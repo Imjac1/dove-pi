@@ -375,6 +375,7 @@ Compatibility aliases remain available: --extensions and --skip-checks.
 
 After installation:
   dove-pi doctor
+  dove-pi skills [query]
   dove-pi project init
   dove-pi
 """)
@@ -396,7 +397,7 @@ def main(arguments: Sequence[str]) -> int:
         return 0
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project"):
+    if arguments and arguments[0] in ("doctor", "project", "skills"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])

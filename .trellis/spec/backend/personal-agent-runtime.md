@@ -541,3 +541,16 @@ await ledger.appendProjectMutationStarted(taskId, stepId, mode, mutationId, "sta
 await provider.runTaskOperation("start", [taskPath]);
 await ledger.appendProjectMutationCompleted(taskId, stepId, mode, mutationId, "start", "trellis", provider.getContext().revision);
 ```
+
+## Scenario: Skill Discovery Diagnostics
+
+Pi remains the owner of skill loading and execution. Dove exposes a read-only
+diagnostic projection so users can verify what Pi can discover without
+duplicating skill parsing or changing project files.
+
+- Discover `.agents/skills/**/SKILL.md` from the current directory and parents.
+- Prefer the nearest project copy when the same skill name is inherited from a
+  parent directory.
+- Expose the projection through Pi `/skills [query]` and `dove-pi skills [query]`.
+- Keep skill documents as project content; discovery must not execute them or
+  treat their text as a policy override.

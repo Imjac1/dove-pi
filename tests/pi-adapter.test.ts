@@ -22,7 +22,7 @@ describe("Pi adapter", () => {
 		} as unknown as ExtensionAPI;
 
 		extension(api);
-		assert.deepEqual([...commands.keys()], ["mode", "status", "设置", "settings-zh", "capabilities", "project", "task", "memory"]);
+		assert.deepEqual([...commands.keys()], ["mode", "status", "设置", "settings-zh", "capabilities", "skills", "project", "task", "memory"]);
 		assert.equal(shortcuts.size, 2);
 		assert.ok(shortcuts.has("ctrl+shift+l"));
 		assert.ok(shortcuts.has("ctrl+alt+m"));
@@ -56,6 +56,8 @@ describe("Pi adapter", () => {
 		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Ready")));
 		await commands.get("mode")?.handler("ultra", context);
 		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · Ready")).length >= 2);
+		await commands.get("skills")?.handler("trellis", context);
+		assert.ok(notifications.some((value) => value.includes("trellis-start")));
 		const notificationCount = notifications.length;
 		await commands.get("mode")?.handler("max", context);
 		assert.equal(notifications.length, notificationCount + 1);

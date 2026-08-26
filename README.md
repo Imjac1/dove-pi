@@ -135,6 +135,13 @@ Trellis skill 是给 Agent 的工作流说明，不是 Trellis CLI 命令。Pi �
 /skill:trellis-check 检查当前任务的 provider 和上下文边界
 ```
 
+如果不确定当前项目是否被 Pi 发现，可以使用 `/skills` 查看所有已发现的 skill；也可以在终端运行：
+
+```text
+dove-pi skills
+dove-pi skills trellis
+```
+
 skill 负责指导 Agent 选择 Trellis 工作流；`/project init`、`/task ...` 等命令负责真正执行项目初始化和任务生命周期。执行 `/reload` 可以刷新 skills、扩展和项目上下文；如果自动发现没有生效，也可以用 `--skill .agents/skills` 启动。
 
 ## Pi 命令

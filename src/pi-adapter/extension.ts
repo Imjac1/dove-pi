@@ -17,6 +17,7 @@ import { buildTrellisContext } from "../trellis-adapter/context.ts";
 import { getPiVersion } from "./host-version.ts";
 import { registerDevelopmentCapabilities } from "../capabilities/development.ts";
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
+import { discoverSkills } from "../skills/discovery.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -210,6 +211,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		handler: async (_args, ctx) => {
 			const lines = registry.list().map((capability) => `${capability.name} [${capability.status}] - ${capability.description}`);
 			ctx.ui.notify(lines.join("\n"), "info");
+		},
+	});
+
+	pi.registerCommand("skills", {
+		description: "List Trellis and project skills discovered by Pi",
+		handler: async (args, ctx) => {
+			const query = args.trim().toLowerCase();
+			const skills = discoverSkills(cwd).filter((skill) => !query || skill.name.toLowerCase().includes(query));
+			if (skills.length === 0) {
+				ctx.ui.notify(query ? `没有找到匹配的 skill：${query}` : "当前项目未发现 .agents/skills/**/SKILL.md。", "info");
+				return;
+			}
+			const lines = skills.map((skill) => `${skill.name}${skill.description ? ` — ${skill.description}` : ""}\n  ${skill.path}`);
+			ctx.ui.notify(`已发现 ${skills.length} 个 skill：\n${lines.join("\n")}`, "info");
 		},
 	});
 

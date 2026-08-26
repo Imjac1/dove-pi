@@ -135,6 +135,13 @@ They respectively initialize/resume a session, explore requirements, load pre-de
 /skill:trellis-check verify the provider and context boundaries for this task
 ```
 
+If you are unsure whether Pi discovered the project skills, run `/skills` to list them. The equivalent terminal diagnostic is:
+
+```text
+dove-pi skills
+dove-pi skills trellis
+```
+
 Skills guide the Agent through the Trellis workflow; `/project init` and `/task ...` perform the actual project initialization and task lifecycle operations. Use `/reload` to refresh skills, extensions, and project context. If auto-discovery is disabled, start with `--skill .agents/skills`.
 
 ## Pi commands

@@ -5,6 +5,7 @@ import { EXTENSION_CATALOG, getProfilePackages, type ExtensionProfile } from "./
 import { inspectExtensionProfile, parseExtensionProfile } from "./extensions/doctor.ts";
 import { installExtensionProfile } from "./extensions/install.ts";
 import { getPiVersion } from "./pi-adapter/host-version.ts";
+import { discoverSkills } from "./skills/discovery.ts";
 
 const args = process.argv.slice(2);
 
@@ -29,9 +30,13 @@ if (args[0] === "doctor") {
 		console.log(JSON.stringify({ health: provider.getHealth(), context: provider.getContext() }, null, 2));
 	}
 } else if (args[0] === "extensions") {
-		await runExtensionsCommand(args.slice(1));
+	await runExtensionsCommand(args.slice(1));
+} else if (args[0] === "skills") {
+	const query = args.slice(1).join(" ").trim().toLowerCase();
+	const skills = discoverSkills(process.cwd()).filter((skill) => !query || skill.name.toLowerCase().includes(query));
+	console.log(JSON.stringify({ projectRoot: process.cwd(), skills }, null, 2));
 } else {
-	console.error("Usage: dove-pi doctor | dove-pi project [init|update|bind] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
+	console.error("Usage: dove-pi doctor | dove-pi project [init|update|bind] | dove-pi skills [query] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
 	process.exitCode = 1;
 }
 
