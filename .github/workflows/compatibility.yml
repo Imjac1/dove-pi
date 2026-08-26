@@ -1,0 +1,25 @@
+name: Compatibility
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        pi-channel: [locked, latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Update Pi dependencies for latest channel
+        if: matrix.pi-channel == 'latest'
+        run: npm install --no-save @earendil-works/pi-coding-agent@latest @earendil-works/pi-tui@latest
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run pi:smoke

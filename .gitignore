@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.pyc
+dist/
+coverage/
+.agent-data/
+.pi/settings.json
+.pi/trust.json

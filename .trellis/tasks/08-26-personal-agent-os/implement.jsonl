@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "Shared thinking guides for cross-layer and code-reuse decisions"}
+{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Executable cross-layer contracts for the Agent core, adapters, and Windows runtime"}

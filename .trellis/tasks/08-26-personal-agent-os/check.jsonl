@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "Shared quality review and reuse guidance"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality layer for runtime code"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type safety layer for Pi-facing TypeScript"}
+{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Quality checks for adapter boundaries and runtime contracts"}
