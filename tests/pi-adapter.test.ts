@@ -58,6 +58,8 @@ describe("Pi adapter", () => {
 		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · Ready")).length >= 2);
 		await commands.get("skills")?.handler("trellis", context);
 		assert.ok(notifications.some((value) => value.includes("trellis-start")));
+		await commands.get("project")?.handler("doctor", context);
+		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
 		const notificationCount = notifications.length;
 		await commands.get("mode")?.handler("max", context);
 		assert.equal(notifications.length, notificationCount + 1);

@@ -6,6 +6,7 @@ import { inspectExtensionProfile, parseExtensionProfile } from "./extensions/doc
 import { installExtensionProfile } from "./extensions/install.ts";
 import { getPiVersion } from "./pi-adapter/host-version.ts";
 import { discoverSkills } from "./skills/discovery.ts";
+import { inspectProjectStatus } from "./project-status.ts";
 
 const args = process.argv.slice(2);
 
@@ -21,13 +22,22 @@ if (args[0] === "doctor") {
 		const requestedProvider = args[2];
 		if (requestedProvider !== "trellis" && requestedProvider !== "lightweight") throw new Error("Usage: dove-pi project bind trellis|lightweight");
 		await updateProjectManifest(provider.projectRoot, requestedProvider);
-		console.log(JSON.stringify({ provider: requestedProvider, projectRoot: provider.projectRoot, restartRequired: true }, null, 2));
+		const rebound = createProjectProvider(provider.projectRoot);
+		console.log(JSON.stringify({ provider: requestedProvider, projectRoot: provider.projectRoot, restartRequired: false, project: inspectProjectStatus(rebound) }, null, 2));
 	} else if (args[1] === "init") {
 		await initializeTrellis(provider.projectRoot);
-		const refreshed = createProjectProvider(provider.projectRoot);
-		console.log(JSON.stringify({ initialized: true, project: refreshed.getHealth(), skills: discoverSkills(provider.projectRoot).filter((skill) => skill.name.startsWith("trellis-")).length }, null, 2));
+		let refreshed = createProjectProvider(provider.projectRoot);
+		await updateProjectManifest(provider.projectRoot, "trellis", refreshed.getHealth().trellisVersion);
+		refreshed = createProjectProvider(provider.projectRoot);
+		console.log(JSON.stringify({ initialized: true, project: inspectProjectStatus(refreshed, true) }, null, 2));
 	} else if (args[1] === "update") {
 		await updateTrellis(provider.projectRoot);
+		let refreshed = createProjectProvider(provider.projectRoot);
+		await updateProjectManifest(provider.projectRoot, "trellis", refreshed.getHealth().trellisVersion);
+		refreshed = createProjectProvider(provider.projectRoot);
+		console.log(JSON.stringify({ updated: true, project: inspectProjectStatus(refreshed, true) }, null, 2));
+	} else if (args[1] === "doctor") {
+		console.log(JSON.stringify(inspectProjectStatus(provider), null, 2));
 	} else {
 		console.log(JSON.stringify({ health: provider.getHealth(), context: provider.getContext() }, null, 2));
 	}
@@ -38,7 +48,7 @@ if (args[0] === "doctor") {
 	const skills = discoverSkills(process.cwd()).filter((skill) => !query || skill.name.toLowerCase().includes(query));
 	console.log(JSON.stringify({ projectRoot: process.cwd(), skills }, null, 2));
 } else {
-	console.error("Usage: dove-pi doctor | dove-pi project [init|update|bind] | dove-pi skills [query] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
+	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
 	process.exitCode = 1;
 }
 

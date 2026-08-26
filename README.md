@@ -150,6 +150,7 @@ skill 负责指导 Agent 选择 Trellis 工作流；`/project init`、`/task ...
 - `/mode fast|standard|ultra`：精确切换策略
 - `/status`、`/status full`：查看 Dove 状态和 telemetry 来源
 - `/project`：查看项目根目录、provider、Trellis 健康状态
+- `/project doctor`：检查 Provider、任务能力和 skill 是否需要 `/reload`
 - `/project bind trellis|lightweight`：显式绑定 provider
 - `/task create|start|finish|archive ...`：调用 Trellis 任务生命周期
 - `/memory [关键词]`：搜索项目日志和记忆

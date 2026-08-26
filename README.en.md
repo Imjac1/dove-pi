@@ -150,6 +150,7 @@ Skills guide the Agent through the Trellis workflow; `/project init` and `/task 
 - `/mode fast|standard|ultra`: select an exact execution mode
 - `/status`, `/status full`: inspect Dove status and telemetry sources
 - `/project`: show root, provider, and Trellis health
+- `/project doctor`: check provider readiness, task lifecycle, and skill reload state
 - `/project bind trellis|lightweight`: explicitly bind a provider
 - `/task create|start|finish|archive ...`: delegate task lifecycle to Trellis
 - `/memory [query]`: search project journals and memory

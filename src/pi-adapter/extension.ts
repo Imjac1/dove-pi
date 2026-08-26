@@ -18,6 +18,7 @@ import { getPiVersion } from "./host-version.ts";
 import { registerDevelopmentCapabilities } from "../capabilities/development.ts";
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
 import { discoverSkills } from "../skills/discovery.ts";
+import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -52,7 +53,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const registry = new CapabilityRegistry();
 	const recipes = new RecipeRegistry();
 	const cwd = process.cwd();
-	const projectProvider = createProjectProvider(cwd);
+	let projectProvider = createProjectProvider(cwd);
+	let skillsReloadRequired = false;
 	const settings = SettingsManager.create(cwd, getAgentDir());
 	let operation: "idle" | "running" = "idle";
 	const ledger = new ExecutionLedger(join(cwd, ".agent-data", "execution.jsonl"));
@@ -234,10 +236,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const [subcommand, requestedProvider] = args.trim().split(/\s+/).filter(Boolean);
 			if (subcommand === "init") {
 				try {
-					await initializeTrellis(projectProvider.projectRoot);
+					const projectRoot = projectProvider.projectRoot;
+					await initializeTrellis(projectRoot);
+					projectProvider = createProjectProvider(projectRoot);
 					const health = projectProvider.getHealth();
-					const skills = discoverSkills(projectProvider.projectRoot).filter((skill) => skill.name.startsWith("trellis-"));
-					ctx.ui.notify(`Trellis 初始化完成（${health.trellisVersion ?? "version unknown"}）。已发现 ${skills.length} 个 Trellis skill。请执行 /reload 以加载项目任务、规范和记忆。`, "info");
+					await updateProjectManifest(projectRoot, "trellis", health.trellisVersion);
+					projectProvider = createProjectProvider(projectRoot);
+					skillsReloadRequired = true;
+					ctx.ui.notify(`${formatProjectStatus(inspectProjectStatus(projectProvider, skillsReloadRequired))}\n初始化完成。Provider、任务和记忆已立即可用；执行 /reload 加载新增 skills。`, "info");
 				} catch (error) {
 					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 				}
@@ -245,8 +251,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 			if (subcommand === "update") {
 				try {
-					await updateTrellis(projectProvider.projectRoot);
-					ctx.ui.notify("Trellis 更新完成。请执行 /reload 或重启 Dove Pi 以刷新项目上下文。", "info");
+					const projectRoot = projectProvider.projectRoot;
+					await updateTrellis(projectRoot);
+					projectProvider = createProjectProvider(projectRoot);
+					const health = projectProvider.getHealth();
+					await updateProjectManifest(projectRoot, "trellis", health.trellisVersion);
+					projectProvider = createProjectProvider(projectRoot);
+					skillsReloadRequired = true;
+					ctx.ui.notify(`${formatProjectStatus(inspectProjectStatus(projectProvider, skillsReloadRequired))}\nTrellis 更新完成；执行 /reload 加载更新后的 skills。`, "info");
 				} catch (error) {
 					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 				}
@@ -258,7 +270,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					return;
 				}
 				await updateProjectManifest(projectProvider.projectRoot, requestedProvider);
-				ctx.ui.notify(`项目 Provider 已绑定为 ${requestedProvider}，重启 Dove Pi 后生效。`, "info");
+				projectProvider = createProjectProvider(projectProvider.projectRoot);
+				ctx.ui.notify(`项目 Provider 已绑定为 ${requestedProvider}，当前会话已生效。`, "info");
+				return;
+			}
+			if (subcommand === "doctor") {
+				const report = inspectProjectStatus(projectProvider, skillsReloadRequired);
+				ctx.ui.notify(formatProjectStatus(report), report.ready ? "info" : "warning");
 				return;
 			}
 			const health = projectProvider.getHealth();

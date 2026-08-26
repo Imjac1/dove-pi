@@ -376,6 +376,7 @@ Compatibility aliases remain available: --extensions and --skip-checks.
 After installation:
   dove-pi doctor
   dove-pi skills [query]
+  dove-pi project doctor
   dove-pi project init
   dove-pi
 """)

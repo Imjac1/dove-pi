@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createProjectProvider, discoverProject, readProjectManifest, updateProjectManifest, withProjectMutationLock, writeProjectManifest } from "../src/project-provider/index.ts";
+import { formatProjectStatus, inspectProjectStatus } from "../src/project-status.ts";
 
 describe("project provider firewall", () => {
 	it("discovers the nearest Trellis root and maps stable task identities", async () => {
@@ -45,6 +46,23 @@ describe("project provider firewall", () => {
 		assert.equal(provider.projectRoot, root);
 		assert.equal(provider.getHealth().status, "lightweight");
 		assert.equal(provider.getContext().tasks.length, 0);
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("reports project readiness and reload state as a single status projection", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-project-status-"));
+		await mkdir(join(root, ".trellis", "scripts"), { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15", "utf8");
+		await writeFile(join(root, ".trellis", "scripts", "task.py"), "# test fixture\n", "utf8");
+		const provider = createProjectProvider(root);
+		assert.equal(inspectProjectStatus(provider).ready, true);
+		assert.match(inspectProjectStatus(provider).issues.join("\n"), /No Trellis skills/);
+		await mkdir(join(root, ".agents", "skills", "trellis-start"), { recursive: true });
+		await writeFile(join(root, ".agents", "skills", "trellis-start", "SKILL.md"), "---\ndescription: Start\n---\n", "utf8");
+		const report = inspectProjectStatus(createProjectProvider(root), true);
+		assert.equal(report.ready, true);
+		assert.equal(report.skillsReloadRequired, true);
+		assert.match(formatProjectStatus(report), /Skills: 1 discovered \/ reload required/);
 		await rm(root, { recursive: true, force: true });
 	});
 
