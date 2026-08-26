@@ -17,6 +17,8 @@
 13. Track the latest stable Pi through semver, Dependabot, and locked/latest compatibility CI.
 14. Add the Dove project integration manifest, distinct session/task/execution identity mapping, mutation intent/completion recovery, and deterministic task-creation policy.
 15. Add source-boundary labeling for project context, secret-path exclusions, monorepo scope resolution, and explicit Git/Trellis maintenance confirmation.
+16. Simplify the user-facing flow: add consented single-step project bootstrap, refresh provider/skills after bootstrap,
+    and keep Trellis-specific commands as advanced compatibility interfaces.
 
 ## Validation
 
@@ -36,6 +38,8 @@
 - Verify dispatch policy keeps small/tightly coupled tasks inline and only parallelizes tasks with an explicit expected benefit.
 - Test hard thresholds (under 60 seconds inline, isolated over 120 seconds dispatch, independent branches over 60 seconds dispatch when concurrency exists) and the 25% wall-time / 20% total-cost decision threshold.
 - Verify Fast/Standard/Ultra context selection and Pi locked/latest compatibility smoke tests.
+- Verify a new interactive project can bootstrap from one confirmation, an explicitly lightweight-bound project does not
+  prompt or read Trellis, and the existing low-level commands remain backward compatible.
 
 ## Review gates
 

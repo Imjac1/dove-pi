@@ -11,7 +11,7 @@ import { normalizeAgentMode, type AgentMode } from "../core/contracts.ts";
 import { runPowerShell } from "../windows-runtime/powershell.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
 import { applyWorkspacePatch, createWorkspaceSnapshot, inspectWorkspacePath, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
-import { createProjectProvider, initializeTrellis, updateProjectManifest, updateTrellis } from "../project-provider/index.ts";
+import { createProjectProvider, initializeTrellis, readProjectManifest, updateProjectManifest, updateTrellis } from "../project-provider/index.ts";
 import { buildProjectContext } from "../trellis-adapter/context.ts";
 import { getPiVersion } from "./host-version.ts";
 import { registerDevelopmentCapabilities } from "../capabilities/development.ts";
@@ -54,6 +54,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const cwd = process.cwd();
 	let projectProvider = createProjectProvider(cwd);
 	let skillsReloadRequired = false;
+	let projectBootstrapPrompted = false;
 	const settings = SettingsManager.create(cwd, getAgentDir());
 	let operation: "idle" | "running" = "idle";
 	const ledger = new ExecutionLedger(join(cwd, ".agent-data", "execution.jsonl"));
@@ -147,6 +148,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		ctx.ui.notify(`检测到 ${pending.length} 个未完成的项目变更意图；已重新读取 Provider 状态，但没有自动宣称成功。请检查 /project 或 /doctor。`, "warning");
 	}
 
+	async function initializeProject(): Promise<void> {
+		const projectRoot = projectProvider.projectRoot;
+		await initializeTrellis(projectRoot);
+		projectProvider = createProjectProvider(projectRoot);
+		const health = projectProvider.getHealth();
+		await updateProjectManifest(projectRoot, "trellis", health.trellisVersion);
+		projectProvider = createProjectProvider(projectRoot);
+		skillsReloadRequired = true;
+	}
+
+	function isUnboundLightweightProject(): boolean {
+		return projectProvider.kind === "lightweight" && readProjectManifest(projectProvider.projectRoot) === undefined;
+	}
+
 	pi.registerCommand("mode", {
 		description: "Show or change Fast, Standard, or Ultra execution mode",
 		handler: async (args, ctx) => {
@@ -235,14 +250,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const [subcommand, requestedProvider] = args.trim().split(/\s+/).filter(Boolean);
 			if (subcommand === "init") {
 				try {
-					const projectRoot = projectProvider.projectRoot;
-					await initializeTrellis(projectRoot);
-					projectProvider = createProjectProvider(projectRoot);
-					const health = projectProvider.getHealth();
-					await updateProjectManifest(projectRoot, "trellis", health.trellisVersion);
-					projectProvider = createProjectProvider(projectRoot);
-					skillsReloadRequired = true;
-					ctx.ui.notify(`${formatProjectStatus(inspectProjectStatus(projectProvider, skillsReloadRequired))}\n初始化完成。Provider、任务和记忆已立即可用；执行 /reload 加载新增 skills。`, "info");
+					await initializeProject();
+					ctx.ui.notify(`${formatProjectStatus(inspectProjectStatus(projectProvider, skillsReloadRequired))}\n初始化完成，正在刷新项目 skills。`, "info");
+					await ctx.reload();
 				} catch (error) {
 					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 				}
@@ -250,14 +260,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 			if (subcommand === "update") {
 				try {
-					const projectRoot = projectProvider.projectRoot;
-					await updateTrellis(projectRoot);
-					projectProvider = createProjectProvider(projectRoot);
+					await updateTrellis(projectProvider.projectRoot);
+					projectProvider = createProjectProvider(projectProvider.projectRoot);
 					const health = projectProvider.getHealth();
-					await updateProjectManifest(projectRoot, "trellis", health.trellisVersion);
-					projectProvider = createProjectProvider(projectRoot);
+					await updateProjectManifest(projectProvider.projectRoot, "trellis", health.trellisVersion);
+					projectProvider = createProjectProvider(projectProvider.projectRoot);
 					skillsReloadRequired = true;
-					ctx.ui.notify(`${formatProjectStatus(inspectProjectStatus(projectProvider, skillsReloadRequired))}\nTrellis 更新完成；执行 /reload 加载更新后的 skills。`, "info");
+					ctx.ui.notify(`${formatProjectStatus(inspectProjectStatus(projectProvider, skillsReloadRequired))}\nTrellis 更新完成，正在刷新项目 skills。`, "info");
+					await ctx.reload();
 				} catch (error) {
 					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 				}
@@ -502,6 +512,18 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		operation = "idle";
 		updateStatus(ctx);
 		await reconcileProjectMutations(ctx);
+		if (ctx.hasUI && !projectBootstrapPrompted && isUnboundLightweightProject()) {
+			projectBootstrapPrompted = true;
+			const confirmed = await ctx.ui.confirm("初始化项目上下文？", "当前项目还没有 Trellis。初始化后，Dove 会自动管理任务、规范、工作流和记忆；选择否将继续使用轻量模式。\n\n确认初始化？");
+			if (confirmed) {
+				try {
+					await initializeProject();
+					ctx.ui.notify("项目上下文初始化完成；Provider 已生效。新 skills 将在下一次 Pi reload 后可用。", "info");
+				} catch (error) {
+					ctx.ui.notify(`项目上下文初始化失败：${error instanceof Error ? error.message : String(error)}`, "error");
+				}
+			}
+		}
 		ctx.ui.notify("Ctrl+P 切换模型 · Ctrl+Alt+M 循环执行策略 · Ctrl+D 或 /quit 退出", "info");
 	});
 

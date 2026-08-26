@@ -91,8 +91,8 @@ dove-pi project update
 | Dove 启动 | 自动 | 从当前目录向上发现最近的 `.trellis/`，选择 `TrellisProvider`。 |
 | 每次 Agent 请求 | 自动 | 在请求进入模型前读取任务、活动任务、规范、工作流和记忆，并按 Fast/Standard/Ultra 编译相关上下文。 |
 | `/project`、`dove-pi doctor` | 自动读取 | 显示 provider、Trellis 版本、任务生命周期能力和当前任务，不修改项目。 |
-| 没有 `.trellis/` | 不自动初始化 | 使用 lightweight provider；不会偷偷创建 Trellis。 |
-| `/project init` 或 `dove-pi project init` | 手动 | 在当前目录执行 Dove 的非交互式 Trellis 初始化预设；完成后显示健康状态和 skill 数量，再用 `/reload` 刷新。 |
+| 没有 `.trellis/` | 首次启动时询问 | 交互式 Pi 会询问是否初始化；拒绝后使用 lightweight provider。明确绑定 lightweight 的项目不会重复询问。 |
+| `/project init` 或 `dove-pi project init` | 手动/高级 | 在当前目录执行 Dove 的非交互式 Trellis 初始化预设；完成后自动刷新 Pi 资源。 |
 | `/project update` 或 `dove-pi project update` | 手动 | 显式执行 `trellis update`，不会在启动时自动更新。 |
 | `/task create|start|finish|archive` | 手动 | 通过项目内 `.trellis/scripts/task.py` 执行任务生命周期，并写入 Dove mutation ledger。 |
 | `/memory [关键词]` | 手动触发读取 | 查询已经规范化的 Trellis journal/memory，不会自动把对话写成永久记忆。 |
@@ -113,7 +113,7 @@ Pi 启动
   → 记录结果/失败/未完成 mutation
 ```
 
-因此，正常开发时你不需要手动输入 `trellis` 命令；进入一个已经初始化的 Trellis 项目后，Dove 会自动使用它。如果项目还没有 Trellis，直接在 Pi 中执行 `/project init` 即可，不必退出 Pi。
+因此，正常开发时你不需要手动输入 `trellis` 命令；进入一个已经初始化的 Trellis 项目后，Dove 会自动使用它。如果项目还没有 Trellis，首次启动时确认初始化即可；也可以使用 `/project init` 手动触发。
 
 ## 在 Pi 中调用 Trellis skills
 
@@ -145,7 +145,7 @@ dove-pi skills
 dove-pi skills trellis
 ```
 
-skill 负责指导 Agent 选择 Trellis 工作流；`/project init`、`/task ...` 等命令负责真正执行项目初始化和任务生命周期。执行 `/reload` 可以刷新 skills、扩展和项目上下文；如果自动发现没有生效，也可以用 `--skill .agents/skills` 启动。
+skill 负责指导 Agent 选择 Trellis 工作流；`/project init`、`/task ...` 等命令负责真正执行项目初始化和任务生命周期。初始化/更新命令会自动请求 Pi 刷新资源；如果宿主处于不可重载的生命周期，才需要手动执行 `/reload`。
 
 ## Pi 命令
 

@@ -48,6 +48,14 @@ The Core imports neither Trellis packages nor Trellis file details. It consumes 
 `TrellisProvider`; a full native project-management provider is intentionally deferred. If Trellis is unavailable, Dove
 may start in a limited read-only/lightweight mode, but must not silently create a second project database.
 
+## User-facing control surface
+
+Keep a single Dove-facing entry point. On an interactive session start, an unbound lightweight project may receive one
+consent prompt to initialize Trellis. Initialization uses the existing provider operation, then refreshes the provider
+and host resources when the Pi command context exposes `reload()`. Explicitly bound lightweight projects never prompt.
+The existing low-level commands remain available for diagnostics, scripts, and compatibility, but the primary workflow
+should not require users to know Trellis CLI flags or individual skill names.
+
 Provider selection is deterministic: an explicit project setting wins; otherwise an existing `.trellis/` selects
 `TrellisProvider`. In a directory without Trellis, the first-run flow offers guided `trellis init`; declining leaves
 project-management features unavailable but does not prevent basic Dove execution.

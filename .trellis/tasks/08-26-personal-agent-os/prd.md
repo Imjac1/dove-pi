@@ -100,6 +100,25 @@ Build a Windows-first personal Agent distribution that uses Pi as the interactiv
 
 Use a **Trellis-first control plane with a Dove execution plane and a provider firewall**.
 
+## UX simplification decision
+
+Dove is the single user-facing control surface. Trellis remains the default project backend, but its provider name,
+CLI flags, skill filenames, and task lifecycle internals are advanced concepts rather than required daily vocabulary.
+
+The first-run path should offer one consented project bootstrap from inside Pi. After approval, Dove initializes the
+project, refreshes its provider, and makes project context available without requiring the user to manually chain
+`trellis init`, `/reload`, and a Trellis session skill. Existing `/project`, `/task`, `/skills`, and `/skill:*` commands
+remain supported as explicit advanced/compatibility interfaces.
+
+### UX acceptance criteria
+
+- [x] A new project can be initialized from a single Dove-facing flow with one user confirmation.
+- [x] After initialization, the active provider and normalized context are available immediately; skill refresh is
+  automatic when the host supports reload and otherwise produces one actionable notice.
+- [ ] The primary documentation presents Dove commands and natural-language work first; Trellis CLI details are moved
+  to an advanced section.
+- [x] Explicit lightweight binding suppresses initialization prompts and all Trellis context reads.
+
 - Trellis owns project management: project identity, tasks, task lifecycle, specs, workflow state, journals, and long-term memory.
 - Dove owns execution: capabilities, policies, approvals, Windows runtime, evidence, execution ledger, mode events, and Pi UX.
 - The Agent Core depends only on a small normalized project-context interface; it does not import Trellis or copy Trellis's CLI/templates/hooks.
