@@ -89,8 +89,8 @@ Both, with different responsibilities: **reads and context assembly are automati
 | Every Agent request | Automatic | Before the prompt reaches the model, reads tasks, the active task, specs, workflow, and memory, then compiles relevant context for Fast/Standard/Ultra. |
 | `/project`, `dove-pi doctor` | Automatic read | Reports provider, Trellis version, task-lifecycle capability, and current task without modifying the project. |
 | No `.trellis/` found | Not automatic | Uses the lightweight provider; it never silently creates Trellis. |
-| `dove-pi project init` | Explicit | Runs `trellis init`. |
-| `dove-pi project update` | Explicit | Runs `trellis update`; startup never updates Trellis implicitly. |
+| `/project init` or `dove-pi project init` | Explicit | Runs `trellis init`; use `/reload` in Pi afterwards. |
+| `/project update` or `dove-pi project update` | Explicit | Runs `trellis update`; startup never updates Trellis implicitly. |
 | `/task create|start|finish|archive` | Explicit | Runs the project-local `.trellis/scripts/task.py` lifecycle command and records the mutation in Dove's ledger. |
 | `/memory [query]` | Explicit read | Searches normalized Trellis journal/memory documents; it does not promote conversation into permanent memory automatically. |
 | `/project bind trellis|lightweight` | Explicit | Writes `.dove/project.json` to pin provider selection; it does not edit Trellis data. |
@@ -110,7 +110,32 @@ User runs /task or project init/update
   → records success, failure, or an incomplete mutation
 ```
 
-For normal development you do not need to type a `trellis` command manually. Open Dove Pi inside an initialized Trellis project and it will use Trellis automatically. Explicit commands are only needed for initialization, upgrades, provider binding, and task lifecycle changes.
+For normal development you do not need to type a `trellis` command manually. Open Dove Pi inside an initialized Trellis project and it will use Trellis automatically. If the project has no Trellis yet, run `/project init` inside Pi; you do not need to leave Pi.
+
+## Invoking Trellis skills in Pi
+
+Trellis skills are workflow instructions for the Agent, not Trellis CLI commands. Pi automatically discovers `.agents/skills/**/SKILL.md` from the current project and its parent directories. On first use, approve/trust the project when Pi asks to load project resources.
+
+Common invocations:
+
+```text
+/skill:trellis-start
+/skill:trellis-brainstorm
+/skill:trellis-before-dev
+/skill:trellis-check
+/skill:trellis-continue
+/skill:trellis-update-spec
+/skill:trellis-finish-work
+```
+
+They respectively initialize/resume a session, explore requirements, load pre-development guidelines, run quality checks, continue an active task, capture a reusable spec rule, and wrap up/archive work. Skills can receive additional instructions:
+
+```text
+/skill:trellis-brainstorm design a new Windows capability
+/skill:trellis-check verify the provider and context boundaries for this task
+```
+
+Skills guide the Agent through the Trellis workflow; `/project init` and `/task ...` perform the actual project initialization and task lifecycle operations. Use `/reload` to refresh skills, extensions, and project context. If auto-discovery is disabled, start with `--skill .agents/skills`.
 
 ## Pi commands
 

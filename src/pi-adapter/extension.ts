@@ -12,7 +12,7 @@ import { runPowerShell } from "../windows-runtime/powershell.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
 import { applyWorkspacePatch, createWorkspaceSnapshot, inspectWorkspacePath, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
 import { readTrellisSnapshot } from "../trellis-adapter/index.ts";
-import { createProjectProvider, updateProjectManifest } from "../project-provider/index.ts";
+import { createProjectProvider, initializeTrellis, updateProjectManifest, updateTrellis } from "../project-provider/index.ts";
 import { buildTrellisContext } from "../trellis-adapter/context.ts";
 import { getPiVersion } from "./host-version.ts";
 import { registerDevelopmentCapabilities } from "../capabilities/development.ts";
@@ -218,7 +218,21 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			const [subcommand, requestedProvider] = args.trim().split(/\s+/).filter(Boolean);
 			if (subcommand === "init") {
-				ctx.ui.notify("请在项目目录的终端运行：dove-pi project init；初始化完成后重启 Dove Pi。", "info");
+				try {
+					await initializeTrellis(projectProvider.projectRoot);
+					ctx.ui.notify("Trellis 初始化完成。请执行 /reload 或重启 Dove Pi 以加载项目任务、规范和记忆。", "info");
+				} catch (error) {
+					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+				}
+				return;
+			}
+			if (subcommand === "update") {
+				try {
+					await updateTrellis(projectProvider.projectRoot);
+					ctx.ui.notify("Trellis 更新完成。请执行 /reload 或重启 Dove Pi 以刷新项目上下文。", "info");
+				} catch (error) {
+					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+				}
 				return;
 			}
 			if (subcommand === "bind") {

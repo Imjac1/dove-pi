@@ -10,6 +10,7 @@ export * from "./discovery.ts";
 export * from "./manifest.ts";
 export * from "./lightweight-provider.ts";
 export * from "./trellis-provider.ts";
+export * from "./trellis-cli.ts";
 export * from "./lock.ts";
 
 /** Deterministically select a provider; an explicit manifest wins over discovery. */
