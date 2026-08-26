@@ -4,7 +4,11 @@ import { spawn } from "node:child_process";
 
 export async function initializeTrellis(projectRoot: string): Promise<void> {
 	if (existsSync(join(projectRoot, ".trellis"))) throw new Error(`Trellis is already initialized at ${projectRoot}`);
-	await runTrellisCli(projectRoot, ["init"]);
+	// Pi owns the interactive host, so avoid nesting Trellis' questionnaire
+	// inside the Pi TUI. The Pi preset also installs the project-local assets
+	// needed for skill discovery; Trellis still derives the developer identity
+	// from the project's configured Git identity.
+	await runTrellisCli(projectRoot, ["init", "--yes", "--pi", "--no-monorepo"]);
 }
 
 export async function updateTrellis(projectRoot: string): Promise<void> {

@@ -89,7 +89,7 @@ dove-pi project update
 | 每次 Agent 请求 | 自动 | 在请求进入模型前读取任务、活动任务、规范、工作流和记忆，并按 Fast/Standard/Ultra 编译相关上下文。 |
 | `/project`、`dove-pi doctor` | 自动读取 | 显示 provider、Trellis 版本、任务生命周期能力和当前任务，不修改项目。 |
 | 没有 `.trellis/` | 不自动初始化 | 使用 lightweight provider；不会偷偷创建 Trellis。 |
-| `/project init` 或 `dove-pi project init` | 手动 | 显式执行 `trellis init`。Pi 内执行后用 `/reload` 刷新。 |
+| `/project init` 或 `dove-pi project init` | 手动 | 在当前目录执行非交互式 `trellis init --yes --pi --no-monorepo`；完成后用 `/reload` 刷新。 |
 | `/project update` 或 `dove-pi project update` | 手动 | 显式执行 `trellis update`，不会在启动时自动更新。 |
 | `/task create|start|finish|archive` | 手动 | 通过项目内 `.trellis/scripts/task.py` 执行任务生命周期，并写入 Dove mutation ledger。 |
 | `/memory [关键词]` | 手动触发读取 | 查询已经规范化的 Trellis journal/memory，不会自动把对话写成永久记忆。 |
