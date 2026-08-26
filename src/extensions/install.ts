@@ -15,6 +15,8 @@ export interface ExtensionInstallOptions {
 	readonly cwd?: string;
 	readonly piEntry?: string;
 	readonly configuredPackages?: readonly string[];
+	/** Emit one line per package; the default is concise for the installer/UI. */
+	readonly verbose?: boolean;
 	readonly run?: (command: string, args: readonly string[], cwd: string) => Promise<void>;
 }
 
@@ -27,17 +29,18 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	const cwd = options.cwd ?? process.cwd();
 	const piEntry = options.piEntry ?? defaultPiEntry();
 	const run = options.run ?? runPiInstall;
+	const verbose = options.verbose ?? false;
 	const installed: string[] = [];
 	const skipped: string[] = [];
 	const configuredPackages = options.configuredPackages ?? await readConfiguredPackages();
 
 	for (const entry of getProfilePackages(profile)) {
 		if (configuredPackages.some((value) => matchesConfiguredPackage(value, entry))) {
-			console.log(`Skipping ${entry.id}; already configured in Pi.`);
+			if (verbose) console.log(`Skipping ${entry.id}; already configured in Pi.`);
 			skipped.push(entry.id);
 			continue;
 		}
-		console.log(`Installing ${entry.id} (${entry.installSpec})...`);
+		if (verbose) console.log(`Installing ${entry.id} (${entry.installSpec})...`);
 		await run(piEntry, ["install", entry.installSpec], cwd);
 		installed.push(entry.id);
 	}

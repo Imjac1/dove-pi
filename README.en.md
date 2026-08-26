@@ -4,13 +4,22 @@
 
 Dove Pi is a Windows-first personal Agent runtime. Users interact with Dove Pi as the single front door: Pi hosts the TUI and model, Dove executes verified work, and Trellis manages project context and tasks behind the scenes.
 
+## Requirements
+
+- Windows 10/11
+- Python 3.10+
+- Node.js `>=22.19.0`
+- Windows PowerShell 5.1 or PowerShell 7 (7 recommended)
+
+The installer selects the complete `max` extension profile by default. This `max` is only an extension collection name, not a Dove execution mode.
+
 ## The shortest path
 
-``@@BT@powershell
+```powershell
 python .\dove_pi.py install
 cd path\to\your\project
 dove-pi
-``@@BT@
+```
 
 When a project has no `.trellis/`, interactive Pi asks once whether to initialize project context. Accepting creates Trellis, selects the provider, and loads context. Declining keeps the project in lightweight mode. You can also run `/project init` explicitly.
 
@@ -18,13 +27,13 @@ Initialization and update commands request a Pi resource reload when the host li
 
 ## The architecture in one picture
 
-``@@BT@text
+```text
 User → Dove Pi → Agent
                ├─ discovers the project
                ├─ reads normalized context
                ├─ suggests a workflow
                └─ calls Trellis for task changes when needed
-``@@BT@
+```
 
 | Component | Owns |
 | --- | --- |
@@ -37,9 +46,9 @@ Trellis is the single authority for project data. Dove is the authority for exec
 
 Context has one path:
 
-``@@BT@text
+```text
 Project Provider → ProjectContextSnapshot → Context Compiler → Agent
-``@@BT@
+```
 
 Binding a project to lightweight therefore changes status, task operations, and model context together.
 
@@ -47,9 +56,9 @@ Binding a project to lightweight therefore changes status, task operations, and 
 
 After startup, describe the work naturally:
 
-``@@BT@text
+```text
 Fix the login timeout and add tests.
-``@@BT@
+```
 
 Dove classifies the request, loads relevant project context, suggests a workflow skill, prefers verified capabilities/recipes, and records execution results. Ordinary conversation does not create a Trellis task. Explicit tracking requests and clear multi-step changes do.
 
@@ -57,22 +66,22 @@ Dove classifies the request, loads relevant project context, suggests a workflow
 
 You can say:
 
-``@@BT@text
+```text
 Start tracking this development task.
 Finish the current task.
 Archive this task.
-``@@BT@
+```
 
 The Agent can call Dove's `agent_project_task` tool for `create`, `start`, `finish`, or `archive`. The tool requires interactive confirmation and uses the same Provider and mutation ledger as the compatibility command.
 
 Compatibility commands remain available:
 
-``@@BT@text
+```text
 /task create <title>
 /task start <task directory or name>
 /task finish
 /task archive <task directory or name>
-``@@BT@
+```
 
 ## Skills
 
@@ -86,7 +95,7 @@ Skills are Agent workflow instructions, not Trellis CLI commands. Dove provides 
 
 Suggestions are advisory and do not mutate the project by themselves. Explicit invocation is always available:
 
-``@@BT@text
+```text
 /skill:trellis-start
 /skill:trellis-continue
 /skill:trellis-brainstorm
@@ -94,14 +103,14 @@ Suggestions are advisory and do not mutate the project by themselves. Explicit i
 /skill:trellis-check
 /skill:trellis-update-spec
 /skill:trellis-finish-work
-``@@BT@
+```
 
 Inspect discovery with:
 
-``@@BT@text
+```text
 /skills
 /skills trellis
-``@@BT@
+```
 
 ## Automatic versus explicit behavior
 
@@ -118,7 +127,7 @@ Inspect discovery with:
 
 ## Commands you may need
 
-``@@BT@text
+```text
 /status
 /status full
 /project
@@ -131,7 +140,7 @@ Inspect discovery with:
 /capabilities
 /mode fast|standard|ultra
 Ctrl+Alt+M
-``@@BT@
+```
 
 Most users do not need `/project bind`, `/task ...`, or `/skill:*`. They remain useful for diagnostics, scripting, and compatibility.
 
@@ -151,32 +160,32 @@ Dove has no `max` execution mode. Pi's `max` thinking level and the installer's 
 
 Updates are explicit:
 
-``@@BT@text
+```text
 /project update
-``@@BT@
+```
 
 or:
 
-``@@BT@powershell
+```powershell
 dove-pi project update
-``@@BT@
+```
 
 Trellis handles template hashes, user modifications, conflicts, and `.new` files. Dove calls the Provider, refreshes status, and records the result.
 
 ## Troubleshooting
 
-``@@BT@powershell
+```powershell
 dove-pi doctor
 dove-pi project
 dove-pi skills trellis
-``@@BT@
+```
 
 Inside Pi:
 
-``@@BT@text
+```text
 /project doctor
 /skills trellis
-``@@BT@
+```
 
 - No Trellis: accept the startup prompt or run `/project init`.
 - Skills missing: run `/reload` and trust the project directory.
@@ -185,7 +194,7 @@ Inside Pi:
 
 ## Installation options and verification
 
-``@@BT@powershell
+```powershell
 python .\dove_pi.py install --verify full
 python .\dove_pi.py install --no-font
 python .\dove_pi.py install --no-path
@@ -196,7 +205,7 @@ npm test
 npm run test:installer
 npm run doctor
 npm run pi:smoke
-``@@BT@
+```
 
 `setup` aliases `install`. Repeated installs reuse the lockfile and npm cache and do not silently upgrade Pi or global extensions.
 

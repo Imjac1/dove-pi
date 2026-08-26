@@ -21,6 +21,8 @@
     and keep Trellis-specific commands as advanced compatibility interfaces.
 17. Add deterministic workflow-intent suggestions and an approval-protected `agent_project_task` tool; reuse the same
     mutation/ledger path from `/task` so natural language and compatibility commands cannot diverge.
+18. Reconcile the README with the actual CLI surface and simplify installer progress output/options without reducing the
+    default complete extension installation; fix no-argument launcher dispatch and avoid noisy repeated extension logs.
 
 ## Validation
 
@@ -44,6 +46,8 @@
   prompt or read Trellis, and the existing low-level commands remain backward compatible.
 - Verify task-tool mutations require confirmation, are blocked in non-interactive contexts, and preserve the same
   provider-qualified task IDs and ledger records as `/task`; verify skill suggestions are advisory only.
+- Verify `python dove_pi.py` with no arguments launches Pi, install output has stable step counts with optional stages,
+  repeated setup skips already configured extensions quietly, and the README examples match `src/cli.ts` exactly.
 
 ## Review gates
 

@@ -4,13 +4,22 @@
 
 Dove Pi 是一个 Windows 优先的个人 Agent 运行环境。用户只需要面对 Dove Pi；Pi 是交互宿主，Dove 负责执行，Trellis 在后台负责项目上下文和任务管理。
 
+## 环境要求
+
+- Windows 10/11
+- Python 3.10+
+- Node.js `>=22.19.0`
+- PowerShell 5.1 或 PowerShell 7（推荐 7）
+
+安装器默认安装完整的 `max` 扩展 profile。这里的 `max` 只是扩展集合名称，不是 Dove 的执行策略。
+
 ## 最短使用流程
 
-``@@BT@powershell
+```powershell
 python .\dove_pi.py install
 cd 你的项目目录
 dove-pi
-``@@BT@
+```
 
 首次进入没有 `.trellis/` 的项目时，Pi 会询问是否初始化。确认后 Dove 会自动创建 Trellis、切换 Provider 并加载上下文；拒绝则继续使用 lightweight 模式。也可以手动执行 `/project init`。
 
@@ -18,13 +27,13 @@ dove-pi
 
 ## 核心关系
 
-``@@BT@text
+```text
 用户 → Dove Pi → Agent
               ├─ 自动发现项目
               ├─ 自动读取上下文
               ├─ 自动建议工作流
               └─ 按需调用 Trellis 管理任务
-``@@BT@
+```
 
 | 部件 | 负责什么 |
 | --- | --- |
@@ -37,9 +46,9 @@ Trellis 是项目数据的唯一权威，Dove 是执行数据的唯一权威。D
 
 上下文只有一条读取链路：
 
-``@@BT@text
+```text
 Project Provider → ProjectContextSnapshot → Context Compiler → Agent
-``@@BT@
+```
 
 因此 `/project bind lightweight` 会同时影响项目状态、任务操作和模型上下文，不会出现“界面是 lightweight、模型仍在读 Trellis”的半切换状态。
 
@@ -47,9 +56,9 @@ Project Provider → ProjectContextSnapshot → Context Compiler → Agent
 
 初始化完成后，直接用自然语言描述需求：
 
-``@@BT@text
+```text
 修复登录超时问题，并补充测试
-``@@BT@
+```
 
 Dove 会自动判断请求类型、读取相关上下文、建议 workflow skill、优先使用已验证的 capability/recipe，并记录执行结果。普通聊天不会自动创建任务；明确要求跟踪或进行多步骤代码变更时才进入任务流程。
 
@@ -57,22 +66,22 @@ Dove 会自动判断请求类型、读取相关上下文、建议 workflow skill
 
 推荐直接说：
 
-``@@BT@text
+```text
 开始跟踪这个开发任务
 完成当前任务
 归档这个任务
-``@@BT@
+```
 
 Agent 可以调用 Dove 的 `agent_project_task` 工具完成 `create`、`start`、`finish`、`archive`。工具会先请求交互式确认，并通过 Provider 和 Dove mutation ledger 记录。
 
 兼容命令：
 
-``@@BT@text
+```text
 /task create <标题>
 /task start <任务目录或名称>
 /task finish
 /task archive <任务目录或名称>
-``@@BT@
+```
 
 ## Skill 怎么用
 
@@ -86,7 +95,7 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 
 建议不会自行修改项目。需要执行时可以显式调用：
 
-``@@BT@text
+```text
 /skill:trellis-start
 /skill:trellis-continue
 /skill:trellis-brainstorm
@@ -94,14 +103,14 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /skill:trellis-check
 /skill:trellis-update-spec
 /skill:trellis-finish-work
-``@@BT@
+```
 
 查看 skills：
 
-``@@BT@text
+```text
 /skills
 /skills trellis
-``@@BT@
+```
 
 ## 自动和手动的边界
 
@@ -118,7 +127,7 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 
 ## 常用命令
 
-``@@BT@text
+```text
 /status
 /status full
 /project
@@ -131,7 +140,7 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /capabilities
 /mode fast|standard|ultra
 Ctrl+Alt+M
-``@@BT@
+```
 
 普通使用不需要记住 `/project bind`、`/task ...` 或 `/skill:*`；它们是高级/兼容接口。
 
@@ -151,25 +160,25 @@ Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `ma
 
 Trellis 更新必须显式执行：
 
-``@@BT@text
+```text
 /project update
-``@@BT@
+```
 
 或：
 
-``@@BT@powershell
+```powershell
 dove-pi project update
-``@@BT@
+```
 
 更新由 Trellis 自己处理模板哈希、用户修改保护、冲突和 `.new` 文件。Dove 只负责调用 Provider、刷新状态并记录结果。
 
 ## 故障排查
 
-``@@BT@powershell
+```powershell
 dove-pi doctor
 dove-pi project
 dove-pi skills trellis
-``@@BT@
+```
 
 Pi 内可以执行 `/project doctor` 和 `/skills trellis`。
 
@@ -180,7 +189,7 @@ Pi 内可以执行 `/project doctor` 和 `/skills trellis`。
 
 ## 安装与验证
 
-``@@BT@powershell
+```powershell
 python .\dove_pi.py install --verify full
 python .\dove_pi.py install --no-font
 python .\dove_pi.py install --no-path
@@ -191,7 +200,7 @@ npm test
 npm run test:installer
 npm run doctor
 npm run pi:smoke
-``@@BT@
+```
 
 `setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存，不会隐式升级 Pi 或全局扩展。
 

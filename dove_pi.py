@@ -70,39 +70,48 @@ def install(*, skip_checks: bool = False, no_path: bool = False, extension_profi
         if verify not in {"quick", "full", "none"}:
             raise RuntimeError("verify must be quick, full, or none")
         skip_checks = verify == "none"
-    print("Dove Pi installer")
-    print(f"  source: {PROJECT_ROOT}")
+    print("Dove Pi setup")
+    print(f"Source: {PROJECT_ROOT}")
     executable("node")
     npm = executable("npm")
     version = node_version()
     if version < MIN_NODE:
         raise RuntimeError(f"Node.js {format_version(MIN_NODE)} or newer is required; found {format_version(version)}. Install Node.js LTS and try again.")
-    print(f"  node: {format_version(version)}")
+    print(f"Node.js: {format_version(version)}")
+
+    total_steps = 1 + (1 if extension_profile else 0) + (1 if extension_profile and install_font else 0)
+    total_steps += 0 if skip_checks else 2 + (1 if verify == "full" else 0)
+    current_step = 0
+
+    def stage(label: str) -> str:
+        nonlocal current_step
+        current_step += 1
+        return f"{current_step}/{total_steps} {label}"
 
     lockfile = PROJECT_ROOT / "package-lock.json"
     if lockfile.exists() and (clean or not (PROJECT_ROOT / "node_modules").exists()):
-        run([npm, "ci", "--no-audit", "--no-fund", "--loglevel=error"], label="1/5 Installing locked dependencies")
+        run([npm, "ci", "--no-audit", "--no-fund", "--loglevel=error"], label=stage("Installing locked dependencies"))
     elif lockfile.exists():
-        run([npm, "install", "--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error"], label="1/5 Checking dependencies")
+        run([npm, "install", "--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error"], label=stage("Checking dependencies"))
     else:
-        run([npm, "install", "--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error"], label="1/5 Installing dependencies")
+        run([npm, "install", "--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error"], label=stage("Installing dependencies"))
 
     if extension_profile:
-        print(f"\n[2/5 Installing Pi extensions: {extension_profile}]", flush=True)
+        print(f"\n[{stage(f'Configuring Pi extensions ({extension_profile})')}]", flush=True)
         extension_exit = run_local_cli(["extensions", "install", extension_profile])
         if extension_exit != 0:
             raise subprocess.CalledProcessError(extension_exit, ["dove-pi", "extensions", "install", extension_profile])
         if install_font:
-            print("\n[3/5 Configuring terminal icons]", flush=True)
+            print(f"\n[{stage('Configuring terminal icons')}]", flush=True)
             ensure_icon_font()
         else:
             configure_icons("auto")
 
     if not skip_checks:
-        run([npm, "run", "typecheck"], label="4/5 Verifying Dove Pi")
-        run([npm, "run", "pi:smoke"], label="5/5 Verifying Pi integration")
+        run([npm, "run", "typecheck"], label=stage("Checking Dove Pi"))
+        run([npm, "run", "pi:smoke"], label=stage("Checking Pi integration"))
         if verify == "full":
-            run([npm, "test"], label="Running full test suite")
+            run([npm, "test"], label=stage("Running full test suite"))
 
     launcher_root = launcher_directory()
     launcher_root.mkdir(parents=True, exist_ok=True)
@@ -364,12 +373,15 @@ def print_help() -> None:
 Install everything with one command:
   python dove_pi.py install
 
-Optional controls:
-  --profile PROFILE       max (default), or minimal/dev/research/security
+Common controls:
   --verify quick|full|none  quick (default), full tests, or no checks
-  --no-font               skip Nerd Font setup
-  --no-path               do not add the launcher to user PATH
-  --clean                 reinstall locked npm dependencies
+  --no-font                skip Nerd Font setup and use ASCII icons
+  --no-path                do not add the launcher to user PATH
+  --clean                  reinstall locked npm dependencies
+
+Advanced controls:
+  --profile PROFILE        max (default), or minimal/dev/research/security
+  --no-extensions          skip Pi extension installation
 
 Compatibility aliases remain available: --extensions and --skip-checks.
 
@@ -386,7 +398,7 @@ def main(arguments: Sequence[str]) -> int:
     if arguments and arguments[0] in {"help", "-h", "--help"}:
         print_help()
         return 0
-    if arguments[0] in {"install", "setup"}:
+    if arguments and arguments[0] in {"install", "setup"}:
         options = parse_install(arguments[1:])
         install(
             verify="none" if options.skip_checks else options.verify,

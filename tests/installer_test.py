@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from dove_pi import format_version, parse_install
+from dove_pi import format_version, main, parse_install
 
 
 class InstallerCliTests(unittest.TestCase):
@@ -22,6 +23,11 @@ class InstallerCliTests(unittest.TestCase):
 
     def test_version_formatting(self):
         self.assertEqual(format_version((22, 19, 0)), "22.19.0")
+
+    def test_no_arguments_launches_pi(self):
+        with patch("dove_pi.launch", return_value=0) as launch:
+            self.assertEqual(main([]), 0)
+            launch.assert_called_once_with([])
 
 
 if __name__ == "__main__":

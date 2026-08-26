@@ -370,6 +370,10 @@ dove-pi [official-pi-options]
 
 - The installer requires Python, Node.js `>=22.19.0`, and npm. On the first install (or with `--clean`) it uses `npm ci`; subsequent installs use lockfile-aware `npm install --prefer-offline` instead of a broad `npm update`, so repeated setup is faster and does not unexpectedly upgrade the dependency graph. It installs only missing entries from the selected profile through Pi's official `pi install` command; it does not run a separate global Pi extension update on every setup. It installs the `max` extension profile by default (or the selected profile, unless `--no-extensions` is supplied), attempts the Windows Nerd Font installation through winget unless `--no-font` is supplied, and runs quick type-check/Pi smoke verification by default. `--verify full` adds the complete test suite and `--verify none` skips checks. If winget is unavailable or the font install fails, it configures the TUI to use ASCII icons and continues. `setup` is a user-friendly alias for `install`; `--profile` and `--verify` are the primary options, while `--extensions` and `--skip-checks` remain compatibility aliases.
 - The same `dove_pi.py` entry point launches the configured Pi host when invoked without the `install` subcommand.
+- Invoking `python dove_pi.py` with no arguments must launch Pi (it must not index an empty argv list); installer help
+  keeps the common controls (`--verify`, `--no-font`, `--no-path`, `--clean`) separate from advanced profile controls.
+- Repeated setup should keep extension installation output concise: already configured packages are skipped without one
+  noisy line per package unless verbose diagnostics are explicitly requested.
 - The launcher keeps `process.cwd()` as the target workspace and injects `.pi/extensions/personal-agent.ts` from the installed Dove Pi source tree.
 - By default the installer creates `%LOCALAPPDATA%\DovePi\bin\dove-pi.ps1` and `dove-pi.cmd`, and adds that directory to the user PATH. `--no-path` suppresses the PATH mutation.
 - The underlying `@earendil-works/pi-coding-agent` executable remains `pi`; only the user-facing project launcher is named `dove-pi`.
