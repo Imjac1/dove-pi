@@ -18,6 +18,9 @@ Pi：交互宿主
 
 数据权威只有一个：Trellis 管理项目数据，Dove 管理执行数据。Dove 不复制任务/规范数据库，也不直接改写 `.trellis/` 文件。
 
+上下文只有一条读取链路：`Project Provider → ProjectContextSnapshot → Context Compiler → Agent`。
+因此 `/project bind lightweight` 会同时影响状态、任务操作和模型上下文；不会出现状态显示为 lightweight、但模型仍偷偷读取 Trellis 的“半切换”状态。
+
 ## 环境要求
 
 - Windows 10/11

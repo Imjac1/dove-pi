@@ -1,46 +1,73 @@
-import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import type { AgentMode } from "../core/contracts.ts";
 import { ContextCompiler, type CompiledContext } from "../core/context-compiler.ts";
-import { createProjectProvider } from "../project-provider/index.ts";
-import { readTrellisSnapshot } from "./index.ts";
+import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../project-provider/index.ts";
 
-export function buildTrellisContext(cwd: string, query: string, mode: AgentMode): CompiledContext {
+/**
+ * Compile context from the provider's normalized projection.
+ *
+ * The provider is the only layer allowed to know how project files are
+ * discovered or decoded. This keeps explicit provider bindings (including
+ * the lightweight fallback) authoritative and prevents a stale Trellis read
+ * from leaking into the model prompt.
+ */
+export function buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): CompiledContext {
 	const compiler = new ContextCompiler();
-	const provider = createProjectProvider(cwd);
-	if (provider.kind !== "trellis") return compiler.compile(query, mode);
-	const projectRoot = provider.projectRoot;
-	const snapshot = readTrellisSnapshot(projectRoot);
+	const context = provider.getContext();
+	const activeTask = context.currentTask;
+	const taskByFile = indexTaskFiles(context.tasks);
+	const normalizedQuery = query.toLowerCase();
 
-	for (const task of snapshot.tasks) {
-		const isActive = snapshot.activeTaskPath !== undefined && task.path === snapshot.activeTaskPath;
-		for (const path of task.files) {
-			if (mode === "fast" && (!isActive || !path.endsWith("prd.md"))) continue;
-			const priority = isActive ? 100 : task.priority === "P1" ? 40 : 20;
-			addFile(compiler, projectRoot, path, "task", priority, isActive && path.endsWith("prd.md"));
+	for (const document of context.documents) {
+		const task = document.kind === "task" ? taskByFile.get(normalizePath(document.path)) : undefined;
+		const isActiveTask = task !== undefined && activeTask !== undefined && task.stableId === activeTask.stableId;
+
+		if (document.kind === "task") {
+			const isPrd = document.path.toLowerCase().endsWith("prd.md");
+			if (mode === "fast" && (!isActiveTask || !isPrd)) continue;
+			const priority = isActiveTask ? 100 : task?.priority === "P1" ? 40 : 20;
+			addDocument(compiler, context, document, priority, isActiveTask && isPrd);
+			continue;
+		}
+
+		if (document.kind === "spec") {
+			const isRuntimeSpec = document.path.toLowerCase().endsWith("personal-agent-runtime.md");
+			if (mode === "fast" && !isRuntimeSpec) continue;
+			addDocument(compiler, context, document, isRuntimeSpec ? 90 : 10, isRuntimeSpec);
+			continue;
+		}
+
+		if (document.kind === "workflow") {
+			if (mode === "fast") continue;
+			addDocument(compiler, context, document, 70, false);
+			continue;
+		}
+
+		if (document.kind === "memory" || document.kind === "journal") {
+			if (mode !== "ultra" && !normalizedQuery.includes("memory")) continue;
+			addDocument(compiler, context, document, document.kind === "journal" ? 30 : 10, false);
 		}
 	}
-	for (const path of snapshot.specFiles) {
-		const isRuntimeSpec = path.endsWith("personal-agent-runtime.md");
-		if (mode === "fast" && !isRuntimeSpec) continue;
-		addFile(compiler, projectRoot, path, "spec", isRuntimeSpec ? 90 : 10, isRuntimeSpec);
-	}
-	for (const path of snapshot.workflowFiles) {
-		if (mode === "fast") continue;
-		addFile(compiler, projectRoot, path, "workflow", 70, false);
-	}
-	for (const memory of snapshot.memories) {
-		if (mode !== "ultra" && !query.toLowerCase().includes("memory")) continue;
-		addFile(compiler, projectRoot, memory.path, "memory", memory.kind === "journal" ? 30 : 10, false);
-	}
+
 	return compiler.compile(query, mode);
 }
 
-function addFile(compiler: ContextCompiler, cwd: string, path: string, kind: "task" | "spec" | "memory" | "workflow", priority: number, required: boolean): void {
-	try {
-		compiler.add({ id: relative(cwd, path), kind, content: readFileSync(path, "utf8"), priority, required, sourceRef: path });
-	} catch {
-		// Project files can change while a session is compiling context. The next
-		// refresh will pick up a file that was temporarily unavailable.
-	}
+/** Backward-compatible convenience wrapper for callers that only have cwd. */
+export function buildTrellisContext(cwd: string, query: string, mode: AgentMode): CompiledContext {
+	return buildProjectContext(createProjectProvider(cwd), query, mode);
+}
+
+function indexTaskFiles(tasks: readonly ProjectTask[]): Map<string, ProjectTask> {
+	const result = new Map<string, ProjectTask>();
+	for (const task of tasks) for (const path of task.files) result.set(normalizePath(path), task);
+	return result;
+}
+
+function addDocument(compiler: ContextCompiler, context: ProjectContextSnapshot, document: ProjectContextSnapshot["documents"][number], priority: number, required: boolean): void {
+	const id = relative(context.projectRoot, document.path) || document.path;
+	compiler.add({ id, kind: document.kind, content: document.content, priority, required, sourceRef: document.sourceRef });
+}
+
+function normalizePath(path: string): string {
+	return path.replace(/[\\/]+/g, "/").toLowerCase();
 }

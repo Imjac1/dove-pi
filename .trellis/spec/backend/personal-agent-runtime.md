@@ -173,7 +173,7 @@ const outcome = await executeDispatch({
 
 ```typescript
 readTrellisSnapshot(cwd: string): TrellisSnapshot;
-buildTrellisContext(cwd: string, query: string, mode: AgentMode): CompiledContext;
+buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): CompiledContext;
 ```
 
 `TrellisSnapshot` exposes both compatibility file lists and structured `tasks`, `memories`, and optional `activeTaskPath`.
@@ -184,6 +184,7 @@ buildTrellisContext(cwd: string, query: string, mode: AgentMode): CompiledContex
 - A memory file is represented by `TrellisMemoryRecord { path, kind, developer? }`, where `kind` distinguishes `journal`, `index`, and `document`.
 - The current session's `.trellis/.runtime/sessions/*.json` `current_task` is resolved relative to the workspace and compared to the task directory using normalized absolute paths.
 - Fast mode includes only the active task PRD and the runtime spec as required context. Standard/Ultra use relevance scoring; Ultra may include typed memory records without an application token cap.
+- The Pi adapter must pass its selected `ProjectProvider` into context compilation. A cwd convenience wrapper may exist for compatibility, but it must delegate to the same provider projection rather than reading Trellis files directly.
 
 ### 4. Validation & Error Matrix
 

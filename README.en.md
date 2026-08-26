@@ -18,6 +18,9 @@ The core does not import Pi or Trellis internals. The current working directory 
 
 There is one project-data authority: Trellis owns project data and Dove owns execution data. Dove does not maintain a duplicate task/spec database and never edits `.trellis/` files directly.
 
+Context has one read path: `Project Provider → ProjectContextSnapshot → Context Compiler → Agent`.
+This means `/project bind lightweight` changes status, task operations, and model context together; there is no half-switched state where the UI says lightweight while the model still reads Trellis behind the scenes.
+
 ## Requirements
 
 - Windows 10/11

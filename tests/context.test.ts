@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ContextCompiler } from "../src/core/context-compiler.ts";
-import { buildTrellisContext } from "../src/trellis-adapter/context.ts";
+import { buildProjectContext, buildTrellisContext } from "../src/trellis-adapter/context.ts";
+import { LightweightProvider } from "../src/project-provider/lightweight-provider.ts";
 import { isSensitiveProjectPath, readTrellisSnapshot } from "../src/trellis-adapter/index.ts";
 
 describe("context compiler", () => {
@@ -62,6 +63,11 @@ describe("Trellis context", () => {
 	it("exposes Trellis workflow as a typed project document outside Fast mode", () => {
 		const context = buildTrellisContext(process.cwd(), "workflow phase", "standard");
 		assert.ok(context.items.some((item) => item.kind === "workflow" && item.id.endsWith("workflow.md")));
+	});
+
+	it("honors an explicitly bound lightweight provider without reading Trellis files", () => {
+		const context = buildProjectContext(new LightweightProvider(process.cwd()), "PowerShell runtime", "ultra");
+		assert.equal(context.items.length, 0);
 	});
 
 	it("excludes common secret-bearing paths from Trellis context", async () => {
