@@ -554,3 +554,7 @@ duplicating skill parsing or changing project files.
 - Expose the projection through Pi `/skills [query]` and `dove-pi skills [query]`.
 - Keep skill documents as project content; discovery must not execute them or
   treat their text as a policy override.
+- Dove's `/project init` hides Trellis platform flags and uses the current
+  non-interactive shared-skill compatibility preset `--yes --codex --no-monorepo`.
+- The Dove boundary must not install Trellis' competing `.pi` extension; it
+  reports provider health and discovered Trellis skill count after init.

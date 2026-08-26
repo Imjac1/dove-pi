@@ -235,7 +235,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			if (subcommand === "init") {
 				try {
 					await initializeTrellis(projectProvider.projectRoot);
-					ctx.ui.notify("Trellis 初始化完成。请执行 /reload 或重启 Dove Pi 以加载项目任务、规范和记忆。", "info");
+					const health = projectProvider.getHealth();
+					const skills = discoverSkills(projectProvider.projectRoot).filter((skill) => skill.name.startsWith("trellis-"));
+					ctx.ui.notify(`Trellis 初始化完成（${health.trellisVersion ?? "version unknown"}）。已发现 ${skills.length} 个 Trellis skill。请执行 /reload 以加载项目任务、规范和记忆。`, "info");
 				} catch (error) {
 					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 				}

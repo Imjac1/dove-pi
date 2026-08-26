@@ -89,7 +89,7 @@ Both, with different responsibilities: **reads and context assembly are automati
 | Every Agent request | Automatic | Before the prompt reaches the model, reads tasks, the active task, specs, workflow, and memory, then compiles relevant context for Fast/Standard/Ultra. |
 | `/project`, `dove-pi doctor` | Automatic read | Reports provider, Trellis version, task-lifecycle capability, and current task without modifying the project. |
 | No `.trellis/` found | Not automatic | Uses the lightweight provider; it never silently creates Trellis. |
-| `/project init` or `dove-pi project init` | Explicit | Runs the non-interactive `trellis init --yes --pi --no-monorepo` preset; use `/reload` in Pi afterwards. |
+| `/project init` or `dove-pi project init` | Explicit | Runs Dove's non-interactive Trellis initialization preset, reports health and discovered skills, then use `/reload` in Pi. |
 | `/project update` or `dove-pi project update` | Explicit | Runs `trellis update`; startup never updates Trellis implicitly. |
 | `/task create|start|finish|archive` | Explicit | Runs the project-local `.trellis/scripts/task.py` lifecycle command and records the mutation in Dove's ledger. |
 | `/memory [query]` | Explicit read | Searches normalized Trellis journal/memory documents; it does not promote conversation into permanent memory automatically. |

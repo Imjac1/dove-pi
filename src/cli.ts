@@ -24,6 +24,8 @@ if (args[0] === "doctor") {
 		console.log(JSON.stringify({ provider: requestedProvider, projectRoot: provider.projectRoot, restartRequired: true }, null, 2));
 	} else if (args[1] === "init") {
 		await initializeTrellis(provider.projectRoot);
+		const refreshed = createProjectProvider(provider.projectRoot);
+		console.log(JSON.stringify({ initialized: true, project: refreshed.getHealth(), skills: discoverSkills(provider.projectRoot).filter((skill) => skill.name.startsWith("trellis-")).length }, null, 2));
 	} else if (args[1] === "update") {
 		await updateTrellis(provider.projectRoot);
 	} else {
