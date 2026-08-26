@@ -2,205 +2,199 @@
 
 英文文档：[README.en.md](README.en.md)
 
-Dove Pi 是一个 Windows 优先的个人 Agent 运行环境。它使用官方 Pi 作为交互宿主，使用 Dove 作为执行面，并把 Trellis 作为项目管理和上下文控制面。
+Dove Pi 是一个 Windows 优先的个人 Agent 运行环境。用户只需要面对 Dove Pi；Pi 是交互宿主，Dove 负责执行，Trellis 在后台负责项目上下文和任务管理。
 
-## 架构
+## 最短使用流程
 
-```text
-Pi：交互宿主
- └─ Dove Pi Adapter：命令、工具、快捷键、状态栏
-     ├─ Dove Core：能力、策略、审批、调度、证据、执行记录
-     ├─ Windows Runtime：PowerShell 与事务式工作区操作
-     └─ Trellis Provider：项目、任务、规范、工作流、日志、记忆
-```
-
-核心不直接依赖 Pi 或 Trellis 的内部实现。当前目录是项目边界；如果发现 `.trellis/`，自动使用 Trellis；没有 Trellis 时提供引导初始化和轻量模式。
-
-数据权威只有一个：Trellis 管理项目数据，Dove 管理执行数据。Dove 不复制任务/规范数据库，也不直接改写 `.trellis/` 文件。
-
-上下文只有一条读取链路：`Project Provider → ProjectContextSnapshot → Context Compiler → Agent`。
-因此 `/project bind lightweight` 会同时影响状态、任务操作和模型上下文；不会出现状态显示为 lightweight、但模型仍偷偷读取 Trellis 的“半切换”状态。
-
-## 环境要求
-
-- Windows 10/11
-- Node.js `>=22.19.0`
-- PowerShell 5.1 或 PowerShell 7（推荐 PowerShell 7）
-- Pi 0.84.x 测试兼容范围
-- Trellis 0.6.x 或兼容的本地 provider
-
-## 安装
-
-在仓库目录执行：
-
-```powershell
+``@@BT@powershell
 python .\dove_pi.py install
-```
+cd 你的项目目录
+dove-pi
+``@@BT@
 
-默认行为：
+首次进入没有 `.trellis/` 的项目时，Pi 会询问是否初始化。确认后 Dove 会自动创建 Trellis、切换 Provider 并加载上下文；拒绝则继续使用 lightweight 模式。也可以手动执行 `/project init`。
 
-- 安装锁定的 Node 依赖；
-- 安装完整的 `max` 扩展 profile；
-- 尝试配置 Nerd Font；
-- 创建用户级 `dove-pi` launcher；
-- 执行快速类型检查和 Pi 集成验证。
+初始化/更新命令会在宿主允许时自动刷新 Pi 资源；如果当前生命周期不支持热重载，下一次 `/reload` 即可加载新 skills。
 
-常用参数：
+## 核心关系
 
-```powershell
-python .\dove_pi.py install --profile dev
+``@@BT@text
+用户 → Dove Pi → Agent
+              ├─ 自动发现项目
+              ├─ 自动读取上下文
+              ├─ 自动建议工作流
+              └─ 按需调用 Trellis 管理任务
+``@@BT@
+
+| 部件 | 负责什么 |
+| --- | --- |
+| Pi | 模型、TUI、原生快捷键和会话 |
+| Dove | 能力、策略、审批、调度、证据和执行记录 |
+| Project Provider | 项目发现、上下文标准化和任务操作 |
+| Trellis | 项目、任务、规范、工作流、记忆和日志 |
+
+Trellis 是项目数据的唯一权威，Dove 是执行数据的唯一权威。Dove 不复制第二套任务/规范数据库，也不直接改写 `.trellis/` 文件。
+
+上下文只有一条读取链路：
+
+``@@BT@text
+Project Provider → ProjectContextSnapshot → Context Compiler → Agent
+``@@BT@
+
+因此 `/project bind lightweight` 会同时影响项目状态、任务操作和模型上下文，不会出现“界面是 lightweight、模型仍在读 Trellis”的半切换状态。
+
+## 日常工作
+
+初始化完成后，直接用自然语言描述需求：
+
+``@@BT@text
+修复登录超时问题，并补充测试
+``@@BT@
+
+Dove 会自动判断请求类型、读取相关上下文、建议 workflow skill、优先使用已验证的 capability/recipe，并记录执行结果。普通聊天不会自动创建任务；明确要求跟踪或进行多步骤代码变更时才进入任务流程。
+
+## 任务管理
+
+推荐直接说：
+
+``@@BT@text
+开始跟踪这个开发任务
+完成当前任务
+归档这个任务
+``@@BT@
+
+Agent 可以调用 Dove 的 `agent_project_task` 工具完成 `create`、`start`、`finish`、`archive`。工具会先请求交互式确认，并通过 Provider 和 Dove mutation ledger 记录。
+
+兼容命令：
+
+``@@BT@text
+/task create <标题>
+/task start <任务目录或名称>
+/task finish
+/task archive <任务目录或名称>
+``@@BT@
+
+## Skill 怎么用
+
+Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据意图给出 advisory 建议：
+
+- 需求分析、方案设计 → `trellis-brainstorm`
+- 修改或修复代码 → `trellis-before-dev`
+- 测试、审查、验证 → `trellis-check`
+- 继续上次工作 → `trellis-continue`
+- 收尾、归档、记录经验 → `trellis-finish-work`
+
+建议不会自行修改项目。需要执行时可以显式调用：
+
+``@@BT@text
+/skill:trellis-start
+/skill:trellis-continue
+/skill:trellis-brainstorm
+/skill:trellis-before-dev
+/skill:trellis-check
+/skill:trellis-update-spec
+/skill:trellis-finish-work
+``@@BT@
+
+查看 skills：
+
+``@@BT@text
+/skills
+/skills trellis
+``@@BT@
+
+## 自动和手动的边界
+
+| 行为 | 默认方式 |
+| --- | --- |
+| 发现项目、Provider、任务上下文 | 自动 |
+| 选择上下文范围和执行策略 | 自动 |
+| 建议 workflow skill | 自动建议 |
+| 执行 skill | 显式调用或按工作流确认 |
+| 创建/修改/完成任务 | 明确意图 + 交互式确认 |
+| Trellis 初始化 | 首次启动询问，或 `/project init` |
+| Trellis 更新 | `/project update` 明确触发 |
+| Provider 绑定 | 仅高级配置使用 |
+
+## 常用命令
+
+``@@BT@text
+/status
+/status full
+/project
+/project doctor
+/project init
+/project update
+/project bind trellis
+/project bind lightweight
+/memory [关键词]
+/capabilities
+/mode fast|standard|ultra
+Ctrl+Alt+M
+``@@BT@
+
+普通使用不需要记住 `/project bind`、`/task ...` 或 `/skill:*`；它们是高级/兼容接口。
+
+## 执行策略
+
+默认使用 Standard。三种策略只影响上下文深度和调度积极程度，不改变权限、审批、目标范围或模型限制。
+
+| 策略 | 适合场景 |
+| --- | --- |
+| Fast | 简单、确定、短任务；优先精确能力匹配 |
+| Standard | 普通开发和多步骤任务；默认推荐 |
+| Ultra | 复杂任务；加载更多相关规范和记忆，并自适应压缩 |
+
+Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `max` 扩展 profile 是另一回事。
+
+## Trellis 更新
+
+Trellis 更新必须显式执行：
+
+``@@BT@text
+/project update
+``@@BT@
+
+或：
+
+``@@BT@powershell
+dove-pi project update
+``@@BT@
+
+更新由 Trellis 自己处理模板哈希、用户修改保护、冲突和 `.new` 文件。Dove 只负责调用 Provider、刷新状态并记录结果。
+
+## 故障排查
+
+``@@BT@powershell
+dove-pi doctor
+dove-pi project
+dove-pi skills trellis
+``@@BT@
+
+Pi 内可以执行 `/project doctor` 和 `/skills trellis`。
+
+- 没有 Trellis：确认初始化提示，或执行 `/project init`；
+- skills 没出现：执行 `/reload`，并确认 Pi 已信任项目目录；
+- Provider degraded：先看 `/project doctor`，修复 `.trellis/` 后再更新；
+- 想暂时绕过 Trellis：`/project bind lightweight`。
+
+## 安装与验证
+
+``@@BT@powershell
 python .\dove_pi.py install --verify full
 python .\dove_pi.py install --no-font
 python .\dove_pi.py install --no-path
 python .\dove_pi.py install --clean
-```
 
-`setup` 是 `install` 的别名。旧参数 `--extensions`、`--skip-checks` 仍兼容。重复安装会复用 lockfile 和 npm 缓存，不会每次隐式更新 Pi 或全局扩展。
-
-## 启动与项目检查
-
-从目标项目目录启动：
-
-```powershell
-dove-pi
-```
-
-也可以直接使用：
-
-```powershell
-python .\dove_pi.py
-```
-
-检查运行环境和项目 provider：
-
-```powershell
-dove-pi doctor
-dove-pi project
-dove-pi project init
-dove-pi project update
-```
-
-`project update` 只在明确调用时执行 Trellis 的迁移/更新逻辑。更新前应保留快照；用户修改的模板会通过 Trellis 的冲突和 `.new` 机制处理。
-
-## Trellis 是自动调用还是手动调用？
-
-两者都有，但职责不同：**读取和上下文组装是自动的，项目初始化、更新和任务修改是显式的。**
-
-| 场景 | 调用方式 | 实际行为 |
-| --- | --- | --- |
-| Dove 启动 | 自动 | 从当前目录向上发现最近的 `.trellis/`，选择 `TrellisProvider`。 |
-| 每次 Agent 请求 | 自动 | 在请求进入模型前读取任务、活动任务、规范、工作流和记忆，并按 Fast/Standard/Ultra 编译相关上下文。 |
-| `/project`、`dove-pi doctor` | 自动读取 | 显示 provider、Trellis 版本、任务生命周期能力和当前任务，不修改项目。 |
-| 没有 `.trellis/` | 首次启动时询问 | 交互式 Pi 会询问是否初始化；拒绝后使用 lightweight provider。明确绑定 lightweight 的项目不会重复询问。 |
-| `/project init` 或 `dove-pi project init` | 手动/高级 | 在当前目录执行 Dove 的非交互式 Trellis 初始化预设；完成后自动刷新 Pi 资源。 |
-| `/project update` 或 `dove-pi project update` | 手动 | 显式执行 `trellis update`，不会在启动时自动更新。 |
-| `/task create|start|finish|archive` | 手动 | 通过项目内 `.trellis/scripts/task.py` 执行任务生命周期，并写入 Dove mutation ledger。 |
-| `/memory [关键词]` | 手动触发读取 | 查询已经规范化的 Trellis journal/memory，不会自动把对话写成永久记忆。 |
-| `/project bind trellis|lightweight` | 手动 | 写入 `.dove/project.json` 固定 provider 选择，不直接修改 Trellis 数据。 |
-
-底层调用可以简化为：
-
-```text
-Pi 启动
-  → Dove 发现当前项目
-  → 发现 .trellis/
-  → 自动读取和规范化上下文
-  → Agent 请求使用相关上下文
-
-用户执行 /task 或 project init/update
-  → Dove 做健康检查和锁定
-  → 调用 Trellis task.py 或 trellis CLI
-  → 记录结果/失败/未完成 mutation
-```
-
-因此，正常开发时你不需要手动输入 `trellis` 命令；进入一个已经初始化的 Trellis 项目后，Dove 会自动使用它。如果项目还没有 Trellis，首次启动时确认初始化即可；也可以使用 `/project init` 手动触发。
-
-## 在 Pi 中调用 Trellis skills
-
-Trellis skill 是给 Agent 的工作流说明，不是 Trellis CLI 命令。Pi 会从当前项目及其父目录自动发现 `.agents/skills/**/SKILL.md`，首次使用项目资源时按提示信任项目即可。
-
-常用调用方式：
-
-```text
-/skill:trellis-start
-/skill:trellis-brainstorm
-/skill:trellis-before-dev
-/skill:trellis-check
-/skill:trellis-continue
-/skill:trellis-update-spec
-/skill:trellis-finish-work
-```
-
-用途分别是：初始化/恢复会话、需求分析、编码前加载规范、质量检查、继续当前任务、记录规范、收尾归档。也可以带补充说明，例如：
-
-```text
-/skill:trellis-brainstorm 设计一个新的 Windows capability
-/skill:trellis-check 检查当前任务的 provider 和上下文边界
-```
-
-如果不确定当前项目是否被 Pi 发现，可以使用 `/skills` 查看所有已发现的 skill；也可以在终端运行：
-
-```text
-dove-pi skills
-dove-pi skills trellis
-```
-
-skill 负责指导 Agent 选择 Trellis 工作流；`/project init`、`/task ...` 等命令负责真正执行项目初始化和任务生命周期。初始化/更新命令会自动请求 Pi 刷新资源；如果宿主处于不可重载的生命周期，才需要手动执行 `/reload`。
-
-## Pi 命令
-
-- `Ctrl+Alt+M`：Fast → Standard → Ultra
-- `/mode fast|standard|ultra`：精确切换策略
-- `/status`、`/status full`：查看 Dove 状态和 telemetry 来源
-- `/project`：查看项目根目录、provider、Trellis 健康状态
-- `/project doctor`：检查 Provider、任务能力和 skill 是否需要 `/reload`
-- `/project bind trellis|lightweight`：显式绑定 provider
-- `/task create|start|finish|archive ...`：调用 Trellis 任务生命周期
-- `/memory [关键词]`：搜索项目日志和记忆
-- `/capabilities`：查看可复用能力
-
-Pi 原生的模型选择和退出快捷键保持不变。Pi 的 thinking level `max` 和扩展安装 profile `max` 仍然保留，但它们不是 Dove 执行策略。
-
-## 三种执行策略
-
-| 策略 | 行为 |
-| --- | --- |
-| Fast | 只加载当前任务 PRD 和运行时规范，优先精确能力匹配，尽量不调度子 Agent。 |
-| Standard | 使用相关性排序的任务/规范上下文，按正常规则执行能力和调度。 |
-| Ultra | 扩大相关上下文和记忆检索，去重并自适应压缩，不设置 Dove 自己的固定 token 上限。 |
-
-策略不会改变权限、审批、目标范围或模型限制。正在运行的步骤保持原策略；切换只影响尚未开始的步骤。
-
-调度规则：短任务、共享可变状态、Fast Path 默认 inline；独立且耗时较长的分支才考虑 parallel；可隔离的长任务才考虑 subagent。每次决策记录预测成本、实际耗时和原因。
-
-## Trellis 同步模型
-
-同步是 provider 介导的规范化，不是文件镜像：
-
-1. 发现项目根目录和 provider；
-2. 在会话开始及上下文敏感操作前读取 Trellis；
-3. 转换为 Dove Core 的统一只读模型；
-4. 所有项目修改通过 provider；
-5. Dove ledger/evidence 保存 Trellis task ID 和 provider revision；
-6. 发现冲突时保留双方并要求显式处理，不使用静默的 last-write-wins。
-
-项目内容进入模型上下文时会标记为不可信数据，不能覆盖系统安全策略。快照、证据和日志默认排除凭据文件。
-
-## 开发与验证
-
-```powershell
-npm install
 npm run typecheck
 npm test
 npm run test:installer
 npm run doctor
 npm run pi:smoke
-```
+``@@BT@
 
-当前实现是可运行的基础 MVP，不是完整的开发、运维或安全能力市场。任务 replay、完整远程控制面、第二套原生项目数据库和自动记忆晋升暂不在首个版本范围内。
+`setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存，不会隐式升级 Pi 或全局扩展。
 
-## 当前后续工作
-
-下一阶段重点是：干净环境安装和真实 Trellis 生命周期验证、真实 Pi 子 Agent/channel 调度、成本校准、Trellis 版本更新/冲突/回滚测试，以及发布前的 CI 和安全边界检查。
+当前版本是可运行的基础 MVP。任务 replay、完整远程控制面、第二套原生项目数据库和自动记忆晋升暂不在首个版本范围内。
 
 项目规范位于 [.trellis/spec/](.trellis/spec/)，当前任务位于 [.trellis/tasks/08-26-personal-agent-os/](.trellis/tasks/08-26-personal-agent-os/)。

@@ -19,6 +19,8 @@
 15. Add source-boundary labeling for project context, secret-path exclusions, monorepo scope resolution, and explicit Git/Trellis maintenance confirmation.
 16. Simplify the user-facing flow: add consented single-step project bootstrap, refresh provider/skills after bootstrap,
     and keep Trellis-specific commands as advanced compatibility interfaces.
+17. Add deterministic workflow-intent suggestions and an approval-protected `agent_project_task` tool; reuse the same
+    mutation/ledger path from `/task` so natural language and compatibility commands cannot diverge.
 
 ## Validation
 
@@ -40,6 +42,8 @@
 - Verify Fast/Standard/Ultra context selection and Pi locked/latest compatibility smoke tests.
 - Verify a new interactive project can bootstrap from one confirmation, an explicitly lightweight-bound project does not
   prompt or read Trellis, and the existing low-level commands remain backward compatible.
+- Verify task-tool mutations require confirmation, are blocked in non-interactive contexts, and preserve the same
+  provider-qualified task IDs and ledger records as `/task`; verify skill suggestions are advisory only.
 
 ## Review gates
 

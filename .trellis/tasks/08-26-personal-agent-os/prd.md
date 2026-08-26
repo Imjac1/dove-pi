@@ -115,9 +115,13 @@ remain supported as explicit advanced/compatibility interfaces.
 - [x] A new project can be initialized from a single Dove-facing flow with one user confirmation.
 - [x] After initialization, the active provider and normalized context are available immediately; skill refresh is
   automatic when the host supports reload and otherwise produces one actionable notice.
-- [ ] The primary documentation presents Dove commands and natural-language work first; Trellis CLI details are moved
+- [x] The primary documentation presents Dove commands and natural-language work first; Trellis CLI details are moved
   to an advanced section.
 - [x] Explicit lightweight binding suppresses initialization prompts and all Trellis context reads.
+- [x] Explicit natural-language task requests can be routed through an approval-protected Dove project-task tool;
+  ordinary conversational turns must not mutate Trellis.
+- [x] The Agent receives a deterministic skill suggestion for planning, implementation, checking, continuation, and
+  finish intents without requiring the user to remember skill names.
 
 - Trellis owns project management: project identity, tasks, task lifecycle, specs, workflow state, journals, and long-term memory.
 - Dove owns execution: capabilities, policies, approvals, Windows runtime, evidence, execution ledger, mode events, and Pi UX.

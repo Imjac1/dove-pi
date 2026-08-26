@@ -30,6 +30,7 @@ describe("Pi adapter", () => {
 		assert.ok(tools.has("agent_list_capabilities"));
 		assert.ok(tools.has("agent_doctor"));
 		assert.ok(tools.has("agent_project_status"));
+		assert.ok(tools.has("agent_project_task"));
 		assert.ok(tools.has("agent_project_context"));
 		assert.ok(tools.has("agent_workspace_snapshot"));
 		assert.ok(tools.has("agent_workspace_verify"));
@@ -64,6 +65,8 @@ describe("Pi adapter", () => {
 		await commands.get("mode")?.handler("max", context);
 		assert.equal(notifications.length, notificationCount + 1);
 		assert.equal(notifications.at(-1), "Mode must be fast, standard, or ultra.");
+		const beforeStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.match(String((beforeStart as { message?: { content?: string } })?.message?.content), /trellis-before-dev/);
 	});
 });
 

@@ -56,6 +56,11 @@ and host resources when the Pi command context exposes `reload()`. Explicitly bo
 The existing low-level commands remain available for diagnostics, scripts, and compatibility, but the primary workflow
 should not require users to know Trellis CLI flags or individual skill names.
 
+Natural-language task changes are exposed as one LLM-callable `agent_project_task` tool. The tool accepts only the
+versioned lifecycle operations (`create`, `start`, `finish`, `archive`), asks for interactive confirmation before any
+mutation, and delegates to the selected Provider. The context adapter adds a non-authoritative skill suggestion based
+on explicit intent keywords; suggestions never execute a skill or change project state by themselves.
+
 Provider selection is deterministic: an explicit project setting wins; otherwise an existing `.trellis/` selects
 `TrellisProvider`. In a directory without Trellis, the first-run flow offers guided `trellis init`; declining leaves
 project-management features unavailable but does not prevent basic Dove execution.
