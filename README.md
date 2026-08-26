@@ -79,11 +79,43 @@ dove-pi project update
 
 `project update` 只在明确调用时执行 Trellis 的迁移/更新逻辑。更新前应保留快照；用户修改的模板会通过 Trellis 的冲突和 `.new` 机制处理。
 
+## Trellis 是自动调用还是手动调用？
+
+两者都有，但职责不同：**读取和上下文组装是自动的，项目初始化、更新和任务修改是显式的。**
+
+| 场景 | 调用方式 | 实际行为 |
+| --- | --- | --- |
+| Dove 启动 | 自动 | 从当前目录向上发现最近的 `.trellis/`，选择 `TrellisProvider`。 |
+| 每次 Agent 请求 | 自动 | 在请求进入模型前读取任务、活动任务、规范、工作流和记忆，并按 Fast/Standard/Ultra 编译相关上下文。 |
+| `/project`、`dove-pi doctor` | 自动读取 | 显示 provider、Trellis 版本、任务生命周期能力和当前任务，不修改项目。 |
+| 没有 `.trellis/` | 不自动初始化 | 使用 lightweight provider；不会偷偷创建 Trellis。 |
+| `dove-pi project init` | 手动 | 显式执行 `trellis init`。 |
+| `dove-pi project update` | 手动 | 显式执行 `trellis update`，不会在启动时自动更新。 |
+| `/task create|start|finish|archive` | 手动 | 通过项目内 `.trellis/scripts/task.py` 执行任务生命周期，并写入 Dove mutation ledger。 |
+| `/memory [关键词]` | 手动触发读取 | 查询已经规范化的 Trellis journal/memory，不会自动把对话写成永久记忆。 |
+| `/project bind trellis|lightweight` | 手动 | 写入 `.dove/project.json` 固定 provider 选择，不直接修改 Trellis 数据。 |
+
+底层调用可以简化为：
+
+```text
+Pi 启动
+  → Dove 发现当前项目
+  → 发现 .trellis/
+  → 自动读取和规范化上下文
+  → Agent 请求使用相关上下文
+
+用户执行 /task 或 project init/update
+  → Dove 做健康检查和锁定
+  → 调用 Trellis task.py 或 trellis CLI
+  → 记录结果/失败/未完成 mutation
+```
+
+因此，正常开发时你不需要手动输入 `trellis` 命令；进入一个已经初始化的 Trellis 项目后，Dove 会自动使用它。只有初始化、升级、绑定 provider 和修改任务生命周期时，才需要显式命令。
+
 ## Pi 命令
 
 - `Ctrl+Alt+M`：Fast → Standard → Ultra
 - `/mode fast|standard|ultra`：精确切换策略
-- `/mode fast|standard|ultra`：Dove 执行策略只接受这三个值
 - `/status`、`/status full`：查看 Dove 状态和 telemetry 来源
 - `/project`：查看项目根目录、provider、Trellis 健康状态
 - `/project bind trellis|lightweight`：显式绑定 provider

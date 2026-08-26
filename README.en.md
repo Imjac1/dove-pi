@@ -79,11 +79,43 @@ dove-pi project update
 
 `project update` runs Trellis migration/update logic only when explicitly requested. Preserve a snapshot before maintenance; Trellis handles modified templates and `.new` sidecars.
 
+## Is Trellis automatic or manual?
+
+Both, with different responsibilities: **reads and context assembly are automatic; initialization, updates, and task mutations are explicit.**
+
+| Situation | Invocation | Actual behavior |
+| --- | --- | --- |
+| Dove startup | Automatic | Discovers the nearest `.trellis/` from the current directory and selects `TrellisProvider`. |
+| Every Agent request | Automatic | Before the prompt reaches the model, reads tasks, the active task, specs, workflow, and memory, then compiles relevant context for Fast/Standard/Ultra. |
+| `/project`, `dove-pi doctor` | Automatic read | Reports provider, Trellis version, task-lifecycle capability, and current task without modifying the project. |
+| No `.trellis/` found | Not automatic | Uses the lightweight provider; it never silently creates Trellis. |
+| `dove-pi project init` | Explicit | Runs `trellis init`. |
+| `dove-pi project update` | Explicit | Runs `trellis update`; startup never updates Trellis implicitly. |
+| `/task create|start|finish|archive` | Explicit | Runs the project-local `.trellis/scripts/task.py` lifecycle command and records the mutation in Dove's ledger. |
+| `/memory [query]` | Explicit read | Searches normalized Trellis journal/memory documents; it does not promote conversation into permanent memory automatically. |
+| `/project bind trellis|lightweight` | Explicit | Writes `.dove/project.json` to pin provider selection; it does not edit Trellis data. |
+
+The underlying flow is:
+
+```text
+Pi startup
+  → Dove discovers the current project
+  → finds .trellis/
+  → automatically reads and normalizes context
+  → Agent request uses the relevant context
+
+User runs /task or project init/update
+  → Dove checks provider health and acquires the project lock
+  → invokes Trellis task.py or the Trellis CLI
+  → records success, failure, or an incomplete mutation
+```
+
+For normal development you do not need to type a `trellis` command manually. Open Dove Pi inside an initialized Trellis project and it will use Trellis automatically. Explicit commands are only needed for initialization, upgrades, provider binding, and task lifecycle changes.
+
 ## Pi commands
 
 - `Ctrl+Alt+M`: cycle Fast → Standard → Ultra
 - `/mode fast|standard|ultra`: select an exact execution mode
-- `/mode fast|standard|ultra`: Dove accepts only these three execution modes
 - `/status`, `/status full`: inspect Dove status and telemetry sources
 - `/project`: show root, provider, and Trellis health
 - `/project bind trellis|lightweight`: explicitly bind a provider
