@@ -154,10 +154,7 @@ function runNpmInstall(args: readonly string[], cwd: string): Promise<boolean> {
 			cwd,
 			stdio: "inherit",
 			windowsHide: true,
-			env: {
-				...process.env,
-				npm_config_include: "optional",
-			},
+			env: npmEnvironment(),
 		});
 		child.once("error", (error) => {
 			console.warn(`Warning: npm repair process could not start (${error instanceof Error ? error.message : String(error)}).`);
@@ -196,14 +193,7 @@ function runPiInstall(command: string, args: readonly string[], cwd: string): Pr
 			cwd,
 			stdio: "inherit",
 			windowsHide: true,
-			env: {
-				...process.env,
-				// @ast-grep/cli ships the Windows executable as an optional
-				// dependency. Keep it enabled even when the user's npm config omits
-				// optional packages by default. Do not set the deprecated `optional`
-				// config alias because current npm prints a warning for every package.
-				npm_config_include: "optional",
-			},
+			env: npmEnvironment(),
 		});
 		child.once("error", reject);
 		child.once("exit", (code, signal) => {
@@ -212,4 +202,14 @@ function runPiInstall(command: string, args: readonly string[], cwd: string): Pr
 			else resolve();
 		});
 	});
+}
+
+function npmEnvironment(): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+	// @ast-grep/cli ships the Windows executable as an optional dependency.
+	// Force inclusion without carrying npm's deprecated `optional` alias into
+	// the child process (which makes current npm print a warning per package).
+	delete env.npm_config_optional;
+	env.npm_config_include = "optional";
+	return env;
 }
