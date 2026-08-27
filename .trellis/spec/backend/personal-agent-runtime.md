@@ -569,3 +569,4 @@ duplicating skill parsing or changing project files.
   non-interactive shared-skill compatibility preset `--yes --codex --no-monorepo`.
 - The Dove boundary must not install Trellis' competing `.pi` extension; it
   reports provider health and discovered Trellis skill count after init.
+- A missing Trellis project must not block Pi's startup lifecycle with a synchronous confirmation. Startup shows a non-blocking hint; bootstrap confirmation is deferred to the first implementation, planning, or task-oriented request, while `/project init` remains an explicit immediate path.

@@ -23,7 +23,7 @@ cd path\to\your\project
 dove-pi
 ```
 
-When a project has no `.trellis/`, interactive Pi asks once whether to initialize project context. Accepting creates Trellis, selects the provider, and loads context. Declining keeps the project in lightweight mode. You can also run `/project init` explicitly.
+When a project has no `.trellis/`, Dove no longer blocks startup waiting for initialization confirmation. Pi becomes interactive immediately and shows a hint; Dove asks only when the first implementation, fix, planning, or task request arrives. Accepting creates Trellis, selects the provider, and loads context. Declining keeps the project in lightweight mode. You can also run `/project init` at any time.
 
 Initialization and update commands request a Pi resource reload when the host lifecycle allows it. If the current lifecycle cannot hot-reload, run `/reload` once.
 

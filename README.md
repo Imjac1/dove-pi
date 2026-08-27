@@ -23,7 +23,7 @@ cd 你的项目目录
 dove-pi
 ```
 
-首次进入没有 `.trellis/` 的项目时，Pi 会询问是否初始化。确认后 Dove 会自动创建 Trellis、切换 Provider 并加载上下文；拒绝则继续使用 lightweight 模式。也可以手动执行 `/project init`。
+首次进入没有 `.trellis/` 的项目时，Dove 不会在启动阶段阻塞等待初始化确认；Pi 会先立即进入可交互状态并显示提示。第一次进行实现、修复、规划或任务类操作时，Dove 才会询问是否初始化。确认后自动创建 Trellis、切换 Provider 并加载上下文；拒绝则继续使用 lightweight 模式。也可以随时手动执行 `/project init`。
 
 初始化/更新命令会在宿主允许时自动刷新 Pi 资源；如果当前生命周期不支持热重载，下一次 `/reload` 即可加载新 skills。
 

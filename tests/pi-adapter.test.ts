@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 
 describe("Pi adapter", () => {
@@ -106,6 +106,13 @@ describe("Pi adapter", () => {
 		assert.ok(payload.stdout.length < 8_500);
 		assert.match(payload.stdout, /truncated/);
 		assert.ok(payload.nested[0].stderr.length < 8_500);
+	});
+
+	it("does not block a new directory on bootstrap for ordinary greetings", () => {
+		assert.equal(shouldOfferProjectBootstrap("hi"), false);
+		assert.equal(shouldOfferProjectBootstrap("你好"), false);
+		assert.equal(shouldOfferProjectBootstrap("修复登录问题"), true);
+		assert.equal(shouldOfferProjectBootstrap("继续当前任务"), true);
 	});
 });
 

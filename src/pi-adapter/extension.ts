@@ -614,16 +614,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		updateStatus(ctx);
 		await reconcileProjectMutations(ctx);
 		if (ctx.hasUI && !projectBootstrapPrompted && isUnboundLightweightProject()) {
-			projectBootstrapPrompted = true;
-			const confirmed = await ctx.ui.confirm("初始化项目上下文？", "当前项目还没有 Trellis。初始化后，Dove 会自动管理任务、规范、工作流和记忆；选择否将继续使用轻量模式。\n\n确认初始化？");
-			if (confirmed) {
-				try {
-					await initializeProject();
-					ctx.ui.notify("项目上下文初始化完成；Provider 已生效。新 skills 将在下一次 Pi reload 后可用。", "info");
-				} catch (error) {
-					ctx.ui.notify(`项目上下文初始化失败：${error instanceof Error ? error.message : String(error)}`, "error");
-				}
-			}
+			ctx.ui.notify("当前目录还没有 Trellis；普通对话会立即可用。第一次进行实现、修复或任务规划时，Dove 会询问是否初始化项目上下文，也可以执行 /project init。", "info");
 		}
 		ctx.ui.notify("Ctrl+P 切换模型 · Ctrl+Alt+M 循环执行策略 · Ctrl+D 或 /quit 退出", "info");
 	});
@@ -645,7 +636,19 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		await settings.flush();
 	});
 
-	pi.on("before_agent_start", async (event) => {
+	pi.on("before_agent_start", async (event, ctx) => {
+		if (ctx.hasUI && !projectBootstrapPrompted && isUnboundLightweightProject() && shouldOfferProjectBootstrap(event.prompt)) {
+			projectBootstrapPrompted = true;
+			const confirmed = await ctx.ui.confirm("初始化项目上下文？", "当前项目还没有 Trellis。初始化后，Dove 会自动管理任务、规范、工作流和记忆；选择否将继续使用轻量模式。\n\n确认初始化？");
+			if (confirmed) {
+				try {
+					await initializeProject();
+					ctx.ui.notify("项目上下文初始化完成；Provider 已生效。新 skills 将在下一次 Pi reload 后可用。", "info");
+				} catch (error) {
+					ctx.ui.notify(`项目上下文初始化失败：${error instanceof Error ? error.message : String(error)}`, "error");
+				}
+			}
+		}
 		if (toolProfile === "auto" && !hasExplicitToolSelection) {
 			const project = projectProvider.getContext();
 			const taskHint = project.currentTask
@@ -681,6 +684,12 @@ function summarizeProjectTask(task: ProjectTask | undefined): (ProjectTask & { f
 		fileCount: task.files.length,
 		filesOmitted: Math.max(0, task.files.length - files.length),
 	};
+}
+
+export function shouldOfferProjectBootstrap(prompt: string): boolean {
+	const value = prompt.trim().toLowerCase();
+	if (!value || /^(hi|hello|hey|你好|嗨|谢谢|thanks|继续聊天|闲聊)$/.test(value)) return false;
+	return /implement|fix|refactor|change|modify|add|create|build|test|debug|plan|design|review|实现|修复|重构|修改|新增|开发|编写|构建|测试|调试|规划|设计|审查|任务/.test(value);
 }
 
 /** Keep complete execution output in tool details/ledger, but bound the copy
