@@ -26,6 +26,7 @@ function trellisCapabilities(projectRoot: string): ProviderCapabilities {
 export class TrellisProvider implements ProjectProvider {
 	public readonly kind = "trellis" as const;
 	public readonly projectRoot: string;
+	private contextCache?: { context: ProjectContextSnapshot; expiresAt: number };
 
 	public constructor(projectRoot: string) {
 		this.projectRoot = resolve(projectRoot);
@@ -64,6 +65,12 @@ export class TrellisProvider implements ProjectProvider {
 	}
 
 	public getContext(): ProjectContextSnapshot {
+		// before_agent_start commonly asks for the same projection twice (tool
+		// intent hint + context compilation). A very short request-local cache
+		// removes duplicate recursive filesystem scans without hiding edits across
+		// turns; mutations recreate the provider and therefore invalidate it.
+		const now = Date.now();
+		if (this.contextCache && this.contextCache.expiresAt > now) return this.contextCache.context;
 		const snapshot = readTrellisSnapshot(this.projectRoot);
 		const tasks = snapshot.tasks.map((task) => toProjectTask(task));
 		const currentTask = tasks.find((task) => snapshot.activeTaskPath !== undefined && task.path === snapshot.activeTaskPath);
@@ -73,7 +80,9 @@ export class TrellisProvider implements ProjectProvider {
 		for (const path of snapshot.workflowFiles) addDocument(documents, path, "workflow");
 		for (const memory of snapshot.memories) addDocument(documents, memory.path, memory.kind === "journal" ? "journal" : "memory");
 		const revision = contextRevision(this.projectRoot, snapshot);
-		return { provider: this.kind, projectRoot: this.projectRoot, revision, tasks, ...(currentTask ? { currentTask } : {}), documents, raw: snapshot };
+		const context = { provider: this.kind, projectRoot: this.projectRoot, revision, tasks, ...(currentTask ? { currentTask } : {}), documents, raw: snapshot };
+		this.contextCache = { context, expiresAt: now + 250 };
+		return context;
 	}
 
 	public getCurrentTask(): ProjectTask | undefined {

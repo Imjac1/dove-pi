@@ -22,6 +22,7 @@ describe("Pi adapter", () => {
 			appendEntry() {},
 			getAllTools() { return [{ name: "read" }, { name: "agent_doctor" }, { name: "agent_browser" }]; },
 			setActiveTools(names: string[]) { activeToolSets.push(names); },
+			getActiveTools() { return activeToolSets.at(-1) ?? []; },
 			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
 		} as unknown as ExtensionAPI;
 
@@ -72,6 +73,11 @@ describe("Pi adapter", () => {
 		assert.ok(notifications.some((value) => value.includes("trellis-start")));
 		await commands.get("project")?.handler("doctor", context);
 		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
+		await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.ok(activeToolSets.at(-1)?.includes("agent_browser"));
+		const autoToolSetCount = activeToolSets.length;
+		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.equal(activeToolSets.length, autoToolSetCount, "auto mode keeps intent tools instead of rebuilding the set");
 		const notificationCount = notifications.length;
 		await commands.get("mode")?.handler("max", context);
 		assert.equal(notifications.length, notificationCount + 1);
@@ -80,7 +86,8 @@ describe("Pi adapter", () => {
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor", "agent_browser"]);
 		const beforeStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal((beforeStart as { message?: unknown })?.message, undefined);
-		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
+		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
+		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
 		const contextResult = await events.get("context")?.({
 			type: "context",
 			messages: [
@@ -88,8 +95,9 @@ describe("Pi adapter", () => {
 				{ role: "user", content: [{ type: "text", text: "keep" }], timestamp: 2 },
 			],
 		}, context);
-		assert.equal((contextResult as { messages?: unknown[] })?.messages?.length, 1);
+		assert.equal((contextResult as { messages?: unknown[] })?.messages?.length, 2);
 		assert.equal(((contextResult as { messages?: Array<{ role?: string }> })?.messages?.[0])?.role, "user");
+		assert.equal(((contextResult as { messages?: Array<{ customType?: string }> })?.messages?.[1])?.customType, "personal-agent-context");
 	});
 
 	it("keeps only the compact core tool set by default", () => {
