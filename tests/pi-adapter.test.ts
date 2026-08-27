@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension, { compactModelPayload, compactToolResultContent, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
-import { selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
+import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 
 describe("Pi adapter", () => {
 	it("registers modes, shortcuts, capabilities, and doctor", async () => {
@@ -108,6 +108,9 @@ describe("Pi adapter", () => {
 		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "继续当前任务", "08-25-execute-assembly-impl e2e protocol"), ["read", "lsp_diagnostics", "symbol_search"]);
 		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "继续", "Personal Agent OS"), ["read"]);
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser"], "full"), ["read", "agent_doctor", "agent_browser"]);
+		assert.equal(hasHashlineEditTools(["read", "replace", "insert", "grep"]), true);
+		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "core"), ["read", "grep", "replace", "insert"]);
+		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "full"), ["read", "grep", "replace", "insert"]);
 	});
 
 	it("keeps large execution logs out of model-facing tool results", () => {
@@ -130,6 +133,8 @@ describe("Pi adapter", () => {
 		assert.ok(compacted);
 		assert.ok((compacted?.[0] as { text: string }).text.length <= 1_100);
 		assert.match((compacted?.[0] as { text: string }).text, /tool result compacted/);
+		const withImage = compactToolResultContent([{ type: "text", text: "x".repeat(40_000) }, { type: "image", data: "abc", mimeType: "image/png" }], 1_000);
+		assert.equal(withImage?.some((part) => part.type === "image"), true);
 	});
 
 	it("derives an Ultra context budget from the active model window", () => {

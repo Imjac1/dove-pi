@@ -9,6 +9,13 @@ export interface ExtensionInstallResult {
 	readonly profile: ExtensionProfile;
 	readonly installed: readonly string[];
 	readonly skipped: readonly string[];
+	readonly failed: readonly ExtensionInstallFailure[];
+}
+
+export interface ExtensionInstallFailure {
+	readonly id: string;
+	readonly installSpec: string;
+	readonly error: string;
 }
 
 export interface ExtensionInstallOptions {
@@ -17,6 +24,8 @@ export interface ExtensionInstallOptions {
 	readonly configuredPackages?: readonly string[];
 	/** Emit one line per package; the default is concise for the installer/UI. */
 	readonly verbose?: boolean;
+	/** Continue with the remaining optional profile entries after an install error. */
+	readonly continueOnError?: boolean;
 	readonly run?: (command: string, args: readonly string[], cwd: string) => Promise<void>;
 }
 
@@ -30,8 +39,10 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	const piEntry = options.piEntry ?? defaultPiEntry();
 	const run = options.run ?? runPiInstall;
 	const verbose = options.verbose ?? false;
+	const continueOnError = options.continueOnError ?? true;
 	const installed: string[] = [];
 	const skipped: string[] = [];
+	const failed: ExtensionInstallFailure[] = [];
 	const configuredPackages = options.configuredPackages ?? await readConfiguredPackages();
 
 	for (const entry of getProfilePackages(profile)) {
@@ -41,11 +52,30 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 			continue;
 		}
 		if (verbose) console.log(`Installing ${entry.id} (${entry.installSpec})...`);
-		await run(piEntry, ["install", entry.installSpec], cwd);
-		installed.push(entry.id);
+		try {
+			await run(piEntry, ["install", entry.installSpec], cwd);
+			installed.push(entry.id);
+		} catch (error) {
+			const failure = {
+				id: entry.id,
+				installSpec: entry.installSpec,
+				error: describeInstallFailure(entry.id, error),
+			};
+			failed.push(failure);
+			console.warn(`Warning: optional Pi extension ${entry.id} could not be installed. ${failure.error}`);
+			if (!continueOnError) throw error;
+		}
 	}
 
-	return { profile, installed, skipped };
+	return { profile, installed, skipped, failed };
+}
+
+function describeInstallFailure(id: string, error: unknown): string {
+	const message = error instanceof Error ? error.message : String(error);
+	if (id === "lens" && /ast-grep.*native binary/i.test(message)) {
+		return `${message} Windows could not resolve the optional @ast-grep native package; retry after updating npm or use the dev profile to omit pi-lens.`;
+	}
+	return message;
 }
 
 async function readConfiguredPackages(): Promise<string[]> {
@@ -65,7 +95,19 @@ function defaultPiEntry(): string {
 
 function runPiInstall(command: string, args: readonly string[], cwd: string): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, [command, ...args], { cwd, stdio: "inherit", windowsHide: true });
+		const child = spawn(process.execPath, [command, ...args], {
+			cwd,
+			stdio: "inherit",
+			windowsHide: true,
+			env: {
+				...process.env,
+				// @ast-grep/cli ships the Windows executable as an optional
+				// dependency. Keep it enabled even when the user's npm config omits
+				// optional packages by default.
+				npm_config_include: "optional",
+				npm_config_optional: "true",
+			},
+		});
 		child.once("error", reject);
 		child.once("exit", (code, signal) => {
 			if (signal) reject(new Error(`Pi extension install terminated by ${signal}.`));

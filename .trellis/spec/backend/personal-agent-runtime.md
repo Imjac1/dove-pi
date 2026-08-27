@@ -434,6 +434,7 @@ dove-pi
 - Trigger: reviewing or composing optional third-party Pi extensions for a Dove Pi installation.
 - Scope: `src/extensions/catalog.ts` owns the package/profile manifest; `src/extensions/doctor.ts` owns offline-first compatibility checks; `src/cli.ts` and `dove_pi.py` expose the CLI boundary.
 - The catalog remains the single source of truth for extension package/profile metadata. Explicit `extensions install <profile>` and the source installer may install the selected profile by delegating each package to Pi's official `pi install` command; they must not implement package resolution or settings mutation themselves. Dove Pi core, dispatch, workspace recovery, and scope policy remain authoritative.
+- Profile installation is failure-tolerant by default: a failed optional package is recorded in a structured `failed` list, reported with an actionable warning, and does not prevent remaining profile entries or the Dove core from being installed. The Pi child process preserves npm optional dependencies so packages with platform-native helpers (for example `pi-lens`/`@ast-grep/cli`) can resolve their binaries. Callers that require all entries may opt into fail-fast behavior through the installer API.
 
 ### 2. Signatures
 

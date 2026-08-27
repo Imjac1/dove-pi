@@ -46,6 +46,22 @@ describe("extension profiles", () => {
 		assert.equal(report.issues.some((issue) => issue.code === "profile-conflict"), false);
 	});
 
+	it("reports hashline overlap with Dove built-in editing authority", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "dove-pi-extension-hashline-"));
+		const settingsPath = join(temporary, "settings.json");
+		await writeFile(settingsPath, JSON.stringify({ packages: ["npm:pi-hashline-edit-pro"] }), "utf8");
+		const report = await inspectExtensionProfile("dev", {
+			cwd: temporary,
+			settingsPath,
+			piVersion: "0.84.3",
+			nodeVersion: "22.19.0",
+			platform: "win32",
+			checkExecutables: false,
+		});
+		assert.ok(report.issues.some((issue) => issue.code === "dove-authority-overlap"));
+		await rm(temporary, { recursive: true, force: true });
+	});
+
 	it("detects a conflicting pair when a caller composes one", () => {
 		const issues = checkProfileConflicts([getExtension("pi-lsp"), getExtension("lens")]);
 		assert.ok(issues.some((issue) => issue.code === "profile-conflict"));
@@ -103,5 +119,34 @@ describe("extension profiles", () => {
 		});
 		assert.deepEqual(result.skipped, ["extension-settings", "open-tui"]);
 		assert.deepEqual(calls.map((call) => call[2]), ["npm:@tmustier/pi-raw-paste", "npm:@narumitw/pi-caffeinate"]);
+	});
+
+	it("continues after an optional extension fails and reports the failure", async () => {
+		const calls: string[][] = [];
+		const result = await installExtensionProfile("minimal", {
+			piEntry: "pi-entry",
+			configuredPackages: [],
+			run: async (command, args) => {
+				calls.push([command, ...args]);
+				if (args[1] === "npm:pi-open-tui") throw new Error("Failed to locate native binary.");
+			},
+		});
+		assert.deepEqual(result.installed, ["extension-settings", "raw-paste", "caffeinate"]);
+		assert.deepEqual(result.failed, [{ id: "open-tui", installSpec: "npm:pi-open-tui", error: "Failed to locate native binary." }]);
+		assert.equal(calls.length, 4);
+	});
+
+	it("can fail fast when strict extension installation is requested", async () => {
+		await assert.rejects(
+			installExtensionProfile("minimal", {
+				piEntry: "pi-entry",
+				configuredPackages: [],
+				continueOnError: false,
+				run: async (_command, args) => {
+					if (args[1] === "npm:pi-open-tui") throw new Error("native install failed");
+				},
+			}),
+			/native install failed/,
+		);
 	});
 });

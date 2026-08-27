@@ -102,6 +102,7 @@ export async function inspectExtensionProfile(profile: ExtensionProfile, options
 	issues.push(...checkProfileConflicts(profilePackages));
 	const configuredEntries = EXTENSION_CATALOG.filter((entry) => settings.packages.some((value) => matchesConfiguredPackage(value, entry)));
 	issues.push(...checkConfiguredConflicts(configuredEntries));
+	issues.push(...checkDoveAuthorityOverlap(configuredEntries));
 	issues.push(...checkLoadOrder(profilePackages, settings.packages));
 	return {
 		profile,
@@ -171,6 +172,16 @@ function checkConfiguredConflicts(packages: readonly ExtensionPackageDefinition[
 		...issue,
 		message: `${issue.message} Both packages are configured in Pi settings.`,
 	}));
+}
+
+function checkDoveAuthorityOverlap(packages: readonly ExtensionPackageDefinition[]): ExtensionDoctorIssue[] {
+	if (!packages.some((entry) => entry.id === "hashline-edit")) return [];
+	return [{
+		level: "warning",
+		code: "dove-authority-overlap",
+		packageId: "hashline-edit",
+		message: "hashline-edit replaces Pi built-in read/edit/grep; Dove will suppress built-in edit at runtime. Verify only hashline replace/insert are used for mutations.",
+	}];
 }
 
 async function findLocalPackageJson(packageName: string, cwd: string): Promise<string | undefined> {

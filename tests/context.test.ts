@@ -55,7 +55,9 @@ describe("Trellis context", () => {
 		assert.ok(task);
 		assert.equal(task.status, "in_progress");
 		assert.equal(task.title, "Build Personal Agent OS for Pi");
-		assert.equal(snapshot.activeTaskPath, task.path);
+		const activeTask = snapshot.tasks.find((entry) => entry.path === snapshot.activeTaskPath);
+		assert.ok(activeTask);
+		assert.equal(activeTask.status, "in_progress");
 		assert.ok(snapshot.memories.some((memory) => memory.kind === "journal"));
 		assert.equal(snapshot.tasks.some((entry) => entry.id === "archive"), false);
 		assert.ok(snapshot.memories.some((memory) => memory.path.endsWith("workspace\\index.md") && memory.developer === undefined));
@@ -76,8 +78,11 @@ describe("Trellis context", () => {
 
 	it("loads active task and runtime spec in fast mode", () => {
 		const context = buildTrellisContext(process.cwd(), "PowerShell runtime", "fast");
+		const snapshot = readTrellisSnapshot(process.cwd());
+		const activeTask = snapshot.tasks.find((entry) => entry.path === snapshot.activeTaskPath);
 		assert.ok(context.items.some((item) => item.id.includes("personal-agent-runtime.md")));
-		assert.ok(context.items.some((item) => item.id.includes("personal-agent-os")));
+		assert.ok(activeTask);
+		assert.ok(context.items.some((item) => item.id.includes(activeTask.id)));
 	});
 
 	it("does not inject the runtime contract on an unrelated standard turn", () => {

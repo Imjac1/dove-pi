@@ -1,5 +1,13 @@
 export type DoveToolProfile = "auto" | "core" | "full";
 
+/** Hashline replaces the built-in edit authority while retaining read/grep names. */
+export function hasHashlineEditTools(allToolNames: readonly string[]): boolean {
+	const names = new Set(allToolNames);
+	return names.has("replace") && names.has("insert");
+}
+
+const HASHLINE_EDIT_TOOL_NAMES = ["replace", "insert", "undo_last_change"] as const;
+
 /**
  * Tools that are useful for ordinary coding and conversation. Third-party
  * extensions remain installed, but their larger schemas are not sent to the
@@ -39,8 +47,13 @@ const INTENT_TOOL_NAMES: ReadonlyArray<readonly [RegExp, readonly string[]]> = [
 ];
 
 export function selectDoveToolNames(allToolNames: readonly string[], profile: DoveToolProfile, prompt = "", contextHint = ""): string[] {
-	if (profile === "full") return [...new Set(allToolNames)];
+	const hashline = hasHashlineEditTools(allToolNames);
+	if (profile === "full") return [...new Set(allToolNames)].filter((name) => !(hashline && name === "edit"));
 	const selected = new Set(allToolNames.filter((name) => CORE_TOOL_NAMES.has(name)));
+	if (hashline) {
+		selected.delete("edit");
+		for (const name of HASHLINE_EDIT_TOOL_NAMES) if (allToolNames.includes(name)) selected.add(name);
+	}
 	if (profile === "auto") {
 		const intentText = `${prompt}\n${contextHint}`;
 		for (const [intent, names] of INTENT_TOOL_NAMES) {

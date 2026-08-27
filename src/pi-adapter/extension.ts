@@ -19,7 +19,7 @@ import { createChineseSettingsComponent } from "./chinese-settings.ts";
 import { discoverSkills } from "../skills/discovery.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts";
 import { suggestWorkflowSkill } from "./workflow-intent.ts";
-import { parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
+import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -85,7 +85,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// this session instead of removing it on the next unrelated prompt.
 		// This makes auto mode monotonic and avoids repeated cache-prefix churn.
 		const current = typeof pi.getActiveTools === "function" ? pi.getActiveTools() : activeToolSnapshot;
-		applyActiveTools([...new Set([...current, ...requested])]);
+		const allToolNames = pi.getAllTools().map((tool) => tool.name);
+		const hashline = hasHashlineEditTools(allToolNames);
+		applyActiveTools([...new Set([...current, ...requested])].filter((name) => !(hashline && name === "edit")));
 	}
 	registerDevelopmentCapabilities(registry);
 	recipes.register({
@@ -145,7 +147,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const policy = displayMode(mode.current);
 		const state = operation === "running" ? "Running" : "Ready";
 		const coloredPolicy = ctx.ui.theme.fg(modeColors[mode.current], policy);
-		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${state}`);
+		const thinking = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : undefined);
+		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${state}${thinking ? ` · Pi ${thinking}` : ""}`);
 	}
 
 	function persistMode(change: ModeChange): void {
@@ -232,8 +235,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("dove-tools", {
-		description: "Use compact core tools or enable the complete installed tool set",
+		description: "Use compact core tools, reset auto tools, or enable the complete installed tool set",
 		handler: async (args, ctx) => {
+			if (args.trim().toLowerCase() === "reset") {
+				const names = pi.getAllTools().map((tool) => tool.name);
+				applyActiveTools(selectDoveToolNames(names, "core"));
+				toolProfile = "auto";
+				ctx.ui.notify("Dove 自动工具阶段已重置为 core；后续请求会按意图重新加入工具。", "info");
+				return;
+			}
 			const requested = parseDoveToolProfile(args);
 			if (!requested) {
 				ctx.ui.notify(`当前工具集合：${toolProfile}。用法：/dove-tools auto|core|full`, "info");
@@ -470,17 +480,27 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "agent_doctor",
 		label: "Agent Doctor",
-		description: "Inspect Pi, Node, PowerShell, workspace, and Trellis compatibility.",
+		description: "Inspect Pi, model/thinking runtime, tools, Node, PowerShell, workspace, and Trellis compatibility.",
 		parameters: Type.Object({}),
-		async execute() {
+		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
 			const project = projectProvider.getHealth();
 			const projectContext = projectProvider.getContext();
 			const documentCount = (kind: "spec" | "task" | "memory" | "journal" | "workflow") => projectContext.documents.filter((document) => document.kind === kind).length;
 			const powershell = await inspectWindowsEnvironment(cwd);
+			const allToolNames = pi.getAllTools().map((tool) => tool.name);
+			const thinkingLevel = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : undefined);
+			const model = ctx.model;
 			const report = {
 				pi: getPiVersion(),
 				node: process.version,
 				platform: process.platform,
+				runtime: {
+					model: model ? { provider: model.provider, id: model.id, api: model.api, contextWindow: model.contextWindow, maxTokens: model.maxTokens } : undefined,
+					thinkingLevel,
+					toolProfile,
+					hashlineEdit: hasHashlineEditTools(allToolNames),
+					activeToolCount: typeof pi.getActiveTools === "function" ? pi.getActiveTools().length : activeToolSnapshot.length,
+				},
 				powershell,
 				trellis: { enabled: project.provider === "trellis", provider: project.provider, root: project.projectRoot, version: project.trellisVersion, capabilities: project.capabilities, issues: project.issues, specFiles: documentCount("spec"), taskFiles: documentCount("task"), memoryFiles: documentCount("memory") + documentCount("journal"), workflowFiles: documentCount("workflow") },
 			};
@@ -785,8 +805,15 @@ export function compactToolResultContent(content: readonly { type: "text" | "ima
 	const headChars = Math.floor(available * 0.75);
 	const tailChars = Math.max(0, available - headChars);
 	const omitted = text.length - headChars - tailChars;
-	return [{
+	const compacted: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [{
 		type: "text",
 		text: `${text.slice(0, headChars)}\n\n${marker.replace("omitted characters", `omitted ${omitted} characters`)}\n\n${tailChars > 0 ? text.slice(-tailChars) : ""}`,
 	}];
+	// A large textual result must not make unrelated image blocks disappear.
+	// Keep images in their original order after the compacted text; Pi/provider
+	// remains responsible for image-size and input-modality limits.
+	for (const part of content) {
+		if (part.type === "image" && typeof part.data === "string" && typeof part.mimeType === "string") compacted.push({ type: "image", data: part.data, mimeType: part.mimeType });
+	}
+	return compacted;
 }
