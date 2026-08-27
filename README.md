@@ -178,6 +178,8 @@ Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `ma
 
 `auto` 不只检查本轮 prompt，也会参考当前 Trellis 任务的状态和文件路径；例如继续一个包含 `.c`、`.go` 或 `.ts` 文件的任务时，会自动补齐相关诊断/符号工具。切换只影响后续模型回合，不会卸载扩展。为稳定缓存前缀，auto 会在当前会话保留已加入的意图工具；长会话可执行 `/dove-tools reset` 回到 core，再按意图重新加入。`/status` 会显示当前工具集合和 Pi thinking level；Pi/provider 的实际 usage 仍是最终计费依据。
 
+如果 OpenRouter 上的 DeepSeek 兼容层把工具调用返回成 `<｜DSML｜tool_calls>` 文本，Dove 会在 Pi 的 `message_end` 边界将完整调用转换为标准工具块，再交给 Pi 原有的工具审批和执行流程。解析失败或不完整的 DSML 会原样保留，不会猜测执行；因此不会因为兼容层异常而把普通文本当成命令。
+
 如果安装了 `pi-hashline-edit-pro`，Dove 会自动隐藏内置 `edit`，并保留 hashline 的 `replace`/`insert` 编辑路径，避免两套编辑权威同时暴露。`dove-pi extensions doctor` 会报告该兼容边界。
 
 Ultra 不等于强制调用所有工具或子 Agent。它允许更积极的上下文和调度，但共享可变状态、短任务和紧耦合调试仍会留在当前 Agent，避免错误并行。

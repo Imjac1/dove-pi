@@ -35,6 +35,7 @@ interface PowerShellResult {
 - PowerShell output is structured; raw output is retained as an artifact and summaries reference evidence rather than copying large logs into model context.
 - Pi tool results must apply a model-facing output bound to large execution strings (stdout/stderr and nested recipe results); complete output remains in tool details and execution artifacts.
 - The Pi adapter also bounds oversized built-in read/shell/search results before they re-enter model context. When compacted, it preserves the original content in tool details and includes a clear request-narrowing marker.
+- The Pi adapter normalizes complete DeepSeek DSML text tool calls (`<｜DSML｜tool_calls>...`) at the `message_end` boundary into standard Pi `toolCall` blocks. This compatibility path is strict (complete wrapper/invocation/parameter tags only), preserves non-DSML content, leaves malformed text unchanged, and still relies on Pi's normal `tool_call` policy and approval path.
 - Execution ledger records use JSONL and include task ID, step ID, mode, capability, status, timestamp, and duration.
 - Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
 

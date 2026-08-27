@@ -147,6 +147,28 @@ Regression tests should exercise a simulated Windows branch with non-ASCII
 paths and should assert that optional native-package failures remain structured
 and do not prevent the rest of an extension profile from installing.
 
+### Provider Tool-Call Protocol Boundaries
+
+When a gateway advertises one API surface but a model emits a provider-specific
+text protocol, the host can silently render tool calls as ordinary assistant
+text. Before changing the execution loop, inspect the persisted assistant
+message and its `stopReason`:
+
+- If the provider response contains structured tool blocks, keep Pi's native
+  path authoritative.
+- If it contains a complete, recognizable text protocol (for example
+  DeepSeek DSML), normalize it once at `message_end` into the host's typed
+  tool-call blocks.
+- Preserve all non-protocol content and leave incomplete markers untouched;
+  never infer a command from a partial string.
+- Let the normalized block re-enter the existing `tool_call` approval,
+  allowlist, and execution handlers. A compatibility parser must not execute
+  tools directly or bypass policy.
+
+Regression tests should cover multiple calls, typed parameters, thinking/text
+carriers, malformed input, and the final host event shape—not only the parser
+in isolation.
+
 In Trellis, command templates (e.g., `record-session.md`) exist in **multiple platforms** with identical or near-identical content. This is a cross-layer boundary.
 
 ### Checklist: After Modifying Any Command Template

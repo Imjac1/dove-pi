@@ -20,6 +20,7 @@ import { discoverSkills } from "../skills/discovery.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts";
 import { suggestWorkflowSkill } from "./workflow-intent.ts";
 import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
+import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -674,6 +675,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.on("agent_end", async (_event, ctx) => {
 		operation = "idle";
 		updateStatus(ctx);
+	});
+
+	pi.on("message_end", async (event) => {
+		const message = event.message;
+		if (message.role !== "assistant") return;
+		const normalized = normalizeDsmlContent(message.content);
+		if (!normalized.converted) return;
+		return { message: { ...message, content: normalized.content as typeof message.content } };
 	});
 
 	pi.on("thinking_level_select", async (event) => {

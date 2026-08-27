@@ -49,6 +49,7 @@ describe("Pi adapter", () => {
 		assert.match(projectContextText, /intentionally an index/);
 		assert.match(projectContextText, /"taskCount"/);
 		assert.ok(events.has("before_agent_start"));
+		assert.ok(events.has("message_end"));
 		assert.ok(events.has("thinking_level_select"));
 		const context: FakeContext = {
 			ui: {
@@ -66,6 +67,15 @@ describe("Pi adapter", () => {
 		await shortcuts.get("ctrl+alt+m")?.handler(context);
 		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Ready")));
 		assert.ok(statusColors.includes("thinkingMax"));
+		const dsmlResult = await events.get("message_end")?.({
+			message: {
+				role: "assistant",
+				content: [{ type: "thinking", thinking: '<｜DSML｜tool_calls><｜DSML｜invoke name="read"><｜DSML｜parameter name="path" string="true">README.md</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>', thinkingSignature: "" }],
+			},
+		}, context);
+		const dsmlMessage = (dsmlResult as { message?: { content?: Array<{ type: string; name?: string }> } } | undefined)?.message;
+		assert.equal(dsmlMessage?.content?.[0]?.type, "toolCall");
+		assert.equal(dsmlMessage?.content?.[0]?.name, "read");
 
 		await commands.get("mode")?.handler("fast", context);
 		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Ready")));
