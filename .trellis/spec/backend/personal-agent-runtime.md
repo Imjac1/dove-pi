@@ -444,6 +444,18 @@ dove-pi
 ```typescript
 inspectExtensionProfile(profile, options): Promise<ExtensionDoctorReport>;
 getProfilePackages(profile): ExtensionPackageDefinition[];
+
+type ExtensionUpdateStatus = "updated" | "skipped-empty" | "skipped-disabled" | "failed";
+
+type ExtensionInstallResult = {
+  profile: ExtensionProfile;
+  updated: boolean;
+  updateStatus: ExtensionUpdateStatus;
+  updateError?: string;
+  installed: readonly string[];
+  skipped: readonly string[];
+  failed: readonly ExtensionInstallFailure[];
+};
 ```
 
 ```powershell
@@ -459,6 +471,7 @@ dove-pi extensions install max
 - The combined Python installer defaults to installing the complete recommended `max` profile. `--extensions <profile>` selects another profile and `--no-extensions` skips third-party packages. Installation is explicit at the package-operation boundary and is never performed by doctor.
 - `dove-pi icons setup|status|install` detects/configures the `pi-open-tui` icon mode, reports the current font state, or installs the default `DEVCOM.JetBrainsMonoNerdFont` package through winget. The installer sets `nerd` mode after a successful font install and otherwise uses `ascii`.
 - `pi-open-tui` is the preferred single TUI/status authority. Profiles load `extension-settings` before `pi-open-tui`; `pi-powerbar`, `pi-powerline-footer`, and `pi-tps-status` are mutually exclusive fallback renderers and must not share a profile with `pi-open-tui`.
+- `installExtensionProfile` delegates updates to Pi's `update --extensions` and exposes a stable `updateStatus`: `updated` after a successful update, `skipped-empty` when no packages are configured, `skipped-disabled` for `--no-extension-updates`, and `failed` when update fails. Update failure retains `updateError` and remains fail-open; profile reconciliation still runs. Stage summaries go to stderr so `dove-pi extensions install` keeps stdout machine-readable JSON.
 - Context, cumulative tokens, cache, model/provider, TPS, TTFT, duration, stalls, cost, Git, and extension-status rendering belong to the selected TUI extension. Dove publishes only compact mode/operation text (`Dove · Fast|◆ Standard|✦ Ultra · Ready|Running`) plus the current Pi thinking level through `ctx.ui.setStatus`; it must not implement a duplicate telemetry collector or footer renderer. Dove accepts only `fast`, `standard`, and `ultra`; Pi's native thinking level `max` and the extension installation profile `max` remain separate concepts. Changing Dove mode does not silently change Pi thinking; `/status` and `agent_doctor` show both values.
 - Cache diagnostics are a read-only projection of Pi session entries, not a second accounting system. `/status full` and `agent_doctor` may show both the latest-request cache hit rate and the cumulative session rate, plus cache read/write totals and a best-effort miss reason (`warmup`, `model-change`, `idle`, or `prefix-change`). For custom OpenRouter provider IDs, the adapter may add `x-session-affinity` from the current Pi session unless `DOVE_PI_DISABLE_SESSION_AFFINITY=1` is set; existing provider headers take precedence.
 - The last effective Pi thinking level is persisted through Pi's official `defaultThinkingLevel` setting when `thinking_level_select` fires, so a new session restores the user's previous level without a parallel configuration format.

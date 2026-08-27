@@ -8,11 +8,14 @@ import { getProfilePackages, matchesConfiguredPackage, type ExtensionProfile } f
 export interface ExtensionInstallResult {
 	readonly profile: ExtensionProfile;
 	readonly updated: boolean;
+	readonly updateStatus: ExtensionUpdateStatus;
 	readonly updateError?: string;
 	readonly installed: readonly string[];
 	readonly skipped: readonly string[];
 	readonly failed: readonly ExtensionInstallFailure[];
 }
+
+export type ExtensionUpdateStatus = "updated" | "skipped-empty" | "skipped-disabled" | "failed";
 
 export interface ExtensionInstallFailure {
 	readonly id: string;
@@ -53,16 +56,29 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	const failed: ExtensionInstallFailure[] = [];
 	const configuredPackages = options.configuredPackages ?? await readConfiguredPackages();
 	let updated = false;
+	let updateStatus: ExtensionUpdateStatus;
 	let updateError: string | undefined;
 
 	// Let Pi own extension version resolution and settings updates. Only invoke
 	// the updater when this profile already has configured packages; a first
 	// install has nothing to update and should stay fast/offline-friendly.
-	if (updateConfigured && configuredPackages.length > 0) {
+	if (!updateConfigured) {
+		updateStatus = "skipped-disabled";
+		// Keep stdout reserved for the structured result emitted by the CLI.
+		console.error("Pi extension updates skipped (--no-update).");
+	} else if (configuredPackages.length === 0) {
+		updateStatus = "skipped-empty";
+		// Keep stdout reserved for the structured result emitted by the CLI.
+		console.error("No configured Pi extensions; update skipped for this first install.");
+	} else {
 		try {
 			await run(piEntry, ["update", "--extensions"], cwd);
 			updated = true;
+			updateStatus = "updated";
+			// Keep stdout reserved for the structured result emitted by the CLI.
+			console.error(`Updated ${configuredPackages.length} configured Pi extension${configuredPackages.length === 1 ? "" : "s"}.`);
 		} catch (error) {
+			updateStatus = "failed";
 			updateError = error instanceof Error ? error.message : String(error);
 			console.warn(`Warning: Pi extension update failed; continuing with profile reconciliation. ${updateError}`);
 		}
@@ -95,12 +111,16 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 				error: describeInstallFailure(entry.id, finalError),
 			};
 			failed.push(failure);
-			console.warn(`Warning: optional Pi extension ${entry.id} could not be installed. ${failure.error}`);
+			console.warn(
+				`Warning: optional Pi extension ${entry.id} could not be installed. `
+				+ `Command: pi install ${entry.installSpec}. ${failure.error} `
+				+ "Next step: fix the reported dependency/environment issue and rerun the install.",
+			);
 			if (!continueOnError) throw error;
 		}
 	}
 
-	return { profile, updated, ...(updateError ? { updateError } : {}), installed, skipped, failed };
+	return { profile, updated, updateStatus, ...(updateError ? { updateError } : {}), installed, skipped, failed };
 }
 
 async function repairAstGrepNativeDependency(extensionId: string, _cwd: string): Promise<boolean> {

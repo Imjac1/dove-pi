@@ -233,6 +233,7 @@ python .\dove_pi.py install --verify full
 python .\dove_pi.py install --no-font
 python .\dove_pi.py install --no-path
 python .\dove_pi.py install --clean
+python .\dove_pi.py install --no-extension-updates
 
 npm run typecheck
 npm test
@@ -242,6 +243,8 @@ npm run pi:smoke
 ```
 
 `setup` aliases `install`. Repeated installs reuse the lockfile and npm cache; when the selected profile already has configured Pi extensions, the installer first delegates to Pi's official `pi update --extensions`, then fills in missing components. Update failures are warned but do not block installation; use `--no-extension-updates` to skip the update step.
+
+The installer prints a stage-level summary for three cases: configured extensions updated, first install with no configured extensions (update skipped), or updates explicitly disabled. `--no-extension-updates` skips only the update step and still installs missing profile entries; `--no-extensions` skips the entire third-party extension phase.
 
 Extension installation is failure-tolerant by default: when an optional extension such as `pi-lens` (which uses a Windows native binary) fails, Dove removes stale JS/native package directories, force-reifies the matching `@ast-grep/cli` and platform package, and retries once; if it still fails, the reason is shown, the remaining components continue, and the structured result lists the `failed` entry. Close other Node/Pi processes if Windows is locking a binary, then rerun the same install command.
 

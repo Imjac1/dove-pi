@@ -99,6 +99,7 @@ describe("extension profiles", () => {
 		},
 		});
 		assert.deepEqual(result.installed, ["extension-settings", "open-tui", "raw-paste", "caffeinate"]);
+		assert.equal(result.updateStatus, "skipped-empty");
 		assert.deepEqual(result.skipped, []);
 		assert.deepEqual(calls, [
 			["pi-entry", "install", "npm:@juanibiapina/pi-extension-settings"],
@@ -119,6 +120,7 @@ describe("extension profiles", () => {
 			},
 		});
 		assert.deepEqual(result.skipped, ["extension-settings", "open-tui"]);
+		assert.equal(result.updateStatus, "skipped-disabled");
 		assert.deepEqual(calls.map((call) => call[2]), ["npm:@tmustier/pi-raw-paste", "npm:@narumitw/pi-caffeinate"]);
 	});
 
@@ -179,17 +181,23 @@ describe("extension profiles", () => {
 
 	it("updates configured packages through Pi before reconciling a profile", async () => {
 		const calls: string[][] = [];
-		const configured = getProfilePackages("minimal").map((entry) => entry.installSpec);
+		const configured = [getProfilePackages("minimal")[0].installSpec];
 		const result = await installExtensionProfile("minimal", {
 			piEntry: "pi-entry",
 			configuredPackages: configured,
 			run: async (command, args) => { calls.push([command, ...args]); },
 		});
 		assert.equal(result.updated, true);
+		assert.equal(result.updateStatus, "updated");
 		assert.equal(result.updateError, undefined);
-		assert.deepEqual(result.installed, []);
-		assert.deepEqual(result.skipped, ["extension-settings", "open-tui", "raw-paste", "caffeinate"]);
-		assert.deepEqual(calls, [["pi-entry", "update", "--extensions"]]);
+		assert.deepEqual(result.installed, ["open-tui", "raw-paste", "caffeinate"]);
+		assert.deepEqual(result.skipped, ["extension-settings"]);
+		assert.deepEqual(calls, [
+			["pi-entry", "update", "--extensions"],
+			["pi-entry", "install", "npm:pi-open-tui"],
+			["pi-entry", "install", "npm:@tmustier/pi-raw-paste"],
+			["pi-entry", "install", "npm:@narumitw/pi-caffeinate"],
+		]);
 	});
 
 	it("continues profile reconciliation when the optional update step fails", async () => {
@@ -201,6 +209,7 @@ describe("extension profiles", () => {
 			},
 		});
 		assert.equal(result.updated, false);
+		assert.equal(result.updateStatus, "failed");
 		assert.equal(result.updateError, "update unavailable");
 		assert.ok(result.installed.includes("extension-settings"));
 	});

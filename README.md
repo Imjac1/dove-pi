@@ -226,6 +226,7 @@ python .\dove_pi.py install --verify full
 python .\dove_pi.py install --no-font
 python .\dove_pi.py install --no-path
 python .\dove_pi.py install --clean
+python .\dove_pi.py install --no-extension-updates
 
 npm run typecheck
 npm test
@@ -235,6 +236,8 @@ npm run pi:smoke
 ```
 
 `setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存；如果当前 profile 已经配置过 Pi 扩展，安装器会先调用 Pi 官方的 `pi update --extensions`，再补齐缺失组件。更新失败会警告但继续安装；使用 `--no-extension-updates` 可跳过更新。
+
+安装器会在阶段摘要中明确显示三种状态：已更新已有插件、首次安装没有已配置插件因而跳过更新、或用户显式跳过更新。`--no-extension-updates` 只跳过更新，不会跳过缺失插件的安装；`--no-extensions` 才会跳过整个第三方插件阶段。
 扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会清理对应的残留 JS/native 包，强制重新构造匹配的 `@ast-grep/cli` 与平台包并重试一次；仍失败则显示原因、继续安装其余组件，并在结果中列出 `failed` 项。这不会阻断 Dove Pi 主程序，修复环境后重新运行同一条安装命令即可补装。若 Windows 正在锁定二进制文件，请先关闭其他 Node/Pi 进程。
 安装器也支持用户名或仓库路径包含中文等非 ASCII 字符：`.cmd` 启动器只保存 ASCII 内容并在运行时定位旁边的 PowerShell 启动器，PowerShell 启动器使用带 BOM 的 UTF-8，避免 `UnicodeEncodeError` 或 PowerShell 5.1 乱码。
 
