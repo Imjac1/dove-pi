@@ -125,6 +125,28 @@ After implementation:
 
 ## Cross-Platform Template Consistency
 
+### Windows Launcher and Native Package Boundaries
+
+Windows installers have two independent encoding/process boundaries that must
+be tested separately:
+
+- A `.cmd` launcher should contain ASCII-only text and resolve a sibling
+  PowerShell launcher with `%~dp0`; embedding an absolute Unicode path in the
+  batch file makes success depend on the active code page.
+- The PowerShell launcher should be UTF-8 with a BOM so Windows PowerShell 5.1
+  and PowerShell 7 decode non-ASCII paths consistently.
+- Native npm helpers must be repaired inside their managed package root only.
+  Remove both the platform package and its JS wrapper before reification, then
+  install the native package and wrapper in separate steps so a failed
+  postinstall cannot reuse a half-created binary destination.
+- Avoid Node's `shell: true` for `npm.cmd` on current Node releases. Spawn
+  `cmd.exe /d /s /c npm.cmd ...` with shell mode disabled to avoid DEP0190 and
+  Windows `EINVAL` failures.
+
+Regression tests should exercise a simulated Windows branch with non-ASCII
+paths and should assert that optional native-package failures remain structured
+and do not prevent the rest of an extension profile from installing.
+
 In Trellis, command templates (e.g., `record-session.md`) exist in **multiple platforms** with identical or near-identical content. This is a cross-layer boundary.
 
 ### Checklist: After Modifying Any Command Template

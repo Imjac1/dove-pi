@@ -235,6 +235,10 @@ npm run pi:smoke
 
 `setup` aliases `install`. Repeated installs reuse the lockfile and npm cache and do not silently upgrade Pi or global extensions.
 
+Extension installation is failure-tolerant by default: when an optional extension such as `pi-lens` (which uses a Windows native binary) fails, Dove removes stale JS/native package directories, force-reifies the matching `@ast-grep/cli` and platform package, and retries once; if it still fails, the reason is shown, the remaining components continue, and the structured result lists the `failed` entry. Close other Node/Pi processes if Windows is locking a binary, then rerun the same install command.
+
+The installer also supports usernames and repository paths containing non-ASCII characters. The generated `.cmd` launcher contains ASCII only and resolves its sibling PowerShell launcher at runtime, while the PowerShell launcher is written as UTF-8 with a BOM for reliable PowerShell 5.1/7 decoding.
+
 This is a runnable foundation MVP. Task replay, a full remote control plane, a second native project database, and automatic memory promotion are intentionally out of scope for the first release.
 
 Project guidelines live in [.trellis/spec/](.trellis/spec/), and the active task is [.trellis/tasks/08-26-personal-agent-os/](.trellis/tasks/08-26-personal-agent-os/).

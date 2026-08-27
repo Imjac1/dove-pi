@@ -386,7 +386,7 @@ dove-pi [official-pi-options]
 - Repeated setup should keep extension installation output concise: already configured packages are skipped without one
   noisy line per package unless verbose diagnostics are explicitly requested.
 - The launcher keeps `process.cwd()` as the target workspace and injects `.pi/extensions/personal-agent.ts` from the installed Dove Pi source tree.
-- By default the installer creates `%LOCALAPPDATA%\DovePi\bin\dove-pi.ps1` and `dove-pi.cmd`, and adds that directory to the user PATH. `--no-path` suppresses the PATH mutation.
+- By default the installer creates `%LOCALAPPDATA%\DovePi\bin\dove-pi.ps1` and `dove-pi.cmd`, and adds that directory to the user PATH. `--no-path` suppresses the PATH mutation. The `.cmd` file is ASCII-only and resolves its sibling PowerShell launcher via `%~dp0`, so non-ASCII user/repository paths never need to be encoded into the batch file; the PowerShell launcher is UTF-8 with BOM for PowerShell 5.1/7 compatibility.
 - The underlying `@earendil-works/pi-coding-agent` executable remains `pi`; only the user-facing project launcher is named `dove-pi`.
 
 ### 4. Validation & Error Matrix
@@ -436,7 +436,7 @@ dove-pi
 - Trigger: reviewing or composing optional third-party Pi extensions for a Dove Pi installation.
 - Scope: `src/extensions/catalog.ts` owns the package/profile manifest; `src/extensions/doctor.ts` owns offline-first compatibility checks; `src/cli.ts` and `dove_pi.py` expose the CLI boundary.
 - The catalog remains the single source of truth for extension package/profile metadata. Explicit `extensions install <profile>` and the source installer may install the selected profile by delegating each package to Pi's official `pi install` command; they must not implement package resolution or settings mutation themselves. Dove Pi core, dispatch, workspace recovery, and scope policy remain authoritative.
-- Profile installation is failure-tolerant by default: a failed optional package is recorded in a structured `failed` list, reported with an actionable warning, and does not prevent remaining profile entries or the Dove core from being installed. The Pi child process preserves npm optional dependencies so packages with platform-native helpers (for example `pi-lens`/`@ast-grep/cli`) can resolve their binaries. If a stale `pi-lens` install still fails, the installer repairs the matching Windows `@ast-grep/cli-*` native package and retries once. Callers that require all entries may opt into fail-fast behavior through the installer API.
+- Profile installation is failure-tolerant by default: a failed optional package is recorded in a structured `failed` list, reported with an actionable warning, and does not prevent remaining profile entries or the Dove core from being installed. The Pi child process preserves npm optional dependencies so packages with platform-native helpers (for example `pi-lens`/`@ast-grep/cli`) can resolve their binaries. If a stale `pi-lens` install still fails, the installer removes the managed `@ast-grep/cli` and matching Windows `@ast-grep/cli-*` directories, force-reifies the native package and JS wrapper, and retries once. Callers that require all entries may opt into fail-fast behavior through the installer API.
 
 ### 2. Signatures
 

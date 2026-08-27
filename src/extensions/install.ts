@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
+import { access, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -96,36 +96,81 @@ async function repairAstGrepNativeDependency(extensionId: string, _cwd: string):
 				: undefined;
 	if (!nativePackage) return false;
 	const brokenCliDir = join(installRoot, "node_modules", "@ast-grep", "cli");
+	const nativePackageDir = join(installRoot, "node_modules", ...nativePackage.split("/"));
 	try {
-		// A failed postinstall can leave ast-grep.exe/sg.exe in place. Remove
-		// only this managed package directory before reifying the native helper;
-		// never touch the user's project or the whole Pi npm root.
-		await rm(brokenCliDir, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
+		// A failed postinstall can leave ast-grep.exe/sg.exe in place, while npm
+		// still considers both packages current. Remove only these managed
+		// package directories before reifying them; never touch the user's
+		// project or the whole Pi npm root.
+		await rm(brokenCliDir, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 });
+		await rm(nativePackageDir, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 });
+		if (!await isMissing(brokenCliDir) || !await isMissing(nativePackageDir)) {
+			throw new Error("stale @ast-grep package directories remain");
+		}
 	} catch {
+		console.warn("Warning: could not remove the stale pi-lens @ast-grep installation; it may be locked by antivirus or another Node process.");
 		return false;
 	}
 	console.warn(`Repairing ${nativePackage} for pi-lens...`);
+	const npmArgs = ["--prefix", installRoot, "--legacy-peer-deps", "--include=optional", "--force", "--no-audit", "--no-fund", "--package-lock=false"];
+	// Reify the native package first, then reify the JS wrapper separately.
+	// This avoids the postinstall script seeing a half-created destination when
+	// npm reuses a partially extracted package after a previous failure.
+	if (!await runNpmInstall(["install", nativePackage, ...npmArgs], installRoot)) return false;
+	await rm(brokenCliDir, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 });
+	const nativeVersion = await readPackageVersion(join(nativePackageDir, "package.json"));
+	const cliPackage = nativeVersion ? `@ast-grep/cli@${nativeVersion}` : "@ast-grep/cli";
+	return runNpmInstall(["install", cliPackage, ...npmArgs], installRoot);
+}
+
+async function isMissing(path: string): Promise<boolean> {
+	try {
+		await access(path);
+		return false;
+	} catch {
+		return true;
+	}
+}
+
+async function readPackageVersion(path: string): Promise<string | undefined> {
+	try {
+		const parsed = JSON.parse(await readFile(path, "utf8")) as { version?: unknown };
+		return typeof parsed.version === "string" && parsed.version.trim() ? parsed.version : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function runNpmInstall(args: readonly string[], cwd: string): Promise<boolean> {
 	return new Promise((resolve) => {
-		const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-		const child = spawn(npm, ["install", nativePackage, "--prefix", installRoot, "--legacy-peer-deps", "--include=optional", "--force", "--no-audit", "--no-fund"], {
+		const windows = process.platform === "win32";
+		const executable = windows ? (process.env.ComSpec ?? "cmd.exe") : "npm";
+		// Invoking npm.cmd through Node's `shell: true` emits DEP0190 on Node 22+
+		// and can fail with EINVAL on some Windows installations. cmd.exe is the
+		// supported native shim host; keep shell mode disabled and pass arguments
+		// as a normal argv list.
+		const childArgs = windows ? ["/d", "/s", "/c", "npm.cmd", ...args] : [...args];
+		const child = spawn(executable, childArgs, {
+			cwd,
 			stdio: "inherit",
 			windowsHide: true,
 			env: {
 				...process.env,
 				npm_config_include: "optional",
-				npm_config_optional: "true",
 			},
-			shell: process.platform === "win32",
 		});
-		child.once("error", () => resolve(false));
+		child.once("error", (error) => {
+			console.warn(`Warning: npm repair process could not start (${error instanceof Error ? error.message : String(error)}).`);
+			resolve(false);
+		});
 		child.once("exit", (code, signal) => resolve(code === 0 && !signal));
 	});
 }
 
 function describeInstallFailure(id: string, error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);
-	if (id === "lens" && /ast-grep.*native binary/i.test(message)) {
-		return `${message} Windows could not resolve the optional @ast-grep native package; retry after updating npm or use the dev profile to omit pi-lens.`;
+	if (id === "lens" && /ast-grep.*(?:native binary|binaries into place)/i.test(message)) {
+		return `${message} Windows could not reify the optional @ast-grep native package; close other Node processes and retry, or use the dev profile to omit pi-lens.`;
 	}
 	return message;
 }
@@ -155,9 +200,9 @@ function runPiInstall(command: string, args: readonly string[], cwd: string): Pr
 				...process.env,
 				// @ast-grep/cli ships the Windows executable as an optional
 				// dependency. Keep it enabled even when the user's npm config omits
-				// optional packages by default.
+				// optional packages by default. Do not set the deprecated `optional`
+				// config alias because current npm prints a warning for every package.
 				npm_config_include: "optional",
-				npm_config_optional: "true",
 			},
 		});
 		child.once("error", reject);

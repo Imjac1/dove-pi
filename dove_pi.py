@@ -144,10 +144,22 @@ def write_launchers(directory: Path) -> None:
         ps1 = directory / "dove-pi.ps1"
         ps1.write_text(
             f"& '{python_text}' '{script_text}' @args\nexit $LASTEXITCODE\n",
-            encoding="utf-8",
+            # Windows PowerShell 5.1 needs a BOM to reliably decode a script
+            # that contains non-ASCII paths. PowerShell 7 accepts this too.
+            encoding="utf-8-sig",
         )
         cmd = directory / "dove-pi.cmd"
-        cmd.write_text(f'@echo off\r\n"{python}" "{script}" %*\r\n', encoding="ascii")
+        # Keep the batch file itself ASCII and resolve its sibling PowerShell
+        # launcher at runtime. This avoids encoding the user's profile or
+        # repository path in cmd.exe at all (including code pages that cannot
+        # represent a particular Unicode character).
+        cmd.write_text(
+            '@echo off\r\n'
+            'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass '
+            '-File "%~dp0dove-pi.ps1" %*\r\n'
+            'exit /b %ERRORLEVEL%\r\n',
+            encoding="ascii",
+        )
     else:
         launcher = directory / "dove-pi"
         launcher.write_text(f'#!/bin/sh\nexec "{python}" "{script}" "$@"\n', encoding="utf-8")

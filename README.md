@@ -229,7 +229,8 @@ npm run pi:smoke
 ```
 
 `setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存，不会隐式升级 Pi 或全局扩展。
-扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会先尝试修复对应的 `@ast-grep` 原生包并重试一次；仍失败则显示原因、继续安装其余组件，并在结果中列出 `failed` 项。这不会阻断 Dove Pi 主程序，修复环境后重新运行同一条安装命令即可补装。
+扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会清理对应的残留 JS/native 包，强制重新构造匹配的 `@ast-grep/cli` 与平台包并重试一次；仍失败则显示原因、继续安装其余组件，并在结果中列出 `failed` 项。这不会阻断 Dove Pi 主程序，修复环境后重新运行同一条安装命令即可补装。若 Windows 正在锁定二进制文件，请先关闭其他 Node/Pi 进程。
+安装器也支持用户名或仓库路径包含中文等非 ASCII 字符：`.cmd` 启动器只保存 ASCII 内容并在运行时定位旁边的 PowerShell 启动器，PowerShell 启动器使用带 BOM 的 UTF-8，避免 `UnicodeEncodeError` 或 PowerShell 5.1 乱码。
 
 当前版本是可运行的基础 MVP。任务 replay、完整远程控制面、第二套原生项目数据库和自动记忆晋升暂不在首个版本范围内。
 
