@@ -63,7 +63,7 @@ def format_version(version: tuple[int, int, int]) -> str:
     return ".".join(str(part) for part in version)
 
 
-def install(*, skip_checks: bool = False, no_path: bool = False, extension_profile: str | None = "max", clean: bool = False, verify: str | None = None, install_font: bool = True) -> None:
+def install(*, skip_checks: bool = False, no_path: bool = False, extension_profile: str | None = "max", clean: bool = False, verify: str | None = None, install_font: bool = True, update_extensions: bool = True) -> None:
     # `skip_checks` remains for callers of the original Python API. The CLI
     # uses --verify so the common path is explicit and easy to understand.
     if verify is not None:
@@ -98,7 +98,10 @@ def install(*, skip_checks: bool = False, no_path: bool = False, extension_profi
 
     if extension_profile:
         print(f"\n[{stage(f'Configuring Pi extensions ({extension_profile})')}]", flush=True)
-        extension_exit = run_local_cli(["extensions", "install", extension_profile])
+        extension_args = ["extensions", "install", extension_profile]
+        if not update_extensions:
+            extension_args.append("--no-update")
+        extension_exit = run_local_cli(extension_args)
         if extension_exit != 0:
             raise subprocess.CalledProcessError(extension_exit, ["dove-pi", "extensions", "install", extension_profile])
         if install_font:
@@ -371,6 +374,11 @@ def parse_install(arguments: Sequence[str]) -> argparse.Namespace:
         action="store_true",
         help="Skip third-party Pi extension installation",
     )
+    parser.add_argument(
+        "--no-extension-updates",
+        action="store_true",
+        help="Keep configured Pi extensions at their current versions",
+    )
     parser.add_argument("--verify", choices=("quick", "full", "none"), default="quick", help="Verification level: quick (default), full, or none")
     parser.add_argument("--skip-checks", action="store_true", help="Compatibility alias for --verify none")
     parser.add_argument("--no-path", action="store_true")
@@ -390,6 +398,7 @@ Common controls:
   --no-font                skip Nerd Font setup and use ASCII icons
   --no-path                do not add the launcher to user PATH
   --clean                  reinstall locked npm dependencies
+  --no-extension-updates   skip Pi's official extension update step
 
 Advanced controls:
   --profile PROFILE        max (default), or minimal/dev/research/security
@@ -408,6 +417,11 @@ Runtime defaults:
   Ordinary sessions use automatic intent-based tool loading to keep prompt
   tokens low. Use /dove-tools full inside Pi, or set
   DOVE_PI_TOOL_PROFILE=full, when you need every installed extension tool.
+
+Cache compatibility:
+  Custom OpenRouter providers receive Pi session affinity automatically.
+  Set DOVE_PI_DISABLE_SESSION_AFFINITY=1 only for proxies that reject it.
+  Set PI_CACHE_RETENTION=long when the selected upstream supports long TTLs.
 """)
 
 
@@ -423,6 +437,7 @@ def main(arguments: Sequence[str]) -> int:
             extension_profile=None if options.no_extensions else options.profile,
             clean=options.clean,
             install_font=not options.no_font,
+            update_extensions=not options.no_extension_updates,
         )
         return 0
     if arguments and arguments[0] == "extensions":

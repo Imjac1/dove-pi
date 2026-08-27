@@ -369,3 +369,25 @@ state correctly, but several commands still re-parsed event payload fields with
 local casts. The fix was to make the core event layer own `ThreadChannelEvent`
 and `isThreadEvent`, make `reduceChannelMetadata` the only channel metadata
 projection, and make `reduceThreads` the only thread replay reducer.
+
+## Provider Prompt-Cache Boundary
+
+Pi has two distinct extension boundaries that must not be conflated:
+
+- `before_agent_start` runs once at the beginning of a user request and can
+  append a persisted custom message for that run.
+- `context` runs before every provider request, including tool-call
+  continuations, and must be treated as a pure projection.
+
+Dynamic project guidance that is rebuilt and moved by `context` changes the
+message ordering after each tool result. Providers then see a different
+prefix and may re-bill the entire history as a cache miss. Keep the stable
+system prompt static; emit a versioned, append-only context snapshot from
+`before_agent_start` only when its epoch changes (mode, project revision,
+workflow hint, or active tool policy). A `context` handler may remove legacy
+unversioned entries, but must never reorder or recreate the current snapshot.
+
+Regression checks must cover a user prompt followed by assistant/tool-result
+messages and assert that the context transform returns the same ordering. A
+large full miss during a short tool chain is evidence of a prefix mutation,
+not normal cache expiry.

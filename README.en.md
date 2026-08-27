@@ -149,6 +149,10 @@ Inspect discovery with:
 Ctrl+Alt+M
 ```
 
+`/status full` reports both the latest request cache hit rate (`Last CH`) and the cumulative session rate (`Session CH`), using provider-reported Pi usage rather than estimates.
+
+Dove project context is emitted as a versioned, append-only session snapshot. A new snapshot is added only when the mode, Trellis revision, workflow hint, or active tool policy changes; the per-request context hook never reorders the current snapshot after tool calls. Legacy unversioned snapshots are filtered for compatibility.
+
 Most users do not need `/project bind`, `/task ...`, or `/skill:*`. They remain useful for diagnostics, scripting, and compatibility.
 
 ## Execution modes
@@ -177,6 +181,8 @@ The `max` extension profile answers “which capabilities are installed”; `cor
 - `DOVE_PI_TOOL_PROFILE=full`: start a session with the complete tool set.
 
 `auto` considers both the current prompt and the active Trellis task's status and file paths. For example, continuing a task that contains `.c`, `.go`, or `.ts` files can automatically add diagnostic and symbol tools. Switching affects subsequent model turns and does not uninstall anything. To stabilize the cache prefix, auto keeps intent tools active for the current session; on a long session, use `/dove-tools reset` to return to core and let intent discovery add tools again. `/status` shows the active tool set and Pi thinking level; Pi/provider usage remains the authoritative billing metric.
+
+For custom OpenRouter providers, Dove automatically sends the current Pi session ID as `x-session-affinity` so a locked upstream can reuse its prompt-cache prefix. Set `DOVE_PI_DISABLE_SESSION_AFFINITY=1` if a proxy rejects that header. Cache retention remains Pi's responsibility through `PI_CACHE_RETENTION`; use `long` only when the selected upstream supports long TTLs.
 
 When an OpenRouter DeepSeek compatibility layer returns tool calls as `<｜DSML｜tool_calls>` text, Dove converts complete calls at Pi's `message_end` boundary into standard tool blocks and sends them through Pi's existing approval and execution path. Incomplete or malformed DSML is left as ordinary text; Dove never guesses a command from a partial marker.
 
@@ -235,7 +241,7 @@ npm run doctor
 npm run pi:smoke
 ```
 
-`setup` aliases `install`. Repeated installs reuse the lockfile and npm cache and do not silently upgrade Pi or global extensions.
+`setup` aliases `install`. Repeated installs reuse the lockfile and npm cache; when the selected profile already has configured Pi extensions, the installer first delegates to Pi's official `pi update --extensions`, then fills in missing components. Update failures are warned but do not block installation; use `--no-extension-updates` to skip the update step.
 
 Extension installation is failure-tolerant by default: when an optional extension such as `pi-lens` (which uses a Windows native binary) fails, Dove removes stale JS/native package directories, force-reifies the matching `@ast-grep/cli` and platform package, and retries once; if it still fails, the reason is shown, the remaining components continue, and the structured result lists the `failed` entry. Close other Node/Pi processes if Windows is locking a binary, then rerun the same install command.
 

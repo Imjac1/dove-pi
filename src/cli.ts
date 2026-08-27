@@ -76,7 +76,7 @@ async function runExtensionsCommand(commandArgs: string[]): Promise<void> {
 	}
 	if (command === "install") {
 		const profile = parseExtensionProfile(commandArgs[1] ?? "max");
-		const result = await installExtensionProfile(profile);
+		const result = await installExtensionProfile(profile, { updateConfigured: !commandArgs.includes("--no-update") });
 		console.log(JSON.stringify(result, null, 2));
 		return;
 	}

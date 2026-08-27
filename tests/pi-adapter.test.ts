@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension, { compactModelPayload, compactToolResultContent, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
+import { formatProgressSnapshot, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 
 describe("Pi adapter", () => {
 	it("registers modes, shortcuts, capabilities, and doctor", async () => {
@@ -50,20 +51,34 @@ describe("Pi adapter", () => {
 		assert.match(projectContextText, /"taskCount"/);
 		assert.ok(events.has("before_agent_start"));
 		assert.ok(events.has("message_end"));
+		assert.ok(events.has("tool_result"));
 		assert.ok(events.has("thinking_level_select"));
+		assert.ok(events.has("before_provider_headers"));
 		const context: FakeContext = {
 			ui: {
 				theme: { fg: (color, value) => { statusColors.push(color); return value; } },
 				setStatus: (_key, value) => { if (value) statuses.push(value); },
 				notify: (message) => { notifications.push(message); },
 			},
-			sessionManager: { getEntries: () => [] },
+			sessionManager: { getEntries: () => [], getSessionId: () => "session-test" },
 		};
+		const headers: Record<string, string> = {};
+		await events.get("before_provider_headers")?.({ type: "before_provider_headers", headers }, { ...context, model: { provider: "cc-switch-open-router", baseUrl: "https://openrouter.ai/api" } });
+		assert.equal(headers["x-session-affinity"], "session-test");
+		const preservedHeaders = { "x-session-affinity": "existing" };
+		await events.get("before_provider_headers")?.({ type: "before_provider_headers", headers: preservedHeaders }, { ...context, model: { provider: "cc-switch-open-router" } });
+		assert.equal(preservedHeaders["x-session-affinity"], "existing");
 		await events.get("session_start")?.(undefined, context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
 		assert.ok(statuses.some((value) => value.includes("Pi max")));
 		assert.ok(notifications.some((value) => value.includes("Ctrl+P 切换模型")));
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		await events.get("tool_result")?.({ type: "tool_result", toolName: "bash", toolCallId: "1", input: { command: "bad" }, content: [{ type: "text", text: "failed" }], isError: true }, { ...context, hasUI: true });
+		await events.get("tool_result")?.({ type: "tool_result", toolName: "bash", toolCallId: "2", input: { command: "bad" }, content: [{ type: "text", text: "failed" }], isError: true }, { ...context, hasUI: true });
+		assert.ok(notifications.some((value) => value.includes("同一个工具失败调用重复 2 次")));
+		assert.match(notifications.find((value) => value.includes("同一个工具失败调用重复 2 次")) ?? "", /重新读取当前状态/);
+		await events.get("agent_end")?.({ type: "agent_end", messages: [] }, context);
 		await shortcuts.get("ctrl+alt+m")?.handler(context);
 		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Ready")));
 		assert.ok(statusColors.includes("thinkingMax"));
@@ -99,20 +114,46 @@ describe("Pi adapter", () => {
 		await commands.get("dove-tools")?.handler("reset", context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		const beforeStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.equal((beforeStart as { message?: unknown })?.message, undefined);
+		const beforeStartMessage = (beforeStart as { message?: { customType?: string; details?: { schemaVersion?: number } } })?.message;
+		assert.equal(beforeStartMessage?.customType, "personal-agent-context");
+		assert.equal(beforeStartMessage?.details?.schemaVersion, 2);
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
+		const repeatedStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.equal((repeatedStart as { message?: unknown })?.message, undefined, "unchanged context epochs must not append another snapshot");
 		const contextResult = await events.get("context")?.({
 			type: "context",
 			messages: [
-				{ role: "custom", customType: "personal-agent-context", content: "stale", display: false, timestamp: 1 },
+				{ role: "custom", customType: "personal-agent-context", content: "legacy", display: false, timestamp: 1 },
 				{ role: "user", content: [{ type: "text", text: "keep" }], timestamp: 2 },
+				{ role: "custom", customType: "personal-agent-context", content: [{ type: "text", text: "current" }], display: false, details: { schemaVersion: 2, epoch: "test" }, timestamp: 3 },
 			],
 		}, context);
-		assert.equal((contextResult as { messages?: unknown[] })?.messages?.length, 2);
-		assert.equal(((contextResult as { messages?: Array<{ role?: string }> })?.messages?.[0])?.role, "user");
-		assert.equal(((contextResult as { messages?: Array<{ customType?: string }> })?.messages?.[1])?.customType, "personal-agent-context");
-		assert.match(String(((contextResult as { messages?: Array<{ content?: Array<{ text?: string }> }> })?.messages?.[1])?.content?.[0]?.text), /PERSONAL AGENT REQUEST CONTEXT/);
+		const contextMessages = (contextResult as { messages?: Array<{ role?: string; content?: unknown }> })?.messages ?? [];
+		assert.equal(contextMessages.length, 2, "legacy context entries are removed without reordering current history");
+		assert.equal(contextMessages[0]?.role, "user");
+		assert.match(JSON.stringify(contextMessages[1]?.content), /current/);
+		const appendOnlyResult = await events.get("context")?.({
+			type: "context",
+			messages: [
+				{ role: "user", content: [{ type: "text", text: "keep" }], timestamp: 2 },
+				{ role: "custom", customType: "personal-agent-context", content: "current", display: false, details: { schemaVersion: 2, epoch: "test" }, timestamp: 3 },
+				{ role: "assistant", content: [{ type: "text", text: "answer" }], timestamp: 4 },
+				{ role: "toolResult", toolCallId: "1", toolName: "read", content: [{ type: "text", text: "result" }], isError: false, timestamp: 5 },
+			],
+		}, context);
+		assert.equal(appendOnlyResult, undefined, "v2 context history remains append-only across provider requests");
+	});
+
+	it("warns once for a repeated failure and resets after progress", () => {
+		const guard = new ProgressGuard({ consecutiveErrorThreshold: 3, repeatedFailureThreshold: 2, longRunMinutes: 1 });
+		guard.start(1_000);
+		assert.equal(guard.recordToolResult({ toolName: "read", input: { path: "missing" }, isError: true }, 2_000)?.kind, undefined);
+		assert.equal(guard.recordToolResult({ toolName: "read", input: { path: "missing" }, isError: true }, 3_000)?.kind, "repeated-failure");
+		assert.equal(guard.recordToolResult({ toolName: "read", input: { path: "missing" }, isError: true }, 4_000)?.kind, "consecutive-errors");
+		assert.equal(guard.recordToolResult({ toolName: "read", input: { path: "ok" }, isError: false }, 5_000), undefined);
+		assert.equal(guard.snapshot(61_001).longRun, true);
+		assert.match(formatProgressSnapshot(guard.snapshot(61_001), 61_001), /longRun=true/);
 	});
 
 	it("keeps only the compact core tool set by default", () => {
@@ -160,10 +201,12 @@ describe("Pi adapter", () => {
 });
 
 interface FakeContext {
+	hasUI?: boolean;
+	model?: unknown;
 	ui: {
 		theme: { fg: (color: string, value: string) => string };
 		setStatus: (key: string, value: string | undefined) => void;
 		notify: (message: string, level?: string) => void;
 	};
-	sessionManager: { getEntries: () => unknown[] };
+	sessionManager: { getEntries: () => unknown[]; getSessionId?: () => string };
 }

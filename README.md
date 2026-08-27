@@ -149,6 +149,8 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 Ctrl+Alt+M
 ```
 
+`/status full` 里的缓存诊断会同时显示最近一次请求（Last CH）和当前会话累计命中率（Session CH）。`CH` 使用 Pi/provider 已上报的 usage 计算，不会把估算值当成真实命中。
+
 普通使用不需要记住 `/project bind`、`/task ...` 或 `/skill:*`；它们是高级/兼容接口。
 
 ## 执行策略
@@ -165,7 +167,7 @@ Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `ma
 
 上下文不会把整个 `.trellis/` 目录原样塞进每一轮请求：Fast 只带当前任务 PRD 和运行时契约的相关片段；Standard/Ultra 按请求意图检索规范、工作流或记忆，空查询不会展开整个项目；超长文档会保留相关段落并压缩。`/status full` 中的上下文统计以 Pi/provider 的实际用量为准。
 
-针对大项目还有三层保护：Fast/Standard 的上下文检索有总字符预算，宽泛查询超出预算时只保留高相关度文档；Ultra 不设置人为固定上限，依靠相关性、去重、单文档压缩和 Pi/provider 的模型上下文上限保护；项目任务列表只返回前 50 条预览并显示省略数量；Dove 上下文现在是当前请求的临时 system prompt，不会每轮写入会话历史。旧版本已经写入的 `personal-agent-context` 记录也会在发送给模型前过滤掉，因此继续旧会话不会线性重复增长。
+针对大项目还有三层保护：Fast/Standard 的上下文检索有总字符预算，宽泛查询超出预算时只保留高相关度文档；Ultra 不设置人为固定上限，依靠相关性、去重、单文档压缩和 Pi/provider 的模型上下文上限保护；项目任务列表只返回前 50 条预览并显示省略数量。动态 Dove 上下文以版本化 `personal-agent-context` 快照追加到用户回合，只在模式、Trellis revision、workflow hint 或工具策略变化时新增；工具调用期间不会被 `context` hook 移到消息末尾，从而保持 provider cache 前缀稳定。旧版本无 schema 标记的记录会在发送给模型前过滤掉。
 
 ### 工具集合与 token
 
@@ -177,6 +179,8 @@ Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `ma
 - 环境变量 `DOVE_PI_TOOL_PROFILE=full`：启动时默认使用完整工具集合。
 
 `auto` 不只检查本轮 prompt，也会参考当前 Trellis 任务的状态和文件路径；例如继续一个包含 `.c`、`.go` 或 `.ts` 文件的任务时，会自动补齐相关诊断/符号工具。切换只影响后续模型回合，不会卸载扩展。为稳定缓存前缀，auto 会在当前会话保留已加入的意图工具；长会话可执行 `/dove-tools reset` 回到 core，再按意图重新加入。`/status` 会显示当前工具集合和 Pi thinking level；Pi/provider 的实际 usage 仍是最终计费依据。
+
+对自定义 OpenRouter provider，Dove 会自动把当前 Pi session ID 作为 `x-session-affinity` 发送，以便锁定的上游复用 prompt cache。代理不接受该 header 时，可设置 `DOVE_PI_DISABLE_SESSION_AFFINITY=1` 关闭。缓存保留时间由 Pi 的 `PI_CACHE_RETENTION` 控制；确认上游支持长 TTL 后可设置为 `long`。
 
 如果 OpenRouter 上的 DeepSeek 兼容层把工具调用返回成 `<｜DSML｜tool_calls>` 文本，Dove 会在 Pi 的 `message_end` 边界将完整调用转换为标准工具块，再交给 Pi 原有的工具审批和执行流程。解析失败或不完整的 DSML 会原样保留，不会猜测执行；因此不会因为兼容层异常而把普通文本当成命令。
 
@@ -230,7 +234,7 @@ npm run doctor
 npm run pi:smoke
 ```
 
-`setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存，不会隐式升级 Pi 或全局扩展。
+`setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存；如果当前 profile 已经配置过 Pi 扩展，安装器会先调用 Pi 官方的 `pi update --extensions`，再补齐缺失组件。更新失败会警告但继续安装；使用 `--no-extension-updates` 可跳过更新。
 扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会清理对应的残留 JS/native 包，强制重新构造匹配的 `@ast-grep/cli` 与平台包并重试一次；仍失败则显示原因、继续安装其余组件，并在结果中列出 `failed` 项。这不会阻断 Dove Pi 主程序，修复环境后重新运行同一条安装命令即可补装。若 Windows 正在锁定二进制文件，请先关闭其他 Node/Pi 进程。
 安装器也支持用户名或仓库路径包含中文等非 ASCII 字符：`.cmd` 启动器只保存 ASCII 内容并在运行时定位旁边的 PowerShell 启动器，PowerShell 启动器使用带 BOM 的 UTF-8，避免 `UnicodeEncodeError` 或 PowerShell 5.1 乱码。
 

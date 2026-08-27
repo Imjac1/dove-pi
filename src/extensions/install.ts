@@ -7,6 +7,8 @@ import { getProfilePackages, matchesConfiguredPackage, type ExtensionProfile } f
 
 export interface ExtensionInstallResult {
 	readonly profile: ExtensionProfile;
+	readonly updated: boolean;
+	readonly updateError?: string;
 	readonly installed: readonly string[];
 	readonly skipped: readonly string[];
 	readonly failed: readonly ExtensionInstallFailure[];
@@ -26,6 +28,8 @@ export interface ExtensionInstallOptions {
 	readonly verbose?: boolean;
 	/** Continue with the remaining optional profile entries after an install error. */
 	readonly continueOnError?: boolean;
+	/** Run Pi's official extension updater before reconciling the profile. */
+	readonly updateConfigured?: boolean;
 	/** Repair a platform-native helper before retrying a known extension install. */
 	readonly repairNativeDependency?: (extensionId: string, cwd: string) => Promise<boolean>;
 	readonly run?: (command: string, args: readonly string[], cwd: string) => Promise<void>;
@@ -42,11 +46,27 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	const run = options.run ?? runPiInstall;
 	const verbose = options.verbose ?? false;
 	const continueOnError = options.continueOnError ?? true;
+	const updateConfigured = options.updateConfigured ?? true;
 	const repairNativeDependency = options.repairNativeDependency ?? repairAstGrepNativeDependency;
 	const installed: string[] = [];
 	const skipped: string[] = [];
 	const failed: ExtensionInstallFailure[] = [];
 	const configuredPackages = options.configuredPackages ?? await readConfiguredPackages();
+	let updated = false;
+	let updateError: string | undefined;
+
+	// Let Pi own extension version resolution and settings updates. Only invoke
+	// the updater when this profile already has configured packages; a first
+	// install has nothing to update and should stay fast/offline-friendly.
+	if (updateConfigured && configuredPackages.length > 0) {
+		try {
+			await run(piEntry, ["update", "--extensions"], cwd);
+			updated = true;
+		} catch (error) {
+			updateError = error instanceof Error ? error.message : String(error);
+			console.warn(`Warning: Pi extension update failed; continuing with profile reconciliation. ${updateError}`);
+		}
+	}
 
 	for (const entry of getProfilePackages(profile)) {
 		if (configuredPackages.some((value) => matchesConfiguredPackage(value, entry))) {
@@ -80,7 +100,7 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 		}
 	}
 
-	return { profile, installed, skipped, failed };
+	return { profile, updated, ...(updateError ? { updateError } : {}), installed, skipped, failed };
 }
 
 async function repairAstGrepNativeDependency(extensionId: string, _cwd: string): Promise<boolean> {

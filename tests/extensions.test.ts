@@ -113,6 +113,7 @@ describe("extension profiles", () => {
 		const result = await installExtensionProfile("minimal", {
 			piEntry: "pi-entry",
 			configuredPackages: ["npm:pi-open-tui", "npm:@juanibiapina/pi-extension-settings"],
+			updateConfigured: false,
 			run: async (command, args) => {
 				calls.push([command, ...args]);
 			},
@@ -142,6 +143,7 @@ describe("extension profiles", () => {
 				piEntry: "pi-entry",
 				configuredPackages: [],
 				continueOnError: false,
+				updateConfigured: false,
 				run: async (_command, args) => {
 					if (args[1] === "npm:pi-open-tui") throw new Error("native install failed");
 				},
@@ -159,6 +161,7 @@ describe("extension profiles", () => {
 		const result = await installExtensionProfile("max", {
 			piEntry: "pi-entry",
 			configuredPackages: configured,
+			updateConfigured: false,
 			repairNativeDependency: async () => {
 				repaired += 1;
 				return true;
@@ -172,5 +175,33 @@ describe("extension profiles", () => {
 		assert.deepEqual(result.installed, ["lens"]);
 		assert.deepEqual(result.failed, []);
 		assert.equal(calls.length, 2);
+	});
+
+	it("updates configured packages through Pi before reconciling a profile", async () => {
+		const calls: string[][] = [];
+		const configured = getProfilePackages("minimal").map((entry) => entry.installSpec);
+		const result = await installExtensionProfile("minimal", {
+			piEntry: "pi-entry",
+			configuredPackages: configured,
+			run: async (command, args) => { calls.push([command, ...args]); },
+		});
+		assert.equal(result.updated, true);
+		assert.equal(result.updateError, undefined);
+		assert.deepEqual(result.installed, []);
+		assert.deepEqual(result.skipped, ["extension-settings", "open-tui", "raw-paste", "caffeinate"]);
+		assert.deepEqual(calls, [["pi-entry", "update", "--extensions"]]);
+	});
+
+	it("continues profile reconciliation when the optional update step fails", async () => {
+		const result = await installExtensionProfile("minimal", {
+			piEntry: "pi-entry",
+			configuredPackages: ["npm:pi-open-tui"],
+			run: async (_command, args) => {
+				if (args[0] === "update") throw new Error("update unavailable");
+			},
+		});
+		assert.equal(result.updated, false);
+		assert.equal(result.updateError, "update unavailable");
+		assert.ok(result.installed.includes("extension-settings"));
 	});
 });
