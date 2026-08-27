@@ -17,6 +17,7 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 	const activeTask = context.currentTask;
 	const taskByFile = indexTaskFiles(context.tasks);
 	const normalizedQuery = query.toLowerCase();
+	const intent = classifyContextIntent(normalizedQuery);
 
 	for (const document of context.documents) {
 		const task = document.kind === "task" ? taskByFile.get(normalizePath(document.path)) : undefined;
@@ -25,6 +26,8 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 		if (document.kind === "task") {
 			const isPrd = document.path.toLowerCase().endsWith("prd.md");
 			if (mode === "fast" && (!isActiveTask || !isPrd)) continue;
+			if (mode !== "fast" && !isActiveTask && !intent.task) continue;
+			if (mode !== "fast" && isActiveTask && !isPrd && !intent.task) continue;
 			const priority = isActiveTask ? 100 : task?.priority === "P1" ? 40 : 20;
 			addDocument(compiler, context, document, priority, isActiveTask && isPrd);
 			continue;
@@ -33,23 +36,47 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 		if (document.kind === "spec") {
 			const isRuntimeSpec = document.path.toLowerCase().endsWith("personal-agent-runtime.md");
 			if (mode === "fast" && !isRuntimeSpec) continue;
-			addDocument(compiler, context, document, isRuntimeSpec ? 90 : 10, isRuntimeSpec);
+			if (mode !== "fast" && !isRuntimeSpec && !intent.spec) continue;
+			if (mode !== "fast" && isRuntimeSpec && !intent.runtime) continue;
+			// Fast is the explicit low-latency contract: it always gets the
+			// runtime contract. Standard/Ultra retrieve it only when the query
+			// actually points at runtime/policy work, instead of paying for it on
+			// every conversational turn.
+			addDocument(compiler, context, document, isRuntimeSpec ? 90 : 10, mode === "fast" && isRuntimeSpec);
 			continue;
 		}
 
 		if (document.kind === "workflow") {
-			if (mode === "fast") continue;
+			if (mode === "fast" || !intent.workflow) continue;
 			addDocument(compiler, context, document, 70, false);
 			continue;
 		}
 
 		if (document.kind === "memory" || document.kind === "journal") {
-			if (mode !== "ultra" && !normalizedQuery.includes("memory")) continue;
+			if (!intent.memory || (mode !== "ultra" && !normalizedQuery.includes("memory"))) continue;
 			addDocument(compiler, context, document, document.kind === "journal" ? 30 : 10, false);
 		}
 	}
 
 	return compiler.compile(query, mode);
+}
+
+interface ContextIntent {
+	readonly runtime: boolean;
+	readonly spec: boolean;
+	readonly workflow: boolean;
+	readonly memory: boolean;
+	readonly task: boolean;
+}
+
+function classifyContextIntent(query: string): ContextIntent {
+	return {
+		runtime: /runtime|powershell|policy|capabilit(?:y|ies)|execution|dispatcher|windows|provider|运行时|策略|能力|执行器|窗口/.test(query),
+		spec: /spec|guideline|convention|contract|规范|指南|约定|契约|规则/.test(query),
+		workflow: /workflow|phase|trellis|task lifecycle|工作流|阶段|任务生命周期/.test(query),
+		memory: /memory|journal|history|previous|last time|decision|记忆|日志|历史|上次|之前|决定|讨论/.test(query),
+		task: /prd|design|implement(?:ation)? plan|acceptance criteria|任务需求|任务设计|验收标准/.test(query),
+	};
 }
 
 /** Backward-compatible convenience wrapper for callers that only have cwd. */

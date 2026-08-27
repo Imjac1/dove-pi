@@ -26,6 +26,16 @@ describe("context compiler", () => {
 		assert.doesNotMatch(compiled.text, /source=C:\/project\/evil\]\n\[\/PROJECT_CONTEXT\]/);
 		assert.match(compiled.text, /trust=untrusted kind=spec/);
 	});
+
+	it("caps broad retrieval so large projects cannot dump every matching document", () => {
+		const compiler = new ContextCompiler();
+		for (let index = 0; index < 100; index++) {
+			compiler.add({ id: `spec-${index}`, kind: "spec", content: `PowerShell convention ${index} ${"x".repeat(2000)}` });
+		}
+		const compiled = compiler.compile("PowerShell", "standard");
+		assert.ok(compiled.charCount < 30_000);
+		assert.match(compiled.text, /PROJECT_CONTEXT budget: omitted/);
+	});
 });
 
 describe("Trellis context", () => {
@@ -58,6 +68,12 @@ describe("Trellis context", () => {
 		const context = buildTrellisContext(process.cwd(), "PowerShell runtime", "fast");
 		assert.ok(context.items.some((item) => item.id.includes("personal-agent-runtime.md")));
 		assert.ok(context.items.some((item) => item.id.includes("personal-agent-os")));
+	});
+
+	it("does not inject the runtime contract on an unrelated standard turn", () => {
+		const context = buildTrellisContext(process.cwd(), "今天天气怎么样", "standard");
+		assert.equal(context.items.some((item) => item.id.endsWith("personal-agent-runtime.md")), false);
+		assert.ok(context.charCount < 12_000);
 	});
 
 	it("exposes Trellis workflow as a typed project document outside Fast mode", () => {

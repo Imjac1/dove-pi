@@ -60,7 +60,19 @@ describe("strategy evaluation", () => {
 		const ultra = compiler.compile("", "ultra");
 		assert.deepEqual(fast.items.map((item) => item.id), ["active-task"]);
 		assert.deepEqual(standard.items.map((item) => item.id), ["active-task"]);
-		assert.deepEqual(ultra.items.map((item) => item.id), ["active-task", "runtime-spec", "historical-memory"]);
+		// An empty prompt must not turn Ultra into a full-project dump. Optional
+		// documents are retrieved only when the user gives a meaningful query.
+		assert.deepEqual(ultra.items.map((item) => item.id), ["active-task"]);
 		console.log(JSON.stringify({ scenario: "context policy", fast: fast.items.length, standard: standard.items.length, ultra: ultra.items.length }));
+	});
+
+	it("compacts oversized documents and exposes a local token estimate", () => {
+		const compiler = new ContextCompiler();
+		compiler.add({ id: "runtime", kind: "spec", content: `${"runtime contract\n".repeat(2_000)}`, required: true });
+		const context = compiler.compile("runtime", "fast");
+		assert.ok(context.items[0]!.content.length < 6_100);
+		assert.match(context.items[0]!.content, /context compacted from/);
+		assert.equal(context.charCount, context.text.length);
+		assert.ok(context.estimatedTokens > 0);
 	});
 });

@@ -13,6 +13,8 @@ Dove Pi 是一个 Windows 优先的个人 Agent 运行环境。用户只需要�
 
 安装器默认安装完整的 `max` 扩展 profile。这里的 `max` 只是扩展集合名称，不是 Dove 的执行策略。
 
+注意：安装完整扩展不等于每轮都把全部工具发给模型。Dove 默认使用 `auto` 工具集合，只发送 Pi 基础工具、Dove 项目工具和必要的交互工具；识别到浏览器、MCP、LSP、后台任务等意图时，会自动加入对应工具。这样普通的 `hi` 或简单问答不会因为扩展元数据产生数万 token 的固定开销。
+
 ## 最短使用流程
 
 ```powershell
@@ -139,6 +141,10 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /memory [关键词]
 /capabilities
 /mode fast|standard|ultra
+/dove-tools                 # 查看当前工具集合（默认 auto）
+/dove-tools full            # 临时启用已安装的全部工具
+/dove-tools auto            # 恢复按意图自动加载
+/dove-tools core            # 强制使用低 token 核心集合
 Ctrl+Alt+M
 ```
 
@@ -155,6 +161,23 @@ Ctrl+Alt+M
 | Ultra | 复杂任务；加载更多相关规范和记忆，并自适应压缩 |
 
 Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `max` 扩展 profile 是另一回事。
+
+上下文不会把整个 `.trellis/` 目录原样塞进每一轮请求：Fast 只带当前任务 PRD 和运行时契约的相关片段；Standard/Ultra 按请求意图检索规范、工作流或记忆，空查询不会展开整个项目；超长文档会保留相关段落并压缩。`/status full` 中的上下文统计以 Pi/provider 的实际用量为准。
+
+针对大项目还有三层保护：Fast/Standard 的上下文检索有总字符预算，宽泛查询超出预算时只保留高相关度文档；Ultra 不设置人为固定上限，依靠相关性、去重、单文档压缩和 Pi/provider 的模型上下文上限保护；项目任务列表只返回前 50 条预览并显示省略数量；Dove 上下文现在是当前请求的临时 system prompt，不会每轮写入会话历史。旧版本已经写入的 `personal-agent-context` 记录也会在发送给模型前过滤掉，因此继续旧会话不会线性重复增长。
+
+### 工具集合与 token
+
+`max` 扩展 profile 解决的是“安装哪些能力”，`core/full` 工具集合解决的是“当前回合把哪些工具 schema 发给模型”，两者是两层设置：
+
+- `auto`（默认）：按当前请求自动加入所需工具；
+- `core`：强制低 token 的日常对话和普通开发；
+- `full`：临时启用全部已安装工具；
+- 环境变量 `DOVE_PI_TOOL_PROFILE=full`：启动时默认使用完整工具集合。
+
+`auto` 不只检查本轮 prompt，也会参考当前 Trellis 任务的状态和文件路径；例如继续一个包含 `.c`、`.go` 或 `.ts` 文件的任务时，会自动补齐相关诊断/符号工具。切换只影响后续模型回合，不会卸载扩展。`/status` 会显示当前工具集合；Pi/provider 的实际 usage 仍是最终计费依据。
+
+Ultra 不等于强制调用所有工具或子 Agent。它允许更积极的上下文和调度，但共享可变状态、短任务和紧耦合调试仍会留在当前 Agent，避免错误并行。
 
 ## Trellis 更新
 

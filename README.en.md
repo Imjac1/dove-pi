@@ -13,6 +13,8 @@ Dove Pi is a Windows-first personal Agent runtime. Users interact with Dove Pi a
 
 The installer selects the complete `max` extension profile by default. This `max` is only an extension collection name, not a Dove execution mode.
 
+Installing the complete profile does not mean sending every tool to the model on every turn. Dove starts in the `auto` tool set: Pi's basic tools, Dove project tools, and essential interaction tools. When the request clearly needs browser, MCP, LSP, planning, or background-task capabilities, Dove adds only the matching tools automatically. A simple `hi` therefore does not pay a fixed tens-of-thousands-of-token metadata cost.
+
 ## The shortest path
 
 ```powershell
@@ -139,6 +141,10 @@ Inspect discovery with:
 /memory [query]
 /capabilities
 /mode fast|standard|ultra
+/dove-tools                 # show the current tool set (auto by default)
+/dove-tools full            # temporarily enable all installed tools
+/dove-tools auto            # return to intent-based loading
+/dove-tools core            # force the low-token core set
 Ctrl+Alt+M
 ```
 
@@ -155,6 +161,23 @@ Standard is the default. Modes affect context depth and dispatch aggressiveness,
 | Ultra | Complex work requiring more related specs and memory |
 
 Dove has no `max` execution mode. Pi's `max` thinking level and the installer's `max` extension profile are separate concepts.
+
+Context is not a raw dump of the whole `.trellis/` tree on every turn: Fast keeps the active task PRD and runtime contract to relevant excerpts; Standard/Ultra retrieve specs, workflow, or memory only when the request signals that intent, and an empty query never expands the whole project. Oversized documents are compacted around relevant sections. For billing, Pi/provider-reported usage remains authoritative.
+
+Large projects have three additional guardrails: Fast/Standard context retrieval has a total character budget and drops lower-ranked documents for broad queries; Ultra intentionally has no artificial fixed cap and relies on relevance, deduplication, per-document compaction, and Pi/provider model limits; project task listings return only the first 50 entries plus an omission count; Dove context is now a request-scoped system prompt instead of a persisted message. Context records written by older Dove versions are filtered before the provider request, so resuming an old session does not keep growing linearly.
+
+### Tool sets and token usage
+
+The `max` extension profile answers “which capabilities are installed”; `core/full` answers “which tool schemas are sent on this turn.” They are independent settings:
+
+- `auto` (default): add only the tools implied by the current request;
+- `core`: force low-token conversations and ordinary development;
+- `full`: temporarily enable all installed tools;
+- `DOVE_PI_TOOL_PROFILE=full`: start a session with the complete tool set.
+
+`auto` considers both the current prompt and the active Trellis task's status and file paths. For example, continuing a task that contains `.c`, `.go`, or `.ts` files can automatically add diagnostic and symbol tools. Switching affects subsequent model turns and does not uninstall anything. `/status` shows the active tool set; Pi/provider usage remains the authoritative billing metric.
+
+Ultra does not force every tool or sub-agent to run. It permits more capable context and dispatch decisions, while shared mutable state, short work, and tightly coupled debugging remain inline to avoid unsafe parallel edits.
 
 ## Updating Trellis
 

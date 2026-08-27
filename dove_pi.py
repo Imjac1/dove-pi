@@ -391,6 +391,11 @@ After installation:
   dove-pi project doctor
   dove-pi project init
   dove-pi
+
+Runtime defaults:
+  Ordinary sessions use automatic intent-based tool loading to keep prompt
+  tokens low. Use /dove-tools full inside Pi, or set
+  DOVE_PI_TOOL_PROFILE=full, when you need every installed extension tool.
 """)
 
 

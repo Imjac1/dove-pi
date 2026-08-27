@@ -33,6 +33,7 @@ interface PowerShellResult {
 - Every capability declares version, platform, side effects, idempotency, status, and execution function.
 - Mode changes are persisted as `personal-agent-mode` entries and apply only at the next not-yet-started step.
 - PowerShell output is structured; raw output is retained as an artifact and summaries reference evidence rather than copying large logs into model context.
+- Pi tool results must apply a model-facing output bound to large execution strings (stdout/stderr and nested recipe results); complete output remains in tool details and execution artifacts.
 - Execution ledger records use JSONL and include task ID, step ID, mode, capability, status, timestamp, and duration.
 - Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
 
@@ -185,6 +186,9 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - The current session's `.trellis/.runtime/sessions/*.json` `current_task` is resolved relative to the workspace and compared to the task directory using normalized absolute paths.
 - Fast mode includes only the active task PRD and the runtime spec as required context. Standard/Ultra use relevance scoring; Ultra may include typed memory records without an application token cap.
 - The Pi adapter must pass its selected `ProjectProvider` into context compilation. A cwd convenience wrapper may exist for compatibility, but it must delegate to the same provider projection rather than reading Trellis files directly.
+- Dove's per-request project guidance is returned as `before_agent_start.systemPrompt`; it must not be persisted as a custom message on every turn. A `context` handler filters legacy `personal-agent-context` custom messages from resumed sessions before provider requests and compaction.
+- Fast and Standard apply bounded total context-character budgets for broad retrieval. Ultra has no artificial application token cap and relies on relevance scoring, content deduplication, per-document compaction, and Pi/provider model-context limits.
+- Model-facing project indexes use bounded previews for large collections (for example, the first 50 task records plus an omission count); complete raw collections remain provider-local details.
 
 ### 4. Validation & Error Matrix
 
@@ -208,6 +212,7 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - Assert journal and index files receive distinct memory kinds.
 - Assert malformed or missing metadata does not prevent snapshot creation.
 - Assert Fast mode keeps active PRD/runtime spec behavior and Trellis-disabled mode remains loadable.
+- Assert request-scoped Dove context is not persisted, legacy context messages are filtered, and broad Standard retrieval stays within its character budget.
 
 ### 7. Wrong vs Correct
 
@@ -452,6 +457,7 @@ dove-pi extensions install max
 - Missing packages are warnings; Pi/Node incompatibility, invalid load order, and conflicting authority packages are errors.
 - Doctor checks local settings and executables without requiring npm/network access. It must not rewrite `~/.pi/agent/settings.json` or silently install software.
 - Third-party sub-agent, background-task, plan, workspace, or security packages must remain optional when they overlap a Dove Pi authority contract.
+- The Dove `auto` tool profile may use the active normalized Trellis task (status and bounded file-path preview) as an intent hint in addition to the current prompt. It must not use task titles alone as a broad trigger, and Ultra must not force all tools or unsafe parallel dispatch.
 
 ### 4. Validation & Error Matrix
 
