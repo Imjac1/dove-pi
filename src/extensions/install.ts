@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,6 +95,15 @@ async function repairAstGrepNativeDependency(extensionId: string, _cwd: string):
 				? "@ast-grep/cli-win32-ia32-msvc"
 				: undefined;
 	if (!nativePackage) return false;
+	const brokenCliDir = join(installRoot, "node_modules", "@ast-grep", "cli");
+	try {
+		// A failed postinstall can leave ast-grep.exe/sg.exe in place. Remove
+		// only this managed package directory before reifying the native helper;
+		// never touch the user's project or the whole Pi npm root.
+		await rm(brokenCliDir, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
+	} catch {
+		return false;
+	}
 	console.warn(`Repairing ${nativePackage} for pi-lens...`);
 	return new Promise((resolve) => {
 		const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -106,6 +115,7 @@ async function repairAstGrepNativeDependency(extensionId: string, _cwd: string):
 				npm_config_include: "optional",
 				npm_config_optional: "true",
 			},
+			shell: process.platform === "win32",
 		});
 		child.once("error", () => resolve(false));
 		child.once("exit", (code, signal) => resolve(code === 0 && !signal));
