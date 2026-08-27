@@ -1,6 +1,6 @@
 import { relative } from "node:path";
 import type { AgentMode } from "../core/contracts.ts";
-import { ContextCompiler, type CompiledContext } from "../core/context-compiler.ts";
+import { ContextCompiler, type CompiledContext, type ContextCompileOptions } from "../core/context-compiler.ts";
 import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../project-provider/index.ts";
 
 /**
@@ -11,7 +11,7 @@ import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvide
  * the lightweight fallback) authoritative and prevents a stale Trellis read
  * from leaking into the model prompt.
  */
-export function buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): CompiledContext {
+export function buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode, options: ContextCompileOptions = {}): CompiledContext {
 	const compiler = new ContextCompiler();
 	const context = provider.getContext();
 	const activeTask = context.currentTask;
@@ -58,7 +58,7 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 		}
 	}
 
-	return compiler.compile(query, mode);
+	return compiler.compile(query, mode, options);
 }
 
 interface ContextIntent {
@@ -80,8 +80,8 @@ function classifyContextIntent(query: string): ContextIntent {
 }
 
 /** Backward-compatible convenience wrapper for callers that only have cwd. */
-export function buildTrellisContext(cwd: string, query: string, mode: AgentMode): CompiledContext {
-	return buildProjectContext(createProjectProvider(cwd), query, mode);
+export function buildTrellisContext(cwd: string, query: string, mode: AgentMode, options: ContextCompileOptions = {}): CompiledContext {
+	return buildProjectContext(createProjectProvider(cwd), query, mode, options);
 }
 
 function indexTaskFiles(tasks: readonly ProjectTask[]): Map<string, ProjectTask> {

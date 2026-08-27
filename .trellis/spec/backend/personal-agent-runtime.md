@@ -34,6 +34,7 @@ interface PowerShellResult {
 - Mode changes are persisted as `personal-agent-mode` entries and apply only at the next not-yet-started step.
 - PowerShell output is structured; raw output is retained as an artifact and summaries reference evidence rather than copying large logs into model context.
 - Pi tool results must apply a model-facing output bound to large execution strings (stdout/stderr and nested recipe results); complete output remains in tool details and execution artifacts.
+- The Pi adapter also bounds oversized built-in read/shell/search results before they re-enter model context. When compacted, it preserves the original content in tool details and includes a clear request-narrowing marker.
 - Execution ledger records use JSONL and include task ID, step ID, mode, capability, status, timestamp, and duration.
 - Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
 
@@ -190,6 +191,7 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - Keep provider prompt-cache prefixes stable: the static Dove system-prompt section must not include per-request mode, task, workflow, or project text. Inject those values through the request-only `context` transform after the persistent history, and never append them as session entries.
 - In `auto` tool mode, intent-specific tools are session-monotonic: once enabled they remain active until the user explicitly changes the tool profile or starts a new session. Avoid repeated `setActiveTools()` calls when the effective set is unchanged, because tool definitions participate in the provider prompt prefix.
 - Fast and Standard apply bounded total context-character budgets for broad retrieval. Ultra has no artificial application token cap and relies on relevance scoring, content deduplication, per-document compaction, and Pi/provider model-context limits.
+- When Pi exposes current context usage and model window, the adapter derives a remaining-character budget with response headroom and passes it to the compiler. This is a dynamic model limit guard, not a fixed Ultra budget.
 - Model-facing project indexes use bounded previews for large collections (for example, the first 50 task records plus an omission count); complete raw collections remain provider-local details.
 
 ### 4. Validation & Error Matrix

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, compactToolResultContent, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 
 describe("Pi adapter", () => {
@@ -98,6 +98,7 @@ describe("Pi adapter", () => {
 		assert.equal((contextResult as { messages?: unknown[] })?.messages?.length, 2);
 		assert.equal(((contextResult as { messages?: Array<{ role?: string }> })?.messages?.[0])?.role, "user");
 		assert.equal(((contextResult as { messages?: Array<{ customType?: string }> })?.messages?.[1])?.customType, "personal-agent-context");
+		assert.match(String(((contextResult as { messages?: Array<{ content?: Array<{ text?: string }> }> })?.messages?.[1])?.content?.[0]?.text), /PERSONAL AGENT REQUEST CONTEXT/);
 	});
 
 	it("keeps only the compact core tool set by default", () => {
@@ -121,6 +122,21 @@ describe("Pi adapter", () => {
 		assert.equal(shouldOfferProjectBootstrap("你好"), false);
 		assert.equal(shouldOfferProjectBootstrap("修复登录问题"), true);
 		assert.equal(shouldOfferProjectBootstrap("继续当前任务"), true);
+	});
+
+	it("bounds oversized built-in tool results without changing small results", () => {
+		assert.equal(compactToolResultContent([{ type: "text", text: "small" }]), undefined);
+		const compacted = compactToolResultContent([{ type: "text", text: "x".repeat(40_000) }], 1_000);
+		assert.ok(compacted);
+		assert.ok((compacted?.[0] as { text: string }).text.length <= 1_100);
+		assert.match((compacted?.[0] as { text: string }).text, /tool result compacted/);
+	});
+
+	it("derives an Ultra context budget from the active model window", () => {
+		assert.equal(getRemainingContextChars(undefined, 200_000), undefined);
+		assert.equal(getRemainingContextChars(10_000, undefined), undefined);
+		const remaining = getRemainingContextChars(180_000, 200_000);
+		assert.ok(remaining && remaining >= 4_096 && remaining < 60_000);
 	});
 });
 

@@ -36,6 +36,16 @@ describe("context compiler", () => {
 		assert.ok(compiled.charCount < 30_000);
 		assert.match(compiled.text, /PROJECT_CONTEXT budget: omitted/);
 	});
+
+	it("honors a model-derived budget in Ultra without adding a fixed Ultra cap", () => {
+		const compiler = new ContextCompiler();
+		for (let index = 0; index < 20; index++) {
+			compiler.add({ id: `runtime-${index}`, kind: "runtime", content: `runtime ${index} ${"x".repeat(2_000)}` });
+		}
+		const compiled = compiler.compile("runtime", "ultra", { maxChars: 8_000 });
+		assert.ok(compiled.charCount < 10_000);
+		assert.match(compiled.text, /PROJECT_CONTEXT budget: omitted/);
+	});
 });
 
 describe("Trellis context", () => {

@@ -24,6 +24,11 @@ export interface CompiledContext {
 	readonly estimatedTokens: number;
 }
 
+export interface ContextCompileOptions {
+	/** Optional remaining model-context budget in characters. */
+	readonly maxChars?: number;
+}
+
 export class ContextCompiler {
 	private readonly documents: ContextDocument[] = [];
 
@@ -32,9 +37,9 @@ export class ContextCompiler {
 		this.documents.push(document);
 	}
 
-	public compile(query: string, mode: AgentMode): CompiledContext {
+	public compile(query: string, mode: AgentMode, options: ContextCompileOptions = {}): CompiledContext {
 		const terms = tokenize(query);
-		const contextBudget = contextBudgetChars(mode);
+		const contextBudget = contextBudgetChars(mode, options.maxChars);
 		const scored = this.documents
 			.map((document) => ({ ...document, relevance: score(document, terms) }))
 			.filter((document) => document.required || document.relevance > 0)
@@ -77,11 +82,13 @@ export class ContextCompiler {
 	}
 }
 
-function contextBudgetChars(mode: AgentMode): number {
+function contextBudgetChars(mode: AgentMode, maxChars?: number): number {
 	// Ultra deliberately has no fixed application token cap. Pi/provider model
 	// limits, relevance scoring, deduplication, and per-document compaction remain
 	// the protection there; Fast/Standard keep explicit latency-oriented budgets.
-	return mode === "fast" ? 16_000 : mode === "standard" ? 24_000 : Number.POSITIVE_INFINITY;
+	const modeBudget = mode === "fast" ? 16_000 : mode === "standard" ? 24_000 : Number.POSITIVE_INFINITY;
+	if (maxChars === undefined || !Number.isFinite(maxChars) || maxChars <= 0) return modeBudget;
+	return Math.min(modeBudget, Math.floor(maxChars));
 }
 
 /** Source labels are metadata, but file names are project-controlled input.
