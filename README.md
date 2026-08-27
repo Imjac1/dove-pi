@@ -145,6 +145,7 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /dove-tools full            # 临时启用已安装的全部工具
 /dove-tools auto            # 恢复按意图自动加载
 /dove-tools core            # 强制使用低 token 核心集合
+/dove-tools reset            # 重置 auto 会话阶段，清除已累加的意图工具
 Ctrl+Alt+M
 ```
 
@@ -175,7 +176,9 @@ Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `ma
 - `full`：临时启用全部已安装工具；
 - 环境变量 `DOVE_PI_TOOL_PROFILE=full`：启动时默认使用完整工具集合。
 
-`auto` 不只检查本轮 prompt，也会参考当前 Trellis 任务的状态和文件路径；例如继续一个包含 `.c`、`.go` 或 `.ts` 文件的任务时，会自动补齐相关诊断/符号工具。切换只影响后续模型回合，不会卸载扩展。`/status` 会显示当前工具集合；Pi/provider 的实际 usage 仍是最终计费依据。
+`auto` 不只检查本轮 prompt，也会参考当前 Trellis 任务的状态和文件路径；例如继续一个包含 `.c`、`.go` 或 `.ts` 文件的任务时，会自动补齐相关诊断/符号工具。切换只影响后续模型回合，不会卸载扩展。为稳定缓存前缀，auto 会在当前会话保留已加入的意图工具；长会话可执行 `/dove-tools reset` 回到 core，再按意图重新加入。`/status` 会显示当前工具集合和 Pi thinking level；Pi/provider 的实际 usage 仍是最终计费依据。
+
+如果安装了 `pi-hashline-edit-pro`，Dove 会自动隐藏内置 `edit`，并保留 hashline 的 `replace`/`insert` 编辑路径，避免两套编辑权威同时暴露。`dove-pi extensions doctor` 会报告该兼容边界。
 
 Ultra 不等于强制调用所有工具或子 Agent。它允许更积极的上下文和调度，但共享可变状态、短任务和紧耦合调试仍会留在当前 Agent，避免错误并行。
 
@@ -226,7 +229,7 @@ npm run pi:smoke
 ```
 
 `setup` 是 `install` 的别名。重复安装会复用 lockfile 和 npm 缓存，不会隐式升级 Pi 或全局扩展。
-扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会显示原因、继续安装其余组件，并在结果中列出 `failed` 项；这不会阻断 Dove Pi 主程序。修复环境后重新运行同一条安装命令即可补装。
+扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会先尝试修复对应的 `@ast-grep` 原生包并重试一次；仍失败则显示原因、继续安装其余组件，并在结果中列出 `failed` 项。这不会阻断 Dove Pi 主程序，修复环境后重新运行同一条安装命令即可补装。
 
 当前版本是可运行的基础 MVP。任务 replay、完整远程控制面、第二套原生项目数据库和自动记忆晋升暂不在首个版本范围内。
 

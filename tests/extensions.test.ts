@@ -149,4 +149,28 @@ describe("extension profiles", () => {
 			/native install failed/,
 		);
 	});
+
+	it("repairs a Windows native helper and retries pi-lens once", async () => {
+		const calls: string[][] = [];
+		let repaired = 0;
+		const configured = getProfilePackages("max")
+			.filter((entry) => entry.id !== "lens")
+			.map((entry) => entry.installSpec);
+		const result = await installExtensionProfile("max", {
+			piEntry: "pi-entry",
+			configuredPackages: configured,
+			repairNativeDependency: async () => {
+				repaired += 1;
+				return true;
+			},
+			run: async (command, args) => {
+				calls.push([command, ...args]);
+				if (calls.length === 1) throw new Error("Pi extension install exited with code 1.");
+			},
+		});
+		assert.equal(repaired, 1);
+		assert.deepEqual(result.installed, ["lens"]);
+		assert.deepEqual(result.failed, []);
+		assert.equal(calls.length, 2);
+	});
 });

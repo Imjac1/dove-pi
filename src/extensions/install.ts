@@ -26,6 +26,8 @@ export interface ExtensionInstallOptions {
 	readonly verbose?: boolean;
 	/** Continue with the remaining optional profile entries after an install error. */
 	readonly continueOnError?: boolean;
+	/** Repair a platform-native helper before retrying a known extension install. */
+	readonly repairNativeDependency?: (extensionId: string, cwd: string) => Promise<boolean>;
 	readonly run?: (command: string, args: readonly string[], cwd: string) => Promise<void>;
 }
 
@@ -40,6 +42,7 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	const run = options.run ?? runPiInstall;
 	const verbose = options.verbose ?? false;
 	const continueOnError = options.continueOnError ?? true;
+	const repairNativeDependency = options.repairNativeDependency ?? repairAstGrepNativeDependency;
 	const installed: string[] = [];
 	const skipped: string[] = [];
 	const failed: ExtensionInstallFailure[] = [];
@@ -56,10 +59,20 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 			await run(piEntry, ["install", entry.installSpec], cwd);
 			installed.push(entry.id);
 		} catch (error) {
+			let finalError = error;
+			if (entry.id === "lens" && await repairNativeDependency(entry.id, cwd)) {
+				try {
+					await run(piEntry, ["install", entry.installSpec], cwd);
+					installed.push(entry.id);
+					continue;
+				} catch (retryError) {
+					finalError = retryError;
+				}
+			}
 			const failure = {
 				id: entry.id,
 				installSpec: entry.installSpec,
-				error: describeInstallFailure(entry.id, error),
+				error: describeInstallFailure(entry.id, finalError),
 			};
 			failed.push(failure);
 			console.warn(`Warning: optional Pi extension ${entry.id} could not be installed. ${failure.error}`);
@@ -68,6 +81,35 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	}
 
 	return { profile, installed, skipped, failed };
+}
+
+async function repairAstGrepNativeDependency(extensionId: string, _cwd: string): Promise<boolean> {
+	if (extensionId !== "lens" || process.platform !== "win32") return false;
+	const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+	const installRoot = join(agentDir, "npm");
+	const nativePackage = process.arch === "x64"
+		? "@ast-grep/cli-win32-x64-msvc"
+		: process.arch === "arm64"
+			? "@ast-grep/cli-win32-arm64-msvc"
+			: process.arch === "ia32"
+				? "@ast-grep/cli-win32-ia32-msvc"
+				: undefined;
+	if (!nativePackage) return false;
+	console.warn(`Repairing ${nativePackage} for pi-lens...`);
+	return new Promise((resolve) => {
+		const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+		const child = spawn(npm, ["install", nativePackage, "--prefix", installRoot, "--legacy-peer-deps", "--include=optional", "--force", "--no-audit", "--no-fund"], {
+			stdio: "inherit",
+			windowsHide: true,
+			env: {
+				...process.env,
+				npm_config_include: "optional",
+				npm_config_optional: "true",
+			},
+		});
+		child.once("error", () => resolve(false));
+		child.once("exit", (code, signal) => resolve(code === 0 && !signal));
+	});
 }
 
 function describeInstallFailure(id: string, error: unknown): string {
