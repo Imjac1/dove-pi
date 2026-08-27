@@ -230,7 +230,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		description: "Show Dove mode, tool profile, and operation status; telemetry is provided by the TUI extension",
 		handler: async (args, ctx) => {
 			const detail = args.trim().toLowerCase() === "full" ? "Telemetry: context, tokens, TPS, TTFT, duration, stalls, cost, Git, and model are provided by pi-open-tui when enabled." : "Use /status full for telemetry details. Install pi-open-tui for the dsh-like status bar.";
-			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, tools=${toolProfile}, operation=${operation}. ${detail}`, "info");
+			const thinking = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : "unknown");
+			const hashline = hasHashlineEditTools(pi.getAllTools().map((tool) => tool.name));
+			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, thinking=${thinking}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}. ${detail}`, "info");
 		},
 	});
 

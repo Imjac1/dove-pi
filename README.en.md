@@ -145,6 +145,7 @@ Inspect discovery with:
 /dove-tools full            # temporarily enable all installed tools
 /dove-tools auto            # return to intent-based loading
 /dove-tools core            # force the low-token core set
+/dove-tools reset            # reset the auto session stage and clear accumulated intent tools
 Ctrl+Alt+M
 ```
 
@@ -175,7 +176,9 @@ The `max` extension profile answers “which capabilities are installed”; `cor
 - `full`: temporarily enable all installed tools;
 - `DOVE_PI_TOOL_PROFILE=full`: start a session with the complete tool set.
 
-`auto` considers both the current prompt and the active Trellis task's status and file paths. For example, continuing a task that contains `.c`, `.go`, or `.ts` files can automatically add diagnostic and symbol tools. Switching affects subsequent model turns and does not uninstall anything. `/status` shows the active tool set; Pi/provider usage remains the authoritative billing metric.
+`auto` considers both the current prompt and the active Trellis task's status and file paths. For example, continuing a task that contains `.c`, `.go`, or `.ts` files can automatically add diagnostic and symbol tools. Switching affects subsequent model turns and does not uninstall anything. To stabilize the cache prefix, auto keeps intent tools active for the current session; on a long session, use `/dove-tools reset` to return to core and let intent discovery add tools again. `/status` shows the active tool set and Pi thinking level; Pi/provider usage remains the authoritative billing metric.
+
+When `pi-hashline-edit-pro` is installed, Dove automatically hides the built-in `edit` tool and keeps hashline `replace`/`insert` as the editing path, so two edit authorities are not exposed at once. `dove-pi extensions doctor` reports this compatibility boundary.
 
 Ultra does not force every tool or sub-agent to run. It permits more capable context and dispatch decisions, while shared mutable state, short work, and tightly coupled debugging remain inline to avoid unsafe parallel edits.
 

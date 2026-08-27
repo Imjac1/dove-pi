@@ -23,6 +23,7 @@ describe("Pi adapter", () => {
 			getAllTools() { return [{ name: "read" }, { name: "agent_doctor" }, { name: "agent_browser" }]; },
 			setActiveTools(names: string[]) { activeToolSets.push(names); },
 			getActiveTools() { return activeToolSets.at(-1) ?? []; },
+			getThinkingLevel() { return "max"; },
 			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
 		} as unknown as ExtensionAPI;
 
@@ -60,6 +61,7 @@ describe("Pi adapter", () => {
 		await events.get("session_start")?.(undefined, context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Pi max")));
 		assert.ok(notifications.some((value) => value.includes("Ctrl+P 切换模型")));
 		await shortcuts.get("ctrl+alt+m")?.handler(context);
 		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Ready")));
@@ -84,6 +86,8 @@ describe("Pi adapter", () => {
 		assert.equal(notifications.at(-1), "Mode must be fast, standard, or ultra.");
 		await commands.get("dove-tools")?.handler("full", context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor", "agent_browser"]);
+		await commands.get("dove-tools")?.handler("reset", context);
+		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		const beforeStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal((beforeStart as { message?: unknown })?.message, undefined);
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
