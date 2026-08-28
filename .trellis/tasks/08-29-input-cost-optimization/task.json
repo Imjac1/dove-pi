@@ -1,0 +1,28 @@
+{
+  "id": "input-cost-optimization",
+  "name": "input-cost-optimization",
+  "title": "Input-side cost optimization: truncate huge tool outputs & verify capability fast path",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "aixi",
+  "assignee": "aixi",
+  "createdAt": "2026-08-29",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-28-dove-pi-usage-review",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "priority": "P0"
+  }
+}

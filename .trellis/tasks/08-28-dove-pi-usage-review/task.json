@@ -3,5 +3,13 @@
   "title": "Dove Pi usage review & optimization plan",
   "status": "active",
   "created": "2026-08-28",
-  "tags": ["dove-pi", "tokens", "performance", "agents"]
+  "tags": [
+    "dove-pi",
+    "tokens",
+    "performance",
+    "agents"
+  ],
+  "children": [
+    "08-29-input-cost-optimization"
+  ]
 }
