@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -211,6 +214,84 @@ describe("Pi adapter", () => {
 		assert.equal(getRemainingContextChars(10_000, undefined), undefined);
 		const remaining = getRemainingContextChars(180_000, 200_000);
 		assert.ok(remaining && remaining >= 4_096 && remaining < 60_000);
+	});
+
+	it("auto policy respects explicit per-model thinking level from settings", async () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-adapter-fix1-"));
+		const agentDir = join(tmpDir, "agent");
+		mkdirSync(agentDir, { recursive: true });
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultThinkingLevel: "max", modelThinkingLevels: { "cc-switch-open-router/deepseek-v4-flash-0731": "max" } }), "utf8");
+		const prevEnv = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		try {
+			const commands = new Map<string, { handler: (args: string, ctx: FakeContext) => Promise<void> }>();
+			const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+			const sets: string[] = [];
+			const api = {
+				registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
+				registerShortcut() {},
+				registerTool() {},
+				registerFlag() {},
+				appendEntry() {},
+				getAllTools() { return [{ name: "read" }, { name: "agent_doctor" }]; },
+				setActiveTools() {},
+				getActiveTools() { return []; },
+				getThinkingLevel() { return "max"; },
+				setThinkingLevel(level: string) { sets.push(level); },
+				on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const context: FakeContext = {
+				model: { provider: "cc-switch-open-router", id: "deepseek-v4-flash-0731" },
+				ui: { theme: { fg: (c, v) => v }, setStatus: () => {}, notify: () => {} },
+				sessionManager: { getEntries: () => [] },
+			};
+			// Auto policy + explicit per-model max -> must NOT override with mode level
+			await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+			assert.deepEqual(sets, [], "explicit per-model level must be respected by auto policy");
+		} finally {
+			if (prevEnv === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = prevEnv;
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("auto policy asserts mode level when no explicit thinking level configured", async () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-adapter-fix1b-"));
+		const agentDir = join(tmpDir, "agent");
+		mkdirSync(agentDir, { recursive: true });
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({}), "utf8");
+		const prevEnv = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		try {
+			const commands = new Map<string, { handler: (args: string, ctx: FakeContext) => Promise<void> }>();
+			const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+			const sets: string[] = [];
+			const api = {
+				registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
+				registerShortcut() {},
+				registerTool() {},
+				registerFlag() {},
+				appendEntry() {},
+				getAllTools() { return [{ name: "read" }, { name: "agent_doctor" }]; },
+				setActiveTools() {},
+				getActiveTools() { return []; },
+				getThinkingLevel() { return "medium"; },
+				setThinkingLevel(level: string) { sets.push(level); },
+				on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const context: FakeContext = {
+				model: { provider: "some-provider", id: "some-model" },
+				ui: { theme: { fg: (c, v) => v }, setStatus: () => {}, notify: () => {} },
+				sessionManager: { getEntries: () => [] },
+			};
+			// No explicit config -> auto derives standard->high and asserts it
+			await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+			assert.deepEqual(sets, ["high"], "auto policy must assert mode-derived level when no explicit config");
+		} finally {
+			if (prevEnv === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = prevEnv;
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
 	});
 });
 

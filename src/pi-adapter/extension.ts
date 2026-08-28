@@ -168,6 +168,21 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	}
 	function applyThinkingPolicy(ctx?: ExtensionContext): void {
 		if (thinkingPolicy.kind === "off") return; // manual-only: never assert a level
+		// auto: respect explicit user configuration (per-model or global default).
+		// Pi itself prioritizes modelThinkingLevels > defaultThinkingLevel on model
+		// switch; overriding that here would silently change the user's choice
+		// (e.g. restart resets mode to standard and would downgrade a configured
+		// max to high). Only assert the mode-derived level when the user has NOT
+		// pinned a thinking level anywhere.
+		if (thinkingPolicy.kind === "auto") {
+			const model = ctx?.model as { provider?: string; id?: string } | undefined;
+			if (model?.provider && model?.id) {
+				const perModel = settings.getModelThinkingLevel(model.provider, model.id);
+				if (perModel !== undefined) return; // user pinned this model -> respect
+			}
+			const globalDefault = settings.getDefaultThinkingLevel();
+			if (globalDefault !== undefined && globalDefault !== "medium") return; // user set a non-default global level -> respect
+		}
 		const level = resolveThinkingLevel(thinkingPolicy, mode.current);
 		if (typeof pi.setThinkingLevel === "function") pi.setThinkingLevel(level);
 		if (ctx) updateStatus(ctx);
