@@ -140,6 +140,7 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /project bind lightweight
 /memory [关键词]
 /capabilities
+/web [status|auth <hosts...> [profile=名称]]
 /mode fast|standard|ultra
 /dove-tools                 # 查看当前工具集合（默认 auto）
 /dove-tools full            # 临时启用已安装的全部工具
@@ -151,6 +152,27 @@ Ctrl+Alt+M
 
 `/status full` 里的缓存诊断会同时显示最近一次请求（Last CH）和当前会话累计命中率（Session CH）。`CH` 使用 Pi/provider 已上报的 usage 计算，不会把估算值当成真实命中。
 
+
+## Web 访问（真实用户模式）
+
+Dove 通过已安装的 `pi-web-access` 扩展提供 `web_search`、`fetch_content`、`source_check`、`get_search_content` 等工具。要像真实用户一样读取网站、避免反爬导致内容残缺，可用“真实用户认证”路径：Dove 读取本机 Edge/Chrome 已登录的真实 cookie，仅发给你白名单里的主机。
+
+```text
+/web status                     # 查看配置路径、cookie 开关、authFetch 白名单、Edge/Chrome 是否可用
+/web auth example.com www.example.com [profile=名称]   # 启用真实 cookie 并对这些 host 放行
+dove-pi web status              # 命令行等价
+dove-pi web auth example.com [profile=名称]
+```
+
+分层策略：
+
+- 普通/无需登录的内容：`fetch_content` 直接抓；
+- 登录墙或 cookie 保护的内容：先用 `/web auth <host>...` 放行该 host，再用 `fetch_content` 的 `auth` 参数（profile 名或 `true`），Dove 会带上本机真实登录 cookie；
+- 反爬较重或 JS 渲染的页面（`fetch_content` 报“JavaScript-rendered / incomplete / blocked”）：Dove 会自动改用 `agent_browser`（真实 Chromium 会话）抓取，而不是报告残缺结果。
+
+安全边界：cookie 只发给 authFetch 白名单内的 host；SSRF 校验和 host 范围保持生效；cookie 不会发给第三方托管提取服务。配置写在 `~/.pi/web-search.json`（或 `$PI_CODING_AGENT_DIR` 下）。
+
+若 `agent_browser` 报“Failed to launch Chrome … parallel configuration (14001)”，说明本机 Chrome 的 SxS 运行库坏了（已存在 `chrome.exe.bak_sxs_broken`）。改用 Edge：agent-browser 全局配置已指向 `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`（`~/.pi/config/pi-agent-browser-native/config.json`）。正式发起的真实浏览器会话使用 `agent_browser` 的 `sessionMode: fresh` 并带 `--executable-path <Edge路径>`。
 普通使用不需要记住 `/project bind`、`/task ...` 或 `/skill:*`；它们是高级/兼容接口。
 
 ## 执行策略

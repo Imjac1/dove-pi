@@ -29,7 +29,7 @@ describe("Pi adapter", () => {
 		} as unknown as ExtensionAPI;
 
 		extension(api);
-		assert.deepEqual([...commands.keys()], ["mode", "status", "dove-tools", "设置", "settings-zh", "capabilities", "skills", "project", "task", "memory"]);
+		assert.deepEqual([...commands.keys()], ["mode", "status", "sysprompt", "reasoning-voice", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
 		assert.equal(shortcuts.size, 2);
 		assert.ok(shortcuts.has("ctrl+shift+l"));
 		assert.ok(shortcuts.has("ctrl+alt+m"));
@@ -119,6 +119,16 @@ describe("Pi adapter", () => {
 		assert.equal(beforeStartMessage?.details?.schemaVersion, 2);
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
+		const sysCaptured = notifications.length;
+		await commands.get("sysprompt")?.handler("", context);
+		assert.ok(notifications.slice(sysCaptured).at(-1)?.includes("[PERSONAL AGENT]"));
+		assert.ok(notifications.slice(sysCaptured).at(-1)?.includes("supplied separately at request time"));
+		await commands.get("reasoning-voice")?.handler("off", context);
+		const withoutVoiceStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.doesNotMatch(String((withoutVoiceStart as { systemPrompt?: string })?.systemPrompt), /We need|first-person-plural/);
+		await commands.get("reasoning-voice")?.handler("on", context);
+		const withVoiceStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.match(String((withVoiceStart as { systemPrompt?: string })?.systemPrompt), /first-person-plural/);
 		const repeatedStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal((repeatedStart as { message?: unknown })?.message, undefined, "unchanged context epochs must not append another snapshot");
 		const contextResult = await events.get("context")?.({

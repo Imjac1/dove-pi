@@ -3,6 +3,7 @@ import { initializeTrellis, updateTrellis } from "./project-provider/trellis-cli
 import { inspectWindowsEnvironment } from "./windows-runtime/doctor.ts";
 import { EXTENSION_CATALOG, getProfilePackages, type ExtensionProfile } from "./extensions/catalog.ts";
 import { inspectExtensionProfile, parseExtensionProfile } from "./extensions/doctor.ts";
+import { inspectWebAccessReadiness, writeWebSearchConfig } from "./web-access/config.ts";
 import { installExtensionProfile } from "./extensions/install.ts";
 import { getPiVersion } from "./pi-adapter/host-version.ts";
 import { discoverSkills } from "./skills/discovery.ts";
@@ -47,8 +48,23 @@ if (args[0] === "doctor") {
 	const query = args.slice(1).join(" ").trim().toLowerCase();
 	const skills = discoverSkills(process.cwd()).filter((skill) => !query || skill.name.toLowerCase().includes(query));
 	console.log(JSON.stringify({ projectRoot: process.cwd(), skills }, null, 2));
+} else if (args[0] === "web") {
+	const command = args[1] ?? "status";
+	if (command === "status") {
+		console.log(JSON.stringify(inspectWebAccessReadiness(), null, 2));
+	} else if (command === "auth") {
+		const tokens = args.slice(2);
+		const profileIndex = tokens.findIndex((token) => token.startsWith("profile="));
+		const profile = profileIndex >= 0 ? tokens.splice(profileIndex, 1)[0].slice("profile=".length) : undefined;
+		const hosts = tokens.filter(Boolean);
+		if (hosts.length === 0) throw new Error("Usage: dove-pi web auth <hosts...> [profile=name]");
+		const readiness = writeWebSearchConfig({ allowBrowserCookies: true, profile: { name: profile?.trim() || "default", hosts } });
+		console.log(JSON.stringify(readiness, null, 2));
+	} else {
+		throw new Error("Usage: dove-pi web status | dove-pi web auth <hosts...> [profile=name]");
+	}
 } else {
-	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
+	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
 	process.exitCode = 1;
 }
 

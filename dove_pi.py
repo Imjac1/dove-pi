@@ -409,11 +409,10 @@ Compatibility aliases remain available: --extensions and --skip-checks.
 After installation:
   dove-pi doctor
   dove-pi skills [query]
+  dove-pi web status | dove-pi web auth <hosts...> [profile=name]
   dove-pi project doctor
   dove-pi project init
   dove-pi
-
-Runtime defaults:
   Ordinary sessions use automatic intent-based tool loading to keep prompt
   tokens low. Use /dove-tools full inside Pi, or set
   DOVE_PI_TOOL_PROFILE=full, when you need every installed extension tool.
@@ -442,7 +441,7 @@ def main(arguments: Sequence[str]) -> int:
         return 0
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project", "skills"):
+    if arguments and arguments[0] in ("doctor", "project", "skills", "web"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])
