@@ -1,9 +1,25 @@
-import { createProjectProvider, updateProjectManifest } from "./project-provider/index.ts";
-import { initializeTrellis, updateTrellis } from "./project-provider/trellis-cli.ts";
+import {
+	createProjectProvider,
+	updateProjectManifest,
+} from "./project-provider/index.ts";
+import {
+	initializeTrellis,
+	updateTrellis,
+} from "./project-provider/trellis-cli.ts";
 import { inspectWindowsEnvironment } from "./windows-runtime/doctor.ts";
-import { EXTENSION_CATALOG, getProfilePackages, type ExtensionProfile } from "./extensions/catalog.ts";
-import { inspectExtensionProfile, parseExtensionProfile } from "./extensions/doctor.ts";
-import { inspectWebAccessReadiness, writeWebSearchConfig } from "./web-access/config.ts";
+import {
+	EXTENSION_CATALOG,
+	getProfilePackages,
+	type ExtensionProfile,
+} from "./extensions/catalog.ts";
+import {
+	inspectExtensionProfile,
+	parseExtensionProfile,
+} from "./extensions/doctor.ts";
+import {
+	inspectWebAccessReadiness,
+	writeWebSearchConfig,
+} from "./web-access/config.ts";
 import { installExtensionProfile } from "./extensions/install.ts";
 import { getPiVersion } from "./pi-adapter/host-version.ts";
 import { discoverSkills } from "./skills/discovery.ts";
@@ -18,37 +34,93 @@ if (args[0] === "doctor") {
 	const health = provider.getHealth();
 	const context = provider.getContext();
 	const powershell = await inspectWindowsEnvironment(process.cwd());
-	console.log(JSON.stringify({ node: process.version, platform: process.platform, powershell, project: { ...health, currentTask: context.currentTask, taskCount: context.tasks.length, revision: context.revision } }, null, 2));
+	console.log(
+		JSON.stringify(
+			{
+				node: process.version,
+				platform: process.platform,
+				powershell,
+				project: {
+					...health,
+					currentTask: context.currentTask,
+					taskCount: context.tasks.length,
+					revision: context.revision,
+				},
+			},
+			null,
+			2,
+		),
+	);
 } else if (args[0] === "project") {
 	const provider = createProjectProvider(process.cwd());
 	if (args[1] === "bind") {
 		const requestedProvider = args[2];
-		if (requestedProvider !== "trellis" && requestedProvider !== "lightweight") throw new Error("Usage: dove-pi project bind trellis|lightweight");
+		if (requestedProvider !== "trellis" && requestedProvider !== "lightweight")
+			throw new Error("Usage: dove-pi project bind trellis|lightweight");
 		await updateProjectManifest(provider.projectRoot, requestedProvider);
 		const rebound = createProjectProvider(provider.projectRoot);
-		console.log(JSON.stringify({ provider: requestedProvider, projectRoot: provider.projectRoot, restartRequired: false, project: inspectProjectStatus(rebound) }, null, 2));
+		console.log(
+			JSON.stringify(
+				{
+					provider: requestedProvider,
+					projectRoot: provider.projectRoot,
+					restartRequired: false,
+					project: inspectProjectStatus(rebound),
+				},
+				null,
+				2,
+			),
+		);
 	} else if (args[1] === "init") {
 		await initializeTrellis(provider.projectRoot);
 		let refreshed = createProjectProvider(provider.projectRoot);
-		await updateProjectManifest(provider.projectRoot, "trellis", refreshed.getHealth().trellisVersion);
+		await updateProjectManifest(
+			provider.projectRoot,
+			"trellis",
+			refreshed.getHealth().trellisVersion,
+		);
 		refreshed = createProjectProvider(provider.projectRoot);
-		console.log(JSON.stringify({ initialized: true, project: inspectProjectStatus(refreshed, true) }, null, 2));
+		console.log(
+			JSON.stringify(
+				{ initialized: true, project: inspectProjectStatus(refreshed, true) },
+				null,
+				2,
+			),
+		);
 	} else if (args[1] === "update") {
 		await updateTrellis(provider.projectRoot);
 		let refreshed = createProjectProvider(provider.projectRoot);
-		await updateProjectManifest(provider.projectRoot, "trellis", refreshed.getHealth().trellisVersion);
+		await updateProjectManifest(
+			provider.projectRoot,
+			"trellis",
+			refreshed.getHealth().trellisVersion,
+		);
 		refreshed = createProjectProvider(provider.projectRoot);
-		console.log(JSON.stringify({ updated: true, project: inspectProjectStatus(refreshed, true) }, null, 2));
+		console.log(
+			JSON.stringify(
+				{ updated: true, project: inspectProjectStatus(refreshed, true) },
+				null,
+				2,
+			),
+		);
 	} else if (args[1] === "doctor") {
 		console.log(JSON.stringify(inspectProjectStatus(provider), null, 2));
 	} else {
-		console.log(JSON.stringify({ health: provider.getHealth(), context: provider.getContext() }, null, 2));
+		console.log(
+			JSON.stringify(
+				{ health: provider.getHealth(), context: provider.getContext() },
+				null,
+				2,
+			),
+		);
 	}
 } else if (args[0] === "extensions") {
 	await runExtensionsCommand(args.slice(1));
 } else if (args[0] === "skills") {
 	const query = args.slice(1).join(" ").trim().toLowerCase();
-	const skills = discoverSkills(process.cwd()).filter((skill) => !query || skill.name.toLowerCase().includes(query));
+	const skills = discoverSkills(process.cwd()).filter(
+		(skill) => !query || skill.name.toLowerCase().includes(query),
+	);
 	console.log(JSON.stringify({ projectRoot: process.cwd(), skills }, null, 2));
 } else if (args[0] === "web") {
 	const command = args[1] ?? "status";
@@ -56,67 +128,149 @@ if (args[0] === "doctor") {
 		console.log(JSON.stringify(inspectWebAccessReadiness(), null, 2));
 	} else if (command === "auth") {
 		const tokens = args.slice(2);
-		const profileIndex = tokens.findIndex((token) => token.startsWith("profile="));
-		const profile = profileIndex >= 0 ? tokens.splice(profileIndex, 1)[0].slice("profile=".length) : undefined;
+		const profileIndex = tokens.findIndex((token) =>
+			token.startsWith("profile="),
+		);
+		const profile =
+			profileIndex >= 0
+				? tokens.splice(profileIndex, 1)[0].slice("profile=".length)
+				: undefined;
 		const hosts = tokens.filter(Boolean);
-		if (hosts.length === 0) throw new Error("Usage: dove-pi web auth <hosts...> [profile=name]");
-		const readiness = writeWebSearchConfig({ allowBrowserCookies: true, profile: { name: profile?.trim() || "default", hosts } });
+		if (hosts.length === 0)
+			throw new Error("Usage: dove-pi web auth <hosts...> [profile=name]");
+		const readiness = writeWebSearchConfig({
+			allowBrowserCookies: true,
+			profile: { name: profile?.trim() || "default", hosts },
+		});
 		console.log(JSON.stringify(readiness, null, 2));
 	} else {
-		throw new Error("Usage: dove-pi web status | dove-pi web auth <hosts...> [profile=name]");
+		throw new Error(
+			"Usage: dove-pi web status | dove-pi web auth <hosts...> [profile=name]",
+		);
 	}
 } else if (args[0] === "token") {
 	const command = args[1] ?? "audit";
-	if (command !== "audit") throw new Error("Usage: dove-pi token audit [--since=Nh] [--filter=substr]");
-	const sinceIndex = args.findIndex((a) => a === "--since" || a.startsWith("--since="));
-	const sinceHours = sinceIndex >= 0 ? Number((args[sinceIndex].startsWith("--since=") ? args[sinceIndex].slice(7) : args[sinceIndex + 1])?.replace(/h$/i, "")) : undefined;
-	const filterIndex = args.findIndex((a) => a === "--filter" || a.startsWith("--filter="));
-	const filter = filterIndex >= 0 ? (args[filterIndex].startsWith("--filter=") ? args[filterIndex].slice(9) : args[filterIndex + 1]) : undefined;
-	const result = await runTokenAudit({ sinceHours: Number.isFinite(sinceHours) ? sinceHours : undefined, filter });
+	if (command !== "audit")
+		throw new Error("Usage: dove-pi token audit [--since=Nh] [--filter=substr]");
+	const sinceIndex = args.findIndex(
+		(a) => a === "--since" || a.startsWith("--since="),
+	);
+	const sinceHours =
+		sinceIndex >= 0
+			? Number(
+					(args[sinceIndex].startsWith("--since=")
+						? args[sinceIndex].slice(7)
+						: args[sinceIndex + 1]
+					)?.replace(/h$/i, ""),
+				)
+			: undefined;
+	const filterIndex = args.findIndex(
+		(a) => a === "--filter" || a.startsWith("--filter="),
+	);
+	const filter =
+		filterIndex >= 0
+			? args[filterIndex].startsWith("--filter=")
+				? args[filterIndex].slice(9)
+				: args[filterIndex + 1]
+			: undefined;
+	const result = await runTokenAudit({
+		sinceHours: Number.isFinite(sinceHours) ? sinceHours : undefined,
+		filter,
+	});
 	console.log(formatTokenAudit(result));
 } else if (args[0] === "cache") {
 	const sub = args[1] ?? "audit";
-	if (sub !== "audit") throw new Error("Usage: dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8]");
-	const minIndex = args.findIndex((a) => a === "--min-requests" || a.startsWith("--min-requests="));
-	const minRequests = minIndex >= 0 ? Number((args[minIndex].startsWith("--min-requests=") ? args[minIndex].slice(15) : args[minIndex + 1])) : undefined;
-	const filterIndex = args.findIndex((a) => a === "--filter" || a.startsWith("--filter="));
-	const filter = filterIndex >= 0 ? (args[filterIndex].startsWith("--filter=") ? args[filterIndex].slice(9) : args[filterIndex + 1]) : undefined;
-	const belowIndex = args.findIndex((a) => a === "--below" || a.startsWith("--below="));
-	const below = belowIndex >= 0 ? Number((args[belowIndex].startsWith("--below=") ? args[belowIndex].slice(8) : args[belowIndex + 1])) : undefined;
-	const audit = await runCacheAudit({ minRequests: Number.isFinite(minRequests) && minRequests! > 0 ? minRequests : undefined, filter, onlyBelow: Number.isFinite(below) ? below : undefined });
+	if (sub !== "audit")
+		throw new Error(
+			"Usage: dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8]",
+		);
+	const minIndex = args.findIndex(
+		(a) => a === "--min-requests" || a.startsWith("--min-requests="),
+	);
+	const minRequests =
+		minIndex >= 0
+			? Number(
+					args[minIndex].startsWith("--min-requests=")
+						? args[minIndex].slice(15)
+						: args[minIndex + 1],
+				)
+			: undefined;
+	const filterIndex = args.findIndex(
+		(a) => a === "--filter" || a.startsWith("--filter="),
+	);
+	const filter =
+		filterIndex >= 0
+			? args[filterIndex].startsWith("--filter=")
+				? args[filterIndex].slice(9)
+				: args[filterIndex + 1]
+			: undefined;
+	const belowIndex = args.findIndex(
+		(a) => a === "--below" || a.startsWith("--below="),
+	);
+	const below =
+		belowIndex >= 0
+			? Number(
+					args[belowIndex].startsWith("--below=")
+						? args[belowIndex].slice(8)
+						: args[belowIndex + 1],
+				)
+			: undefined;
+	const audit = await runCacheAudit({
+		minRequests:
+			Number.isFinite(minRequests) && minRequests! > 0 ? minRequests : undefined,
+		filter,
+		onlyBelow: Number.isFinite(below) ? below : undefined,
+	});
 	console.log(formatCacheAudit(audit));
 } else {
-	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
+	console.error(
+		"Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>",
+	);
 	process.exitCode = 1;
 }
 
 async function runExtensionsCommand(commandArgs: string[]): Promise<void> {
 	const command = commandArgs[0] ?? "list";
 	if (command === "list") {
-		console.log(JSON.stringify({
-			profiles: ["minimal", "dev", "research", "security", "max"],
-			catalog: EXTENSION_CATALOG,
-		}, null, 2));
+		console.log(
+			JSON.stringify(
+				{
+					profiles: ["minimal", "dev", "research", "security", "max"],
+					catalog: EXTENSION_CATALOG,
+				},
+				null,
+				2,
+			),
+		);
 		return;
 	}
 	if (command === "doctor") {
 		const profileValue = commandArgs[1];
 		const profile = parseExtensionProfile(profileValue) as ExtensionProfile;
-		const report = await inspectExtensionProfile(profile, { cwd: process.cwd(), piVersion: getPiVersion() });
+		const report = await inspectExtensionProfile(profile, {
+			cwd: process.cwd(),
+			piVersion: getPiVersion(),
+		});
 		console.log(JSON.stringify(report, null, 2));
 		if (!report.ok) process.exitCode = 1;
 		return;
 	}
 	if (command === "show") {
 		const profile = parseExtensionProfile(commandArgs[1]);
-		console.log(JSON.stringify({ profile, packages: getProfilePackages(profile) }, null, 2));
+		console.log(
+			JSON.stringify({ profile, packages: getProfilePackages(profile) }, null, 2),
+		);
 		return;
 	}
 	if (command === "install") {
 		const profile = parseExtensionProfile(commandArgs[1] ?? "max");
-		const result = await installExtensionProfile(profile, { updateConfigured: !commandArgs.includes("--no-update") });
+		const result = await installExtensionProfile(profile, {
+			updateConfigured: !commandArgs.includes("--no-update"),
+		});
 		console.log(JSON.stringify(result, null, 2));
 		return;
 	}
-	throw new Error(`Unknown extensions command '${command}'. Use list, show, doctor, or install.`);
+	throw new Error(
+		`Unknown extensions command '${command}'. Use list, show, doctor, or install.`,
+	);
 }
