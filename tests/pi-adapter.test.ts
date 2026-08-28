@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, compactToolResultContent, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, compactToolResultContent, getProjectContextBudget, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 
@@ -215,6 +215,15 @@ describe("Pi adapter", () => {
 		assert.equal(getRemainingContextChars(10_000, undefined), undefined);
 		const remaining = getRemainingContextChars(180_000, 200_000);
 		assert.ok(remaining && remaining >= 4_096 && remaining < 60_000);
+	});
+
+	it("limits first-request project context for small model windows", () => {
+		const budget = getProjectContextBudget({ contextWindow: 12_800, promptChars: 18_000 });
+		assert.ok(budget);
+		assert.ok(budget <= 8_000, `budget=${budget}`);
+		const observed = getProjectContextBudget({ tokens: 23_218, contextWindow: 12_800 });
+		assert.equal(observed, 1_024);
+		assert.equal(getProjectContextBudget({ promptChars: 1_000 }), undefined);
 	});
 
 	it("auto policy respects explicit per-model thinking level from settings", async () => {

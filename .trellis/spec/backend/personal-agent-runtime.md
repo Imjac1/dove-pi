@@ -194,7 +194,7 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - When `pi-hashline-edit-pro` is present, the Pi adapter treats hashline `replace`/`insert` (and undo when available) as the edit authority and must suppress the built-in `edit` tool in every profile, including explicit `full`; this prevents another extension from reintroducing the built-in mutation path.
 - `/dove-tools reset` is an explicit session-stage reset: it returns to the compact core set and lets a later `auto` request add intent tools again. The reset is allowed to change the tool prefix because it is user initiated.
 - Fast and Standard apply bounded total context-character budgets for broad retrieval. Ultra has no artificial application token cap and relies on relevance scoring, content deduplication, per-document compaction, and Pi/provider model-context limits.
-- When Pi exposes current context usage and model window, the adapter derives a remaining-character budget with response headroom and passes it to the compiler. This is a dynamic model limit guard, not a fixed Ultra budget.
+- When Pi exposes current context usage and model window, the adapter derives a remaining-character budget with response headroom and passes it to the compiler. On a first request, before usage is available, it falls back to the model's declared window, reserves space for system/tool/output tokens, and limits project context to a conservative window share. This is a dynamic model limit guard, not a fixed Ultra budget.
 - Model-facing project indexes use bounded previews for large collections (for example, the first 50 task records plus an omission count); complete raw collections remain provider-local details.
 
 ### 4. Validation & Error Matrix

@@ -1007,8 +1007,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			applyAutoTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile, event.prompt, taskHint));
 		}
 		const usage = typeof ctx.getContextUsage === "function" ? ctx.getContextUsage() : undefined;
-		const remainingContextChars = getRemainingContextChars(usage?.tokens, usage?.contextWindow);
-		const contextGuard = guardContext({ tokens: usage?.tokens ?? null, contextWindow: usage?.contextWindow, mode: mode.current });
+		const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
+		const promptChars = event.systemPrompt.length + event.prompt.length;
+		const remainingContextChars = getProjectContextBudget({ tokens: usage?.tokens, contextWindow, promptChars });
+		const contextGuard = guardContext({ tokens: usage?.tokens ?? null, contextWindow, mode: mode.current });
 		if (contextGuard.compactAdvised && contextGuard.hint && ctx.hasUI && !guardNotified) {
 			guardNotified = true;
 			ctx.ui.notify(contextGuard.hint, "warning");
@@ -1083,6 +1085,30 @@ export function getRemainingContextChars(tokens: number | null | undefined, cont
 	// ASCII-heavy project text averages ~4 chars/token; using 3 keeps a safety
 	// margin for CJK and structured delimiters without imposing a fixed Ultra cap.
 	return Math.max(4_096, Math.floor(remainingTokens * 3));
+}
+
+/**
+ * Derive a safe project-context budget even on a model's first request, when
+ * Pi has not reported a live context-usage value yet. The project fragment is
+ * deliberately limited to a share of the model window so system instructions,
+ * tool schemas, the user turn, and a response still have room. This is a
+ * provider/model-limit guard, not a fixed Ultra application cap.
+ */
+export function getProjectContextBudget(input: {
+	tokens?: number | null;
+	contextWindow?: number;
+	promptChars?: number;
+}): number | undefined {
+	const contextWindow = input.contextWindow;
+	if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
+	const observedTokens = input.tokens !== null && input.tokens !== undefined && Number.isFinite(input.tokens)
+		? Math.max(0, input.tokens)
+		: Math.ceil(Math.max(0, input.promptChars ?? 0) / 3) + 2_048;
+	const responseReserve = Math.min(8_192, Math.max(2_048, Math.floor(contextWindow * 0.1)));
+	const remainingTokens = contextWindow - observedTokens - responseReserve;
+	const windowShareChars = Math.floor(contextWindow * 3 * 0.2);
+	if (remainingTokens <= 0) return 1_024;
+	return Math.max(1_024, Math.min(Math.floor(remainingTokens * 3), windowShareChars));
 }
 
 function summarizeProjectTask(task: ProjectTask | undefined): (ProjectTask & { fileCount: number; filesOmitted: number }) | undefined {
