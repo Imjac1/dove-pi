@@ -4,6 +4,7 @@
 Usage:
     python dove_pi.py install [--profile PROFILE] [--verify quick|full|none] [--no-path] [--clean]
     python dove_pi.py setup [same options as install]
+    python dove_pi.py update [--check] [--force] [--verify quick|full|none]
     python dove_pi.py icons setup|install|status
     python dove_pi.py [official Pi arguments]
 """
@@ -13,12 +14,14 @@ from __future__ import annotations
 import argparse
 import ctypes
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import json
 from typing import Sequence
+
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -29,6 +32,12 @@ CLI = PROJECT_ROOT / "src" / "cli.ts"
 ICON_FONT_PACKAGE = "DEVCOM.JetBrainsMonoNerdFont"
 MIN_NODE = (22, 19, 0)
 PROFILES = ("minimal", "dev", "research", "security", "max")
+DEFAULT_PROFILE = "max"
+MANIFEST_DIR = PROJECT_ROOT / ".dove"
+MANIFEST_PATH = MANIFEST_DIR / "manifest.json"
+MANIFEST_FIELDS = ("profile", "previousCommit", "currentCommit", "lastUpdatedAt")
+TRELLIS_GLOBAL_PACKAGE = "@mindfoldhq/trellis"
+REMOTE_BRANCH = "origin/master"
 
 
 def executable(name: str) -> str:
@@ -63,9 +72,11 @@ def format_version(version: tuple[int, int, int]) -> str:
     return ".".join(str(part) for part in version)
 
 
-def install(*, skip_checks: bool = False, no_path: bool = False, extension_profile: str | None = "max", clean: bool = False, verify: str | None = None, install_font: bool = True, update_extensions: bool = True) -> None:
+def install(*, skip_checks: bool = False, no_path: bool = False, extension_profile: str | None = "max", clean: bool = False, verify: str | None = None, install_font: bool = True, update_extensions: bool = True, update_trellis: bool = True) -> None:
     # `skip_checks` remains for callers of the original Python API. The CLI
     # uses --verify so the common path is explicit and easy to understand.
+    if extension_profile is None:
+        extension_profile = read_manifest().get("profile") or DEFAULT_PROFILE
     if verify is not None:
         if verify not in {"quick", "full", "none"}:
             raise RuntimeError("verify must be quick, full, or none")
@@ -79,7 +90,7 @@ def install(*, skip_checks: bool = False, no_path: bool = False, extension_profi
         raise RuntimeError(f"Node.js {format_version(MIN_NODE)} or newer is required; found {format_version(version)}. Install Node.js LTS and try again.")
     print(f"Node.js: {format_version(version)}")
 
-    total_steps = 1 + (1 if extension_profile else 0) + (1 if extension_profile and install_font else 0)
+    total_steps = 1 + (1 if extension_profile else 0) + (1 if extension_profile and install_font else 0) + (1 if extension_profile and update_trellis else 0)
     total_steps += 0 if skip_checks else 2 + (1 if verify == "full" else 0)
     current_step = 0
 
@@ -109,6 +120,9 @@ def install(*, skip_checks: bool = False, no_path: bool = False, extension_profi
             ensure_icon_font()
         else:
             configure_icons("auto")
+        if update_trellis:
+            print(f"\n[{stage('Updating Trellis CLI')}]", flush=True)
+            update_trellis_cli()
 
     if not skip_checks:
         run([npm, "run", "typecheck"], label=stage("Checking Dove Pi"))
@@ -122,6 +136,7 @@ def install(*, skip_checks: bool = False, no_path: bool = False, extension_profi
     if not no_path:
         add_user_path(launcher_root)
     print(f"\nDove Pi is ready: {launcher_root}")
+    write_manifest(profile=extension_profile, current_commit=git_current_commit())
     if no_path:
         print(f"Run directly: {launcher_root / ('dove-pi.cmd' if os.name == 'nt' else 'dove-pi')}")
     else:
@@ -361,13 +376,189 @@ def run_local_cli(arguments: Sequence[str]) -> int:
     return completed.returncode
 
 
+
+def read_manifest() -> dict[str, object]:
+    """Read `.dove/manifest.json`, tolerating a missing or malformed file.
+
+    Returns a dict of known string fields; unknown keys and non-string
+    values are dropped. A missing/corrupt manifest yields an empty dict so
+    callers fall back to defaults without blocking setup."""
+    try:
+        parsed = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    result: dict[str, object] = {}
+    for key, value in parsed.items():
+        if key == "schemaVersion" and isinstance(value, (int, str)):
+            result["schemaVersion"] = int(value)
+        elif key in MANIFEST_FIELDS and isinstance(value, str) and value:
+            result[key] = value
+    return result
+
+
+def write_manifest(*, profile: str | None = None, previous_commit: str | None = None, current_commit: str | None = None) -> None:
+    """Merge fields into the manifest and atomically write it to disk."""
+    manifest = read_manifest()
+    manifest["schemaVersion"] = 1
+    if profile is not None:
+        manifest["profile"] = profile
+    if previous_commit is not None:
+        manifest["previousCommit"] = previous_commit
+    if current_commit is not None:
+        manifest["currentCommit"] = current_commit
+    manifest["lastUpdatedAt"] = datetime.now(timezone.utc).isoformat()
+    MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = MANIFEST_DIR / "manifest.json.tmp"
+    temporary.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(temporary, MANIFEST_PATH)
+
+
+def run_git(arguments: Sequence[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    """Run a git command against the repository root, capturing output."""
+    git = executable("git")
+    completed = subprocess.run(
+        [git, *arguments],
+        cwd=PROJECT_ROOT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
+    if check and completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f"git {' '.join(arguments)} failed: {detail or completed.returncode}")
+    return completed
+
+
+def git_is_repository() -> bool:
+    return run_git(["rev-parse", "--is-inside-work-tree"], check=False).returncode == 0
+
+
+def git_has_origin() -> bool:
+    return run_git(["remote", "get-url", "origin"], check=False).returncode == 0
+
+
+def git_detached_head() -> bool:
+    return run_git(["symbolic-ref", "-q", "HEAD"], check=False).returncode != 0
+
+
+def git_status_porcelain() -> str:
+    return run_git(["status", "--porcelain"], check=False).stdout.strip()
+
+
+def git_current_commit() -> str:
+    return run_git(["rev-parse", "HEAD"], check=False).stdout.strip()
+
+
+def git_fetch_origin() -> None:
+    run_git(["fetch", "origin", "master"])
+
+
+def git_remote_commit() -> str:
+    return run_git(["rev-parse", REMOTE_BRANCH], check=False).stdout.strip()
+
+
+def git_fast_forward() -> None:
+    """Merge origin/master with --ff-only; raising keeps the tree unchanged on failure."""
+    run_git(["merge", "--ff-only", REMOTE_BRANCH])
+
+
+def git_reset_hard() -> None:
+    """Discard uncommitted local changes (the --force path)."""
+    run_git(["reset", "--hard", "HEAD"])
+
+
+def git_is_ancestor(ancestor: str, descendant: str) -> bool:
+    return run_git(["merge-base", "--is-ancestor", ancestor, descendant], check=False).returncode == 0
+
+
+def update_trellis_cli() -> None:
+    """Update the global Trellis CLI; a failure is a warning, never fatal."""
+    npm = executable("npm")
+    completed = subprocess.run(
+        [npm, "update", "-g", TRELLIS_GLOBAL_PACKAGE, "--no-audit", "--no-fund", "--loglevel=error"],
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        print(f"Warning: Trellis CLI update failed: {detail or completed.returncode}", file=sys.stderr)
+
+
+def parse_update(arguments: Sequence[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="dove-pi update")
+    parser.add_argument("--check", action="store_true", help="Report update availability without changing anything")
+    parser.add_argument("--force", action="store_true", help="Discard uncommitted local changes before updating")
+    parser.add_argument("--verify", choices=("quick", "full", "none"), default="quick", help="Verification level after updating (default: quick)")
+    parser.add_argument("--no-trellis-update", action="store_true", help="Skip updating the global Trellis CLI")
+    return parser.parse_args(arguments)
+
+
+def run_update(arguments: Sequence[str]) -> int:
+    """Self-update dove-pi from its git origin (tracking master)."""
+    options = parse_update(arguments)
+    if not git_is_repository():
+        raise RuntimeError("dove-pi is not inside a git repository; self-update requires the dove-pi clone.")
+    if not git_has_origin():
+        raise RuntimeError("dove-pi clone has no 'origin' remote; cannot determine the update source.")
+    if git_detached_head():
+        raise RuntimeError("dove-pi is on a detached HEAD; checkout 'master' before updating.")
+    if options.check:
+        git_fetch_origin()
+        current = git_current_commit()
+        target = git_remote_commit()
+        print(json.dumps({
+            "currentCommit": current,
+            "targetCommit": target,
+            "updateAvailable": current != target and current != "" and target != "",
+        }, ensure_ascii=False))
+        return 0
+    dirty = git_status_porcelain()
+    if dirty:
+        if not options.force:
+            raise RuntimeError(
+                f"Working tree has uncommitted changes; commit/stash them or rerun with --force. "
+                f"Dirty files:\n{dirty}"
+            )
+        print(f"Discarding uncommitted changes (--force): {dirty.replace(chr(10), ' ')}", file=sys.stderr)
+        git_reset_hard()
+    current = git_current_commit()
+    git_fetch_origin()
+    target = git_remote_commit()
+    if not current or not target:
+        raise RuntimeError("Unable to determine local or remote commit; git state is incomplete.")
+    if current == target:
+        print(json.dumps({"updated": False, "currentCommit": current, "message": "already up to date"}, ensure_ascii=False))
+        return 0
+    if not git_is_ancestor(current, target):
+        raise RuntimeError(f"Local history diverged from {REMOTE_BRANCH}; resolve manually or reinstall.")
+    write_manifest(previous_commit=current)
+    git_fast_forward()
+    profile = read_manifest().get("profile") or DEFAULT_PROFILE
+    install(
+        verify=options.verify,
+        extension_profile=profile,
+        clean=False,
+        install_font=False,
+        update_trellis=not options.no_trellis_update,
+    )
+    print(json.dumps({
+        "updated": True,
+        "previousCommit": current,
+        "currentCommit": git_current_commit(),
+        "profile": profile,
+    }, ensure_ascii=False))
+    return 0
+
 def parse_install(arguments: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="dove-pi install")
     parser.add_argument(
         "--profile", "--extensions", dest="profile",
         choices=PROFILES,
-        default="max",
-        help="Extension profile (default: max, install the complete recommended set)",
+        default=None,
+        help="Extension profile (default: stored profile from .dove/manifest.json, else max)",
     )
     parser.add_argument(
         "--no-extensions",
@@ -390,8 +581,14 @@ def parse_install(arguments: Sequence[str]) -> argparse.Namespace:
 def print_help() -> None:
     print("""Dove Pi installer and launcher
 
-Install everything with one command:
+Install or update everything with one command:
   python dove_pi.py install
+  python dove_pi.py update          self-update dove-pi from GitHub (tracking master)
+  python dove_pi.py update --check  report available updates without changing anything
+
+Update controls:
+  --force                discard uncommitted local changes before updating
+  --no-trellis-update    skip updating the global Trellis CLI
 
 Common controls:
   --verify quick|full|none  quick (default), full tests, or no checks
@@ -401,13 +598,14 @@ Common controls:
   --no-extension-updates   skip Pi's official extension update step
 
 Advanced controls:
-  --profile PROFILE        max (default), or minimal/dev/research/security
+  --profile PROFILE        max, or minimal/dev/research/security (default: stored profile, else max)
   --no-extensions          skip Pi extension installation
 
 Compatibility aliases remain available: --extensions and --skip-checks.
 
 After installation:
   dove-pi doctor
+  dove-pi update | dove-pi update --check
   dove-pi skills [query]
   dove-pi web status | dove-pi web auth <hosts...> [profile=name]
   dove-pi project doctor
@@ -439,6 +637,8 @@ def main(arguments: Sequence[str]) -> int:
             update_extensions=not options.no_extension_updates,
         )
         return 0
+    if arguments and arguments[0] == "update":
+        return run_update(arguments[1:])
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
     if arguments and arguments[0] in ("doctor", "project", "skills", "web"):

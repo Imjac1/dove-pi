@@ -6,3 +6,4 @@ coverage/
 .agent-data/
 .pi/settings.json
 .pi/trust.json
+.dove/
