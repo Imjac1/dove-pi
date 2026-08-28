@@ -175,7 +175,14 @@ const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\nPrefer age
 - **FIX3 hashline 对齐诊断**: session_start 检测 host 是否有 hashline(replace/insert/undo),缺且有 edit 时 UI warning 提示升级/install。
 - **FIX7 `dove-pi token audit`**: 新 `src/commands/token-audit.ts` + cli.ts 接线;聚合 `~/.pi/agent/sessions/*` 每项目 input/cacheRead/write/output, 支持 `--since=Nh` `--filter=substr`, 输出 markdown 表。
 
-**验证**: typecheck ✅ · 测试 **94 全过**(+7 context-guard +3 token-audit)✅ · extension 加载 ✅ · pi:smoke ✅ · `token audit` 实测输出真实会话表 ✅。git 变更保留在 worktree 待用户审阅(未代提交)。
+**验证(第一批/第二批)**: typecheck ✅ · 测试 94 全过 ✅ · extension 加载 ✅ · pi:smoke ✅ · `token audit` 实测 ✅。
+
+**第三批(上下文缓存命中率优化——检测工具 + 根因修复)**:
+- **检测工具 `dove-pi cache audit`**(新 `src/commands/cache-audit.ts` + cli.ts):逐会话报告请求数/会话命中%/末次命中%/warmup/全MISS/末次miss原因/未缓存input,支持 `--min-requests=N` `--filter=substr` `--below=0.8`(= 或空格两种参数形式)。
+- 实测(真实会话 1816 请求):**总体命中 90.6%(请求)/89.9%(token)**,但 157 次全 MISS、~29M 未缓存 input,**miss 原因以 prefix-change 为主**(warmup 仅 1/会话预期;idle 少量)。
+- **根因 1(主)**:`before_agent_start` 的 epoch 原含 `suggestion?.skill`(随用户措辞意图翻转)与 `toolEpoch`(随 auto 工具增长变化),导致**每轮意图切换都重建上下文消息 → provider 前缀失效 → 全 MISS**。修复:epoch 仅保留 `mode + project revision`。
+- **根因 2**:`contextRevision` 原计入 memoryFiles(workspace index + journal-N.md 每次会话都追加),导致**journal 写入也翻转前缀**。修复:从 revision 中排除 memoryFiles(内容仍会在真实变更时重读)。
+- 测试同步更新:pi-adapter 断言改为验证"意图翻转不重建快照"(原断言固化了旧行为);+3 cache-audit 测试。**97 全过** ✅ typecheck ✅ extension 加载 ✅。
 
 ## 测试结果(能力提升 + token 消耗实测)
 
