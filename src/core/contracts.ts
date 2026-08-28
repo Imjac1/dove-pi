@@ -25,6 +25,8 @@ export interface CapabilityDefinition<TArgs = Record<string, unknown>, TResult =
 	readonly idempotent: boolean;
 	readonly status: CapabilityStatus;
 	readonly requiredArgs?: readonly string[];
+	/** Shell command prefixes this capability replaces; used to offer a reuse hint when the model would otherwise type them by hand. */
+	readonly hintCommands?: readonly string[];
 	readonly execute: (args: TArgs, context: CapabilityContext) => Promise<TResult>;
 }
 

@@ -14,6 +14,7 @@ const commandCapability = (definition: Omit<CapabilityDefinition, "execute"> & {
 	sideEffects: definition.sideEffects,
 	idempotent: definition.idempotent,
 	status: definition.status,
+	hintCommands: [definition.command],
 	async execute(_args, context): Promise<DevelopmentCommandResult> {
 		const result = await runPowerShell(definition.command, { cwd: context.cwd, signal: context.signal, timeoutMs: definition.timeoutMs });
 		if (result.exitCode !== 0 || result.interrupted) {

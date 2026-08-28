@@ -8,6 +8,7 @@ import { installExtensionProfile } from "./extensions/install.ts";
 import { getPiVersion } from "./pi-adapter/host-version.ts";
 import { discoverSkills } from "./skills/discovery.ts";
 import { inspectProjectStatus } from "./project-status.ts";
+import { runTokenAudit, formatTokenAudit } from "./commands/token-audit.ts";
 
 const args = process.argv.slice(2);
 
@@ -63,8 +64,17 @@ if (args[0] === "doctor") {
 	} else {
 		throw new Error("Usage: dove-pi web status | dove-pi web auth <hosts...> [profile=name]");
 	}
+} else if (args[0] === "token") {
+	const command = args[1] ?? "audit";
+	if (command !== "audit") throw new Error("Usage: dove-pi token audit [--since=Nh] [--filter=substr]");
+	const sinceIndex = args.indexOf("--since");
+	const sinceHours = sinceIndex >= 0 ? Number(args[sinceIndex + 1]?.replace(/h$/i, "")) : undefined;
+	const filterIndex = args.indexOf("--filter");
+	const filter = filterIndex >= 0 ? args[filterIndex + 1] : undefined;
+	const result = await runTokenAudit({ sinceHours: Number.isFinite(sinceHours) ? sinceHours : undefined, filter });
+	console.log(formatTokenAudit(result));
 } else {
-	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
+	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
 	process.exitCode = 1;
 }
 
