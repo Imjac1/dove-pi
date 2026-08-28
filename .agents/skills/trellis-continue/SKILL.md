@@ -7,6 +7,15 @@ description: "Resume work on the current task. Loads the workflow Phase Index, f
 
 Resume work on the current task — pick up at the right phase/step in `.trellis/workflow.md`.
 
+## Execution-first rule
+
+This skill is an execution procedure, not a request to explain the procedure. Run
+the required shell commands immediately with the available tool. Do not answer
+with a paraphrase such as “Let me start by running these commands” before the
+tool calls. After the commands finish, report the discovered phase and next
+step. If a command fails or the turn is interrupted, show the concrete command
+and error instead of claiming that the skill completed.
+
 ---
 
 ## Step 1: Load Current Context
