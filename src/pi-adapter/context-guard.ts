@@ -23,7 +23,7 @@ export interface ContextGuard {
 }
 
 const DEFAULT_MAX_FRACTION = 0.82;
-const DEFAULT_MAX_TOKENS = 28_000;
+const DEFAULT_MAX_TOKENS = 260_000;
 
 function envFraction(): number {
 	const raw = Number(process.env.DOVE_PI_MAX_CONTEXT_FRACTION);
@@ -72,7 +72,13 @@ export function guardContext(input: {
 	}
 
 	// Absolute-token guard: an alternative safety floor for very wide windows
-	// (helps avoid the 18–21万 full-miss pattern observed in real sessions).
+	// Absolute-token guard: an alternative safety floor for very wide windows.
+	// Tuned to ~25-30% of a 1M model window so we advise compaction or a new
+	// session before the hot prefix gets so large that a rebuild (post-compact
+	// full cache MISS at 300K+ tokens) becomes the dominant cost. Compacting a
+	// warm 260K prefix is cheaper than compacting a 500K one:
+	// the hit rate is high (≈90%), so hot prefixes are cheap - the expensive
+	// operation is destroying and rebuilding them.
 	if (tokens !== undefined && tokens > maxTokens) {
 		return {
 			compactAdvised: true,

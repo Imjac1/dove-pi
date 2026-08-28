@@ -29,7 +29,7 @@ describe("Pi adapter", () => {
 		} as unknown as ExtensionAPI;
 
 		extension(api);
-		assert.deepEqual([...commands.keys()], ["mode", "status", "sysprompt", "reasoning-voice", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
+		assert.deepEqual([...commands.keys()], ["mode", "status", "sysprompt", "reasoning-voice", "thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
 		assert.equal(shortcuts.size, 2);
 		assert.ok(shortcuts.has("ctrl+shift+l"));
 		assert.ok(shortcuts.has("ctrl+alt+m"));

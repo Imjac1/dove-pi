@@ -10,6 +10,7 @@ export interface CacheUsageSample {
 	readonly input: number;
 	readonly cacheRead: number;
 	readonly cacheWrite: number;
+	readonly reasoning?: number;
 	readonly timestamp?: number;
 	readonly modelKey?: string;
 }
@@ -38,6 +39,7 @@ interface SessionMessageEntry {
 			readonly input?: unknown;
 			readonly cacheRead?: unknown;
 			readonly cacheWrite?: unknown;
+			readonly reasoning?: unknown;
 		};
 	};
 }
@@ -62,11 +64,13 @@ function sampleFromEntry(entry: SessionMessageEntry): CacheUsageSample | undefin
 	const cacheRead = finite(usage.cacheRead);
 	const cacheWrite = finite(usage.cacheWrite);
 	if (input + cacheRead + cacheWrite <= 0) return undefined;
+	const reasoning = finite(usage.reasoning);
 	const timestamp = timestampValue(entry.message.timestamp);
 	return {
 		input,
 		cacheRead,
 		cacheWrite,
+		...(reasoning > 0 ? { reasoning } : {}),
 		...(timestamp > 0 ? { timestamp } : {}),
 		modelKey: typeof entry.message.provider === "string" && typeof entry.message.model === "string"
 			? `${entry.message.provider}/${entry.message.model}`

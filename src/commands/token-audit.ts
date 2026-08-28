@@ -18,6 +18,7 @@ export interface ProjectSummary {
 	readonly cacheReadTokens: number;
 	readonly cacheWriteTokens: number;
 	readonly outputTokens: number;
+	readonly reasoningTokens: number;
 }
 
 export interface TokenAuditResult {
@@ -27,6 +28,7 @@ export interface TokenAuditResult {
 	readonly totalCacheRead: number;
 	readonly totalCacheWrite: number;
 	readonly totalOutput: number;
+	readonly totalReasoning: number;
 }
 
 export function sessionBaseDir(): string {
@@ -101,6 +103,7 @@ export async function runTokenAudit(
 			totalCacheRead: 0,
 			totalCacheWrite: 0,
 			totalOutput: 0,
+			totalReasoning: 0,
 		};
 	}
 
@@ -109,6 +112,7 @@ export async function runTokenAudit(
 		cacheRead: 0,
 		cacheWrite: 0,
 		output: 0,
+		reasoning: 0,
 		messages: 0,
 	};
 	const projects: ProjectSummary[] = [];
@@ -135,7 +139,7 @@ export async function runTokenAudit(
 		let cacheRead = 0;
 		let cacheWrite = 0;
 		let output = 0;
-
+		let reasoning = 0;
 		for (const sessionFile of sessionFiles) {
 			const entries = await readSessionEntries(sessionFile);
 			const samples = collectCacheUsageSamples(entries);
@@ -146,6 +150,7 @@ export async function runTokenAudit(
 				input += sample.input;
 				cacheRead += sample.cacheRead;
 				cacheWrite += sample.cacheWrite;
+				reasoning += sample.reasoning ?? 0;
 				messageCount++;
 			}
 			output += outputTokensOf(entries);
@@ -166,6 +171,7 @@ export async function runTokenAudit(
 			cacheReadTokens: cacheRead,
 			cacheWriteTokens: cacheWrite,
 			outputTokens: output,
+			reasoningTokens: reasoning,
 		});
 		totals.input += input;
 		totals.cacheRead += cacheRead;
@@ -185,24 +191,27 @@ export async function runTokenAudit(
 		totalCacheRead: totals.cacheRead,
 		totalCacheWrite: totals.cacheWrite,
 		totalOutput: totals.output,
+		totalReasoning: totals.reasoning,
 	};
 }
 
 export function formatTokenAudit(result: TokenAuditResult): string {
 	const lines: string[] = [];
 	lines.push(
-		"| 项目 | 会话 | 消息 | input | cacheRead | cacheWrite | output | prompt合计 |",
+		"| 项目 | 会话 | 消息 | input | cacheRead | cacheWrite | output | reasoning | reasoning% | prompt合计 |",
 	);
-	lines.push("| --- | --- | --- | --- | --- | --- | --- | --- |");
+	lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
 	for (const p of result.projects) {
 		const prompt = p.inputTokens + p.cacheReadTokens + p.cacheWriteTokens;
+		const reasoningPct = p.outputTokens > 0 ? (p.reasoningTokens / p.outputTokens) * 100 : 0;
 		lines.push(
-			`| ${p.project} | ${p.sessionCount} | ${p.messageCount} | ${p.inputTokens.toLocaleString()} | ${p.cacheReadTokens.toLocaleString()} | ${p.cacheWriteTokens.toLocaleString()} | ${p.outputTokens.toLocaleString()} | ${prompt.toLocaleString()} |`,
+			`| ${p.project} | ${p.sessionCount} | ${p.messageCount} | ${p.inputTokens.toLocaleString()} | ${p.cacheReadTokens.toLocaleString()} | ${p.cacheWriteTokens.toLocaleString()} | ${p.outputTokens.toLocaleString()} | ${p.reasoningTokens.toLocaleString()} | ${reasoningPct.toFixed(1)}% | ${prompt.toLocaleString()} |`,
 		);
 	}
 	lines.push("");
+	const totalReasoningPct = result.totalOutput > 0 ? (result.totalReasoning / result.totalOutput) * 100 : 0;
 	lines.push(
-		`**合计**: ${result.projects.length} 个项目 · prompt ${result.totalPrompt.toLocaleString()} · input ${result.totalInput.toLocaleString()} · cacheRead ${result.totalCacheRead.toLocaleString()} · output ${result.totalOutput.toLocaleString()}`,
+		`**合计**: ${result.projects.length} 个项目 · prompt ${result.totalPrompt.toLocaleString()} · input ${result.totalInput.toLocaleString()} · cacheRead ${result.totalCacheRead.toLocaleString()} · output ${result.totalOutput.toLocaleString()} · reasoning ${result.totalReasoning.toLocaleString()} (${totalReasoningPct.toFixed(1)}% of output)`,
 	);
 	return lines.join("\n");
 }

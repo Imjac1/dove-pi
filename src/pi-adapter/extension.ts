@@ -27,6 +27,7 @@ import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 import { formatProgressSnapshot, ProgressGuard } from "./progress-guard.ts";
 import { formatCacheDiagnostics, inspectCacheDiagnostics } from "./cache-diagnostics.ts";
 import { guardContext } from "./context-guard.ts";
+	import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -146,6 +147,31 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			writeFileSync(reasoningVoiceFlagPath, next ? "on" : "off", "utf8");
 		} catch { /* non-fatal: keep the in-memory toggle */ }
 	}
+
+	// Thinking-level policy: auto (mode-driven) or lock:<level>, persisted as a
+	// per-project flag so a lock survives restarts without touching Pi's own
+	// defaultThinkingLevel (which the user may still control manually).
+	const thinkingPolicyFlagPath = join(cwd, ".agent-data", "thinking-policy");
+	function readThinkingPolicyFlag(): ThinkingPolicyState {
+		try {
+			return parsePolicy(readFileSync(thinkingPolicyFlagPath, "utf8"));
+		} catch { /* no flag yet -> default auto */ }
+		return { kind: "auto" };
+	}
+	const thinkingPolicyEnv = process.env.DOVE_PI_THINKING_POLICY;
+	let thinkingPolicy: ThinkingPolicyState = thinkingPolicyEnv !== undefined ? parsePolicy(thinkingPolicyEnv) : readThinkingPolicyFlag();
+	function persistThinkingPolicy(): void {
+		try {
+			mkdirSync(join(cwd, ".agent-data"), { recursive: true });
+			writeFileSync(thinkingPolicyFlagPath, serializePolicy(thinkingPolicy), "utf8");
+		} catch { /* non-fatal: keep the in-memory policy */ }
+	}
+	function applyThinkingPolicy(ctx?: ExtensionContext): void {
+		if (thinkingPolicy.kind === "off") return; // manual-only: never assert a level
+		const level = resolveThinkingLevel(thinkingPolicy, mode.current);
+		if (typeof pi.setThinkingLevel === "function") pi.setThinkingLevel(level);
+		if (ctx) updateStatus(ctx);
+	}
 	const settings = SettingsManager.create(cwd, getAgentDir());
 	let operation: "idle" | "running" = "idle";
 	let toolProfile: DoveToolProfile = parseDoveToolProfile(process.env.DOVE_PI_TOOL_PROFILE) ?? "auto";
@@ -236,9 +262,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const state = operation === "running" ? "Running" : "Ready";
 		const coloredPolicy = ctx.ui.theme.fg(modeColors[mode.current], policy);
 		const thinking = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : undefined);
+		const policyTag = thinkingPolicy.kind === "lock" ? `· 🔒${thinkingPolicy.level}` : thinkingPolicy.kind === "off" ? "· manual" : "";
 		const progress = progressGuard.snapshot();
 		const progressHint = progress.active && (progress.longRun || progress.warning) ? ` · ${progress.longRun ? `长任务 ${formatProgressSnapshot(progress)}` : `检查 ${progress.warning}`}` : "";
-		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${progressHint}`);
+		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${policyTag}${progressHint}`);
 	}
 
 	function persistMode(change: ModeChange): void {
@@ -248,6 +275,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	function setMode(next: AgentMode, ctx: ExtensionContext): void {
 		const change = mode.change(next, "next-step");
 		persistMode(change);
+		// A mode switch re-derives the thinking level in auto policy so the
+		// change takes effect on the next request instead of the next turn.
+		applyThinkingPolicy(ctx);
 		updateStatus(ctx);
 		ctx.ui.notify(`Personal Agent mode: ${displayMode(next)}`, "info");
 	}
@@ -321,10 +351,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			const detail = args.trim().toLowerCase() === "full" ? "Telemetry: context, tokens, TPS, TTFT, duration, stalls, cost, Git, and model are provided by pi-open-tui when enabled." : "Use /status full for telemetry details. Install pi-open-tui for the dsh-like status bar.";
 			const thinking = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : "unknown");
+			const policyShort = formatPolicyShort(thinkingPolicy, mode.current);
 			const hashline = hasHashlineEditTools(pi.getAllTools().map((tool) => tool.name));
 			const cache = inspectCacheDiagnostics(ctx.sessionManager.getEntries());
 			const cacheText = args.trim().toLowerCase() === "full" ? ` Cache: ${formatCacheDiagnostics(cache)}.` : " Use /status full for cache diagnostics.";
-			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, thinking=${thinking}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText} ${detail}`, "info");
+			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText} ${detail}`, "info");
 		},
 	});
 
@@ -361,6 +392,39 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			ctx.ui.notify("用法：/reasoning-voice on|off", "warning");
+		},
+	});
+	pi.registerCommand("thinking", {
+		description: "Show or change the thinking-level policy: auto (mode-driven), lock <level>, or off (manual only)",
+		handler: async (args, ctx) => {
+			const requested = args.trim().toLowerCase();
+			if (requested === "auto" || requested === "unlock") {
+				thinkingPolicy = { kind: "auto" };
+				persistThinkingPolicy();
+				applyThinkingPolicy(ctx);
+				ctx.ui.notify(`思考级别策略：auto（执行模式驱动，当前 ${displayMode(mode.current)} -> ${resolveThinkingLevel(thinkingPolicy, mode.current)}）；下一回合生效。`, "info");
+				return;
+			}
+			if (requested === "off") {
+				thinkingPolicy = { kind: "off", reason: "manual" };
+				persistThinkingPolicy();
+				ctx.ui.notify("思考级别策略：off（完全手动，由 Pi 默认值 / shift+tab 控制）。", "info");
+				return;
+			}
+			if (requested.startsWith("lock ")) {
+				const level = parseThinkingLevel(requested.slice(5));
+				if (level) {
+					thinkingPolicy = { kind: "lock", level };
+					persistThinkingPolicy();
+					applyThinkingPolicy(ctx);
+					ctx.ui.notify(`思考级别已锁定：${level}。所有后续回合固定此级别，直到 /thinking auto。shift+tab 临时切换仅对当前回合生效。`, "info");
+					return;
+				}
+				ctx.ui.notify(`无效级别：${requested.slice(5)}。可用：${THINKING_LEVELS.filter((l) => l !== "off").join(" | ")}`, "warning");
+				return;
+			}
+			const current = typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : "unknown";
+			ctx.ui.notify(`思考级别策略：${formatPolicyShort(thinkingPolicy, mode.current)}；当前实际 ${current}。用法：/thinking auto | lock <level> | off | status`, "info");
 		},
 	});
 	pi.registerCommand("dove-tools", {
@@ -869,10 +933,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("thinking_level_select", async (event) => {
-		// Pi owns the setting format and persistence path. Persist the last
-		// effective level so the next session starts where the user left off.
-		settings.setDefaultThinkingLevel(event.level);
-		await settings.flush();
+		// Only persist the user's manual level into Pi's default when the policy
+		// is off (fully manual). In auto/lock the level is policy-controlled, so
+		// persisting a shift+tab value would pollute the manual baseline that
+		// /thinking off falls back to.
+		if (thinkingPolicy.kind === "off") {
+			settings.setDefaultThinkingLevel(event.level);
+			await settings.flush();
+		}
+		// If the user shift+tabs while a lock is active, the change is
+		// turn-scoped: the next before_agent_start re-asserts the locked level.
+		// In auto policy the next turn re-derives from the execution mode.
 	});
 
 	// Custom OpenRouter-compatible provider ids are not always recognized by
@@ -893,6 +964,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
+		// Thinking policy: assert the intended level at the turn boundary so the
+		// agent loop (createLoopConfig) picks it up for every request in this turn.
+		// Locked levels pin every turn; auto re-derives from the execution mode;
+		// off leaves the level fully manual (Pi default / shift+tab only).
+		applyThinkingPolicy(ctx);
 		if (ctx.hasUI && !projectBootstrapPrompted && isUnboundLightweightProject() && shouldOfferProjectBootstrap(event.prompt)) {
 			projectBootstrapPrompted = true;
 			const confirmed = await ctx.ui.confirm("初始化项目上下文？", "当前项目还没有 Trellis。初始化后，Dove 会自动管理任务、规范、工作流和记忆；选择否将继续使用轻量模式。\n\n确认初始化？");
