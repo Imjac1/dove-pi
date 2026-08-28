@@ -145,7 +145,12 @@ function contextRevision(projectRoot: string, snapshot: ReturnType<typeof readTr
 	// controls identity/status/title and therefore must invalidate a cached
 	// projection when it changes.
 	const taskMetadataFiles = snapshot.tasks.map((task) => join(task.path, "task.json"));
-	for (const path of [...snapshot.specFiles, ...snapshot.taskFiles, ...snapshot.memoryFiles, ...snapshot.workflowFiles, ...taskMetadataFiles]) {
+	// memoryFiles (workspace index + journal-N.md) are EXCLUDED from the revision:
+	// journals are appended by session recording and change on nearly every
+	// session, so including them would flip the provider prompt-cache prefix
+	// (full cacheRead=0 misses) on every journal write. Memory content is still
+	// re-read when a real spec/task/workflow change triggers a rebuild.
+	for (const path of [...snapshot.specFiles, ...snapshot.taskFiles, ...snapshot.workflowFiles, ...taskMetadataFiles]) {
 		try { latest = Math.max(latest, statSync(path).mtimeMs); } catch { /* file removed during refresh */ }
 	}
 	return `${version}:${latest}:${active ? relative(projectRoot, active) : ""}`;

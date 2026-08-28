@@ -9,6 +9,7 @@ import { getPiVersion } from "./pi-adapter/host-version.ts";
 import { discoverSkills } from "./skills/discovery.ts";
 import { inspectProjectStatus } from "./project-status.ts";
 import { runTokenAudit, formatTokenAudit } from "./commands/token-audit.ts";
+import { runCacheAudit, formatCacheAudit } from "./commands/cache-audit.ts";
 
 const args = process.argv.slice(2);
 
@@ -67,14 +68,25 @@ if (args[0] === "doctor") {
 } else if (args[0] === "token") {
 	const command = args[1] ?? "audit";
 	if (command !== "audit") throw new Error("Usage: dove-pi token audit [--since=Nh] [--filter=substr]");
-	const sinceIndex = args.indexOf("--since");
-	const sinceHours = sinceIndex >= 0 ? Number(args[sinceIndex + 1]?.replace(/h$/i, "")) : undefined;
-	const filterIndex = args.indexOf("--filter");
-	const filter = filterIndex >= 0 ? args[filterIndex + 1] : undefined;
+	const sinceIndex = args.findIndex((a) => a === "--since" || a.startsWith("--since="));
+	const sinceHours = sinceIndex >= 0 ? Number((args[sinceIndex].startsWith("--since=") ? args[sinceIndex].slice(7) : args[sinceIndex + 1])?.replace(/h$/i, "")) : undefined;
+	const filterIndex = args.findIndex((a) => a === "--filter" || a.startsWith("--filter="));
+	const filter = filterIndex >= 0 ? (args[filterIndex].startsWith("--filter=") ? args[filterIndex].slice(9) : args[filterIndex + 1]) : undefined;
 	const result = await runTokenAudit({ sinceHours: Number.isFinite(sinceHours) ? sinceHours : undefined, filter });
 	console.log(formatTokenAudit(result));
+} else if (args[0] === "cache") {
+	const sub = args[1] ?? "audit";
+	if (sub !== "audit") throw new Error("Usage: dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8]");
+	const minIndex = args.findIndex((a) => a === "--min-requests" || a.startsWith("--min-requests="));
+	const minRequests = minIndex >= 0 ? Number((args[minIndex].startsWith("--min-requests=") ? args[minIndex].slice(15) : args[minIndex + 1])) : undefined;
+	const filterIndex = args.findIndex((a) => a === "--filter" || a.startsWith("--filter="));
+	const filter = filterIndex >= 0 ? (args[filterIndex].startsWith("--filter=") ? args[filterIndex].slice(9) : args[filterIndex + 1]) : undefined;
+	const belowIndex = args.findIndex((a) => a === "--below" || a.startsWith("--below="));
+	const below = belowIndex >= 0 ? Number((args[belowIndex].startsWith("--below=") ? args[belowIndex].slice(8) : args[belowIndex + 1])) : undefined;
+	const audit = await runCacheAudit({ minRequests: Number.isFinite(minRequests) && minRequests! > 0 ? minRequests : undefined, filter, onlyBelow: Number.isFinite(below) ? below : undefined });
+	console.log(formatCacheAudit(audit));
 } else {
-	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
+	console.error("Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>");
 	process.exitCode = 1;
 }
 

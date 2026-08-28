@@ -922,12 +922,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 
 		const suggestion = suggestWorkflowSkill(event.prompt);
 		const workflowHint = suggestion ? `\nWorkflow suggestion (advisory only): /skill:${suggestion.skill} — ${suggestion.reason}. Do not execute the skill or mutate project state unless the user explicitly asks and the relevant approval is present.` : "";
-		// Keep the dynamic context append-only. Pi persists the message returned
-		// here and reuses it for every tool-call continuation. Rebuilding it in
-		// the `context` event would move the message after the latest tool result
-		// on every provider call and invalidate the provider cache prefix.
-		const toolEpoch = appliedToolSetKey ?? activeToolSnapshot.join("\u001f");
-		const epoch = `${mode.current}:${projectProvider.getContext().revision}:${suggestion?.skill ?? ""}:${toolEpoch}`;
+		// The context snapshot is append-only and Pi reuses it across tool-call
+		// continuations. The epoch MUST stay stable across turns unless the project
+		// content or execution mode genuinely changed: prompt-dependent signals
+		// (workflow skill suggestion) and tool-set growth are excluded here because
+		// rebuilding the message on every intent flip invalidates the provider
+		// prompt-cache prefix (observed as frequent full cacheRead=0 misses).
+		const epoch = `${mode.current}:${projectProvider.getContext().revision}`;
 		const shouldAppendContext = !requestContextText || requestContextEpoch !== epoch;
 		if (shouldAppendContext) {
 			const context = buildProjectContext(projectProvider, event.prompt, mode.current, { maxChars: remainingContextChars });

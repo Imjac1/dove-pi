@@ -100,7 +100,10 @@ describe("Pi adapter", () => {
 		assert.ok(notifications.some((value) => value.includes("trellis-start")));
 		await commands.get("project")?.handler("doctor", context);
 		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
-		await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
+		const firstStartResult = await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
+		const firstStartMessage = (firstStartResult as { message?: { customType?: string; details?: { schemaVersion?: number } } })?.message;
+		assert.equal(firstStartMessage?.customType, "personal-agent-context");
+		assert.equal(firstStartMessage?.details?.schemaVersion, 2);
 		assert.ok(activeToolSets.at(-1)?.includes("agent_browser"));
 		const autoToolSetCount = activeToolSets.length;
 		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
@@ -114,9 +117,10 @@ describe("Pi adapter", () => {
 		await commands.get("dove-tools")?.handler("reset", context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		const beforeStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
-		const beforeStartMessage = (beforeStart as { message?: { customType?: string; details?: { schemaVersion?: number } } })?.message;
-		assert.equal(beforeStartMessage?.customType, "personal-agent-context");
-		assert.equal(beforeStartMessage?.details?.schemaVersion, 2);
+		// Epoch is stable (mode + project revision): a prompt that only changes the
+		// workflow-skill suggestion must NOT re-emit the context snapshot, so the
+		// provider prompt-cache prefix survives intent flips.
+		assert.equal((beforeStart as { message?: unknown })?.message, undefined, "prompt-dependent suggestion must not re-emit the context snapshot");
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
 		const sysCaptured = notifications.length;
