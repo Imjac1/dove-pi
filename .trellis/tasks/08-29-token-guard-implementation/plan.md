@@ -31,7 +31,7 @@ export interface ContextGuard {
 }
 
 const MAX_CONTEXT_FRACTION = 0.82;      // 会话命中 82% 即告警
-const MAX_INPUT_TOKENS = 28_000;        // 可选 hard cap(env: DOVE_PI_MAX_CONTEXT_TOKENS)
+const MAX_INPUT_TOKENS = 150_000;       // advisory threshold (env: DOVE_PI_MAX_CONTEXT_TOKENS)
 
 export function guardContext(input: {
   tokens?: number | null; contextWindow?: number; mode: AgentMode;
@@ -167,7 +167,7 @@ const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\nPrefer age
 ## 已实现(两批,全部质量安全)
 
 **第一批(省 token + 提质量核心)**:
-- **FIX1 prefix fuse**: `src/pi-adapter/context-guard.ts` + `extension.ts`;82% 分数或 28k 绝对上限触发;仅 UI 通知 + append 上下文(建议 /compact),**绝不自动删历史**;`DOVE_PI_PREFIX_FUSE=0` 关闭。
+- **FIX1 prefix fuse**: `src/pi-adapter/context-guard.ts` + `extension.ts`;82% 窗口比例或 150k 绝对提示阈值触发;仅 UI 通知 + append 上下文(建议 /compact),**绝不自动删历史**;`DOVE_PI_PREFIX_FUSE=0` 关闭。
 - **FIX2 capability 清单**: `buildCapabilityIndex()` 注入 system prompt,列出已注册能力+recipes;FIX6 派生子代理指引一并注入。
 
 **第二批(对齐 + 可观测)**:

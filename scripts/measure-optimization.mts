@@ -5,6 +5,7 @@ import {
 } from "../src/capabilities/web-access.ts";
 import { CapabilityRegistry } from "../src/core/capability-registry.ts";
 import type { CapabilityDefinition } from "../src/core/contracts.ts";
+import { DEFAULT_MAX_CONTEXT_TOKENS } from "../src/pi-adapter/context-guard.ts";
 
 /**
  * Measurement harness — quantifies (a) injected system-prompt token cost and
@@ -235,7 +236,8 @@ async function main(): Promise<void> {
 	console.log("C. token 节省潜力(prefix-fuse + reuse 实测样本)");
 	console.log("==================================================");
 
-	// (1) Stacked-context fuse potential: how many assistant usage samples exceed the 28k soft cap.
+	// (1) Stacked-context fuse potential: how many assistant usage samples exceed
+	// the same absolute advisory threshold used by context-guard.
 	let samples = 0;
 	let overCap = 0;
 	let maxPrompt = 0;
@@ -271,7 +273,7 @@ async function main(): Promise<void> {
 				if (prompt <= 0) continue;
 				samples++;
 				if (prompt > maxPrompt) maxPrompt = prompt;
-				if (u.input > 28_000) overCap++;
+				if (u.input > DEFAULT_MAX_CONTEXT_TOKENS) overCap++;
 				if (u.input > 0 && (u.cacheRead ?? 0) === 0 && prompt > 10_000)
 					fullMissions++;
 			}
@@ -279,7 +281,7 @@ async function main(): Promise<void> {
 	}
 	console.log(`  assistant usage 样本            : ${samples}`);
 	console.log(
-		`  > 28k 输入(软上限,fuse 会建议 compact): ${overCap} (${samples ? ((overCap / samples) * 100).toFixed(1) : 0}%)`,
+		`  > ${DEFAULT_MAX_CONTEXT_TOKENS.toLocaleString()} 输入(提示阈值,fuse 会建议 compact): ${overCap} (${samples ? ((overCap / samples) * 100).toFixed(1) : 0}%)`,
 	);
 	console.log(
 		`  大前缀全 MISS(input>0 & cacheRead=0 & prompt>10k): ${fullMissions} 次(每条约数千~18万, fuse 提示/用户 compact 可避免)`,

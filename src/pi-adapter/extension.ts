@@ -409,7 +409,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("用法：/reasoning-voice on|off", "warning");
 		},
 	});
-	pi.registerCommand("thinking", {
+	// Pi 0.84+ owns the built-in `/thinking` command. Keep Dove's policy
+	// controls under an explicit namespace so the extension does not conflict
+	// with the host command or disappear from autocomplete.
+	pi.registerCommand("dove-thinking", {
 		description: "Show or change the thinking-level policy: auto (mode-driven), lock <level>, or off (manual only)",
 		handler: async (args, ctx) => {
 			const requested = args.trim().toLowerCase();
@@ -432,14 +435,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					thinkingPolicy = { kind: "lock", level };
 					persistThinkingPolicy();
 					applyThinkingPolicy(ctx);
-					ctx.ui.notify(`思考级别已锁定：${level}。所有后续回合固定此级别，直到 /thinking auto。shift+tab 临时切换仅对当前回合生效。`, "info");
+					ctx.ui.notify(`思考级别已锁定：${level}。所有后续回合固定此级别，直到 /dove-thinking auto。shift+tab 临时切换仅对当前回合生效。`, "info");
 					return;
 				}
 				ctx.ui.notify(`无效级别：${requested.slice(5)}。可用：${THINKING_LEVELS.filter((l) => l !== "off").join(" | ")}`, "warning");
 				return;
 			}
 			const current = typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : "unknown";
-			ctx.ui.notify(`思考级别策略：${formatPolicyShort(thinkingPolicy, mode.current)}；当前实际 ${current}。用法：/thinking auto | lock <level> | off | status`, "info");
+			ctx.ui.notify(`思考级别策略：${formatPolicyShort(thinkingPolicy, mode.current)}；当前实际 ${current}。用法：/dove-thinking auto | lock <level> | off | status`, "info");
 		},
 	});
 	pi.registerCommand("dove-tools", {
@@ -951,7 +954,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// Only persist the user's manual level into Pi's default when the policy
 		// is off (fully manual). In auto/lock the level is policy-controlled, so
 		// persisting a shift+tab value would pollute the manual baseline that
-		// /thinking off falls back to.
+		// /dove-thinking off falls back to.
 		if (thinkingPolicy.kind === "off") {
 			settings.setDefaultThinkingLevel(event.level);
 			await settings.flush();

@@ -141,6 +141,7 @@ Inspect discovery with:
 /memory [query]
 /capabilities
 /mode fast|standard|ultra
+/dove-thinking auto|lock <level>|off|status  # Dove policy; Pi's native /thinking remains unchanged
 /dove-tools                 # show the current tool set (auto by default)
 /dove-tools full            # temporarily enable all installed tools
 /dove-tools auto            # return to intent-based loading
@@ -149,9 +150,11 @@ Inspect discovery with:
 Ctrl+Alt+M
 ```
 
+`/thinking` is Pi's built-in command for the native thinking level. Dove's auto/lock/manual policy is exposed as `/dove-thinking`, so the extension does not shadow the host command.
+
 `/status full` reports both the latest request cache hit rate (`Last CH`) and the cumulative session rate (`Session CH`), using provider-reported Pi usage rather than estimates.
 
-Dove project context is emitted as a versioned, append-only session snapshot. A new snapshot is added only when the mode, Trellis revision, workflow hint, or active tool policy changes; the per-request context hook never reorders the current snapshot after tool calls. Legacy unversioned snapshots are filtered for compatibility.
+Dove project context is emitted as a versioned, append-only session snapshot. A new snapshot is added only when the mode or Trellis revision changes; workflow hints and auto tool growth do not rebuild the snapshot on every intent flip, which keeps the provider cache prefix stable. The per-request context hook never reorders the current snapshot after tool calls. Legacy unversioned snapshots are filtered for compatibility.
 
 Most users do not need `/project bind`, `/task ...`, or `/skill:*`. They remain useful for diagnostics, scripting, and compatibility.
 

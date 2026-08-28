@@ -142,6 +142,7 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /capabilities
 /web [status|auth <hosts...> [profile=名称]]
 /mode fast|standard|ultra
+/dove-thinking auto|lock <level>|off|status  # Dove 策略；Pi 原生 /thinking 保持不变
 /dove-tools                 # 查看当前工具集合（默认 auto）
 /dove-tools full            # 临时启用已安装的全部工具
 /dove-tools auto            # 恢复按意图自动加载
@@ -149,6 +150,8 @@ Skill 是 Agent 的工作流说明，不是 Trellis CLI 命令。Dove 会根据�
 /dove-tools reset            # 重置 auto 会话阶段，清除已累加的意图工具
 Ctrl+Alt+M
 ```
+
+`/thinking` 是 Pi 的内置命令，负责原生 thinking level；Dove 的自动/锁定/手动策略使用命名空间命令 `/dove-thinking`，避免扩展覆盖宿主命令。
 
 `/status full` 里的缓存诊断会同时显示最近一次请求（Last CH）和当前会话累计命中率（Session CH）。`CH` 使用 Pi/provider 已上报的 usage 计算，不会把估算值当成真实命中。
 
@@ -188,7 +191,7 @@ Dove 没有 `max` 执行策略。Pi thinking level 的 `max` 和安装器的 `ma
 
 上下文不会把整个 `.trellis/` 目录原样塞进每一轮请求：Fast 只带当前任务 PRD 和运行时契约的相关片段；Standard/Ultra 按请求意图检索规范、工作流或记忆，空查询不会展开整个项目；超长文档会保留相关段落并压缩。`/status full` 中的上下文统计以 Pi/provider 的实际用量为准。
 
-针对大项目还有三层保护：Fast/Standard 的上下文检索有总字符预算，宽泛查询超出预算时只保留高相关度文档；Ultra 不设置人为固定上限，依靠相关性、去重、单文档压缩和 Pi/provider 的模型上下文上限保护；项目任务列表只返回前 50 条预览并显示省略数量。动态 Dove 上下文以版本化 `personal-agent-context` 快照追加到用户回合，只在模式、Trellis revision、workflow hint 或工具策略变化时新增；工具调用期间不会被 `context` hook 移到消息末尾，从而保持 provider cache 前缀稳定。旧版本无 schema 标记的记录会在发送给模型前过滤掉。
+针对大项目还有三层保护：Fast/Standard 的上下文检索有总字符预算，宽泛查询超出预算时只保留高相关度文档；Ultra 不设置人为固定上限，依靠相关性、去重、单文档压缩和 Pi/provider 的模型上下文上限保护；项目任务列表只返回前 50 条预览并显示省略数量。动态 Dove 上下文以版本化 `personal-agent-context` 快照追加到用户回合，只在模式或 Trellis revision 变化时新增；workflow 建议和 auto 工具集合不会为了每轮意图变化重建快照，从而保持 provider cache 前缀稳定。工具调用期间不会被 `context` hook 移到消息末尾，旧版本无 schema 标记的记录会在发送给模型前过滤掉。
 
 ### 工具集合与 token
 

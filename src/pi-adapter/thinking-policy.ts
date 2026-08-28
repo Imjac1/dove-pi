@@ -8,7 +8,7 @@ import type { AgentMode } from "../core/contracts.ts";
  *     (fast -> low, standard -> high, ultra -> max). Applied on every turn
  *     start, so a manual shift+tab tweak only affects the current turn.
  *   - lock <level>: pin a fixed thinking level for every turn until the user
- *     runs `/thinking auto`. Manual shift+tab stays turn-scoped: the next
+ *     runs `/dove-thinking auto`. Manual shift+tab stays turn-scoped: the next
  *     turn returns to the locked level.
  *
  * The policy is advisory to Pi's own setting default: the effective level is

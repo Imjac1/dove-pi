@@ -22,17 +22,17 @@ export interface ContextGuard {
 	readonly fractionUsed: number | undefined;
 }
 
-const DEFAULT_MAX_FRACTION = 0.82;
-const DEFAULT_MAX_TOKENS = 150_000;
+export const DEFAULT_MAX_CONTEXT_FRACTION = 0.82;
+export const DEFAULT_MAX_CONTEXT_TOKENS = 150_000;
 
 function envFraction(): number {
 	const raw = Number(process.env.DOVE_PI_MAX_CONTEXT_FRACTION);
-	return Number.isFinite(raw) && raw > 0 && raw < 1 ? raw : DEFAULT_MAX_FRACTION;
+	return Number.isFinite(raw) && raw > 0 && raw < 1 ? raw : DEFAULT_MAX_CONTEXT_FRACTION;
 }
 
 function envMaxTokens(): number {
 	const raw = Number(process.env.DOVE_PI_MAX_CONTEXT_TOKENS);
-	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_TOKENS;
+	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_CONTEXT_TOKENS;
 }
 
 function isGuardEnabled(): boolean {
