@@ -1,43 +1,64 @@
-# Input-side cost optimization: solve the 40K prompt-cache cliff
+# Input-side cost: cache expiry is time-driven; remaining upside bounded
 
-> 关联: `08-28-dove-pi-usage-review` (父任务) | `08-29-token-guard-implementation` (已完成: 前缀保险丝 260K + 思考策略 + reasoning 报告)
-> 日期: 2026-08-29 | 优先级: P0 | 范围: `src/pi-adapter/extension.ts`, `src/pi-adapter/cache-diagnostics.ts`
-> 调研: `research/fix-a-cache-cliff.md`（08-29 观察轮实证，结论反转）
+> 关联: `08-28-dove-pi-usage-review` (父任务) | `08-29-token-guard-implementation` (已完成)
+> 日期: 2026-08-29 | 状态: **结论修正版**（撤回 40K 悬崖/FIX-C1/FIX-C2）
+> 调研: `research/fix-a-cache-cliff.md`（标注 superseded）、`research/fix-c1-feasibility.md`（标注 superseded）
 
-## Goal
+## Goal（修正版）
 
-消除 input 侧的缓存悬崖：单次调用前缀超过 ~40K token 后，上游缓存命中率从 100% 跌到 2-8%，86–91% 的 input 成本都花在这里。
+确认 input 侧成本的根因，明确**本地可做的改进空间其实很有限**，避免继续投入无效优化。
 
-## 背景（调研结论，取代初版 PRD）
+## 实证结论（时间衰减，双重验证）
 
-- 初版假设"大工具结果（130–230K）是成本大头"——**实测不成立**：最大单条工具结果仅 32K 字符。
-- 真实根因：provider 走 `anthropic-messages` API，pi 只设置 3 个 cache_control 断点（system prompt、末工具、末消息）。**断点之间的对话历史从不缓存**，前缀一超过 ~40K（断点覆盖区），中间整段历史每轮全价重算。
-- 实证：pi-agent 245 调用中 input>40K 的 26 个调用 100% MISS，合计占 input 91%；Desktop/code 1765 调用中同样口径占 86%。miss reason 29/30 = prefix-change。
+### 数据集
 
-## Requirements（新方向，取代原 FIX A/B）
+- pi-agent 交互会话：299 调用（08-28 全天）
+- Desktop/code：1,938 调用（多会话汇总，交叉验证）
 
-- **FIX-C2 — 前缀增长定标（P0，主方案）**：40K 是悬崖，260K 软阈值太宽松。把 context-guard 软阈值重新定标到悬崖附近，加中间告警，让长会话在被推入全价区前主动轮转/压缩。改动最小、确定有效。
-	- **FIX-C1 — 中间断点注入（P1，候选修复，env 开关默认关）**：可行性已验证（payload 可变、provider 接受注入，见 `research/fix-c1-feasibility.md`），但 headless 无法复现悬崖、效果待真实会话确认。实现为 `DOVE_PI_INJECT_CACHE_BREAKPOINTS=1` 开关，限制最多 3-4 个断点只给最大中间块。
-	- **FIX-C3 — API 路径评估（P2，可选）**：评估换 `openai-completions` 路径（`prompt_cache_key` + 会话亲和可缓存整前缀）；需验证 OpenRouter/DeepSeek 上游支持。
-	- **验证（P0）**：用 token-audit 对比优化前后：>40K 调用的 cacheRead 命中率、input 总量、单次 max 调用。
+### 决定性数据 1：MISS 率由"间隔时间"驱动，与前缀大小无关
 
-## 约束
+Desktop/code 交叉验证（1,938 调用按间隔×前缀大小分桶）：
 
-- 不新增网络依赖，离线优先。
-- 断点注入必须保持 append-only 上下文消息的 epoch 稳定性，不破坏现有行为。
-- 配置走 env 变量，可一键关闭。
-- 若 `before_provider_request` 无法注入（payload 形态受限），如实记录并降级为 FIX-C2。
+| 轮次间隔 | 小前缀(<50K) | 中(50-150K) | 大(>150K) |
+| --- | --- | --- | --- |
+| <10s | 5.7% | 1.5% | **0.4%** |
+| 10-60s | 14.0% | 11.8% | 13.3% |
+| >60s | **40.0%** | 35.8% | 34.8% |
 
-## Acceptance Criteria
+- **间隔 >60s：三种大小 MISS 率都是 34-40%**（一样糟）
+- **间隔 <10s：三种大小都 0.4-5.7%**（一样好，大前缀反而最低）
+- **前缀大小不决定 MISS 率** → "40K 悬崖""短会话可降低 MISS"均被推翻
 
-- [x] FIX-C1 可行性验证完成：注入中间 cache_control 可行（research/fix-c1-feasibility.md）
-	- [ ] FIX-C1 以 env 开关实现（默认关，最多 3-4 断点）；真实会话验证通过后转默认开
-	- [ ] FIX-C2：软阈值按 40K 悬崖重新定标并生效（含中间告警）
-- [ ] 验证: token-audit 对比显示 input 总量可量化下降
+### 决定性数据 2：无 40K 悬崖
+
+pi-agent 会话前缀 0-350K 全程命中率 74-100% 平滑波动，无断崖；291 调用 0 次压缩也运行良好。
+
+### 误判链（记录避免再犯）
+
+1. 错把 `usage.input`（MISS 时=整个前缀）当"单次大内容" → 造出"130-230K 大调用"
+2. 基于错误指标推"40K 悬崖"和"3 断点"解释 → 部分真（断点确实只有 3 个）但因果错（断点不是 MISS 原因）
+3. 交叉验证才发现唯一显著变量是时间。
+
+## 本地可做与不可做（修正后）
+
+- ❌ 无法改变上游缓存 TTL（时间衰减是提供方行为）
+- ❌ "短会话省 MISS" 不成立（MISS 率与大小无关；新会话还多一次 warmup MISS）
+- ❌ "40K 定标" 无悬崖可躲
+- ❌ FIX-C1 中间断点注入——悬崖前提不成立，且时间衰减下断点救不了整体过期
+
+**真正剩下的杠杆（很小）：**
+
+- 前缀精简仍有一点用：MISS 发生时代价=前缀大小（间隔>60s 的 34-40% 调用里，小前缀损失更小）
+- 但实测工具结果已很小（上限 32K chars）、Dove 上下文已 epoch 稳定 —— **现况已接近最优**
+
+## Acceptance Criteria（修正版）
+
+- [x] 根因确认：时间衰减（间隔>60s MISS 率 34-40%，与大小无关）
+- [x] 撤回 40K 悬崖 / FIX-C1 / FIX-C2 / 短会话推论（含文档）
+- [ ] context-guard 软阈值按新认知收尾（260K 偏保守，评估 ~150K 或明确其仅为防截断兜底）
 - [ ] typecheck + 全量测试通过
 
 ## Notes
 
-- 原始 FIX A（工具结果截断）已取消——调研证明无效。
-- 原始 FIX B（capability 通道验证）仍在待办，独立于本任务缓存工作。
-- 不要动 `src/cli.ts` 的格式化存量（已单独提交 ba75d94）。
+- 本任务不再追求大的成本优化——数据和结论都指向"收益有限"。有价值的产出是**正确的因果认知**与**避免后续误判的文档**。
+- 后续若上游 TTL 变化（换 provider/升级缓存），此任务结论需重新验证。

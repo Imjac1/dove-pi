@@ -50,12 +50,12 @@ describe("context guard (prefix fuse)", () => {
 
 	it("advises on the absolute soft cap even for very wide windows", () => {
 		const guard = guardContext({
-			tokens: 270_000,
+			tokens: 160_000,
 			contextWindow: 1_000_000,
 			mode: "ultra",
 		});
 		assert.equal(guard.compactAdvised, true);
-		assert.ok(guard.hint!.includes("270,000"));
+		assert.ok(guard.hint!.includes("160,000"));
 	});
 
 	it("does not advise below the absolute soft cap on a wide window", () => {

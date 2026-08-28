@@ -23,7 +23,7 @@ export interface ContextGuard {
 }
 
 const DEFAULT_MAX_FRACTION = 0.82;
-const DEFAULT_MAX_TOKENS = 260_000;
+const DEFAULT_MAX_TOKENS = 150_000;
 
 function envFraction(): number {
 	const raw = Number(process.env.DOVE_PI_MAX_CONTEXT_FRACTION);
@@ -71,19 +71,17 @@ export function guardContext(input: {
 		};
 	}
 
-	// Absolute-token guard: an alternative safety floor for very wide windows
-	// Absolute-token guard: an alternative safety floor for very wide windows.
-	// Tuned to ~25-30% of a 1M model window so we advise compaction or a new
-	// session before the hot prefix gets so large that a rebuild (post-compact
-	// full cache MISS at 300K+ tokens) becomes the dominant cost. Compacting a
-	// warm 260K prefix is cheaper than compacting a 500K one:
-	// the hit rate is high (≈90%), so hot prefixes are cheap - the expensive
-	// operation is destroying and rebuilding them.
+	// Absolute-token guard: keeps the prefix from growing unboundedly before the
+	// single advisory hint. Observed data (08-29, both projects): cache misses
+	// are time-driven (gap>60s -> 34-40% miss, independent of prefix size); when
+	// a miss does happen its cost equals the whole prefix, so a moderate cap
+	// bounds the worst-case miss cost. Purely advisory - never auto-compacts.
+	// It is NOT a cost fix on its own (no cliff to avoid); it only bounds risk.
 	if (tokens !== undefined && tokens > maxTokens) {
 		return {
 			compactAdvised: true,
 			fractionUsed,
-			hint: `当前会话已累积约 ${tokens.toLocaleString()} tokens（软上限 ${maxTokens.toLocaleString()}）。建议 /compact 或开始新会话，以避免一次昂贵的完整缓存 MISS。`,
+			hint: `当前会话已累积约 ${tokens.toLocaleString()} tokens（提示阈值 ${maxTokens.toLocaleString()}）。缓存失效时按整个前缀计费，前缀越大单次损失越大；任务告一段落时建议开新会话，避免长前缀在停顿后全量重算。`,
 		};
 	}
 
