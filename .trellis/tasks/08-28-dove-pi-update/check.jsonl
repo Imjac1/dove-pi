@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Validation & Error Matrix: extension update failure must be a warning that does not prevent profile reconciliation; Trellis absence must not fail startup. The update feature must keep non-blocking degenerate behavior."}
+{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Installer contract: repeated setup uses lockfile-aware npm install --prefer-offline rather than a broad npm update; the update feature's dependency step must match this to avoid unexpected dependency-graph upgrades."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality bar for the new Python updater module and its tests."}
