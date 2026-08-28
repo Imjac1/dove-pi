@@ -92,3 +92,41 @@ typecheck ✅ | 测试 94 全过(+7 context-guard +3 token-audit)✅ | extension
 ### Status
 
 [DONE] 任务结论定案、文档修正、阈值收尾。本任务 archive，等待推送。
+
+## Session 4: 负优化全面检查与修复
+
+**Date**: 2026-08-30
+**Task**: 检查已推送改动是否存在负优化（用户要求"确定好再优化"）
+**Branch**: `master`
+
+### Summary
+
+对 08-29 推送的全部改动做 8 项负优化检查，用代码路径 + 真实数据逐项确定：
+
+- **检查 1 重启思考级别静默降级 → 确认为真**：ModeController 默认 standard 且 mode 不持久化，重启后 auto 策略断言 high，覆盖用户 settings 的显式 max（defaultThinkingLevel + modelThinkingLevels）。且 pi 原生 `_getThinkingLevelForModelSwitch` 本来就优先 per-model > default——策略在跟原生行为打架。
+- **检查 2 free provider thinkingLevelMap 未测试 → 确认为真**：`off:null` 让 off 从可选变隐藏，openai-completions 端点从未实测。
+- **检查 5 token-audit 性能 → 排除**：全量遍历 4 项目 53 万条消息仅 0.416s。
+- **检查 6 setThinkingLevel 每回合副作用 → 排除**：仅 isChanging 时写 entry/发事件，同级别重复调用零副作用。
+- **检查 7 cache-diagnostics reasoning 字段 → 排除**：纯读入采样，不参与命中率计算。
+- **检查 3/4/8 可接受或无问题**：thinking_level_select 不持久化符合设计；150K guardNotified 每会话一次不刷屏；env 解析非法值回退 auto、catch 保护。
+
+### Fixes
+
+1. auto 策略尊重用户显式配置：有 per-model 钉或非默认全局级别时不再断言（跳过覆盖），无显式配置时行为不变（照旧按 mode 断言）。
+2. free provider thinkingLevelMap 恢复 `{max:max}`，保留 OpenRouter 全映射（实测过）。
+
+### Git Commits
+
+| Hash | Message |
+| ------ | --------- |
+| `846c869` | fix(thinking-policy): auto policy respects explicit settings; revert free provider map |
+
+### Verification
+
+- 110 测试全过（新增 2 个回归测试：respect 路径不调用 setThinkingLevel、无配置路径调用 high）
+- typecheck OK、pi:smoke OK
+- models.json 往返验证合法，free 已回滚、OpenRouter 保留
+
+### Status
+
+[DONE] 2 个确认负优化已修复并推送。
