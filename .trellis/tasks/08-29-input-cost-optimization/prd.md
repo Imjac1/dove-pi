@@ -16,10 +16,10 @@
 
 ## Requirements（新方向，取代原 FIX A/B）
 
-- **FIX-C1 — 中间断点注入（P0，根因修复）**：验证扩展能否在 `before_provider_request` 钩子里给 Dove 的 epoch 稳定上下文消息注入中间 `cache_control` 断点（绕过 pi `convertMessages` 的重建丢弃）。可行则实现，把长会话切成多段可缓存区。
-- **FIX-C2 — 前缀增长定标（P1，快速缓解）**：40K 是悬崖，260K 软阈值太宽松。重新定标 compaction 提示阈值/加中间告警，让长会话在被推入悬崖成本前主动轮转或压缩。
-- **FIX-C3 — API 路径评估（P2，可选）**：评估换 `openai-completions` 路径（`prompt_cache_key` + 会话亲和可缓存整前缀）；需验证 OpenRouter/DeepSeek 上游支持。
-- **验证（P0）**：用 token-audit 对比优化前后：>40K 调用的 cacheRead 命中率、input 总量、单次 max 调用。
+- **FIX-C2 — 前缀增长定标（P0，主方案）**：40K 是悬崖，260K 软阈值太宽松。把 context-guard 软阈值重新定标到悬崖附近，加中间告警，让长会话在被推入全价区前主动轮转/压缩。改动最小、确定有效。
+	- **FIX-C1 — 中间断点注入（P1，候选修复，env 开关默认关）**：可行性已验证（payload 可变、provider 接受注入，见 `research/fix-c1-feasibility.md`），但 headless 无法复现悬崖、效果待真实会话确认。实现为 `DOVE_PI_INJECT_CACHE_BREAKPOINTS=1` 开关，限制最多 3-4 个断点只给最大中间块。
+	- **FIX-C3 — API 路径评估（P2，可选）**：评估换 `openai-completions` 路径（`prompt_cache_key` + 会话亲和可缓存整前缀）；需验证 OpenRouter/DeepSeek 上游支持。
+	- **验证（P0）**：用 token-audit 对比优化前后：>40K 调用的 cacheRead 命中率、input 总量、单次 max 调用。
 
 ## 约束
 
@@ -30,9 +30,9 @@
 
 ## Acceptance Criteria
 
-- [ ] FIX-C1 可行性验证完成：能在 before_provider_request 注入中间 cache_control（或有明确不可行证据）
-- [ ] FIX-C1 落地后：长会话 >40K 调用的 cacheRead 命中率显著回升（目标 >50%）
-- [ ] FIX-C2：compaction/轮转阈值按 40K 悬崖重新定标并生效
+- [x] FIX-C1 可行性验证完成：注入中间 cache_control 可行（research/fix-c1-feasibility.md）
+	- [ ] FIX-C1 以 env 开关实现（默认关，最多 3-4 断点）；真实会话验证通过后转默认开
+	- [ ] FIX-C2：软阈值按 40K 悬崖重新定标并生效（含中间告警）
 - [ ] 验证: token-audit 对比显示 input 总量可量化下降
 - [ ] typecheck + 全量测试通过
 
