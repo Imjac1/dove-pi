@@ -375,6 +375,7 @@ return runPowerShell(devNodeVersion, { cwd, signal, timeoutMs: 15_000 });
 ```powershell
 python dove_pi.py install [--profile PROFILE] [--verify quick|full|none] [--no-font] [--no-path] [--clean]
 python dove_pi.py setup [same options as install]
+python dove_pi.py update [--check] [--force] [--verify quick|full|none] [--no-trellis-update]
 dove-pi [official-pi-options]
 ```
 
@@ -389,6 +390,10 @@ dove-pi [official-pi-options]
 - The launcher keeps `process.cwd()` as the target workspace and injects `.pi/extensions/personal-agent.ts` from the installed Dove Pi source tree.
 - By default the installer creates `%LOCALAPPDATA%\DovePi\bin\dove-pi.ps1` and `dove-pi.cmd`, and adds that directory to the user PATH. `--no-path` suppresses the PATH mutation. The `.cmd` file is ASCII-only and resolves its sibling PowerShell launcher via `%~dp0`, so non-ASCII user/repository paths never need to be encoded into the batch file; the PowerShell launcher is UTF-8 with BOM for PowerShell 5.1/7 compatibility.
 - The underlying `@earendil-works/pi-coding-agent` executable remains `pi`; only the user-facing project launcher is named `dove-pi`.
+- `dove-pi update` self-updates from the git origin, tracking `master`: fetch + `merge --ff-only`, never a forced/persistent branch switch, never a tag-based release flow. A dirty working tree aborts unless `--force` (which runs `git reset --hard`); a detached HEAD or a missing `origin` aborts. Diverged local history aborts with a manual-resolution hint.
+- The extension profile is persisted in `.dove/manifest.json` (gitignored; `schemaVersion`, `profile`, `previousCommit`, `currentCommit`, `lastUpdatedAt`). `install`/`update` reuse the stored profile instead of silently falling back to `max`; a missing or malformed manifest falls back to `max` without blocking.
+- Before an update, `previousCommit` is recorded in the manifest so rollback is `git reset --hard <previousCommit>` followed by a re-run of `dove-pi install`. `update --check` only fetches and reports `{currentCommit, targetCommit, updateAvailable}` without changing the working tree.
+- `install` (and the post-update phase) updates the global Trellis CLI via `npm update -g @mindfoldhq/trellis`; a failure is a warning and never blocks the install. `--no-trellis-update` opts out. Update/install network access is explicit: startup and `doctor` never fetch.
 
 ### 4. Validation & Error Matrix
 
@@ -401,6 +406,13 @@ dove-pi [official-pi-options]
 | Quality gate fails | Stop unless `-SkipChecks` was explicitly supplied |
 | User PATH already contains launcher directory | Do not duplicate the entry |
 | Target project launched from another directory | Preserve that directory as Pi's working directory |
+| Dirty working tree on update without `--force` | Abort with the dirty file list; do not fetch or mutate |
+| `--force` on update with a dirty tree | `git reset --hard` then continue normally |
+| Local HEAD equals `origin/master` after fetch | Report already-up-to-date with zero git/npm side effects |
+| Local history diverged from `origin/master` | Abort with a manual-resolution hint; never merge non-fast-forward |
+| `.dove/manifest.json` missing or malformed | Fall back to defaults (`profile: max`); do not block install/update |
+| Global Trellis CLI update fails | Warn and continue; never block install/update |
+| `update --check` offline/unreachable | Report a clear error and exit non-zero; never touch the working tree |
 
 ### 5. Good/Base/Bad Cases
 

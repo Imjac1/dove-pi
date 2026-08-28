@@ -152,7 +152,6 @@ Ctrl+Alt+M
 
 `/status full` 里的缓存诊断会同时显示最近一次请求（Last CH）和当前会话累计命中率（Session CH）。`CH` 使用 Pi/provider 已上报的 usage 计算，不会把估算值当成真实命中。
 
-
 ## Web 访问（真实用户模式）
 
 Dove 通过已安装的 `pi-web-access` 扩展提供 `web_search`、`fetch_content`、`source_check`、`get_search_content` 等工具。要像真实用户一样读取网站、避免反爬导致内容残缺，可用“真实用户认证”路径：Dove 读取本机 Edge/Chrome 已登录的真实 cookie，仅发给你白名单里的主机。
@@ -263,6 +262,27 @@ npm run pi:smoke
 扩展安装默认具备容错性：某个可选扩展（例如依赖 Windows 原生二进制的 `pi-lens`）失败时会清理对应的残留 JS/native 包，强制重新构造匹配的 `@ast-grep/cli` 与平台包并重试一次；仍失败则显示原因、继续安装其余组件，并在结果中列出 `failed` 项。这不会阻断 Dove Pi 主程序，修复环境后重新运行同一条安装命令即可补装。若 Windows 正在锁定二进制文件，请先关闭其他 Node/Pi 进程。
 安装器也支持用户名或仓库路径包含中文等非 ASCII 字符：`.cmd` 启动器只保存 ASCII 内容并在运行时定位旁边的 PowerShell 启动器，PowerShell 启动器使用带 BOM 的 UTF-8，避免 `UnicodeEncodeError` 或 PowerShell 5.1 乱码。
 
+## 自更新与插件更新
+
+`dove-pi` 从 GitHub 仓库跟踪 `master` 更新自身：
+
+```powershell
+dove-pi update              # 拉取最新代码并重新对齐依赖/扩展/启动器
+dove-pi update --check      # 只报告是否有更新，不改动任何东西
+dove-pi update --force      # 丢弃未提交的本地改动后更新
+dove-pi update --verify full  # 更新后跑完整测试
+```
+
+行为约定：
+
+- **版本策略**：跟踪 `master`，不做 git tag；更新 = fetch + 快进合并（`--ff-only`），本地历史分叉时中止并提示。
+- **脏树保护**：工作区有未提交改动时默认中止；`--force` 会先 `git reset --hard` 丢弃这些改动。
+- **插件更新**：`dove-pi install`（或 update 的收尾阶段）会同步更新 Pi 扩展目录（官方 `pi update --extensions` + 补齐缺失项），并更新全局 Trellis CLI（`npm update -g @mindfoldhq/trellis`，失败仅警告不阻断）。
+- **回滚**：更新前把旧 commit 写入 `.dove/manifest.json` 的 `previousCommit`；回滚 = `git reset --hard <previousCommit>` 后重跑 `dove-pi install`。
+- **profile 记忆**：扩展 profile 持久化在 `.dove/manifest.json`；之后 `dove-pi install` / `update` 自动沿用，不再默认回落 max。
+- **离线优先**：`update` 只在显式执行时联网；启动和 `doctor` 从不联网。
+
+`.dove/` 已被 `.gitignore` 忽略（机器状态，不入库）。
 当前版本是可运行的基础 MVP。任务 replay、完整远程控制面、第二套原生项目数据库和自动记忆晋升暂不在首个版本范围内。
 
 项目规范位于 [.trellis/spec/](.trellis/spec/)，当前任务位于 [.trellis/tasks/08-26-personal-agent-os/](.trellis/tasks/08-26-personal-agent-os/)。
