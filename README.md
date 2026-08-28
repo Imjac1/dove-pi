@@ -276,9 +276,11 @@ dove-pi update --force      # 丢弃未提交的本地改动后更新
 dove-pi update --verify full  # 更新后跑完整测试
 ```
 
-行为约定：
+行为约定（普通情况下只需运行 `dove-pi update`）：
 
-- **版本策略**：跟踪 `master`，不做 git tag；更新 = fetch + 快进合并（`--ff-only`），本地历史分叉时中止并提示。
+- **版本策略**：跟踪 `master`，不做 git tag；更新 = fetch + 快进合并（`--ff-only`）。程序会自动区分“已是最新”“GitHub 有新版本”“本地领先”和“历史分叉”。
+- **本地领先**：如果本地有尚未推送到 GitHub 的提交，`update` 不会误报或覆盖本地代码，而是安全地报告“本地领先”，直接结束。
+- **分支保护**：自更新只允许在 `master` 分支执行；如果误在其他分支运行，会显示切换命令，不会自动改动分支。
 - **脏树保护**：工作区有未提交改动时默认中止；`--force` 会先 `git reset --hard` 丢弃这些改动。
 - **插件更新**：`dove-pi install`（或 update 的收尾阶段）会同步更新 Pi 扩展目录（官方 `pi update --extensions` + 补齐缺失项），并更新全局 Trellis CLI（`npm update -g @mindfoldhq/trellis`，失败仅警告不阻断）。
 - **回滚**：更新前把旧 commit 写入 `.dove/manifest.json` 的 `previousCommit`；回滚 = `git reset --hard <previousCommit>` 后重跑 `dove-pi install`。

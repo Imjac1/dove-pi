@@ -110,6 +110,7 @@ class UpdateCommandTests(unittest.TestCase):
                 patch("dove_pi.git_fetch_origin"), \
                 patch("dove_pi.git_current_commit", return_value="aaa"), \
                 patch("dove_pi.git_remote_commit", return_value="bbb"), \
+                patch("dove_pi.git_is_ancestor", return_value=True), \
                 patch("dove_pi.git_status_porcelain", return_value=""), \
                 patch("dove_pi.install") as install_mock, \
                 patch("dove_pi.write_manifest") as write_manifest:
@@ -127,6 +128,69 @@ class UpdateCommandTests(unittest.TestCase):
         self.assertTrue(result["updateAvailable"])
         self.assertEqual(result["currentCommit"], "aaa")
         self.assertEqual(result["targetCommit"], "bbb")
+        self.assertEqual(result["state"], "remote-ahead")
+
+    def test_update_check_does_not_call_local_ahead_an_update(self):
+        from dove_pi import run_update
+        with patch("dove_pi.git_is_repository", return_value=True), \
+                patch("dove_pi.git_has_origin", return_value=True), \
+                patch("dove_pi.git_detached_head", return_value=False), \
+                patch("dove_pi.git_current_branch", return_value="master"), \
+                patch("dove_pi.git_fetch_origin"), \
+                patch("dove_pi.git_current_commit", return_value="bbb"), \
+                patch("dove_pi.git_remote_commit", return_value="aaa"), \
+                patch("dove_pi.git_is_ancestor", side_effect=[False, True]), \
+                patch("dove_pi.install") as install_mock:
+            import io
+            import contextlib
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                exit_code = run_update(["--check"])
+        self.assertEqual(exit_code, 0)
+        install_mock.assert_not_called()
+        import json
+        result = json.loads(buffer.getvalue().strip())
+        self.assertFalse(result["updateAvailable"])
+        self.assertEqual(result["state"], "local-ahead")
+
+    def test_update_is_noop_when_local_checkout_is_ahead(self):
+        from dove_pi import run_update
+        with patch("dove_pi.git_is_repository", return_value=True), \
+                patch("dove_pi.git_has_origin", return_value=True), \
+                patch("dove_pi.git_detached_head", return_value=False), \
+                patch("dove_pi.git_current_branch", return_value="master"), \
+                patch("dove_pi.git_status_porcelain", return_value=""), \
+                patch("dove_pi.git_current_commit", return_value="bbb"), \
+                patch("dove_pi.git_fetch_origin"), \
+                patch("dove_pi.git_remote_commit", return_value="aaa"), \
+                patch("dove_pi.git_is_ancestor", side_effect=[False, True]), \
+                patch("dove_pi.git_fast_forward") as fast_forward, \
+                patch("dove_pi.install") as install_mock, \
+                patch("dove_pi.write_manifest") as write_manifest:
+            import io
+            import contextlib
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                exit_code = run_update([])
+        self.assertEqual(exit_code, 0)
+        fast_forward.assert_not_called()
+        install_mock.assert_not_called()
+        write_manifest.assert_not_called()
+        import json
+        result = json.loads(buffer.getvalue().strip())
+        self.assertFalse(result["updated"])
+        self.assertEqual(result["state"], "local-ahead")
+
+    def test_update_rejects_non_master_branch_before_fetch(self):
+        from dove_pi import run_update
+        with patch("dove_pi.git_is_repository", return_value=True), \
+                patch("dove_pi.git_has_origin", return_value=True), \
+                patch("dove_pi.git_detached_head", return_value=False), \
+                patch("dove_pi.git_current_branch", return_value="feature/demo"), \
+                patch("dove_pi.git_fetch_origin") as fetch_mock:
+            with self.assertRaisesRegex(RuntimeError, "git switch master"):
+                run_update(["--check"])
+        fetch_mock.assert_not_called()
 
     def test_update_aborts_on_dirty_tree_without_force(self):
         from dove_pi import run_update

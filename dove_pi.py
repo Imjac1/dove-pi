@@ -38,6 +38,7 @@ MANIFEST_PATH = MANIFEST_DIR / "manifest.json"
 MANIFEST_FIELDS = ("profile", "previousCommit", "currentCommit", "lastUpdatedAt")
 TRELLIS_GLOBAL_PACKAGE = "@mindfoldhq/trellis"
 REMOTE_BRANCH = "origin/master"
+LOCAL_BRANCH = "master"
 
 
 def executable(name: str) -> str:
@@ -444,6 +445,10 @@ def git_detached_head() -> bool:
     return run_git(["symbolic-ref", "-q", "HEAD"], check=False).returncode != 0
 
 
+def git_current_branch() -> str:
+    return run_git(["branch", "--show-current"], check=False).stdout.strip()
+
+
 def git_status_porcelain() -> str:
     return run_git(["status", "--porcelain"], check=False).stdout.strip()
 
@@ -504,15 +509,28 @@ def run_update(arguments: Sequence[str]) -> int:
     if not git_has_origin():
         raise RuntimeError("dove-pi clone has no 'origin' remote; cannot determine the update source.")
     if git_detached_head():
-        raise RuntimeError("dove-pi is on a detached HEAD; checkout 'master' before updating.")
+        raise RuntimeError("dove-pi is on a detached HEAD; run `git switch master` before updating.")
+    branch = git_current_branch()
+    if branch != LOCAL_BRANCH:
+        raise RuntimeError(
+            f"dove-pi is on branch '{branch or '(unknown)'}', but self-update tracks '{LOCAL_BRANCH}'. "
+            f"Run `git switch {LOCAL_BRANCH}` and then retry `dove-pi update`."
+        )
     if options.check:
         git_fetch_origin()
         current = git_current_commit()
         target = git_remote_commit()
+        if not current or not target:
+            raise RuntimeError(
+                "Unable to read GitHub's origin/master after fetch; check the repository remote and network."
+            )
+        relation = _update_relation(current, target)
         print(json.dumps({
             "currentCommit": current,
             "targetCommit": target,
-            "updateAvailable": current != target and current != "" and target != "",
+            "updateAvailable": relation == "remote-ahead",
+            "state": relation,
+            "branch": branch,
         }, ensure_ascii=False))
         return 0
     dirty = git_status_porcelain()
@@ -529,11 +547,30 @@ def run_update(arguments: Sequence[str]) -> int:
     target = git_remote_commit()
     if not current or not target:
         raise RuntimeError("Unable to determine local or remote commit; git state is incomplete.")
-    if current == target:
-        print(json.dumps({"updated": False, "currentCommit": current, "message": "already up to date"}, ensure_ascii=False))
+    relation = _update_relation(current, target)
+    if relation == "up-to-date":
+        print(json.dumps({
+            "updated": False,
+            "currentCommit": current,
+            "targetCommit": target,
+            "state": relation,
+            "branch": branch,
+            "message": "already up to date",
+        }, ensure_ascii=False))
         return 0
-    if not git_is_ancestor(current, target):
-        raise RuntimeError(f"Local history diverged from {REMOTE_BRANCH}; resolve manually or reinstall.")
+    if relation == "local-ahead":
+        print(json.dumps({
+            "updated": False,
+            "currentCommit": current,
+            "targetCommit": target,
+            "state": relation,
+            "message": "local checkout is ahead of GitHub; nothing to download",
+        }, ensure_ascii=False))
+        return 0
+    if relation == "diverged":
+        raise RuntimeError(
+            f"Local history diverged from {REMOTE_BRANCH}; push your local commits or reinstall, then retry."
+        )
     write_manifest(previous_commit=current)
     git_fast_forward()
     profile = read_manifest().get("profile") or DEFAULT_PROFILE
@@ -551,6 +588,25 @@ def run_update(arguments: Sequence[str]) -> int:
         "profile": profile,
     }, ensure_ascii=False))
     return 0
+
+
+def _update_relation(current: str, target: str) -> str:
+    """Classify local HEAD relative to the fetched remote HEAD.
+
+    Hash equality alone cannot distinguish a remote update from a local-only
+    commit.  Using ancestry keeps ``update --check`` truthful and lets the
+    normal update command be a no-op when the local checkout is ahead.
+    """
+    if not current or not target:
+        return "unknown"
+    if current == target:
+        return "up-to-date"
+    if git_is_ancestor(current, target):
+        return "remote-ahead"
+    if git_is_ancestor(target, current):
+        return "local-ahead"
+    return "diverged"
+
 
 def parse_install(arguments: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="dove-pi install")

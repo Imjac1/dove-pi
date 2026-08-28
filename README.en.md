@@ -249,6 +249,17 @@ npm run pi:smoke
 
 The installer prints a stage-level summary for three cases: configured extensions updated, first install with no configured extensions (update skipped), or updates explicitly disabled. `--no-extension-updates` skips only the update step and still installs missing profile entries; `--no-extensions` skips the entire third-party extension phase.
 
+### Self-update from GitHub
+
+For a normal installation, just run:
+
+```powershell
+dove-pi update
+dove-pi update --check       # inspect status without installing anything
+```
+
+Dove tracks the repository's `master` branch and automatically distinguishes an up-to-date checkout, a newer GitHub checkout, local-only commits, and diverged history. A local checkout that is ahead of GitHub is reported as `local-ahead` and is never overwritten. Self-update is accepted only on `master`; running it from another branch prints the exact `git switch master` command to use. Uncommitted changes stop the update unless `--force` is explicitly supplied.
+
 Extension installation is failure-tolerant by default: when an optional extension such as `pi-lens` (which uses a Windows native binary) fails, Dove removes stale JS/native package directories, force-reifies the matching `@ast-grep/cli` and platform package, and retries once; if it still fails, the reason is shown, the remaining components continue, and the structured result lists the `failed` entry. Close other Node/Pi processes if Windows is locking a binary, then rerun the same install command.
 
 The installer also supports usernames and repository paths containing non-ASCII characters. The generated `.cmd` launcher contains ASCII only and resolves its sibling PowerShell launcher at runtime, while the PowerShell launcher is written as UTF-8 with a BOM for reliable PowerShell 5.1/7 decoding.
