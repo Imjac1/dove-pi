@@ -29,4 +29,5 @@ export class LightweightProvider implements ProjectProvider {
 	public async runTaskOperation(_operation: TrellisTaskOperation, _args: readonly string[]): Promise<string> {
 		throw new Error("Trellis is not initialized for this project");
 	}
+	public async reconcileTaskOperation(): Promise<"unknown"> { return "unknown"; }
 }

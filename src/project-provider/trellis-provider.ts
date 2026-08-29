@@ -111,6 +111,20 @@ export class TrellisProvider implements ProjectProvider {
 			}
 		});
 	}
+
+	public async reconcileTaskOperation(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string): Promise<"observed" | "unknown"> {
+		const context = this.getContext();
+		if (context.revision !== beforeRevision && operation === "create") return "observed";
+		if (operation === "create") return context.revision !== beforeRevision ? "observed" : "unknown";
+		const selector = args[0]?.trim();
+		const task = context.tasks.find((candidate) => candidate.path === selector || candidate.providerTaskId === selector || candidate.title === selector || candidate.path.endsWith(selector ?? "\u0000"));
+		if (!task) return "unknown";
+		const status = task.status.toLowerCase();
+		if (operation === "start" && (context.currentTask?.stableId === task.stableId || ["active", "in_progress", "started"].includes(status))) return "observed";
+		if (operation === "finish" && ["done", "completed", "complete", "finished"].includes(status)) return "observed";
+		if (operation === "archive" && ["archived", "closed"].includes(status)) return "observed";
+		return "unknown";
+	}
 }
 
 function classifyTrellisVersion(version: string | undefined): "supported" | "unknown" | "unsupported" {

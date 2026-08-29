@@ -58,6 +58,8 @@ describe("Pi adapter", () => {
 		assert.ok(events.has("tool_result"));
 		assert.ok(events.has("thinking_level_select"));
 		assert.ok(events.has("before_provider_headers"));
+		assert.ok(events.has("before_provider_request"));
+		assert.ok(events.has("after_provider_response"));
 		const context: FakeContext = {
 			ui: {
 				theme: { fg: (color, value) => { statusColors.push(color); return value; } },
@@ -72,6 +74,9 @@ describe("Pi adapter", () => {
 		const preservedHeaders = { "x-session-affinity": "existing" };
 		await events.get("before_provider_headers")?.({ type: "before_provider_headers", headers: preservedHeaders }, { ...context, model: { provider: "cc-switch-open-router" } });
 		assert.equal(preservedHeaders["x-session-affinity"], "existing");
+		const beforeProviderRequest = events.get("before_provider_request");
+		assert.ok(beforeProviderRequest);
+		await assert.rejects(() => beforeProviderRequest({ type: "before_provider_request", payload: { messages: [{ role: "user", content: "x".repeat(2_000) }] } }, { ...context, model: { contextWindow: 100, maxTokens: 20 } }), /exceeds context window/);
 		await events.get("session_start")?.(undefined, context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
@@ -105,13 +110,25 @@ describe("Pi adapter", () => {
 		await commands.get("project")?.handler("doctor", context);
 		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
 		const firstStartResult = await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
-		const firstStartMessage = (firstStartResult as { message?: { customType?: string; details?: { schemaVersion?: number } } })?.message;
+		const firstStartMessage = (firstStartResult as { message?: { customType?: string; details?: { schemaVersion?: number; segments?: unknown[] } } })?.message;
 		assert.equal(firstStartMessage?.customType, "personal-agent-context");
 		assert.equal(firstStartMessage?.details?.schemaVersion, 2);
+		assert.ok(Array.isArray(firstStartMessage?.details?.segments));
 		assert.ok(activeToolSets.at(-1)?.includes("agent_browser"));
 		const autoToolSetCount = activeToolSets.length;
-		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+		const hiStart = await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal(activeToolSets.length, autoToolSetCount, "auto mode keeps intent tools instead of rebuilding the set");
+		assert.doesNotMatch(String((hiStart as { systemPrompt?: string })?.systemPrompt), /Web access:|Dispatch guidance:|\[DOVE REGISTERED CAPABILITIES\]/);
+		const isolatedChat = await events.get("context")?.({
+			type: "context",
+			messages: [
+				{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+				{ role: "custom", customType: "personal-agent-context", content: "previous project PRD", display: false, details: { schemaVersion: 2, epoch: "old" }, timestamp: 2 },
+				{ role: "assistant", content: [{ type: "text", text: "hello" }], timestamp: 3 },
+			],
+		}, context);
+		const isolatedMessages = (isolatedChat as { messages?: Array<{ role?: string; customType?: string; content?: unknown }> } | undefined)?.messages ?? [];
+		assert.equal(isolatedMessages.some((message) => message.customType === "personal-agent-context"), false, "ordinary chat must not inherit a persisted project context snapshot");
 		const notificationCount = notifications.length;
 		await commands.get("mode")?.handler("max", context);
 		assert.equal(notifications.length, notificationCount + 1);
@@ -198,6 +215,50 @@ describe("Pi adapter", () => {
 		assert.equal(shouldOfferProjectBootstrap("你好"), false);
 		assert.equal(shouldOfferProjectBootstrap("修复登录问题"), true);
 		assert.equal(shouldOfferProjectBootstrap("继续当前任务"), true);
+	});
+
+	it("enforces read-only mode across project, workspace, and side-effect capability paths", async () => {
+		const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool(definition: { name: string; execute: (...args: any[]) => Promise<any> }) { tools.set(definition.name, definition); },
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return [{ name: "read" }, { name: "agent_doctor" }]; },
+			setActiveTools() {},
+			getActiveTools() { return []; },
+			getThinkingLevel() { return "medium"; },
+			on() {},
+		} as unknown as ExtensionAPI;
+		const confirmations: string[] = [];
+		const context: FakeContext = {
+			hasUI: true,
+			ui: {
+				theme: { fg: (_color, value) => value },
+				setStatus: () => {},
+				notify: () => {},
+				confirm: async (message: string) => { confirmations.push(message); return true; },
+			},
+			sessionManager: { getEntries: () => [], getSessionId: () => "read-only-test" },
+		};
+		const previous = process.env.DOVE_PI_READ_ONLY;
+		process.env.DOVE_PI_READ_ONLY = "1";
+		try {
+			extension(api);
+			const projectTask = await tools.get("agent_project_task")?.execute("call", { operation: "finish" }, undefined, undefined, context);
+			assert.equal(projectTask?.details?.blocked, true);
+			const restore = await tools.get("agent_workspace_restore")?.execute("call", { snapshotId: "missing" }, undefined, undefined, context);
+			assert.equal(restore?.details?.ok, false);
+			const patch = await tools.get("agent_workspace_patch")?.execute("call", { operations: [] }, undefined, undefined, context);
+			assert.equal(patch?.details?.appliedOperations, 0);
+			const capability = await tools.get("agent_run_capability")?.execute("call", { name: "dev.project_test" }, undefined, undefined, context);
+			assert.equal(capability?.details?.status, "blocked");
+			assert.equal(confirmations.length, 0, "read-only mode must not surface an approval that can re-enable side effects");
+		} finally {
+			if (previous === undefined) delete process.env.DOVE_PI_READ_ONLY;
+			else process.env.DOVE_PI_READ_ONLY = previous;
+		}
 	});
 
 	it("bounds oversized built-in tool results without changing small results", () => {
@@ -312,6 +373,7 @@ interface FakeContext {
 		theme: { fg: (color: string, value: string) => string };
 		setStatus: (key: string, value: string | undefined) => void;
 		notify: (message: string, level?: string) => void;
+		confirm?: (message: string, detail?: string) => Promise<boolean>;
 	};
 	sessionManager: { getEntries: () => unknown[]; getSessionId?: () => string };
 }

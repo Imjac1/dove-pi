@@ -46,6 +46,15 @@ describe("context compiler", () => {
 		assert.ok(compiled.charCount < 10_000);
 		assert.match(compiled.text, /PROJECT_CONTEXT budget: omitted/);
 	});
+
+	it("never lets required documents bypass an explicit budget", () => {
+		const compiler = new ContextCompiler();
+		compiler.add({ id: "required", kind: "task", content: "x".repeat(8_000), required: true });
+		const compiled = compiler.compile("", "standard", { maxChars: 1_000 });
+		assert.equal(compiled.items.length, 0);
+		assert.deepEqual(compiled.omittedRequired, ["required"]);
+		assert.equal(compiled.segments.find((segment) => segment.id === "required")?.reason, "budget");
+	});
 });
 
 describe("Trellis context", () => {
@@ -89,6 +98,11 @@ describe("Trellis context", () => {
 		const context = buildTrellisContext(process.cwd(), "今天天气怎么样", "standard");
 		assert.equal(context.items.some((item) => item.id.endsWith("personal-agent-runtime.md")), false);
 		assert.ok(context.charCount < 12_000);
+	});
+
+	it("does not inject the active task PRD on an ordinary standard turn", () => {
+		const context = buildTrellisContext(process.cwd(), "hi", "standard");
+		assert.equal(context.items.some((item) => item.kind === "task"), false);
 	});
 
 	it("exposes Trellis workflow as a typed project document outside Fast mode", () => {

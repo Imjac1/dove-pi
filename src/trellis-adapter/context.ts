@@ -26,10 +26,12 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 		if (document.kind === "task") {
 			const isPrd = document.path.toLowerCase().endsWith("prd.md");
 			if (mode === "fast" && (!isActiveTask || !isPrd)) continue;
-			if (mode !== "fast" && !isActiveTask && !intent.task) continue;
-			if (mode !== "fast" && isActiveTask && !isPrd && !intent.task) continue;
+			// Standard/Ultra only load task documents for an explicit task/PRD
+			// request. An active task is not a reason to inject its PRD into
+			// ordinary conversation (for example, a simple "hi").
+			if (mode !== "fast" && !intent.task) continue;
 			const priority = isActiveTask ? 100 : task?.priority === "P1" ? 40 : 20;
-			addDocument(compiler, context, document, priority, isActiveTask && isPrd);
+			addDocument(compiler, context, document, priority, mode === "fast" && isActiveTask && isPrd);
 			continue;
 		}
 
