@@ -130,3 +130,26 @@ typecheck ✅ | 测试 94 全过(+7 context-guard +3 token-audit)✅ | extension
 ### Status
 
 [DONE] 2 个确认负优化已修复并推送。
+
+
+## Session 2: Complete Dove-Pi V2 runtime architecture
+
+**Date**: 2026-08-29
+**Task**: Complete Dove-Pi V2 runtime architecture
+**Branch**: `master`
+
+### Summary
+
+Completed and validated the Dove-Pi clean-slate V2 runtime slice: immutable request planning, full provider-payload budget firewall, capability approval/recovery state, correlated execution ledger, Trellis mutation reconciliation, strict ordinary-chat context isolation, Pi read-only degradation, centralized prompt policy, and full regression coverage. Typecheck, 131 Node tests, 19 installer tests, doctor, Pi smoke, and diff checks passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1add042` | (see git log) |
+| `4bee290` | (see git log) |
+| `5689998` | (see git log) |
+
+### Status
+
+[OK] **Completed**
