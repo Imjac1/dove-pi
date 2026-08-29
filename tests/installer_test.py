@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from dove_pi import format_version, main, parse_install, parse_managed_update
+from dove_pi import format_version, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json
 from installer.manager import MaintenanceResult
 
 
@@ -44,6 +44,27 @@ class InstallerCliTests(unittest.TestCase):
     def test_version_formatting(self):
         self.assertEqual(format_version((22, 19, 0)), "22.19.0")
 
+    def test_package_versions_are_release_locked(self):
+        with TemporaryDirectory() as temporary:
+            package = Path(temporary) / "package.json"
+            package.write_text(
+                json.dumps({
+                    "version": "1.2.3",
+                    "dependencies": {"@earendil-works/pi-coding-agent": "4.5.6"},
+                }),
+                encoding="utf-8",
+            )
+            self.assertEqual(package_versions(package), ("1.2.3", "4.5.6"))
+
+    def test_version_reports_dove_and_pi_without_launching(self):
+        output = io.StringIO()
+        with patch("dove_pi.package_versions", return_value=("1.2.3", "4.5.6")), \
+                patch("dove_pi.launch") as launch, \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(main(["--version"]), 0)
+        self.assertEqual(output.getvalue().strip(), "Dove Pi 1.2.3 (Pi 4.5.6)")
+        launch.assert_not_called()
+
     def test_no_arguments_launches_pi(self):
         with patch("dove_pi.launch", return_value=0) as launch:
             self.assertEqual(main([]), 0)
@@ -51,6 +72,72 @@ class InstallerCliTests(unittest.TestCase):
 
 
 class ManagedUpdateCliTests(unittest.TestCase):
+    def test_managed_extension_json_allows_progress_on_stderr_only(self):
+        with TemporaryDirectory() as temporary:
+            install_root = Path(temporary)
+            (install_root / "src").mkdir()
+            (install_root / "node_modules" / "tsx" / "dist").mkdir(parents=True)
+            (install_root / "src" / "cli.ts").write_text("fixture", encoding="utf-8")
+            (install_root / "node_modules" / "tsx" / "dist" / "loader.mjs").write_text("fixture", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout='{"failed":[],"installed":["open-tui"]}\n',
+                stderr="Installed npm:pi-open-tui@0.2.15\n",
+            )
+            diagnostics = io.StringIO()
+            with patch("dove_pi.executable", return_value="node"), \
+                    patch("dove_pi.subprocess.run", return_value=completed) as child, \
+                    contextlib.redirect_stderr(diagnostics):
+                result = run_installed_cli_json(install_root, ["extensions", "install", "max"])
+            self.assertEqual(result["failed"], [])
+            self.assertIn("Installed npm:pi-open-tui", diagnostics.getvalue())
+            self.assertEqual(child.call_args.kwargs["stdout"], subprocess.PIPE)
+            self.assertIsNone(child.call_args.kwargs["stderr"])
+
+    def test_managed_extension_failure_bounds_captured_stdout(self):
+        with TemporaryDirectory() as temporary:
+            install_root = Path(temporary)
+            (install_root / "src").mkdir()
+            (install_root / "node_modules" / "tsx" / "dist").mkdir(parents=True)
+            (install_root / "src" / "cli.ts").write_text("fixture", encoding="utf-8")
+            (install_root / "node_modules" / "tsx" / "dist" / "loader.mjs").write_text("fixture", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=1,
+                stdout="UNBOUNDED_PREFIX\n" + ("x" * 800) + "TAIL",
+                stderr=None,
+            )
+            with patch("dove_pi.executable", return_value="node"), \
+                    patch("dove_pi.subprocess.run", return_value=completed):
+                with self.assertRaises(RuntimeError) as raised:
+                    run_installed_cli_json(install_root, ["extensions", "install", "max"])
+            message = str(raised.exception)
+            self.assertNotIn("UNBOUNDED_PREFIX", message)
+            self.assertTrue(message.endswith("TAIL"))
+            self.assertLessEqual(len(message), 570)
+
+    def test_transaction_subprocess_progress_is_sent_to_stderr(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import json,sys; from pathlib import Path; "
+                    "from installer.transaction import default_command_runner; "
+                    "default_command_runner([sys.executable,'-c',\"print('npm progress')\"],Path.cwd()); "
+                    "print(json.dumps({'status':'ready'}))"
+                ),
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout), {"status": "ready"})
+        self.assertIn("npm progress", completed.stderr)
+
     def test_update_check_json_is_one_document_and_read_only(self):
         result = MaintenanceResult(
             "update-check",

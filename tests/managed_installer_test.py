@@ -24,7 +24,14 @@ def complete_manifest(version: str, release_id: str, commit: str) -> ReleaseMani
         release_id,
         commit,
         components={"pi": "0.84.3", "piTui": "0.84.3", "trellis": "0.6.16"},
-        profiles={"max": ["npm:example-extension@1.0.0"]},
+        runtime={"python": ">=3.10", "node": ">=22.19.0"},
+        profiles={
+            "minimal": [],
+            "dev": [],
+            "research": [],
+            "security": [],
+            "max": ["npm:example-extension@1.0.0"],
+        },
     )
 
 
@@ -284,8 +291,12 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             root = Path(temporary)
             layout = ManagedLayout.at(root / "DovePi")
             source, manifest = make_source(root)
+            (source / "release.json").write_text(json.dumps(manifest.to_json()), encoding="utf-8")
             archive = root / "dove-pi-windows.zip"
-            archive.write_bytes(b"verified release bytes")
+            with zipfile.ZipFile(archive, "w") as bundle:
+                for path in source.rglob("*"):
+                    if path.is_file():
+                        bundle.write(path, path.relative_to(source))
             checksum = root / "dove-pi-windows.zip.sha256"
             checksum.write_text(hashlib.sha256(archive.read_bytes()).hexdigest(), encoding="ascii")
             installer = ManagedInstaller(layout)
@@ -298,6 +309,11 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             cached = installer._cached_asset(manifest.version)
             self.assertIsNotNone(cached)
             self.assertTrue(cached.archive_url.startswith("file:"))
+            shutil.rmtree(load_state(layout).current.install_path / "node_modules")
+            installer.fetch_release = lambda: (_ for _ in ()).throw(RuntimeError("network unavailable"))
+            repaired = installer.repair(verify="none")
+            self.assertTrue(repaired.changed)
+            self.assertTrue((load_state(layout).current.install_path / "node_modules").is_dir())
 
     def test_source_manifest_changes_when_source_changes(self):
         with TemporaryDirectory() as temporary:
@@ -377,6 +393,104 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             self.assertTrue(repaired.changed)
             self.assertTrue((load_state(layout).current.install_path / "node_modules").is_dir())
 
+    def test_update_check_reads_remote_metadata_without_writing_managed_state(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            source, _manifest = make_source(root)
+            installer = ManagedInstaller(layout)
+            installer.transaction = ManagedTransaction(layout, runner=successful_runner)
+            installer.install_source(source, profile="max", verify="none")
+            current = load_state(layout).current
+            self.assertIsNotNone(current)
+            manifest = ReleaseManifest.read(current.install_path / "release.json")
+            before = {
+                path.relative_to(layout.root).as_posix(): path.read_bytes()
+                for path in layout.root.rglob("*")
+                if path.is_file()
+            }
+            asset = ReleaseAsset(
+                f"v{manifest.version}",
+                manifest.version,
+                "https://invalid.example/archive",
+                "https://invalid.example/checksum",
+                release_id=manifest.release_id,
+                manifest=manifest,
+            )
+            installer.fetch_release = lambda: asset
+
+            result = installer.update(check=True, verify="full")
+
+            after = {
+                path.relative_to(layout.root).as_posix(): path.read_bytes()
+                for path in layout.root.rglob("*")
+                if path.is_file()
+            }
+            self.assertFalse(result.changed)
+            self.assertEqual(after, before)
+            self.assertFalse(layout.lock_path.exists())
+
+    def test_isolated_install_noop_update_new_update_rollback_and_offline_repair(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            source, _manifest = make_source(root)
+            installer = ManagedInstaller(layout)
+            installer.transaction = ManagedTransaction(layout, runner=successful_runner)
+
+            installed = installer.install_source(source, profile="max", verify="none")
+            first = load_state(layout).current
+            self.assertTrue(installed.changed)
+            self.assertEqual(first.version, "0.2.0")
+
+            installer.fetch_release = lambda: ReleaseAsset(
+                "v0.2.0",
+                "0.2.0",
+                "https://invalid.example/archive",
+                "https://invalid.example/checksum",
+            )
+            with patch("installer.manager.download_file") as download:
+                unchanged = installer.update(verify="full")
+            self.assertFalse(unchanged.changed)
+            download.assert_not_called()
+
+            release_root = root / "release-0.3.0"
+            release_root.mkdir()
+            (release_root / "dove_pi.py").write_text("print('release')\n", encoding="utf-8")
+            (release_root / "package.json").write_text('{"name":"dove-pi","version":"0.3.0"}\n', encoding="utf-8")
+            (release_root / "package-lock.json").write_text('{"lockfileVersion":3}\n', encoding="utf-8")
+            next_manifest = complete_manifest("0.3.0", "0.3.0+7654321", "7654321")
+            (release_root / "release.json").write_text(json.dumps(next_manifest.to_json()), encoding="utf-8")
+            archive = root / "dove-pi-windows.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                for path in release_root.rglob("*"):
+                    if path.is_file():
+                        bundle.write(path, path.relative_to(release_root))
+            checksum = root / "dove-pi-windows.zip.sha256"
+            checksum.write_text(
+                f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  dove-pi-windows.zip\n",
+                encoding="ascii",
+            )
+            installer.fetch_release = lambda: ReleaseAsset(
+                "v0.3.0",
+                "0.3.0",
+                archive.as_uri(),
+                checksum.as_uri(),
+                release_id=next_manifest.release_id,
+            )
+            updated = installer.update(verify="none")
+            self.assertTrue(updated.changed)
+            self.assertEqual(load_state(layout).current.release_id, next_manifest.release_id)
+
+            installer.rollback()
+            rolled_back = load_state(layout)
+            self.assertEqual(rolled_back.current.release_id, first.release_id)
+            shutil.rmtree(rolled_back.current.install_path / "node_modules")
+            installer.fetch_release = lambda: (_ for _ in ()).throw(RuntimeError("simulated GitHub REST 403"))
+            repaired = installer.repair(verify="none")
+            self.assertTrue(repaired.changed)
+            self.assertEqual(load_state(layout).current.release_id, next_manifest.release_id)
+
     def test_same_version_update_does_not_download_or_run_npm(self):
         with TemporaryDirectory() as temporary:
             layout = ManagedLayout.at(Path(temporary) / "DovePi")
@@ -386,13 +500,85 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             (current / "release.json").write_text(json.dumps(ReleaseManifest("0.3.0", "0.3.0+current").to_json()), encoding="utf-8")
             (current / "node_modules").mkdir()
             write_state(layout, InstallState(current=ReleaseRef("0.3.0+current", current, "0.3.0")), command="install")
-            asset = ReleaseAsset("v0.3.0", "0.3.0", "https://invalid.example/archive", "https://invalid.example/checksum")
+            asset = ReleaseAsset(
+                "v0.3.0",
+                "0.3.0",
+                "https://invalid.example/archive",
+                "https://invalid.example/checksum",
+                release_id="0.3.0+current",
+            )
             installer = ManagedInstaller(layout, fetch_release=lambda: asset)
             installer.transaction = ManagedTransaction(layout, runner=lambda *_args: self.fail("npm must not run for a no-op update"))
             with patch("installer.manager.download_file") as download:
                 result = installer.update(verify="full")
             self.assertFalse(result.changed)
             download.assert_not_called()
+
+    def test_same_version_different_release_identity_is_not_a_noop(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            current = layout.versions_dir / "0.3.0+source"
+            current.mkdir(parents=True)
+            (current / "dove_pi.py").write_text("print('ok')\n", encoding="utf-8")
+            (current / "release.json").write_text(
+                json.dumps(ReleaseManifest("0.3.0", "0.3.0+source").to_json()),
+                encoding="utf-8",
+            )
+            (current / "node_modules").mkdir()
+            write_state(
+                layout,
+                InstallState(current=ReleaseRef("0.3.0+source", current, "0.3.0")),
+                command="install",
+            )
+            asset = ReleaseAsset(
+                "v0.3.0",
+                "0.3.0",
+                "https://invalid.example/archive",
+                "https://invalid.example/checksum",
+                release_id="0.3.0+stable",
+            )
+            installer = ManagedInstaller(layout, fetch_release=lambda: asset)
+            self.assertTrue(installer.update(check=True).changed)
+            with patch.object(installer, "_download_release", side_effect=RuntimeError("download attempted")) as download:
+                with self.assertRaisesRegex(RuntimeError, "download attempted"):
+                    installer.update(verify="none")
+            download.assert_called_once()
+
+    def test_same_identity_but_changed_manifest_is_not_a_noop(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            current = layout.versions_dir / "0.3.0+stable"
+            current.mkdir(parents=True)
+            installed = ReleaseManifest(
+                "0.3.0",
+                "0.3.0+stable",
+                components={"pi": "0.84.2"},
+                profiles={"max": []},
+            )
+            advertised = ReleaseManifest(
+                "0.3.0",
+                "0.3.0+stable",
+                components={"pi": "0.84.3"},
+                profiles={"max": []},
+            )
+            (current / "dove_pi.py").write_text("print('ok')\n", encoding="utf-8")
+            (current / "release.json").write_text(json.dumps(installed.to_json()), encoding="utf-8")
+            (current / "node_modules").mkdir()
+            write_state(
+                layout,
+                InstallState(current=ReleaseRef(installed.release_id, current, installed.version)),
+                command="install",
+            )
+            asset = ReleaseAsset(
+                "v0.3.0",
+                "0.3.0",
+                "https://invalid.example/archive",
+                "https://invalid.example/checksum",
+                release_id=advertised.release_id,
+                manifest=advertised,
+            )
+            installer = ManagedInstaller(layout, fetch_release=lambda: asset)
+            self.assertTrue(installer.update(check=True).changed)
 
     def test_legacy_profile_migrates_and_corrupt_manifest_falls_back(self):
         for manifest_text, expected_profile in ((json.dumps({"profile": "dev"}), "dev"), ("{bad", "max")):

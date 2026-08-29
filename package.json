@@ -18,6 +18,7 @@
     "pi:smoke": "npm run dove-pi -- --version && npm run dove-pi -- --help",
     "benchmark:interop": "node --import tsx scripts/benchmark-interop.mts",
     "release:manifest": "node --import tsx scripts/build-release-manifest.mts",
+    "release:check": "python scripts/check_release_readiness.py",
     "dove-pi": "node ./bin/dove-pi.cjs"
   },
   "dependencies": {

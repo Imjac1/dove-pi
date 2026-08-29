@@ -669,7 +669,7 @@ return runPowerShell(devNodeVersion, { cwd, signal, timeoutMs: 15_000 });
 inspectExtensionProfile(profile, options): Promise<ExtensionDoctorReport>;
 getProfilePackages(profile): ExtensionPackageDefinition[];
 
-type ExtensionUpdateStatus = "updated" | "skipped-empty" | "skipped-disabled" | "failed";
+type ExtensionUpdateStatus = "updated" | "unchanged" | "skipped-empty" | "skipped-disabled" | "failed";
 
 type ExtensionInstallResult = {
   profile: ExtensionProfile;
@@ -695,7 +695,7 @@ dove-pi extensions install max
 - The combined Python installer defaults to installing the complete recommended `max` profile. `--extensions <profile>` selects another profile and `--no-extensions` skips third-party packages. Installation is explicit at the package-operation boundary and is never performed by doctor.
 - `dove-pi icons setup|status|install` detects/configures the `pi-open-tui` icon mode, reports the current font state, or installs the default `DEVCOM.JetBrainsMonoNerdFont` package through winget. The installer sets `nerd` mode after a successful font install and otherwise uses `ascii`.
 - `pi-open-tui` is the preferred single TUI/status authority. Profiles load `extension-settings` before `pi-open-tui`; `pi-powerbar`, `pi-powerline-footer`, and `pi-tps-status` are mutually exclusive fallback renderers and must not share a profile with `pi-open-tui`.
-- `installExtensionProfile` delegates updates to Pi's `update --extensions` and exposes a stable `updateStatus`: `updated` after a successful update, `skipped-empty` when no packages are configured, `skipped-disabled` for `--no-extension-updates`, and `failed` when update fails. Update failure retains `updateError` and remains fail-open; profile reconciliation still runs. Stage summaries go to stderr so `dove-pi extensions install` keeps stdout machine-readable JSON.
+- `installExtensionProfile` reconciles Dove-owned identities one at a time through Pi's exact-spec `install` command. Pi 0.84.3 exposes only a single-source persistent install operation; its multi-source resolver does not persist settings, and concurrent npm mutations against the shared Pi root are unsafe. The installer therefore remains serial, reports bounded start, `[current/total]`, and completion progress on stderr, and keeps stdout for one machine-readable JSON result. `updateStatus` is `updated` when an existing Dove package was reconciled, `unchanged` when configured entries were already exact, `skipped-empty` on first install, `skipped-disabled` for `--no-extension-updates`, and `failed` when any optional entry fails; failure details remain structured and fail-open.
 - Context, cumulative tokens, cache, model/provider, TPS, TTFT, duration, stalls, cost, Git, and extension-status rendering belong to the selected TUI extension. Dove publishes only compact mode/operation text (`Dove · Fast|◆ Standard|✦ Ultra · Ready|Running`) plus the current Pi thinking level through `ctx.ui.setStatus`; it must not implement a duplicate telemetry collector or footer renderer. Dove accepts only `fast`, `standard`, and `ultra`; Pi's native thinking level `max` and the extension installation profile `max` remain separate concepts. Changing Dove mode does not silently change Pi thinking; `/status` and `agent_doctor` show both values.
 - Cache diagnostics are a read-only projection of Pi session entries, not a second accounting system. `/status full` and `agent_doctor` may show both the latest-request cache hit rate and the cumulative session rate, plus cache read/write totals and a best-effort miss reason (`warmup`, `model-change`, `idle`, or `prefix-change`). For custom OpenRouter provider IDs, the adapter may add `x-session-affinity` from the current Pi session unless `DOVE_PI_DISABLE_SESSION_AFFINITY=1` is set; existing provider headers take precedence.
 - The last effective Pi thinking level is persisted through Pi's official `defaultThinkingLevel` setting when `thinking_level_select` fires, so a new session restores the user's previous level without a parallel configuration format.
@@ -831,6 +831,7 @@ dove-pi update [--check] [--verify quick|full|none] [--json] [--no-extensions]
 dove-pi repair [--verify quick|full|none] [--json]
 dove-pi rollback [--json]
 dove-pi uninstall --yes [--json]
+dove-pi --version
 DOVE_PI_HOME=<absolute test root>
 ```
 
@@ -861,17 +862,20 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 
 - The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
 - The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; unknown/interactive arguments alone may fall through to Pi. Adding a CLI command without updating and testing this router is an incomplete cross-layer change.
+- Exact `version` and `--version` requests are handled before Pi launch and read both release-locked identities from the packaged `package.json`, producing `Dove Pi <dove-version> (Pi <pi-version>)`.
 - Install into a staging sibling, run locked dependency installation and verification, move to an immutable version, then activate with atomic state replacement. Retain current and previous.
 - Install, update, and repair hold the same cross-process maintenance lock through application activation, managed-component reconciliation, final state persistence, launcher rewrite, and pruning. The component reconciler is an injected callback so the Python installer does not duplicate the TypeScript extension catalog; never release the maintenance lock and reacquire a separate component lock between these steps.
 - A healthy current release with the same stable version is an application no-op: no archive download and no `npm ci`. Launcher repair and Dove-managed extension reconciliation may still run.
+- The public Windows bootstrap owns prerequisite setup. It preserves compatible Python `>=3.10` and Node `>=22.19.0`; missing, incomplete, or older runtimes use only the exact reviewed winget package IDs `Python.Python.3.12` and `OpenJS.NodeJS.LTS`, refresh process PATH, and are revalidated before any archive activation. When winget is unavailable or the runtime remains unusable, fail with the exact package command and bootstrap retry instruction.
 - `repair --verify none` checks the local manifest and required runtime files. `quick` additionally runs typecheck and Pi smoke against each candidate; `full` also runs the complete test suite. A candidate that fails the requested level is not healthy and repair proceeds to previous, verified cache, or stable release.
 - A source checkout without complete `release.json` component/profile metadata is hydrated only after `npm ci` by the existing TypeScript `release:manifest` generator. The generated manifest preserves the source release ID/commit and becomes the installed manifest. A formal release manifest must instead match the lockfile and TypeScript extension catalog exactly; mismatch aborts before activation.
-- GitHub stable releases, not a checkout branch, are the update authority. Managed update never fetches, merges, or resets a checkout and never updates global Trellis.
+- GitHub stable releases, not a checkout branch, are the update authority. Bootstrap and managed update read `releases/latest/download/release.json` first and derive the fixed archive/checksum URLs from that response; the normal path never requires GitHub's unauthenticated REST API. A resolved tag, manifest version/release ID, archive manifest, and checksum must identify the same immutable release. Managed update never fetches, merges, or resets a checkout and never updates global Trellis.
 - `@mindfoldhq/trellis` is an exact application dependency. Project init/update invokes its absolute bundled entry; application updates never rewrite existing project `.trellis/`.
 - Reconcile only selected-profile extension identities through `pi install npm:<name>@<exact-version>`. Untargeted `pi update --extensions` is forbidden.
 - Optional component failures do not roll back an already verified application release; the reconciler records each failure as `degraded`, final state is written under the same maintenance lock, and offline doctor exposes the degraded ledger.
-- `--json` reserves stdout for exactly one JSON document on both success and failure. Human diagnostics and subprocess progress must not corrupt stdout. Mutating maintenance writes a bounded local success/failure log; `update --check` may read remote metadata but must not acquire the mutation lock, write state, or create a maintenance log.
+- `--json` reserves stdout for exactly one JSON document on both success and failure. During managed extension reconciliation, TypeScript redirects both Pi/npm child streams to stderr; Python captures only the TypeScript result stdout and inherits stderr live. Human diagnostics and subprocess progress must not corrupt stdout, and captured failure excerpts must be bounded. Mutating maintenance writes a bounded local success/failure log; `update --check` may read remote metadata but must not acquire the mutation lock, write state, or create a maintenance log.
 - A bootstrap-provided archive/checksum/tag is SHA-verified again and copied into the managed release cache before activation so `repair` can rebuild offline. Release tag, advertised version, and archive manifest version must match.
+- Release publication is tag-only and fail-closed. Before the GitHub publish action, readiness validation requires a clean source checkout, `v<package-version>`, exact package/lock/manifest components, one valid archive root, matching embedded and external manifests, a matching checksum, parseable PowerShell bootstrap, and exactly the four documented assets.
 - Tests and development E2E set a temporary `DOVE_PI_HOME`; they never modify real `%LOCALAPPDATA%\DovePi`, `~/.pi/agent`, global npm, or project state.
 
 ### 4. Validation & Error Matrix
@@ -887,8 +891,12 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 | `repair --verify quick/full` candidate fails its requested commands | Reject that candidate and continue the documented recovery order |
 | Packaged manifest differs from generated lock/catalog metadata | Abort before activation; do not silently rewrite a formal release |
 | GitHub tag/version differs from archive manifest | Reject the asset and preserve current |
+| GitHub REST API is rate-limited | Continue through direct stable Release assets; do not fall back to a mutable branch |
+| Python/Node is absent or too old during bootstrap | Install the reviewed exact winget package, refresh PATH, and revalidate before downloading/activating Dove |
+| winget is absent or the installed runtime remains unavailable | Stop before activation and print one exact install-and-retry action |
 | Optional managed extension fails | Activate app and record `degraded` |
 | A documented Dove command reaches the launcher | Route it to the bundled local CLI; never pass it through as a Pi prompt/argument |
+| Managed extension child emits progress | Stream it on stderr while preserving exactly one TypeScript JSON document on stdout |
 | JSON maintenance command fails | Emit one parseable error document on stdout and put human details in the local log/stderr |
 | `update --force` is supplied | Reject with a repair instruction; never reset a checkout |
 | Uninstall lacks `--yes` | Refuse and preserve all data |
@@ -910,8 +918,12 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Assert a source checkout with no generated metadata is hydrated after `npm ci`, while a mismatched formal release manifest is rejected.
 - Assert malformed lock metadata fails closed and JSON success/failure paths each produce exactly one parseable stdout document.
 - Assert bootstrap assets populate a verified cache usable by offline repair, and tag/archive version mismatch is rejected.
+- Assert direct manifest-first discovery succeeds without any REST API request and rejects malformed manifest, redirect-tag/version, and release-ID mismatches.
+- Dot-source bootstrap helpers under an explicit test-only switch and cover compatible, missing, outdated, winget-unavailable, and post-install-still-missing prerequisites without invoking real winget or changing machine/user PATH.
+- Assert release readiness rejects dirty, mismatched, unsafe, checksum-invalid, or partial four-asset bundles before the publication action.
 - Assert offline doctor reports current/previous managed state and degraded managed extensions without network access.
 - Invoke each documented non-maintenance command family through `dove_pi.py` and assert it reaches the Dove CLI rather than Pi; keep this routing test isolated from the real user installation and Pi state.
+- Assert `dove-pi --version` reports both packaged Dove and Pi versions without launching Pi, and exact-spec extension reconciliation remains serial with bounded progress on stderr and one JSON stdout result.
 - Assert valid V1 profile migration and corrupt-manifest fallback leave the checkout unchanged.
 - Assert uninstall removes only known managed children while preserving Pi data, project `.trellis/`, checkouts, third-party extensions, and unknown caller-owned files.
 - Validate release metadata against exact `package.json` and `package-lock.json` Pi, TUI, and Trellis versions.

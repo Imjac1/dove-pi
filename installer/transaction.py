@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from typing import Callable, Sequence
 from uuid import uuid4
 
@@ -24,7 +25,10 @@ CommandRunner = Callable[[Sequence[str], Path], None]
 
 
 def default_command_runner(command: Sequence[str], cwd: Path) -> None:
-    subprocess.run(list(command), cwd=cwd, check=True)
+    # Maintenance commands reserve stdout for their final machine-readable
+    # result. Keep dependency/test progress visible without allowing inherited
+    # npm output to corrupt `--json` callers.
+    subprocess.run(list(command), cwd=cwd, check=True, stdout=sys.stderr)
 
 
 def _copy_ignore(_directory: str, names: list[str]) -> set[str]:

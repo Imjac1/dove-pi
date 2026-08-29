@@ -24,6 +24,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:installer
+      - run: npm run doctor
       - run: npm run pi:smoke
       - run: npm run release:manifest -- "$env:RUNNER_TEMP\release.json"
       - name: Assemble release asset
@@ -37,6 +38,20 @@ jobs:
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath 'dove-pi-windows.zip'
           $hash = (Get-FileHash -LiteralPath 'dove-pi-windows.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content -LiteralPath 'dove-pi-windows.zip.sha256' -Value "$hash  dove-pi-windows.zip" -Encoding ascii
+      - name: Verify release readiness
+        shell: pwsh
+        run: >-
+          npm run release:check --
+          --tag "$env:GITHUB_REF_NAME"
+          --commit "$env:GITHUB_SHA"
+          --manifest "$env:RUNNER_TEMP\release.json"
+          --archive "dove-pi-windows.zip"
+          --checksum "dove-pi-windows.zip.sha256"
+          --bootstrap "install.ps1"
+          --asset "dove-pi-windows.zip"
+          --asset "dove-pi-windows.zip.sha256"
+          --asset "install.ps1"
+          --asset "$env:RUNNER_TEMP\release.json"
       - uses: softprops/action-gh-release@v2
         with:
           files: |

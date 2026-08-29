@@ -6,7 +6,7 @@ Dove Pi is a Windows-first personal agent runtime built on [Pi](https://github.c
 
 ### 1. Install
 
-Requires Windows, PowerShell 5.1+, Python 3.10+, and Node.js 22.19+. End users do not need Git or a source checkout.
+Requires Windows and PowerShell 5.1+. End users do not need Git or a source checkout. The installer preserves compatible Python 3.10+ and Node.js 22.19+ runtimes; when either is missing or too old, it installs `Python.Python.3.12` or `OpenJS.NodeJS.LTS` through winget, refreshes the current process PATH, and continues.
 
 ```powershell
 irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
@@ -20,7 +20,16 @@ Get-Content .\install-dove-pi.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-dove-pi.ps1
 ```
 
-The installer selects the full `max` extension profile and installs the application under `%LOCALAPPDATA%\DovePi`. It verifies the release zip with SHA-256, runs `npm ci` and quick verification, and activates the release only after those checks pass.
+The installer selects the full `max` extension profile and installs the application under `%LOCALAPPDATA%\DovePi`. It reads the stable Release `release.json` directly without depending on GitHub REST API quota, verifies the zip SHA-256 and manifest identity, runs `npm ci` plus quick verification, and activates only after those checks pass. If winget is unavailable, installation stops before Dove activation and prints the exact runtime install command and retry instruction.
+
+After installation, verify the Dove and underlying Pi versions plus overall health:
+
+```powershell
+dove-pi --version
+dove-pi doctor
+```
+
+Before the first stable Release is published, the `releases/latest` URL returns 404; do not substitute a `master` branch archive. The same command above becomes the supported entry point after publication.
 
 ### 2. Enter your project
 
@@ -121,7 +130,7 @@ dove-pi repair
 dove-pi rollback
 ```
 
-- `update` checks the latest stable GitHub Release. When the version is unchanged and the current release is healthy, it does not download the zip or run `npm ci`; it only repairs the launcher and reconciles Dove-managed extensions.
+- `update` checks the direct stable GitHub Release manifest without relying on the GitHub REST API. When the version is unchanged and the current release is healthy, it does not download the zip or run `npm ci`; it only repairs the launcher and reconciles Dove-managed extensions.
 - `repair` checks the current release and launcher. If current is damaged, it first recovers a runnable previous release, then rebuilds from stable when needed.
 - `rollback` atomically switches the application to previous. Pi extensions live in user state, so Dove does not pretend they roll back atomically with the app.
 
@@ -221,13 +230,15 @@ npm test
 npm run test:installer
 npm run doctor
 npm run pi:smoke
+npm run release:check -- --help
 ```
 
-Publishing is triggered only by a `v*` tag that matches `package.json`. Ordinary pushes do not publish or modify user installations. Releases currently use SHA-256 integrity verification; publisher code signing is not yet included.
+Publishing is triggered only by a `v*` tag that exactly matches `package.json`. Before the publish action, CI verifies a clean checkout, manifest, archive shape, SHA-256, bootstrap syntax, and exactly four assets: `dove-pi-windows.zip`, its checksum, `install.ps1`, and `release.json`. Ordinary pushes do not publish or modify user installations; publisher code signing is not yet included.
 
 ## Troubleshooting
 
 - `dove-pi` is not found: open a new terminal or run `%LOCALAPPDATA%\DovePi\bin\dove-pi.cmd` directly.
+- Python, Node.js, or npm is missing/old: rerun the public bootstrap at the top; it preserves compatible runtimes and installs only missing prerequisites.
 - Current is damaged: run `dove-pi repair`; the launcher can fall back when previous is complete.
 - An extension is degraded: close Pi/Node processes that may lock native binaries, then run `dove-pi repair`.
 - The project has no Trellis state: run `dove-pi project init` at its root.

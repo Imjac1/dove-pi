@@ -6,7 +6,7 @@ Dove Pi 是基于 [Pi](https://github.com/badlogic/pi-mono) 的 Windows 优先�
 
 ### 1. 安装
 
-需要 Windows、PowerShell 5.1+、Python 3.10+ 和 Node.js 22.19+。普通用户不需要 Git 或源码仓库。
+需要 Windows 和 PowerShell 5.1+。普通用户不需要 Git 或源码仓库；安装器会保留已兼容的 Python 3.10+、Node.js 22.19+，缺失或版本过旧时通过 winget 安装 `Python.Python.3.12` 与 `OpenJS.NodeJS.LTS`，再刷新当前进程 PATH 并继续。
 
 ```powershell
 irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
@@ -20,7 +20,16 @@ Get-Content .\install-dove-pi.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-dove-pi.ps1
 ```
 
-安装器默认装入完整的 `max` 扩展 profile，并把程序放到 `%LOCALAPPDATA%\DovePi`。下载的 release zip 会先校验 SHA-256，完成 `npm ci` 和快速验证后才会激活。
+安装器默认装入完整的 `max` 扩展 profile，并把程序放到 `%LOCALAPPDATA%\DovePi`。它直接读取 stable Release 的 `release.json`，不依赖 GitHub REST API 配额；下载的 release zip 会先校验 SHA-256 和 manifest 身份，完成 `npm ci` 与快速验证后才会激活。若 winget 不可用，安装会在 Dove 激活前停止，并输出精确的运行时安装命令和重试提示。
+
+安装完成后可直接确认 Dove 与底层 Pi 版本及整体健康状态：
+
+```powershell
+dove-pi --version
+dove-pi doctor
+```
+
+首个 stable Release 发布前，`releases/latest` 地址会返回 404；不要改用 `master` 分支归档。Release 发布后仍使用上面同一条命令。
 
 ### 2. 进入你的项目
 
@@ -121,7 +130,7 @@ dove-pi repair
 dove-pi rollback
 ```
 
-- `update` 查询最新 stable GitHub Release。版本未变化且当前安装健康时，不下载 zip、不执行 `npm ci`；只修复 launcher 并对齐 Dove 自己管理的扩展。
+- `update` 通过 stable GitHub Release 的直接 manifest 查询更新，不依赖 GitHub REST API。版本未变化且当前安装健康时，不下载 zip、不执行 `npm ci`；只修复 launcher 并对齐 Dove 自己管理的扩展。
 - `repair` 检查当前 release 和 launcher；当前版本损坏时优先恢复可运行的 previous，再按需重建 stable release。
 - `rollback` 原子切回 previous 应用版本。Pi 用户扩展位于用户目录，因此不会被伪装成与应用一起原子回滚。
 
@@ -221,13 +230,15 @@ npm test
 npm run test:installer
 npm run doctor
 npm run pi:smoke
+npm run release:check -- --help
 ```
 
-发布仅由与 `package.json` 版本匹配的 `v*` tag 触发。普通 push 不会发布，也不会改变用户安装。当前 release 使用 SHA-256 完整性校验；发布者代码签名尚未加入。
+发布仅由与 `package.json` 版本精确匹配的 `v*` tag 触发。发布动作之前，CI 会验证干净 checkout、manifest、归档结构、SHA-256、Bootstrap 语法，以及恰好四个资产：`dove-pi-windows.zip`、checksum、`install.ps1` 和 `release.json`。普通 push 不会发布，也不会改变用户安装；发布者代码签名尚未加入。
 
 ## 常见问题
 
 - `dove-pi` 找不到：打开一个新终端，或直接运行 `%LOCALAPPDATA%\DovePi\bin\dove-pi.cmd`。
+- Python、Node.js 或 npm 缺失/过旧：重新运行顶部公开 Bootstrap；它会保留兼容版本并补齐缺失运行时。
 - current 损坏：运行 `dove-pi repair`；launcher 可在 previous 完整时自动回退。
 - 扩展 degraded：关闭可能锁定 native binary 的 Pi/Node 进程，再运行 `dove-pi repair`。
 - 项目没有 Trellis：在项目根执行 `dove-pi project init`。

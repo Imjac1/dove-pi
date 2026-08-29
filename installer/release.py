@@ -8,14 +8,23 @@ import re
 import shutil
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 import zipfile
 
 from .layout import is_path_within
 
 
-GITHUB_LATEST_RELEASE = "https://api.github.com/repos/Imjac1/dove-pi/releases/latest"
+GITHUB_RELEASE_BASE = "https://github.com/Imjac1/dove-pi/releases/latest/download/"
+GITHUB_LATEST_MANIFEST = urljoin(GITHUB_RELEASE_BASE, "release.json")
+# Kept as a compatibility import for callers that supplied the old constant.
+# Its value is now the direct Release asset, never the GitHub REST endpoint.
+GITHUB_LATEST_RELEASE = GITHUB_LATEST_MANIFEST
 RELEASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$")
+VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+EXPECTED_RUNTIME = {"python": ">=3.10", "node": ">=22.19.0"}
+EXPECTED_COMPONENTS = {"pi", "piTui", "trellis"}
+EXPECTED_PROFILES = {"minimal", "dev", "research", "security", "max"}
 
 
 @dataclass(frozen=True)
@@ -82,6 +91,23 @@ def _string_map(value: object) -> dict[str, str]:
     return {str(key): item for key, item in value.items() if isinstance(key, str) and isinstance(item, str) and item}
 
 
+def validate_stable_manifest(manifest: ReleaseManifest) -> None:
+    if not VERSION_PATTERN.fullmatch(manifest.version):
+        raise RuntimeError(f"release.json has an invalid version: {manifest.version}")
+    if manifest.platform.lower() != "windows":
+        raise RuntimeError(f"The latest Dove Pi release targets {manifest.platform}, not windows")
+    if not manifest.release_id.startswith(f"{manifest.version}+"):
+        raise RuntimeError(
+            f"release.json releaseId {manifest.release_id} does not identify version {manifest.version}",
+        )
+    if manifest.runtime != EXPECTED_RUNTIME:
+        raise RuntimeError("release.json has an invalid Python/Node runtime contract")
+    if set(manifest.components) != EXPECTED_COMPONENTS:
+        raise RuntimeError("release.json must contain exactly the Pi, Pi TUI, and Trellis components")
+    if set(manifest.profiles) != EXPECTED_PROFILES:
+        raise RuntimeError("release.json must contain exactly the supported extension profiles")
+
+
 @dataclass(frozen=True)
 class ReleaseAsset:
     tag: str
@@ -89,36 +115,57 @@ class ReleaseAsset:
     archive_url: str
     checksum_url: str
     manifest_url: str | None = None
+    release_id: str | None = None
+    manifest: ReleaseManifest | None = None
 
 
-def _read_json_url(url: str) -> object:
-    request = Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "dove-pi-installer"})
+def _read_json_url(url: str) -> tuple[object, str]:
+    request = Request(url, headers={"Accept": "application/json", "User-Agent": "dove-pi-installer"})
     try:
         with urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+            value = json.loads(response.read().decode("utf-8"))
+            final_url = response.geturl() if hasattr(response, "geturl") else url
+            return value, final_url if isinstance(final_url, str) and final_url else url
     except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, UnicodeError) as error:
         raise RuntimeError(f"Unable to read Dove Pi release metadata from GitHub: {error}") from error
 
 
-def fetch_latest_release(url: str = GITHUB_LATEST_RELEASE) -> ReleaseAsset:
-    value = _read_json_url(url)
-    if not isinstance(value, dict):
-        raise RuntimeError("GitHub returned invalid Dove Pi release metadata")
-    tag = value.get("tag_name")
-    if not isinstance(tag, str) or not tag:
-        raise RuntimeError("The latest Dove Pi release has no tag")
-    assets = value.get("assets")
-    if not isinstance(assets, list):
-        raise RuntimeError("The latest Dove Pi release has no assets")
-    by_name: dict[str, str] = {}
-    for asset in assets:
-        if isinstance(asset, dict) and isinstance(asset.get("name"), str) and isinstance(asset.get("browser_download_url"), str):
-            by_name[asset["name"]] = asset["browser_download_url"]
+def _release_tag_from_asset_url(url: str) -> str | None:
+    parts = [unquote(part) for part in urlsplit(url).path.split("/") if part]
+    for index in range(len(parts) - 3):
+        if parts[index:index + 2] == ["releases", "download"] and parts[index + 3] == "release.json":
+            return parts[index + 2]
+    return None
+
+
+def fetch_latest_release(url: str = GITHUB_LATEST_MANIFEST) -> ReleaseAsset:
+    value, final_manifest_url = _read_json_url(url)
+    manifest = ReleaseManifest.from_json(value)
+    validate_stable_manifest(manifest)
+    expected_tag = f"v{manifest.version}"
+    resolved_tag = _release_tag_from_asset_url(final_manifest_url)
+    if resolved_tag is not None and resolved_tag != expected_tag:
+        raise RuntimeError(
+            f"Release tag {resolved_tag} does not match release.json version {manifest.version}",
+        )
     archive_name = "dove-pi-windows.zip"
     checksum_name = f"{archive_name}.sha256"
-    if archive_name not in by_name or checksum_name not in by_name:
-        raise RuntimeError(f"Release {tag} is missing {archive_name} or its SHA-256 asset")
-    return ReleaseAsset(tag, tag.removeprefix("v"), by_name[archive_name], by_name[checksum_name], by_name.get("release.json"))
+    # GitHub commonly follows the release redirect all the way to a signed
+    # objects.githubusercontent.com URL. Sibling filenames under that object
+    # URL are not release assets, so only derive a tag-specific base when the
+    # resolved URL still has GitHub's canonical release path. Otherwise retain
+    # the original latest/download channel; embedded manifest identity catches
+    # a latest-release change between metadata and archive requests.
+    asset_base = final_manifest_url if resolved_tag is not None else url
+    return ReleaseAsset(
+        expected_tag,
+        manifest.version,
+        urljoin(asset_base, archive_name),
+        urljoin(asset_base, checksum_name),
+        final_manifest_url,
+        manifest.release_id,
+        manifest,
+    )
 
 
 def download_file(url: str, destination: Path) -> None:

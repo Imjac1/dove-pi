@@ -35,6 +35,7 @@ ICON_FONT_PACKAGE = "DEVCOM.JetBrainsMonoNerdFont"
 MIN_NODE = (22, 19, 0)
 PROFILES = ("minimal", "dev", "research", "security", "max")
 DEFAULT_PROFILE = "max"
+PUBLIC_BOOTSTRAP = "irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex"
 
 
 def executable(name: str) -> str:
@@ -69,13 +70,45 @@ def format_version(version: tuple[int, int, int]) -> str:
     return ".".join(str(part) for part in version)
 
 
+def package_versions(package_path: Path | None = None) -> tuple[str, str]:
+    """Read the release-locked Dove and Pi versions from package.json."""
+    path = package_path or PROJECT_ROOT / "package.json"
+    try:
+        package = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"Unable to read Dove Pi version metadata at {path}: {error}") from error
+    dove = package.get("version") if isinstance(package, dict) else None
+    dependencies = package.get("dependencies") if isinstance(package, dict) else None
+    pi = dependencies.get("@earendil-works/pi-coding-agent") if isinstance(dependencies, dict) else None
+    if not isinstance(dove, str) or not dove.strip() or not isinstance(pi, str) or not pi.strip():
+        raise RuntimeError(f"Dove Pi version metadata is incomplete at {path}")
+    return dove.strip(), pi.strip()
+
+
+def print_version() -> None:
+    dove, pi = package_versions()
+    print(f"Dove Pi {dove} (Pi {pi})")
+
+
 def validate_managed_prerequisites() -> None:
     if sys.version_info < (3, 10):
-        raise RuntimeError(f"Python 3.10 or newer is required; found {sys.version.split()[0]}.")
-    version = node_version()
+        raise RuntimeError(
+            f"Python 3.10 or newer is required; found {sys.version.split()[0]}. "
+            f"Rerun the Dove Pi bootstrap: {PUBLIC_BOOTSTRAP}",
+        )
+    try:
+        version = node_version()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        raise RuntimeError(f"{error}. Rerun the Dove Pi bootstrap: {PUBLIC_BOOTSTRAP}") from error
     if version < MIN_NODE:
-        raise RuntimeError(f"Node.js {format_version(MIN_NODE)} or newer is required; found {format_version(version)}.")
-    executable("npm")
+        raise RuntimeError(
+            f"Node.js {format_version(MIN_NODE)} or newer is required; found {format_version(version)}. "
+            f"Rerun the Dove Pi bootstrap: {PUBLIC_BOOTSTRAP}",
+        )
+    try:
+        executable("npm")
+    except RuntimeError as error:
+        raise RuntimeError(f"{error}. Rerun the Dove Pi bootstrap: {PUBLIC_BOOTSTRAP}") from error
 
 
 def install(*, skip_checks: bool = False, no_path: bool = False, extension_profile: str | None = None, install_extensions: bool = True, clean: bool = False, verify: str | None = None, install_font: bool = True, update_extensions: bool = True, update_trellis: bool = True) -> None:
@@ -295,15 +328,20 @@ def run_installed_cli_json(install_root: Path, arguments: Sequence[str]) -> dict
     completed = subprocess.run(
         [node, "--import", loader.as_uri(), str(cli), *arguments],
         cwd=Path.cwd(),
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=None,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
+    # Real child stderr is inherited so long-running extension reconciliation
+    # remains visibly active. A mocked CompletedProcess may still carry stderr.
     if completed.stderr:
         print(completed.stderr.rstrip(), file=sys.stderr)
     if completed.returncode != 0:
-        raise RuntimeError(f"Managed Dove Pi command failed with exit {completed.returncode}: {completed.stdout.strip() or completed.stderr.strip()}")
+        details = completed.stdout.strip() or (completed.stderr.strip() if completed.stderr else "see the extension progress above")
+        details = details[-500:]
+        raise RuntimeError(f"Managed Dove Pi command failed with exit {completed.returncode}: {details}")
     try:
         value = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
@@ -507,7 +545,7 @@ def print_help() -> None:
     print("""Dove Pi installer and launcher
 
 Install or maintain the managed Dove Pi application:
-  python dove_pi.py install
+  irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
   dove-pi update          install the latest stable GitHub release atomically
   dove-pi update --check  report available stable updates without changing anything
   dove-pi repair          repair the current managed release or recover the previous one
@@ -526,6 +564,7 @@ Common controls:
   --no-extension-updates   install missing Dove extensions but keep configured versions
 
 Advanced controls:
+  python dove_pi.py install  install from a source checkout (compatibility)
   --profile PROFILE        max, or minimal/dev/research/security (default: stored profile, else max)
   --no-extensions          skip Pi extension installation
 
@@ -555,6 +594,9 @@ Cache compatibility:
 def main(arguments: Sequence[str]) -> int:
     if arguments and arguments[0] in {"help", "-h", "--help"}:
         print_help()
+        return 0
+    if list(arguments) in (["version"], ["--version"]):
+        print_version()
         return 0
     if arguments and arguments[0] in {"install", "setup"}:
         options = parse_install(arguments[1:])

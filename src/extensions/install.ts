@@ -23,6 +23,14 @@ export interface ExtensionInstallFailure {
 	readonly error: string;
 }
 
+export interface ExtensionInstallProgress {
+	readonly phase: "start" | "package" | "complete";
+	readonly current: number;
+	readonly total: number;
+	readonly message: string;
+	readonly extensionId?: string;
+}
+
 export interface ExtensionInstallOptions {
 	readonly cwd?: string;
 	readonly piEntry?: string;
@@ -35,6 +43,8 @@ export interface ExtensionInstallOptions {
 	readonly updateConfigured?: boolean;
 	/** Repair a platform-native helper before retrying a known extension install. */
 	readonly repairNativeDependency?: (extensionId: string, cwd: string) => Promise<boolean>;
+	/** Receive bounded serial-stage feedback; defaults to stderr to preserve JSON stdout. */
+	readonly onProgress?: (event: ExtensionInstallProgress) => void;
 	readonly run?: (command: string, args: readonly string[], cwd: string) => Promise<void>;
 }
 
@@ -51,6 +61,7 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	const continueOnError = options.continueOnError ?? true;
 	const updateConfigured = options.updateConfigured ?? true;
 	const repairNativeDependency = options.repairNativeDependency ?? repairAstGrepNativeDependency;
+	const onProgress = options.onProgress ?? ((event: ExtensionInstallProgress) => console.error(event.message));
 	const installed: string[] = [];
 	const skipped: string[] = [];
 	const failed: ExtensionInstallFailure[] = [];
@@ -58,6 +69,13 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	let updated = false;
 	let updateStatus: ExtensionUpdateStatus;
 	let updateError: string | undefined;
+	const profilePackages = getProfilePackages(profile);
+	onProgress({
+		phase: "start",
+		current: 0,
+		total: profilePackages.length,
+		message: `Pi extensions: reconciling ${profilePackages.length} catalog entries serially.`,
+	});
 
 	// Dove owns only the catalog entries in the selected profile. Reconcile
 	// those identities through Pi's official exact-spec install path; never run
@@ -74,15 +92,28 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 		updateStatus = "unchanged";
 	}
 
-	for (const entry of getProfilePackages(profile)) {
+	// Pi 0.84.3 has no public persistent multi-source install API. Its npm
+	// batch helper is private, while resolveExtensionSources() remains serial
+	// and does not persist settings. Keep writes to the shared Pi/npm root
+	// serialized and expose bounded progress instead of reaching into internals.
+	for (const [index, entry] of profilePackages.entries()) {
 		const existing = configuredPackages.find((value) => matchesConfiguredPackage(value, entry));
-		if (existing !== undefined && (!updateConfigured || matchesExactConfiguredPackage(existing, entry))) {
-			if (verbose) console.log(`Skipping ${entry.id}; already configured in Pi.`);
+		const alreadyConfigured = existing !== undefined && (!updateConfigured || matchesExactConfiguredPackage(existing, entry));
+		const action = alreadyConfigured ? "Skipping" : existing === undefined ? "Installing" : "Reconciling";
+		onProgress({
+			phase: "package",
+			current: index + 1,
+			total: profilePackages.length,
+			extensionId: entry.id,
+			message: `Pi extensions [${index + 1}/${profilePackages.length}]: ${action} ${entry.id}.`,
+		});
+		if (alreadyConfigured) {
+			if (verbose) console.error(`Skipping ${entry.id}; already configured in Pi.`);
 			skipped.push(entry.id);
 			continue;
 		}
 		const desiredSpec = exactInstallSpec(entry);
-		if (verbose) console.log(`${existing === undefined ? "Installing" : "Reconciling"} ${entry.id} (${desiredSpec})...`);
+		if (verbose) console.error(`${existing === undefined ? "Installing" : "Reconciling"} ${entry.id} (${desiredSpec})...`);
 		try {
 			await run(piEntry, ["install", desiredSpec], cwd);
 			installed.push(entry.id);
@@ -120,6 +151,12 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 		updateStatus = "failed";
 		updateError = failed.map((entry) => `${entry.id}: ${entry.error}`).join("; ");
 	}
+	onProgress({
+		phase: "complete",
+		current: profilePackages.length,
+		total: profilePackages.length,
+		message: `Pi extensions: ${installed.length} installed/reconciled, ${skipped.length} already current, ${failed.length} failed.`,
+	});
 	return { profile, updated, updateStatus, ...(updateError ? { updateError } : {}), installed, skipped, failed };
 }
 
@@ -192,7 +229,9 @@ function runNpmInstall(args: readonly string[], cwd: string): Promise<boolean> {
 		const childArgs = windows ? ["/d", "/s", "/c", "npm.cmd", ...args] : [...args];
 		const child = spawn(executable, childArgs, {
 			cwd,
-			stdio: "inherit",
+			// The extensions CLI owns stdout as a JSON protocol. Native npm
+			// progress remains visible, but must not corrupt that document.
+			stdio: ["inherit", process.stderr, process.stderr],
 			windowsHide: true,
 			env: npmEnvironment(),
 		});
@@ -231,7 +270,9 @@ function runPiInstall(command: string, args: readonly string[], cwd: string): Pr
 	return new Promise((resolve, reject) => {
 		const child = spawn(process.execPath, [command, ...args], {
 			cwd,
-			stdio: "inherit",
+			// Pi prints package-manager progress to stdout. Route both child
+			// streams to stderr so the parent CLI emits exactly one JSON value.
+			stdio: ["inherit", process.stderr, process.stderr],
 			windowsHide: true,
 			env: npmEnvironment(),
 		});
@@ -244,12 +285,19 @@ function runPiInstall(command: string, args: readonly string[], cwd: string): Pr
 	});
 }
 
-function npmEnvironment(): NodeJS.ProcessEnv {
-	const env = { ...process.env };
+export function npmEnvironment(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+	const env = { ...base };
 	// @ast-grep/cli ships the Windows executable as an optional dependency.
 	// Force inclusion without carrying npm's deprecated `optional` alias into
 	// the child process (which makes current npm print a warning per package).
 	delete env.npm_config_optional;
 	env.npm_config_include = "optional";
+	// Pi installs profile entries one at a time in the same managed npm root.
+	// Repeating advisory network work for every package adds latency without
+	// improving package integrity; keep actionable warnings and errors visible.
+	env.npm_config_audit = "false";
+	env.npm_config_fund = "false";
+	env.npm_config_progress = "false";
+	env.npm_config_update_notifier = "false";
 	return env;
 }

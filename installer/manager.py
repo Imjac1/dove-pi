@@ -20,6 +20,7 @@ from .release import (
     fetch_latest_release,
     read_expected_sha256,
     safe_extract_zip,
+    validate_stable_manifest,
     verify_sha256,
 )
 from .state import InstallState, ManagedExtensionState, ReleaseRef, load_state, write_state
@@ -194,10 +195,19 @@ class ManagedInstaller:
             state = load_state(self.layout)
             state.profile = profile or (_legacy_profile(source) if not self.layout.state_path.exists() else None) or state.profile
             manifest = source_release_manifest(source)
+            if source_asset is not None:
+                archive, checksum, tag = source_asset
+                self._validate_local_asset(archive, checksum, tag=tag, manifest=manifest)
             prepared = self.transaction.prepare_source(source, manifest, verify=verify, force_rebuild=force_rebuild)
             if source_asset is not None:
                 archive, checksum, tag = source_asset
-                self._cache_local_asset(archive, checksum, tag=tag, version=prepared.manifest.version)
+                self._cache_local_asset(
+                    archive,
+                    checksum,
+                    tag=tag,
+                    version=prepared.manifest.version,
+                    release_id=prepared.manifest.release_id,
+                )
             state = self.transaction.activate(prepared, state, command="install")
             state = self._reconcile_components(state, reconcile_components, command="install")
             write_managed_launchers(self.layout)
@@ -213,9 +223,10 @@ class ManagedInstaller:
     ) -> MaintenanceResult:
         state = load_state(self.layout)
         asset = self.fetch_release()
+        current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
         if check:
             current = state.current.release_id if state.current else None
-            update_available = state.current is None or state.current.version != asset.version or not self._is_runnable_ref(state.current)
+            update_available = not current_matches_asset or not self._is_runnable_ref(state.current)
             return MaintenanceResult(
                 "update-check",
                 update_available,
@@ -227,7 +238,8 @@ class ManagedInstaller:
             )
         with MaintenanceLock(self.layout.lock_path, "update"):
             state = load_state(self.layout)
-            if state.current and state.current.version == asset.version and self._is_runnable_ref(state.current):
+            current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
+            if current_matches_asset and self._is_runnable_ref(state.current):
                 state = self._reconcile_components(state, reconcile_components, command="update")
                 write_managed_launchers(self.layout)
                 if reconcile_components is None:
@@ -312,24 +324,67 @@ class ManagedInstaller:
             download_file(asset.archive_url, archive)
             download_file(asset.checksum_url, checksum)
             verify_sha256(archive, read_expected_sha256(checksum))
+        source, manifest = self._extract_release_root(archive, temporary / "extracted")
+        if (
+            manifest.version != asset.version
+            or asset.tag.removeprefix("v") != manifest.version
+            or (asset.release_id is not None and manifest.release_id != asset.release_id)
+            or (asset.manifest is not None and manifest != asset.manifest)
+        ):
+            raise TransactionError(
+                "release",
+                f"Release metadata mismatch: expected {asset.tag} ({asset.release_id or asset.version}), "
+                f"archive {manifest.version} ({manifest.release_id})",
+            )
         descriptor = cache / "asset.json"
         descriptor_tmp = cache / f"asset.json.tmp-{os.getpid()}"
-        descriptor_tmp.write_text(json.dumps({"tag": asset.tag, "version": asset.version}, indent=2) + "\n", encoding="utf-8")
+        descriptor_tmp.write_text(
+            json.dumps({"tag": asset.tag, "version": asset.version, "releaseId": manifest.release_id}, indent=2) + "\n",
+            encoding="utf-8",
+        )
         os.replace(descriptor_tmp, descriptor)
-        extracted = temporary / "extracted"
+        return source, manifest
+
+    def _validate_local_asset(
+        self,
+        archive: Path,
+        checksum: Path,
+        *,
+        tag: str,
+        manifest: ReleaseManifest,
+    ) -> None:
+        if tag != f"v{manifest.version}":
+            raise TransactionError(
+                "release",
+                f"Bootstrap tag {tag} does not match archive version {manifest.version}",
+            )
+        verify_sha256(archive, read_expected_sha256(checksum))
+        validate_stable_manifest(manifest)
+        with TemporaryDirectory(prefix="dove-pi-bootstrap-asset-") as temporary:
+            _source, embedded = self._extract_release_root(archive, Path(temporary) / "extracted")
+        if embedded != manifest:
+            raise TransactionError(
+                "release",
+                "Bootstrap archive release.json does not match the extracted release source",
+            )
+
+    @staticmethod
+    def _extract_release_root(archive: Path, extracted: Path) -> tuple[Path, ReleaseManifest]:
         safe_extract_zip(archive, extracted)
         candidates = [path.parent for path in extracted.rglob("release.json") if (path.parent / "dove_pi.py").is_file()]
         if len(candidates) != 1:
             raise TransactionError("release", "The Dove Pi archive must contain exactly one release root")
-        manifest = ReleaseManifest.read(candidates[0] / "release.json")
-        if manifest.version != asset.version or asset.tag.removeprefix("v") != manifest.version:
-            raise TransactionError(
-                "release",
-                f"Release metadata mismatch: GitHub {asset.tag}, archive {manifest.version} ({manifest.release_id})",
-            )
-        return candidates[0], manifest
+        return candidates[0], ReleaseManifest.read(candidates[0] / "release.json")
 
-    def _cache_local_asset(self, archive: Path, checksum: Path, *, tag: str, version: str) -> None:
+    def _cache_local_asset(
+        self,
+        archive: Path,
+        checksum: Path,
+        *,
+        tag: str,
+        version: str,
+        release_id: str | None = None,
+    ) -> None:
         expected = read_expected_sha256(checksum)
         verify_sha256(archive, expected)
         cache_key = sha256(f"{tag}\0{version}".encode("utf-8")).hexdigest()[:16]
@@ -341,7 +396,10 @@ class ManagedInstaller:
             os.replace(temporary, cache / name)
         descriptor = cache / "asset.json"
         descriptor_tmp = cache / f"asset.json.tmp-{os.getpid()}"
-        descriptor_tmp.write_text(json.dumps({"tag": tag, "version": version}, indent=2) + "\n", encoding="utf-8")
+        descriptor_tmp.write_text(
+            json.dumps({"tag": tag, "version": version, "releaseId": release_id}, indent=2) + "\n",
+            encoding="utf-8",
+        )
         os.replace(descriptor_tmp, descriptor)
 
     def _cached_asset(self, version: str | None) -> ReleaseAsset | None:
@@ -355,7 +413,14 @@ class ManagedInstaller:
                 archive = descriptor.parent / "dove-pi-windows.zip"
                 checksum = descriptor.parent / "dove-pi-windows.zip.sha256"
                 verify_sha256(archive, read_expected_sha256(checksum))
-                return ReleaseAsset(value["tag"], version, archive.as_uri(), checksum.as_uri())
+                release_id = value.get("releaseId")
+                return ReleaseAsset(
+                    value["tag"],
+                    version,
+                    archive.as_uri(),
+                    checksum.as_uri(),
+                    release_id=release_id if isinstance(release_id, str) else None,
+                )
             except (OSError, RuntimeError, json.JSONDecodeError, UnicodeError):
                 continue
         return None
@@ -369,6 +434,19 @@ class ManagedInstaller:
 
     def _is_runnable_ref(self, reference: ReleaseRef) -> bool:
         return self._verify_ref(reference, verify="none")
+
+    @staticmethod
+    def _matches_asset(reference: ReleaseRef, asset: ReleaseAsset) -> bool:
+        if reference.version != asset.version:
+            return False
+        if asset.release_id is not None and reference.release_id != asset.release_id:
+            return False
+        if asset.manifest is not None:
+            try:
+                return ReleaseManifest.read(reference.install_path / "release.json") == asset.manifest
+            except RuntimeError:
+                return False
+        return True
 
     def _reconcile_components(
         self,

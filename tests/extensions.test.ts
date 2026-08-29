@@ -6,10 +6,20 @@ import { tmpdir } from "node:os";
 import { exactInstallSpec, getProfilePackages } from "../src/extensions/catalog.ts";
 import { getExtension } from "../src/extensions/catalog.ts";
 import { checkProfileConflicts, inspectExtensionProfile } from "../src/extensions/doctor.ts";
-import { installExtensionProfile } from "../src/extensions/install.ts";
+import { installExtensionProfile, npmEnvironment } from "../src/extensions/install.ts";
 import { projectExtensionCapabilities } from "../src/extensions/capabilities.ts";
 
 describe("extension profiles", () => {
+	it("keeps optional native packages while disabling repeated npm advisory work", () => {
+		const env = npmEnvironment({ npm_config_optional: "true", KEEP_ME: "yes" });
+		assert.equal(env.KEEP_ME, "yes");
+		assert.equal(env.npm_config_optional, undefined);
+		assert.equal(env.npm_config_include, "optional");
+		assert.equal(env.npm_config_audit, "false");
+		assert.equal(env.npm_config_fund, "false");
+		assert.equal(env.npm_config_progress, "false");
+		assert.equal(env.npm_config_update_notifier, "false");
+	});
 	it("projects configured Pi plugins as host-owned capabilities without registering Core executors", () => {
 		const configured = ["npm:pi-open-tui@0.2.15", "npm:pi-web-access@0.24.2", "npm:pi-mcp-adapter@2.27.0"];
 		const projected = projectExtensionCapabilities(configured, ["web_search"]);
@@ -100,13 +110,15 @@ describe("extension profiles", () => {
 
 	it("installs a profile in catalog order through Pi", async () => {
 		const calls: string[][] = [];
+		const progress: Array<{ phase: string; current: number; total: number; extensionId?: string }> = [];
 		const result = await installExtensionProfile("minimal", {
 			cwd: process.cwd(),
 			piEntry: "pi-entry",
 			configuredPackages: [],
 			run: async (command, args) => {
-			calls.push([command, ...args]);
-		},
+				calls.push([command, ...args]);
+			},
+			onProgress: (event) => progress.push(event),
 		});
 		assert.deepEqual(result.installed, ["extension-settings", "open-tui", "raw-paste", "caffeinate"]);
 		assert.equal(result.updateStatus, "skipped-empty");
@@ -116,6 +128,14 @@ describe("extension profiles", () => {
 			["pi-entry", "install", "npm:pi-open-tui@0.2.15"],
 			["pi-entry", "install", "npm:@tmustier/pi-raw-paste@0.1.3"],
 			["pi-entry", "install", "npm:@narumitw/pi-caffeinate@0.49.5"],
+		]);
+		assert.deepEqual(progress.map(({ phase, current, total, extensionId }) => ({ phase, current, total, extensionId })), [
+			{ phase: "start", current: 0, total: 4, extensionId: undefined },
+			{ phase: "package", current: 1, total: 4, extensionId: "extension-settings" },
+			{ phase: "package", current: 2, total: 4, extensionId: "open-tui" },
+			{ phase: "package", current: 3, total: 4, extensionId: "raw-paste" },
+			{ phase: "package", current: 4, total: 4, extensionId: "caffeinate" },
+			{ phase: "complete", current: 4, total: 4, extensionId: undefined },
 		]);
 	});
 
