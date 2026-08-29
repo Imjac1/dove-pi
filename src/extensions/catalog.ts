@@ -283,8 +283,42 @@ export function getProfilePackages(profile: ExtensionProfile): ExtensionPackageD
 	return PROFILE_PACKAGE_IDS[profile].map(getExtension);
 }
 
-export function matchesConfiguredPackage(configured: string, entry: ExtensionPackageDefinition): boolean {
-	return configured === entry.installSpec || configured === entry.packageName || configured.includes(entry.packageName);
+export function exactInstallSpec(entry: ExtensionPackageDefinition): string {
+	return `npm:${entry.packageName}@${entry.currentVersion}`;
+}
+
+export function configuredPackageSource(configured: unknown): string | undefined {
+	if (typeof configured === "string") return configured.trim() || undefined;
+	if (typeof configured === "object" && configured !== null && "source" in configured) {
+		const source = (configured as { source?: unknown }).source;
+		return typeof source === "string" && source.trim() ? source.trim() : undefined;
+	}
+	return undefined;
+}
+
+export function npmPackageIdentity(sourceValue: unknown): string | undefined {
+	const source = configuredPackageSource(sourceValue);
+	if (!source) return undefined;
+	let spec = source.startsWith("npm:") ? source.slice(4) : source;
+	if (spec.startsWith("@")) {
+		const slash = spec.indexOf("/");
+		if (slash < 0) return spec;
+		const versionSeparator = spec.indexOf("@", slash);
+		return versionSeparator < 0 ? spec : spec.slice(0, versionSeparator);
+	}
+	const versionSeparator = spec.indexOf("@");
+	return versionSeparator < 0 ? spec : spec.slice(0, versionSeparator);
+}
+
+export function matchesConfiguredPackage(configured: unknown, entry: ExtensionPackageDefinition): boolean {
+	return npmPackageIdentity(configured) === entry.packageName;
+}
+
+export function matchesExactConfiguredPackage(configured: unknown, entry: ExtensionPackageDefinition): boolean {
+	const source = configuredPackageSource(configured);
+	if (!source) return false;
+	const normalized = source.startsWith("npm:") ? source : `npm:${source}`;
+	return normalized === exactInstallSpec(entry);
 }
 
 export function isExtensionProfile(value: string): value is ExtensionProfile {

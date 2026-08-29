@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { getProfilePackages } from "../src/extensions/catalog.ts";
+import { exactInstallSpec, getProfilePackages } from "../src/extensions/catalog.ts";
 import { getExtension } from "../src/extensions/catalog.ts";
 import { checkProfileConflicts, inspectExtensionProfile } from "../src/extensions/doctor.ts";
 import { installExtensionProfile } from "../src/extensions/install.ts";
@@ -102,10 +102,10 @@ describe("extension profiles", () => {
 		assert.equal(result.updateStatus, "skipped-empty");
 		assert.deepEqual(result.skipped, []);
 		assert.deepEqual(calls, [
-			["pi-entry", "install", "npm:@juanibiapina/pi-extension-settings"],
-			["pi-entry", "install", "npm:pi-open-tui"],
-			["pi-entry", "install", "npm:@tmustier/pi-raw-paste"],
-			["pi-entry", "install", "npm:@narumitw/pi-caffeinate"],
+			["pi-entry", "install", "npm:@juanibiapina/pi-extension-settings@0.9.1"],
+			["pi-entry", "install", "npm:pi-open-tui@0.2.15"],
+			["pi-entry", "install", "npm:@tmustier/pi-raw-paste@0.1.3"],
+			["pi-entry", "install", "npm:@narumitw/pi-caffeinate@0.49.5"],
 		]);
 	});
 
@@ -121,7 +121,7 @@ describe("extension profiles", () => {
 		});
 		assert.deepEqual(result.skipped, ["extension-settings", "open-tui"]);
 		assert.equal(result.updateStatus, "skipped-disabled");
-		assert.deepEqual(calls.map((call) => call[2]), ["npm:@tmustier/pi-raw-paste", "npm:@narumitw/pi-caffeinate"]);
+		assert.deepEqual(calls.map((call) => call[2]), ["npm:@tmustier/pi-raw-paste@0.1.3", "npm:@narumitw/pi-caffeinate@0.49.5"]);
 	});
 
 	it("continues after an optional extension fails and reports the failure", async () => {
@@ -131,11 +131,11 @@ describe("extension profiles", () => {
 			configuredPackages: [],
 			run: async (command, args) => {
 				calls.push([command, ...args]);
-				if (args[1] === "npm:pi-open-tui") throw new Error("Failed to locate native binary.");
+				if (args[1]?.startsWith("npm:pi-open-tui@")) throw new Error("Failed to locate native binary.");
 			},
 		});
 		assert.deepEqual(result.installed, ["extension-settings", "raw-paste", "caffeinate"]);
-		assert.deepEqual(result.failed, [{ id: "open-tui", installSpec: "npm:pi-open-tui", error: "Failed to locate native binary." }]);
+		assert.deepEqual(result.failed, [{ id: "open-tui", installSpec: "npm:pi-open-tui@0.2.15", error: "Failed to locate native binary." }]);
 		assert.equal(calls.length, 4);
 	});
 
@@ -147,7 +147,7 @@ describe("extension profiles", () => {
 				continueOnError: false,
 				updateConfigured: false,
 				run: async (_command, args) => {
-					if (args[1] === "npm:pi-open-tui") throw new Error("native install failed");
+					if (args[1]?.startsWith("npm:pi-open-tui@")) throw new Error("native install failed");
 				},
 			}),
 			/native install failed/,
@@ -159,7 +159,7 @@ describe("extension profiles", () => {
 		let repaired = 0;
 		const configured = getProfilePackages("max")
 			.filter((entry) => entry.id !== "lens")
-			.map((entry) => entry.installSpec);
+			.map(exactInstallSpec);
 		const result = await installExtensionProfile("max", {
 			piEntry: "pi-entry",
 			configuredPackages: configured,
@@ -179,7 +179,7 @@ describe("extension profiles", () => {
 		assert.equal(calls.length, 2);
 	});
 
-	it("updates configured packages through Pi before reconciling a profile", async () => {
+	it("reconciles only Dove-managed identities to exact versions through Pi", async () => {
 		const calls: string[][] = [];
 		const configured = [getProfilePackages("minimal")[0].installSpec];
 		const result = await installExtensionProfile("minimal", {
@@ -190,27 +190,37 @@ describe("extension profiles", () => {
 		assert.equal(result.updated, true);
 		assert.equal(result.updateStatus, "updated");
 		assert.equal(result.updateError, undefined);
-		assert.deepEqual(result.installed, ["open-tui", "raw-paste", "caffeinate"]);
-		assert.deepEqual(result.skipped, ["extension-settings"]);
+		assert.deepEqual(result.installed, ["extension-settings", "open-tui", "raw-paste", "caffeinate"]);
+		assert.deepEqual(result.skipped, []);
 		assert.deepEqual(calls, [
-			["pi-entry", "update", "--extensions"],
-			["pi-entry", "install", "npm:pi-open-tui"],
-			["pi-entry", "install", "npm:@tmustier/pi-raw-paste"],
-			["pi-entry", "install", "npm:@narumitw/pi-caffeinate"],
+			["pi-entry", "install", "npm:@juanibiapina/pi-extension-settings@0.9.1"],
+			["pi-entry", "install", "npm:pi-open-tui@0.2.15"],
+			["pi-entry", "install", "npm:@tmustier/pi-raw-paste@0.1.3"],
+			["pi-entry", "install", "npm:@narumitw/pi-caffeinate@0.49.5"],
 		]);
 	});
 
-	it("continues profile reconciliation when the optional update step fails", async () => {
+	it("continues profile reconciliation when one exact-version update fails", async () => {
 		const result = await installExtensionProfile("minimal", {
 			piEntry: "pi-entry",
 			configuredPackages: ["npm:pi-open-tui"],
 			run: async (_command, args) => {
-				if (args[0] === "update") throw new Error("update unavailable");
+				if (args[1]?.startsWith("npm:pi-open-tui@")) throw new Error("update unavailable");
 			},
 		});
 		assert.equal(result.updated, false);
 		assert.equal(result.updateStatus, "failed");
-		assert.equal(result.updateError, "update unavailable");
+		assert.match(result.updateError ?? "", /open-tui.*update unavailable/);
 		assert.ok(result.installed.includes("extension-settings"));
+	});
+
+	it("does not touch unrelated user packages", async () => {
+		const calls: string[][] = [];
+		await installExtensionProfile("minimal", {
+			piEntry: "pi-entry",
+			configuredPackages: ["npm:user-owned-extension@9.9.9", ...getProfilePackages("minimal").map(exactInstallSpec)],
+			run: async (command, args) => { calls.push([command, ...args]); },
+		});
+		assert.deepEqual(calls, []);
 	});
 });

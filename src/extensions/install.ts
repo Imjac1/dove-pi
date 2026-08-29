@@ -3,7 +3,7 @@ import { access, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getProfilePackages, matchesConfiguredPackage, type ExtensionProfile } from "./catalog.ts";
+import { exactInstallSpec, getProfilePackages, matchesConfiguredPackage, matchesExactConfiguredPackage, type ExtensionProfile } from "./catalog.ts";
 
 export interface ExtensionInstallResult {
 	readonly profile: ExtensionProfile;
@@ -15,7 +15,7 @@ export interface ExtensionInstallResult {
 	readonly failed: readonly ExtensionInstallFailure[];
 }
 
-export type ExtensionUpdateStatus = "updated" | "skipped-empty" | "skipped-disabled" | "failed";
+export type ExtensionUpdateStatus = "updated" | "unchanged" | "skipped-empty" | "skipped-disabled" | "failed";
 
 export interface ExtensionInstallFailure {
 	readonly id: string;
@@ -26,7 +26,7 @@ export interface ExtensionInstallFailure {
 export interface ExtensionInstallOptions {
 	readonly cwd?: string;
 	readonly piEntry?: string;
-	readonly configuredPackages?: readonly string[];
+	readonly configuredPackages?: readonly unknown[];
 	/** Emit one line per package; the default is concise for the installer/UI. */
 	readonly verbose?: boolean;
 	/** Continue with the remaining optional profile entries after an install error. */
@@ -59,9 +59,9 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 	let updateStatus: ExtensionUpdateStatus;
 	let updateError: string | undefined;
 
-	// Let Pi own extension version resolution and settings updates. Only invoke
-	// the updater when this profile already has configured packages; a first
-	// install has nothing to update and should stay fast/offline-friendly.
+	// Dove owns only the catalog entries in the selected profile. Reconcile
+	// those identities through Pi's official exact-spec install path; never run
+	// a broad update that would also change packages installed by the user.
 	if (!updateConfigured) {
 		updateStatus = "skipped-disabled";
 		// Keep stdout reserved for the structured result emitted by the CLI.
@@ -71,34 +71,30 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 		// Keep stdout reserved for the structured result emitted by the CLI.
 		console.error("No configured Pi extensions; update skipped for this first install.");
 	} else {
-		try {
-			await run(piEntry, ["update", "--extensions"], cwd);
-			updated = true;
-			updateStatus = "updated";
-			// Keep stdout reserved for the structured result emitted by the CLI.
-			console.error(`Updated ${configuredPackages.length} configured Pi extension${configuredPackages.length === 1 ? "" : "s"}.`);
-		} catch (error) {
-			updateStatus = "failed";
-			updateError = error instanceof Error ? error.message : String(error);
-			console.warn(`Warning: Pi extension update failed; continuing with profile reconciliation. ${updateError}`);
-		}
+		updateStatus = "unchanged";
 	}
 
 	for (const entry of getProfilePackages(profile)) {
-		if (configuredPackages.some((value) => matchesConfiguredPackage(value, entry))) {
+		const existing = configuredPackages.find((value) => matchesConfiguredPackage(value, entry));
+		if (existing !== undefined && (!updateConfigured || matchesExactConfiguredPackage(existing, entry))) {
 			if (verbose) console.log(`Skipping ${entry.id}; already configured in Pi.`);
 			skipped.push(entry.id);
 			continue;
 		}
-		if (verbose) console.log(`Installing ${entry.id} (${entry.installSpec})...`);
+		const desiredSpec = exactInstallSpec(entry);
+		if (verbose) console.log(`${existing === undefined ? "Installing" : "Reconciling"} ${entry.id} (${desiredSpec})...`);
 		try {
-			await run(piEntry, ["install", entry.installSpec], cwd);
+			await run(piEntry, ["install", desiredSpec], cwd);
 			installed.push(entry.id);
+			if (existing !== undefined) {
+				updated = true;
+				updateStatus = "updated";
+			}
 		} catch (error) {
 			let finalError = error;
 			if (entry.id === "lens" && await repairNativeDependency(entry.id, cwd)) {
 				try {
-					await run(piEntry, ["install", entry.installSpec], cwd);
+					await run(piEntry, ["install", desiredSpec], cwd);
 					installed.push(entry.id);
 					continue;
 				} catch (retryError) {
@@ -107,19 +103,23 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 			}
 			const failure = {
 				id: entry.id,
-				installSpec: entry.installSpec,
+				installSpec: desiredSpec,
 				error: describeInstallFailure(entry.id, finalError),
 			};
 			failed.push(failure);
 			console.warn(
 				`Warning: optional Pi extension ${entry.id} could not be installed. `
-				+ `Command: pi install ${entry.installSpec}. ${failure.error} `
+				+ `Command: pi install ${desiredSpec}. ${failure.error} `
 				+ "Next step: fix the reported dependency/environment issue and rerun the install.",
 			);
 			if (!continueOnError) throw error;
 		}
 	}
 
+	if (failed.length > 0) {
+		updateStatus = "failed";
+		updateError = failed.map((entry) => `${entry.id}: ${entry.error}`).join("; ");
+	}
 	return { profile, updated, updateStatus, ...(updateError ? { updateError } : {}), installed, skipped, failed };
 }
 
@@ -212,11 +212,11 @@ function describeInstallFailure(id: string, error: unknown): string {
 	return message;
 }
 
-async function readConfiguredPackages(): Promise<string[]> {
+async function readConfiguredPackages(): Promise<unknown[]> {
 	const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 	try {
 		const parsed = JSON.parse(await readFile(join(agentDir, "settings.json"), "utf8")) as { packages?: unknown };
-		return Array.isArray(parsed.packages) ? parsed.packages.filter((value): value is string => typeof value === "string") : [];
+		return Array.isArray(parsed.packages) ? parsed.packages : [];
 	} catch {
 		return [];
 	}

@@ -13,14 +13,16 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "test:installer": "python -m unittest discover -s tests -p installer_test.py",
+    "test:installer": "python -m unittest discover -s tests -p \"*installer*_test.py\"",
     "doctor": "tsx src/cli.ts doctor",
-    "pi:smoke": "npm run dove-pi -- --version && npm run dove-pi -- -e ./.pi/extensions/personal-agent.ts --help",
+    "pi:smoke": "npm run dove-pi -- --version && npm run dove-pi -- --help",
+    "release:manifest": "node --import tsx scripts/build-release-manifest.mts",
     "dove-pi": "node ./bin/dove-pi.cjs"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.3",
-    "@earendil-works/pi-tui": "^0.84.3",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3",
+    "@mindfoldhq/trellis": "0.6.16",
     "typebox": "^1.1.38"
   },
   "devDependencies": {

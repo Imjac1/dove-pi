@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:installer
+      - run: npm run pi:smoke
+      - run: npm run release:manifest -- "$env:RUNNER_TEMP\release.json"
+      - name: Assemble release asset
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'dove-pi-release'
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          $include = @('bin', 'installer', 'scripts', 'src', 'tests', '.pi', 'dove_pi.py', 'package.json', 'package-lock.json', 'tsconfig.json', 'README.md', 'README.en.md')
+          foreach ($entry in $include) { Copy-Item -LiteralPath $entry -Destination $stage -Recurse }
+          Copy-Item -LiteralPath "$env:RUNNER_TEMP\release.json" -Destination (Join-Path $stage 'release.json')
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath 'dove-pi-windows.zip'
+          $hash = (Get-FileHash -LiteralPath 'dove-pi-windows.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath 'dove-pi-windows.zip.sha256' -Value "$hash  dove-pi-windows.zip" -Encoding ascii
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dove-pi-windows.zip
+            dove-pi-windows.zip.sha256
+            install.ps1
+            ${{ runner.temp }}/release.json
