@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext, type ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
@@ -29,8 +29,8 @@ import { formatProgressSnapshot, ProgressGuard } from "./progress-guard.ts";
 import { formatCacheDiagnostics, inspectCacheDiagnostics } from "./cache-diagnostics.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan } from "../core/request-plan.ts";
-import { ModelBudgetError, ModelGateway, modelPayloadFromProvider } from "../core/model-gateway.ts";
-import { requestPolicy } from "../core/prompt-policy.ts";
+import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, type BudgetAccounting } from "../core/model-gateway.ts";
+import { stablePromptPolicy } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
@@ -118,6 +118,16 @@ function runtimeReadOnly(): boolean {
 	return /^(1|true|yes|on)$/i.test(process.env.DOVE_PI_READ_ONLY ?? "");
 }
 
+function isProcessActive(pid: number): boolean {
+	if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "EPERM";
+	}
+}
+
 function payloadMessageText(message: unknown): string {
 	if (typeof message === "string") return message;
 	if (Array.isArray(message)) return message.map(payloadMessageText).join("\n");
@@ -153,6 +163,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const registry = new CapabilityRegistry();
 	const recipes = new RecipeRegistry();
 	const cwd = process.cwd();
+	const stateDir = process.env.DOVE_PI_STATE_DIR?.trim() ? resolve(process.env.DOVE_PI_STATE_DIR) : join(cwd, ".agent-data");
 	let projectProvider = createProjectProvider(cwd);
 	let skillsReloadRequired = false;
 	let projectBootstrapPrompted = false;
@@ -169,7 +180,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let activeToolSnapshot: string[] = [];
 	let lastSystemPrompt: string | undefined;
 	let guardNotified = false;
-	const reasoningVoiceFlagPath = join(cwd, ".agent-data", "reasoning-voice");
+	const reasoningVoiceFlagPath = join(stateDir, "reasoning-voice");
 	function readReasoningVoiceFlag(): boolean {
 		try {
 			const raw = readFileSync(reasoningVoiceFlagPath, "utf8").trim().toLowerCase();
@@ -183,7 +194,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	function setReasoningVoice(next: boolean, ctx?: ExtensionContext): void {
 		reasoningVoice = next;
 		try {
-			mkdirSync(join(cwd, ".agent-data"), { recursive: true });
+			mkdirSync(stateDir, { recursive: true });
 			writeFileSync(reasoningVoiceFlagPath, next ? "on" : "off", "utf8");
 		} catch { /* non-fatal: keep the in-memory toggle */ }
 	}
@@ -191,7 +202,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// Thinking-level policy: auto (mode-driven) or lock:<level>, persisted as a
 	// per-project flag so a lock survives restarts without touching Pi's own
 	// defaultThinkingLevel (which the user may still control manually).
-	const thinkingPolicyFlagPath = join(cwd, ".agent-data", "thinking-policy");
+	const thinkingPolicyFlagPath = join(stateDir, "thinking-policy");
 	function readThinkingPolicyFlag(): ThinkingPolicyState {
 		try {
 			return parsePolicy(readFileSync(thinkingPolicyFlagPath, "utf8"));
@@ -202,7 +213,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let thinkingPolicy: ThinkingPolicyState = thinkingPolicyEnv !== undefined ? parsePolicy(thinkingPolicyEnv) : readThinkingPolicyFlag();
 	function persistThinkingPolicy(): void {
 		try {
-			mkdirSync(join(cwd, ".agent-data"), { recursive: true });
+			mkdirSync(stateDir, { recursive: true });
 			writeFileSync(thinkingPolicyFlagPath, serializePolicy(thinkingPolicy), "utf8");
 		} catch { /* non-fatal: keep the in-memory policy */ }
 	}
@@ -231,7 +242,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let operation: "idle" | "running" = "idle";
 	let toolProfile: DoveToolProfile = parseDoveToolProfile(process.env.DOVE_PI_TOOL_PROFILE) ?? "auto";
 	const hasExplicitToolSelection = process.argv.some((arg) => arg === "--tools" || arg === "-t" || arg === "--no-tools" || arg === "-nt" || arg === "--no-builtin-tools" || arg === "-nbt");
-	const ledger = new ExecutionLedger(join(cwd, ".agent-data", "execution.jsonl"));
+	const ledger = new ExecutionLedger(join(stateDir, "execution.jsonl"));
 	const progressGuard = new ProgressGuard({
 		consecutiveErrorThreshold: Number(process.env.DOVE_PI_PROGRESS_ERROR_THRESHOLD),
 		repeatedFailureThreshold: Number(process.env.DOVE_PI_PROGRESS_REPEAT_THRESHOLD),
@@ -359,19 +370,19 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	}
 
 	async function reconcileCapabilityExecutions(ctx: ExtensionContext): Promise<void> {
-		const pending = await ledger.findIncompleteCapabilityExecutions();
+		const pending = await ledger.findIncompleteCapabilityExecutions({ isProcessActive });
 		if (pending.length === 0) return;
 		for (const intent of pending) {
 			// Never replay an unknown side effect after process death. Marking the
 			// intent as recovered preserves the evidence trail and requires an
 			// explicit user retry through the normal approval path.
-			await ledger.appendCapabilityTerminal({ taskId: intent.taskId, stepId: intent.stepId, mode: intent.mode, executionId: intent.executionId, capability: intent.capability, status: "recovered", reason: "startup-reconciliation-no-automatic-retry" });
+			await ledger.appendCapabilityTerminal({ taskId: intent.taskId, stepId: intent.stepId, mode: intent.mode, sessionId: intent.sessionId, executionId: intent.executionId, capability: intent.capability, status: "recovered", reason: "startup-reconciliation-no-automatic-retry" });
 		}
 		if (ctx.hasUI) ctx.ui.notify(`检测到 ${pending.length} 个未完成的 Capability 执行；已标记为 recovered，未自动重放副作用。`, "warning");
 	}
 
 	async function reconcileProviderRequests(ctx: ExtensionContext): Promise<void> {
-		const pending = await ledger.findIncompleteProviderRequests();
+		const pending = await ledger.findIncompleteProviderRequests({ isProcessActive });
 		for (const intent of pending) await ledger.appendProviderRequestRecovered(intent);
 		if (pending.length > 0 && ctx.hasUI) ctx.ui.notify(`检测到 ${pending.length} 个未完成的 Provider 请求；已记录为 recovered，未假设模型已成功执行。`, "warning");
 	}
@@ -444,7 +455,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			if (args.trim().toLowerCase() === "save") {
-				const dir = join(cwd, ".agent-data");
+				const dir = stateDir;
 				mkdirSync(dir, { recursive: true });
 				const file = join(dir, `system-prompt-${Date.now()}.txt`);
 				writeFileSync(file, lastSystemPrompt, "utf8");
@@ -744,6 +755,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				requestId: request?.requestId,
 				sessionId,
 				toolCallId: _toolCallId,
+				ownerPid: process.pid,
 			}, {
 				required: true,
 				recordPending: true,
@@ -785,14 +797,19 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			name: Type.String({ description: "Registered recipe name, for example windows.readonly_baseline" }),
 			args: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 		}),
-		async execute(_toolCallId, params, signal) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const typedParams = params as { name: string; args?: Record<string, unknown> };
+			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
 			const results = await executeRecipe(recipes, registry, ledger, typedParams.name, typedParams.args ?? {}, {
 				cwd,
 				mode: mode.snapshot(),
 				taskId: "pi-session",
 				stepId: `recipe-${Date.now()}`,
 				signal,
+				requestId: currentRequestPlan?.requestId,
+				sessionId,
+				toolCallId: _toolCallId,
+				ownerPid: process.pid,
 			});
 			return { content: [{ type: "text", text: JSON.stringify(compactModelPayload(results), null, 2) }], details: { results } };
 		},
@@ -1037,7 +1054,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (currentProviderCall) {
 			const call = currentProviderCall;
 			const observed = message as unknown as { stopReason?: unknown; usage?: Readonly<Record<string, number>> };
-			await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, providerCallId: call.id, stopReason: String(observed.stopReason ?? "unknown"), usage: observed.usage });
+			await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, providerCallId: call.id, stopReason: normalizeStopReason(observed.stopReason), usage: observed.usage });
 			currentProviderCall = undefined;
 		}
 		const normalized = normalizeDsmlContent(message.content);
@@ -1080,47 +1097,76 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const model = ctx.model as { contextWindow?: unknown; maxTokens?: unknown; provider?: unknown; id?: unknown } | undefined;
 		const contextWindow = typeof model?.contextWindow === "number" ? model.contextWindow : undefined;
 		if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return;
+		const validContextWindow: number = contextWindow;
 		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, projectAvailable: projectProvider.kind === "trellis" });
 		const sessionManager = ctx.sessionManager as { getSessionId?: () => string };
 		const sessionId = sessionManager.getSessionId?.();
 		const taskId = currentRequestPlan?.intent === "chat" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? "pi-session";
 		const stepId = `provider:${plan.requestId}`;
 		const providerCallId = `provider-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-		const reservedOutput = typeof model?.maxTokens === "number" && Number.isFinite(model.maxTokens) ? Math.max(0, Math.floor(model.maxTokens)) : plan.outputBudget;
-		const gateway = new ModelGateway({
-			contextWindow,
-			reservedOutput,
-			reservedReasoning: 0,
-			toolSchemaOverhead: 512 + (typeof pi.getActiveTools === "function" ? pi.getActiveTools().length * 128 : 0),
-			providerOverhead: 256,
-		});
+		const toolSchemaOverhead = 512 + (typeof pi.getActiveTools === "function" ? pi.getActiveTools().length * 128 : 0);
+		const providerOverhead = 256;
+		const modelMaxTokens = typeof model?.maxTokens === "number" && Number.isFinite(model.maxTokens) ? model.maxTokens : undefined;
+		function preparePayload(candidate: unknown): { payload: unknown; budget: BudgetAccounting } {
+			const request = modelPayloadFromProvider(candidate);
+			const inputAccounting = accountModelBudget(request, {
+				contextWindow: validContextWindow,
+				reservedOutput: 0,
+				reservedReasoning: 0,
+				toolSchemaOverhead,
+				providerOverhead,
+			});
+			const explicitOutputLimit = providerOutputTokenLimit(candidate);
+			const reservedOutput = boundedOutputReservation({
+				contextWindow: validContextWindow,
+				providerRequestedOutput: explicitOutputLimit ?? modelMaxTokens,
+				planOutputBudget: plan.outputBudget,
+				fixedOverhead: toolSchemaOverhead + providerOverhead,
+				inputTokens: inputAccounting.inputTokens,
+				canWriteProviderLimit: explicitOutputLimit !== undefined,
+			});
+			const payload = limitProviderOutputTokens(candidate, reservedOutput);
+			const gateway = new ModelGateway({
+				contextWindow: validContextWindow,
+				reservedOutput,
+				reservedReasoning: 0,
+				toolSchemaOverhead,
+				providerOverhead,
+			});
+			return { payload, budget: gateway.validate(modelPayloadFromProvider(payload)) };
+		}
 		let payload = event.payload;
-		let request = modelPayloadFromProvider(payload);
+		let finalBudget: BudgetAccounting | undefined;
+		let rejection: unknown;
 		try {
-			const budget = gateway.validate(request);
-			await ledger.appendModelBudgetChecked(taskId, stepId, plan.mode, plan.requestId, budget, sessionId);
+			({ payload, budget: finalBudget } = preparePayload(event.payload));
 		} catch (error) {
+			rejection = error;
 			// First remove only derived Dove context. This is deterministic and
 			// preserves user/project history while recovering output headroom.
-			const compacted = stripDoveContextFromPayload(payload);
-			if (compacted !== payload) {
-				const compactedRequest = modelPayloadFromProvider(compacted);
+			const compacted = stripDoveContextFromPayload(event.payload);
+			if (compacted !== event.payload) {
 				try {
-					const budget = gateway.validate(compactedRequest);
-					payload = compacted;
-					await ledger.appendModelBudgetChecked(taskId, stepId, plan.mode, plan.requestId, budget, sessionId);
-				} catch { /* retain original error below */ }
-			}
-			if (payload === event.payload) {
-				if (error instanceof ModelBudgetError) {
-					await ledger.appendModelBudgetRejected(taskId, stepId, plan.mode, plan.requestId, error.diagnostic, sessionId);
-					await ledger.appendProviderRequestRejected({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, providerCallId, diagnostic: error.diagnostic });
-				}
-				throw error;
+					({ payload, budget: finalBudget } = preparePayload(compacted));
+				} catch (compactedError) { rejection = compactedError; }
 			}
 		}
-		const finalBudget = gateway.validate(modelPayloadFromProvider(payload));
-		await ledger.appendProviderRequestStarted({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, providerCallId, inputTokens: finalBudget.inputTokens });
+		if (!finalBudget) {
+			if (rejection instanceof ModelBudgetError) {
+				await ledger.appendModelBudgetRejected(taskId, stepId, plan.mode, plan.requestId, rejection.diagnostic, sessionId);
+				await ledger.appendProviderRequestRejected({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, providerCallId, diagnostic: rejection.diagnostic });
+			}
+			// Pi intentionally swallows extension exceptions. Aborting the host's
+			// active operation is the public cancellation boundary that prevents an
+			// already-rejected payload from reaching fetch/transport.
+			if (typeof ctx.abort === "function") {
+				ctx.abort();
+				return payload === event.payload ? undefined : payload;
+			}
+			throw rejection;
+		}
+		await ledger.appendModelBudgetChecked(taskId, stepId, plan.mode, plan.requestId, finalBudget, sessionId);
+		await ledger.appendProviderRequestStarted({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, providerCallId, inputTokens: finalBudget.inputTokens, ownerPid: process.pid });
 		currentProviderCall = { id: providerCallId, requestId: plan.requestId, taskId, stepId, mode: plan.mode, sessionId };
 		return payload === event.payload ? undefined : payload;
 	});
@@ -1205,8 +1251,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			requestContextSegments = context.segments;
 		}
 		const reasoningVoiceInstruction = reasoningVoice ? ` In your internal reasoning, speak in a concise, action-oriented first-person-plural voice ("We need …" / "We should …") instead of generic lead-ins like "Let me think…". This is a style preference; keep the final answer's substance and correctness unchanged.` : "";
-		const capabilityHint = requestPlan.intent === "execution" || requestPlan.intent === "project-work" ? buildCapabilityIndex(registry, recipes) : "";
-		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${requestPolicy(requestPlan.intent, capabilityHint)} Dove execution mode and project context are supplied separately at request time. Workflow suggestions, when present, are advisory and never execute by themselves.${reasoningVoiceInstruction}`;
+		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} Dove execution mode and project context are supplied separately at request time. Workflow suggestions, when present, are advisory and never execute by themselves.${reasoningVoiceInstruction}`;
 		// Preflight the newly compiled request fragment against the active model
 		// window. Historical conversation usage is accounted for by Pi's own
 		// context usage API; this gate prevents Dove's additions from consuming

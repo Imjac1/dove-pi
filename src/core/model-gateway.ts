@@ -110,6 +110,71 @@ export function modelPayloadFromProvider<TPayload>(payload: TPayload): ModelPayl
 	return { payload, segments };
 }
 
+/**
+ * Bound common provider output fields to the budget actually reserved by the
+ * gateway. Returning a replacement envelope keeps accounting and transport in
+ * agreement without mutating Pi/provider-owned objects.
+ */
+const PROVIDER_OUTPUT_TOKEN_FIELDS = ["max_tokens", "max_output_tokens", "max_completion_tokens"] as const;
+
+/** Read the effective explicit provider limit without guessing a provider API. */
+export function providerOutputTokenLimit(payload: unknown): number | undefined {
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return undefined;
+	const object = payload as Record<string, unknown>;
+	const limits = PROVIDER_OUTPUT_TOKEN_FIELDS
+		.map((key) => object[key])
+		.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
+		.map((value) => Math.floor(value));
+	return limits.length > 0 ? Math.min(...limits) : undefined;
+}
+
+export function limitProviderOutputTokens<TPayload>(payload: TPayload, maxTokens: number): TPayload {
+	const limit = Math.max(1, Math.floor(maxTokens));
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return payload;
+	const object = payload as Record<string, unknown>;
+	let changed = false;
+	const replacement: Record<string, unknown> = { ...object };
+	for (const key of PROVIDER_OUTPUT_TOKEN_FIELDS) {
+		const value = object[key];
+		if (typeof value === "number" && Number.isFinite(value) && value > limit) {
+			replacement[key] = limit;
+			changed = true;
+		}
+	}
+	return (changed ? replacement : payload) as TPayload;
+}
+
+/**
+ * Select the output reservation from the final provider input. The request-plan
+ * budget is minimum response headroom, not a ceiling. If the provider supplied
+ * a smaller explicit limit, that explicit choice remains authoritative.
+ *
+ * When a request needs clamping but has no known writable output field, retain
+ * the requested reservation so ModelGateway rejects it instead of accounting
+ * for a limit that transport will not actually receive.
+ */
+export function boundedOutputReservation(input: {
+	contextWindow: number;
+	providerRequestedOutput?: number;
+	planOutputBudget: number;
+	fixedOverhead?: number;
+	inputTokens?: number;
+	canWriteProviderLimit?: boolean;
+}): number {
+	const fixedOverhead = finiteNonNegative(input.fixedOverhead);
+	const contextWindow = finiteNonNegative(input.contextWindow);
+	const inputTokens = finiteNonNegative(input.inputTokens);
+	const planOutputBudget = Math.max(1, finiteNonNegative(input.planOutputBudget, 1));
+	const providerRequestedOutput = input.providerRequestedOutput === undefined
+		? planOutputBudget
+		: Math.max(1, finiteNonNegative(input.providerRequestedOutput, planOutputBudget));
+	const minimumHeadroom = Math.min(planOutputBudget, providerRequestedOutput);
+	const safeCapacity = Math.floor(contextWindow - fixedOverhead - inputTokens);
+	if (!Number.isFinite(safeCapacity) || safeCapacity < minimumHeadroom) return minimumHeadroom;
+	if (providerRequestedOutput <= safeCapacity) return providerRequestedOutput;
+	return input.canWriteProviderLimit === true ? safeCapacity : providerRequestedOutput;
+}
+
 function findMessages(payload: unknown): readonly unknown[] {
 	if (typeof payload !== "object" || payload === null) return [];
 	const candidate = (payload as { messages?: unknown; input?: unknown }).messages;

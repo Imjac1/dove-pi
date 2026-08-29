@@ -1,12 +1,21 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension, { compactModelPayload, compactToolResultContent, getProjectContextBudget, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
+
+const adapterStateDir = mkdtempSync(join(tmpdir(), "pi-adapter-state-"));
+const previousStateDir = process.env.DOVE_PI_STATE_DIR;
+process.env.DOVE_PI_STATE_DIR = adapterStateDir;
+after(() => {
+	if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
+	else process.env.DOVE_PI_STATE_DIR = previousStateDir;
+	rmSync(adapterStateDir, { recursive: true, force: true });
+});
 
 describe("Pi adapter", () => {
 	it("registers modes, shortcuts, capabilities, and doctor", async () => {
@@ -18,6 +27,7 @@ describe("Pi adapter", () => {
 		const statusColors: string[] = [];
 		const notifications: string[] = [];
 		const activeToolSets: string[][] = [];
+		let providerAborted = false;
 		const api = {
 			registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
 			registerShortcut(key: string, definition: { handler: (ctx: FakeContext) => Promise<void> }) { shortcuts.set(key, definition); },
@@ -67,6 +77,7 @@ describe("Pi adapter", () => {
 				notify: (message) => { notifications.push(message); },
 			},
 			sessionManager: { getEntries: () => [], getSessionId: () => "session-test" },
+			abort: () => { providerAborted = true; },
 		};
 		const headers: Record<string, string> = {};
 		await events.get("before_provider_headers")?.({ type: "before_provider_headers", headers }, { ...context, model: { provider: "cc-switch-open-router", baseUrl: "https://openrouter.ai/api" } });
@@ -76,7 +87,8 @@ describe("Pi adapter", () => {
 		assert.equal(preservedHeaders["x-session-affinity"], "existing");
 		const beforeProviderRequest = events.get("before_provider_request");
 		assert.ok(beforeProviderRequest);
-		await assert.rejects(() => beforeProviderRequest({ type: "before_provider_request", payload: { messages: [{ role: "user", content: "x".repeat(2_000) }] } }, { ...context, model: { contextWindow: 100, maxTokens: 20 } }), /exceeds context window/);
+		await beforeProviderRequest({ type: "before_provider_request", payload: { max_tokens: 20, messages: [{ role: "user", content: "x".repeat(2_000) }] } }, { ...context, model: { contextWindow: 100, maxTokens: 20 } });
+		assert.equal(providerAborted, true, "an over-budget Pi request must abort the host operation instead of relying on a swallowed exception");
 		await events.get("session_start")?.(undefined, context);
 		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
@@ -91,15 +103,26 @@ describe("Pi adapter", () => {
 		await shortcuts.get("ctrl+alt+m")?.handler(context);
 		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Ready")));
 		assert.ok(statusColors.includes("thinkingMax"));
+		providerAborted = false;
+		const unknownProviderPayload = { messages: [{ role: "user", content: "ok" }] };
+		const unknownProviderResult = await beforeProviderRequest({ type: "before_provider_request", payload: unknownProviderPayload }, { ...context, model: { contextWindow: 12_800, maxTokens: 16_384 } });
+		assert.equal(providerAborted, true, "Dove must abort when an unknown provider field prevents a required safe clamp");
+		assert.equal(unknownProviderResult, undefined, "Dove must not invent a provider-specific output field");
+		providerAborted = false;
+		const boundedProviderPayload = await beforeProviderRequest({ type: "before_provider_request", payload: { max_tokens: 16_384, messages: [{ role: "user", content: "ok" }] } }, { ...context, model: { contextWindow: 12_800, maxTokens: 16_384 } });
+		assert.equal(providerAborted, false);
+		assert.equal((boundedProviderPayload as { max_tokens?: number })?.max_tokens, 11_775, "the payload sent by Pi must use the larger safe output reservation Dove accounted for");
 		const dsmlResult = await events.get("message_end")?.({
 			message: {
 				role: "assistant",
 				content: [{ type: "thinking", thinking: '<｜DSML｜tool_calls><｜DSML｜invoke name="read"><｜DSML｜parameter name="path" string="true">README.md</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>', thinkingSignature: "" }],
+				stopReason: "toolUse",
 			},
 		}, context);
 		const dsmlMessage = (dsmlResult as { message?: { content?: Array<{ type: string; name?: string }> } } | undefined)?.message;
 		assert.equal(dsmlMessage?.content?.[0]?.type, "toolCall");
 		assert.equal(dsmlMessage?.content?.[0]?.name, "read");
+		assert.match(readFileSync(join(adapterStateDir, "execution.jsonl"), "utf8"), /"stopReason":"tool_call"/);
 
 		await commands.get("mode")?.handler("fast", context);
 		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Ready")));
@@ -111,6 +134,7 @@ describe("Pi adapter", () => {
 		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
 		const firstStartResult = await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
 		const firstStartMessage = (firstStartResult as { message?: { customType?: string; details?: { schemaVersion?: number; segments?: unknown[] } } })?.message;
+		const firstSystemPrompt = String((firstStartResult as { systemPrompt?: string })?.systemPrompt);
 		assert.equal(firstStartMessage?.customType, "personal-agent-context");
 		assert.equal(firstStartMessage?.details?.schemaVersion, 2);
 		assert.ok(Array.isArray(firstStartMessage?.details?.segments));
@@ -118,7 +142,8 @@ describe("Pi adapter", () => {
 		const autoToolSetCount = activeToolSets.length;
 		const hiStart = await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal(activeToolSets.length, autoToolSetCount, "auto mode keeps intent tools instead of rebuilding the set");
-		assert.doesNotMatch(String((hiStart as { systemPrompt?: string })?.systemPrompt), /Web access:|Dispatch guidance:|\[DOVE REGISTERED CAPABILITIES\]/);
+		assert.equal(String((hiStart as { systemPrompt?: string })?.systemPrompt), firstSystemPrompt, "Dove's provider-prefix policy stays stable across intent changes");
+		assert.match(firstSystemPrompt, /\[DOVE REGISTERED CAPABILITIES\]/);
 		const isolatedChat = await events.get("context")?.({
 			type: "context",
 			messages: [
@@ -376,4 +401,5 @@ interface FakeContext {
 		confirm?: (message: string, detail?: string) => Promise<boolean>;
 	};
 	sessionManager: { getEntries: () => unknown[]; getSessionId?: () => string };
+	abort?: () => void;
 }

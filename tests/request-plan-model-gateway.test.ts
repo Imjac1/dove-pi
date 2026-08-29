@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createRequestPlan } from "../src/core/request-plan.ts";
-import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, modelPayloadFromProvider } from "../src/core/model-gateway.ts";
+import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, providerOutputTokenLimit } from "../src/core/model-gateway.ts";
 import { requestPolicy } from "../src/core/prompt-policy.ts";
 
 describe("request planning", () => {
@@ -29,6 +29,17 @@ describe("request planning", () => {
 	it("does not let explicit chat intent bypass mutation safety", () => {
 		assert.equal(createRequestPlan({ message: "delete the temp file", explicitIntent: "chat" }).intent, "execution");
 		assert.equal(createRequestPlan({ message: "hello", explicitIntent: "invalid" as never }).intent, "chat");
+	});
+
+	it("does not treat negated or explanatory action language as execution", () => {
+		assert.equal(createRequestPlan({ message: "分析登录模块的代码结构，不要修改文件" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "告诉我怎么运行测试，但不要执行" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "show me how to run tests without executing them" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "do not wait; run the tests" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "do not wait, run the tests" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "不要等待，执行测试" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "do not execute, just explain the test plan" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "不要执行，只分析测试方案" }).intent, "lookup");
 	});
 });
 
@@ -66,5 +77,26 @@ describe("model gateway budget", () => {
 		assert.equal(normalizeStopReason("toolUse"), "tool_call");
 		assert.equal(normalizeStopReason("cancelled"), "cancelled");
 		assert.equal(normalizeStopReason("stop"), "completed");
+	});
+
+	it("treats plan output as minimum headroom while keeping transport aligned", () => {
+		const reservation = boundedOutputReservation({ contextWindow: 12_800, providerRequestedOutput: 16_384, planOutputBudget: 1_024, fixedOverhead: 768, inputTokens: 1, canWriteProviderLimit: true });
+		assert.equal(reservation, 12_031);
+		assert.deepEqual(limitProviderOutputTokens({ max_tokens: 16_384, messages: [] }, reservation), { max_tokens: 12_031, messages: [] });
+		assert.equal(providerOutputTokenLimit({ max_tokens: 16_384, max_output_tokens: 512 }), 512);
+
+		const ultraReservation = boundedOutputReservation({ contextWindow: 100_000, providerRequestedOutput: 32_768, planOutputBudget: 4_096, fixedOverhead: 2_000, inputTokens: 10_000, canWriteProviderLimit: true });
+		assert.equal(ultraReservation, 32_768, "a large-window project request must not inherit the static 4096-token planning target as a ceiling");
+
+		const smallerExplicit = boundedOutputReservation({ contextWindow: 12_800, providerRequestedOutput: 512, planOutputBudget: 1_024, fixedOverhead: 768, inputTokens: 1, canWriteProviderLimit: true });
+		assert.equal(smallerExplicit, 512);
+		assert.deepEqual(limitProviderOutputTokens({ max_output_tokens: 512, messages: [] }, smallerExplicit), { max_output_tokens: 512, messages: [] });
+	});
+
+	it("fails closed when a provider limit needs clamping but has no writable field", () => {
+		const reservation = boundedOutputReservation({ contextWindow: 100, providerRequestedOutput: 80, planOutputBudget: 20, fixedOverhead: 20, inputTokens: 30, canWriteProviderLimit: false });
+		assert.equal(reservation, 80);
+		assert.deepEqual(limitProviderOutputTokens({ messages: [] }, 50), { messages: [] }, "Dove must not invent an output field for an unknown provider API");
+		assert.throws(() => new ModelGateway({ contextWindow: 100, reservedOutput: reservation, toolSchemaOverhead: 10, providerOverhead: 10 }).validate({ payload: {}, inputTokens: 30, segments: [] }), ModelBudgetError);
 	});
 });

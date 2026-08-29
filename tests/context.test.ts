@@ -58,18 +58,41 @@ describe("context compiler", () => {
 });
 
 describe("Trellis context", () => {
-	it("reads task metadata, active task, and typed memory records", () => {
-		const snapshot = readTrellisSnapshot(process.cwd());
-		const task = snapshot.tasks.find((entry) => entry.id === "personal-agent-os");
-		assert.ok(task);
-		assert.equal(task.status, "in_progress");
-		assert.equal(task.title, "Build Personal Agent OS for Pi");
-		const activeTask = snapshot.tasks.find((entry) => entry.path === snapshot.activeTaskPath);
-		assert.ok(activeTask);
-		assert.equal(activeTask.status, "in_progress");
-		assert.ok(snapshot.memories.some((memory) => memory.kind === "journal"));
-		assert.equal(snapshot.tasks.some((entry) => entry.id === "archive"), false);
-		assert.ok(snapshot.memories.some((memory) => memory.path.endsWith("workspace\\index.md") && memory.developer === undefined));
+	it("reads task metadata, active task, and typed memory records", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-metadata-"));
+		const taskDir = join(temporary, ".trellis", "tasks", "demo-task");
+		const workspaceDir = join(temporary, ".trellis", "workspace");
+		const developerDir = join(workspaceDir, "dev");
+		const sessionsDir = join(temporary, ".trellis", ".runtime", "sessions");
+		const contextId = "context-test";
+		const previous = process.env.TRELLIS_CONTEXT_ID;
+		process.env.TRELLIS_CONTEXT_ID = contextId;
+		try {
+			await mkdir(taskDir, { recursive: true });
+			await mkdir(developerDir, { recursive: true });
+			await mkdir(sessionsDir, { recursive: true });
+			await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo-task", title: "Demo Task", status: "in_progress", priority: "P1" }), "utf8");
+			await writeFile(join(taskDir, "prd.md"), "# Demo", "utf8");
+			await writeFile(join(developerDir, "journal-1.md"), "# Journal", "utf8");
+			await writeFile(join(workspaceDir, "index.md"), "# Workspace", "utf8");
+			await writeFile(join(sessionsDir, `${contextId}.json`), JSON.stringify({ current_task: ".trellis/tasks/demo-task" }), "utf8");
+
+			const snapshot = readTrellisSnapshot(temporary);
+			assert.equal(snapshot.tasks.length, 1);
+			const task = snapshot.tasks[0];
+			assert.equal(task?.id, "demo-task");
+			assert.equal(task?.status, "in_progress");
+			assert.equal(task?.title, "Demo Task");
+			assert.equal(task?.priority, "P1");
+			assert.equal(task?.path, snapshot.activeTaskPath);
+			assert.ok(task?.files.some((path) => path.endsWith("prd.md")));
+			assert.ok(snapshot.memories.some((memory) => memory.kind === "journal" && memory.developer === "dev"));
+			assert.ok(snapshot.memories.some((memory) => memory.path.endsWith("workspace\\index.md") && memory.kind === "index" && memory.developer === undefined));
+		} finally {
+			if (previous === undefined) delete process.env.TRELLIS_CONTEXT_ID;
+			else process.env.TRELLIS_CONTEXT_ID = previous;
+			await rm(temporary, { recursive: true, force: true });
+		}
 	});
 
 	it("keeps Trellis discovery working with missing or malformed metadata", async () => {

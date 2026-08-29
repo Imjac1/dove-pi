@@ -114,6 +114,15 @@ describe("capability recovery", () => {
 		assert.equal((await ledger.findIncompleteCapabilityExecutions()).length, 0);
 		await rm(temporary, { recursive: true, force: true });
 	});
+
+	it("does not recover an execution owned by another live process", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-capability-owner-"));
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		await ledger.append({ taskId: "task", stepId: "step", kind: "capability.started", timestamp: new Date().toISOString(), mode: "standard", details: { executionId: "exec-live", capability: "test.write", version: "1.0.0", ownerPid: 4242 } });
+		assert.equal((await ledger.findIncompleteCapabilityExecutions({ isProcessActive: (pid) => pid === 4242 })).length, 0);
+		assert.equal((await ledger.findIncompleteCapabilityExecutions({ isProcessActive: () => false })).length, 1);
+		await rm(temporary, { recursive: true, force: true });
+	});
 });
 
 describe("provider request recovery", () => {
@@ -126,6 +135,15 @@ describe("provider request recovery", () => {
 		assert.equal((await ledger.findIncompleteProviderRequests()).length, 0);
 		const records = await ledger.read();
 		assert.equal(records.at(-1)?.details.recovered, true);
+		await rm(temporary, { recursive: true, force: true });
+	});
+
+	it("does not recover a provider request owned by another live process", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-provider-owner-"));
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		await ledger.appendProviderRequestStarted({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-live", providerCallId: "call-live", inputTokens: 42, ownerPid: 4242 });
+		assert.equal((await ledger.findIncompleteProviderRequests({ isProcessActive: (pid) => pid === 4242 })).length, 0);
+		assert.equal((await ledger.findIncompleteProviderRequests({ isProcessActive: () => false })).length, 1);
 		await rm(temporary, { recursive: true, force: true });
 	});
 });

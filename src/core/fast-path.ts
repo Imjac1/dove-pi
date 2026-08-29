@@ -24,7 +24,7 @@ export async function executeFastPath(
 	ledger: ExecutionLedger,
 	name: string,
 	args: Record<string, unknown>,
-	context: { cwd: string; mode: AgentMode; taskId: string; stepId: string; signal?: AbortSignal; requestId?: string; sessionId?: string; toolCallId?: string },
+	context: { cwd: string; mode: AgentMode; taskId: string; stepId: string; signal?: AbortSignal; requestId?: string; sessionId?: string; toolCallId?: string; ownerPid?: number },
 	authorization: CapabilityAuthorization = {},
 	execution: CapabilityExecutionOptions = {},
 ): Promise<CapabilityResult> {
@@ -75,7 +75,7 @@ export async function executeFastPath(
 		timestamp: new Date().toISOString(),
 		mode: context.mode,
 		correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
-		details: { capability: name, version: capability.version, executionId, state: "started" },
+		details: { capability: name, version: capability.version, executionId, state: "started", ownerPid: context.ownerPid },
 	});
 
 	try {

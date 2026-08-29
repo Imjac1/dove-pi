@@ -33,12 +33,26 @@ export interface RequestPlan {
 
 const EXECUTION_PATTERN = /\b(run|execute|launch|start|stop|deploy|install|uninstall|delete|remove|write|edit|modify|change|create|apply|commit|push|shell|command|powershell|script)\b|运行|执行|启动|停止|部署|安装|卸载|删除|移除|写入|编辑|修改|变更|创建|应用|提交|推送|脚本/i;
 const PROJECT_PATTERN = /\b(project|task|prd|design|implementation|code|repository|repo|workspace|file|bug|feature|develop|development|build|test|fix|repair)\b|项目|任务|需求|设计|代码|仓库|工作区|文件|缺陷|功能|开发|构建|测试|修复|修理|解决/i;
-const LOOKUP_PATTERN = /\b(show|read|find|search|list|status|inspect|lookup|look\s+up|what|where|which|how|explain|describe|summarize|summary)\b|查看|读取|查找|搜索|列出|状态|检查|查询|什么|哪里|哪个|如何|解释|描述|总结|打开网页|网页|截图|浏览器|浏览/i;
+const LOOKUP_PATTERN = /\b(show|read|find|search|list|status|inspect|lookup|look\s+up|what|where|which|how|explain|describe|summarize|summary)\b|查看|读取|查找|搜索|列出|状态|检查|查询|什么|哪里|哪个|如何|怎么|怎样|解释|描述|总结|分析|打开网页|网页|截图|浏览器|浏览/i;
+
+/**
+ * Remove clauses that mention an execution verb only to negate it or ask how
+ * it would be done. The remaining text is still checked for an independent
+ * imperative, so "do not wait; run it" cannot downgrade to lookup.
+ */
+function actionableExecutionText(message: string): string {
+	return message
+		.replace(/\b(?:do\s+not|don't|never|without)\b[^.!?;,，。！？；\n]{0,80}/gi, " ")
+		.replace(/(?:不要|别|无需|不需要|禁止)[^.!?;,，。！？；\n]{0,40}/gi, " ")
+		.replace(/\b(?:(?:show|tell)\s+me\s+|explain\s+)?how\s+(?:do\s+i\s+|to\s+)(?:actually\s+)?(?:run|execute|launch|start|stop|deploy|install|uninstall|delete|remove|write|edit|modify|change|create|apply|commit|push)\b/gi, " ")
+		.replace(/(?:怎么|如何|怎样)(?:去|来|才能|可以)?(?:运行|执行|启动|停止|部署|安装|卸载|删除|移除|写入|编辑|修改|变更|创建|应用|提交|推送)/gi, " ");
+}
 
 function classifyIntent(message: string, explicitIntent?: RequestIntent): RequestIntent {
 	// Mutating/executing language wins over project/lookup words ("show how to
-	// run" is still an execution request and must not be treated as chat).
-	if (EXECUTION_PATTERN.test(message)) return "execution";
+	// run and then run it" retains the second imperative after meta-language is
+	// removed). Negated or explanatory mentions do not request execution.
+	if (EXECUTION_PATTERN.test(actionableExecutionText(message))) return "execution";
 	if (explicitIntent) return explicitIntent;
 	if (LOOKUP_PATTERN.test(message)) return "lookup";
 	if (PROJECT_PATTERN.test(message)) return "project-work";

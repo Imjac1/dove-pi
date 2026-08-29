@@ -66,8 +66,8 @@ export class ExecutionLedger {
 		await this.append({ taskId, stepId, kind: "model.budget.rejected", timestamp: new Date().toISOString(), mode, correlation: { requestId, sessionId, taskId }, details: { requestId, ...diagnostic } });
 	}
 
-	public async appendProviderRequestStarted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; providerCallId: string; inputTokens: number }): Promise<void> {
-		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, providerCallId: input.providerCallId, inputTokens: input.inputTokens } });
+	public async appendProviderRequestStarted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; providerCallId: string; inputTokens: number; ownerPid?: number }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, providerCallId: input.providerCallId, inputTokens: input.inputTokens, ownerPid: input.ownerPid } });
 	}
 
 	public async appendProviderRequestCompleted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; providerCallId: string; stopReason?: string; usage?: Readonly<Record<string, number>> }): Promise<void> {
@@ -145,31 +145,31 @@ export class ExecutionLedger {
 	}
 
 	/** Return capability executions that started but never reached a terminal record. */
-	public async findIncompleteCapabilityExecutions(): Promise<readonly CapabilityExecutionIntent[]> {
+	public async findIncompleteCapabilityExecutions(options: RecoveryOwnerOptions = {}): Promise<readonly CapabilityExecutionIntent[]> {
 		const intents = new Map<string, CapabilityExecutionIntent>();
 		for (const record of await this.read()) {
 			if (record.kind !== "capability.started" && record.kind !== "capability.completed" && record.kind !== "capability.cancelled" && record.kind !== "capability.timed_out" && record.kind !== "capability.recovered") continue;
-			const details = record.details as { executionId?: unknown; capability?: unknown; version?: unknown };
+			const details = record.details as { executionId?: unknown; capability?: unknown; version?: unknown; ownerPid?: unknown };
 			if (typeof details.executionId !== "string") continue;
 			if (record.kind === "capability.started") {
-				intents.set(details.executionId, { executionId: details.executionId, taskId: record.taskId, stepId: record.stepId, mode: record.mode, capability: String(details.capability ?? "unknown"), version: String(details.version ?? "unknown") });
+				intents.set(details.executionId, { executionId: details.executionId, taskId: record.taskId, stepId: record.stepId, mode: record.mode, capability: String(details.capability ?? "unknown"), version: String(details.version ?? "unknown"), sessionId: record.correlation?.sessionId, ownerPid: validPid(details.ownerPid) });
 			} else {
 				intents.delete(details.executionId);
 			}
 		}
-		return [...intents.values()];
+		return filterInactiveOwners([...intents.values()], options);
 	}
 
-	public async findIncompleteProviderRequests(): Promise<readonly ProviderRequestIntent[]> {
+	public async findIncompleteProviderRequests(options: RecoveryOwnerOptions = {}): Promise<readonly ProviderRequestIntent[]> {
 		const requests = new Map<string, ProviderRequestIntent>();
 		for (const record of await this.read()) {
 			if (record.kind !== "provider.request.started" && record.kind !== "provider.request.completed" && record.kind !== "provider.request.rejected") continue;
-			const details = record.details as { providerCallId?: unknown; requestId?: unknown };
+			const details = record.details as { providerCallId?: unknown; requestId?: unknown; ownerPid?: unknown };
 			if (typeof details.providerCallId !== "string") continue;
-			if (record.kind === "provider.request.started") requests.set(details.providerCallId, { providerCallId: details.providerCallId, requestId: String(details.requestId ?? record.correlation?.requestId ?? "unknown"), taskId: record.taskId, stepId: record.stepId, mode: record.mode, sessionId: record.correlation?.sessionId });
+			if (record.kind === "provider.request.started") requests.set(details.providerCallId, { providerCallId: details.providerCallId, requestId: String(details.requestId ?? record.correlation?.requestId ?? "unknown"), taskId: record.taskId, stepId: record.stepId, mode: record.mode, sessionId: record.correlation?.sessionId, ownerPid: validPid(details.ownerPid) });
 			else requests.delete(details.providerCallId);
 		}
-		return [...requests.values()];
+		return filterInactiveOwners([...requests.values()], options);
 	}
 }
 
@@ -191,6 +191,8 @@ export interface CapabilityExecutionIntent {
 	readonly mode: AgentMode;
 	readonly capability: string;
 	readonly version: string;
+	readonly sessionId?: string;
+	readonly ownerPid?: number;
 }
 
 export interface ProviderRequestIntent {
@@ -200,6 +202,21 @@ export interface ProviderRequestIntent {
 	readonly stepId: string;
 	readonly mode: AgentMode;
 	readonly sessionId?: string;
+	readonly ownerPid?: number;
+}
+
+export interface RecoveryOwnerOptions {
+	/** Host-owned liveness probe. Core never imports process/OS APIs. */
+	readonly isProcessActive?: (pid: number) => boolean;
+}
+
+function filterInactiveOwners<T extends { readonly ownerPid?: number }>(intents: readonly T[], options: RecoveryOwnerOptions): readonly T[] {
+	if (!options.isProcessActive) return intents;
+	return intents.filter((intent) => intent.ownerPid === undefined || !options.isProcessActive?.(intent.ownerPid));
+}
+
+function validPid(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 function isMissing(error: unknown): boolean {
