@@ -3,21 +3,20 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext, type ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { CapabilityRegistry } from "../core/capability-registry.ts";
-import { executeFastPath } from "../core/fast-path.ts";
-import { executeRecipe, RecipeRegistry } from "../core/recipe-registry.ts";
+import type { CapabilityRegistry } from "../core/capability-registry.ts";
+import { CapabilityInvocationService } from "../core/capability-invocation.ts";
+import { CAPABILITY_PROTOCOL_VERSION } from "../core/capability-protocol.ts";
+import { executeRecipe, type RecipeRegistry } from "../core/recipe-registry.ts";
 import { ExecutionLedger } from "../core/execution-ledger.ts";
 import { ModeController, type ModeChange } from "../core/mode-controller.ts";
 import { normalizeAgentMode, type AgentMode } from "../core/contracts.ts";
-import { runPowerShell } from "../windows-runtime/powershell.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
-import { applyWorkspacePatch, createWorkspaceSnapshot, inspectWorkspacePath, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
+import { applyWorkspacePatch, createWorkspaceSnapshot, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
 import { createProjectProvider, initializeTrellis, readProjectManifest, updateProjectManifest, updateTrellis, type ProjectTask, type TrellisTaskOperation } from "../project-provider/index.ts";
 import { buildProjectContext } from "../trellis-adapter/context.ts";
+import { buildInteroperableProjectContext, readInteroperableContextProjection } from "../context/interoperable.ts";
 import type { ContextSegment } from "../core/context-compiler.ts";
 import { getPiVersion } from "./host-version.ts";
-import { registerDevelopmentCapabilities } from "../capabilities/development.ts";
-import { registerWebAccessCapabilities } from "../capabilities/web-access.ts";
 import { inspectWebAccessReadiness, writeWebSearchConfig } from "../web-access/config.ts";
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
 import { discoverSkills } from "../skills/discovery.ts";
@@ -32,6 +31,9 @@ import { createRequestPlan } from "../core/request-plan.ts";
 import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, type BudgetAccounting } from "../core/model-gateway.ts";
 import { stablePromptPolicy } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
+import { inspectExtensionProfile } from "../extensions/doctor.ts";
+import { projectExtensionCapabilities } from "../extensions/capabilities.ts";
+import { createDoveRuntime } from "../runtime.ts";
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -160,8 +162,7 @@ function stripDoveContextFromPayload<T>(payload: T): T {
 
 export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const mode = new ModeController();
-	const registry = new CapabilityRegistry();
-	const recipes = new RecipeRegistry();
+	const { capabilities: registry, recipes } = createDoveRuntime();
 	const cwd = process.cwd();
 	const stateDir = process.env.DOVE_PI_STATE_DIR?.trim() ? resolve(process.env.DOVE_PI_STATE_DIR) : join(cwd, ".agent-data");
 	let projectProvider = createProjectProvider(cwd);
@@ -268,57 +269,6 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const hashline = hasHashlineEditTools(allToolNames);
 		applyActiveTools([...new Set([...current, ...requested])].filter((name) => !(hashline && name === "edit")));
 	}
-	registerDevelopmentCapabilities(registry);
-	registerWebAccessCapabilities(registry);
-	recipes.register({
-		name: "dev.validate_project",
-		version: "0.1.0",
-		description: "Run the reusable project typecheck and test workflow in order.",
-		status: "stable",
-		steps: [{ capability: "dev.typecheck" }, { capability: "dev.project_test" }],
-	});
-
-	registry.register({
-		name: "windows.host_info",
-		version: "0.1.0",
-		description: "Read basic Windows and PowerShell environment information.",
-		platforms: ["windows"],
-		sideEffects: ["read_only"],
-		idempotent: true,
-		status: "stable",
-		async execute(_args, context) {
-			const result = await runPowerShell("$PSVersionTable | ConvertTo-Json -Compress", { cwd: context.cwd, signal: context.signal, timeoutMs: 15_000 });
-			if (result.exitCode !== 0) throw new Error(result.stderr || `PowerShell exited with ${result.exitCode}`);
-			return { shell: result.executable, powershell: JSON.parse(result.stdout), durationMs: result.durationMs };
-		},
-	});
-
-	recipes.register({
-		name: "windows.readonly_baseline",
-		version: "0.1.0",
-		description: "Collect basic PowerShell host information and inspect the current workspace.",
-		status: "stable",
-		steps: [
-			{ capability: "windows.host_info" },
-			{ capability: "workspace.inspect", args: { path: "." } },
-		],
-	});
-
-	registry.register({
-		name: "workspace.inspect",
-		version: "0.1.0",
-		description: "Inspect a workspace path without modifying it.",
-		platforms: ["any"],
-		sideEffects: ["read_only"],
-		idempotent: true,
-		status: "stable",
-			requiredArgs: ["path"],
-			async execute(args, context) {
-				const typedArgs = args as { path: unknown };
-				return await inspectWorkspacePath(context.cwd, String(typedArgs.path));
-		},
-	});
-
 	function updateStatus(ctx: ExtensionContext): void {
 		// pi-open-tui renders provider telemetry (context, tokens, TPS, TTFT, cost).
 		// Dove only publishes its own mode/operation status through the host API.
@@ -576,9 +526,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("capabilities", {
-		description: "List reusable Personal Agent capabilities",
+		description: "List Dove Core capabilities and host-owned Pi plugin capabilities",
 		handler: async (_args, ctx) => {
-			const lines = registry.list().map((capability) => `${capability.name} [${capability.status}] - ${capability.description}`);
+			const core = registry.list().map((capability) => `${capability.name} [core/${capability.status}] - ${capability.description}`);
+			const extensionReport = await inspectExtensionProfile("max", { cwd, piVersion: getPiVersion(), checkExecutables: false });
+			const host = projectExtensionCapabilities(extensionReport.configuredPackages, pi.getAllTools().map((tool) => tool.name))
+				.map((capability) => `${capability.id} [${capability.provider}/${capability.status}] - ${capability.description}`);
+			const lines = [...core, ...host];
 			ctx.ui.notify(lines.join("\n"), "info");
 		},
 	});
@@ -746,27 +700,35 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const typedParams = params as { name: string; args?: Record<string, unknown> };
 			const request = currentRequestPlan;
 			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
-			const result = await executeFastPath(registry, ledger, typedParams.name, typedParams.args ?? {}, {
-				cwd,
-				mode: mode.snapshot(),
-				taskId: projectProvider.getCurrentTask()?.stableId ?? "pi-session",
-				stepId: `capability-${Date.now()}`,
-				signal,
-				requestId: request?.requestId,
-				sessionId,
-				toolCallId: _toolCallId,
+			const definition = registry.require(typedParams.name);
+			const service = new CapabilityInvocationService(registry, ledger, {
 				ownerPid: process.pid,
-			}, {
-				required: true,
-				recordPending: true,
-				authorize: async ({ name, sideEffects }) => {
+				authorize: async () => {
 					// Degraded/read-only mode is a hard safety boundary: native Pi
 					// confirmation must not turn a side-effect capability back on.
-					if (runtimeReadOnly() && sideEffects.some((effect) => effect !== "read_only")) return false;
+					if (runtimeReadOnly() && definition.sideEffects.some((effect) => effect !== "read_only")) return false;
 					if (!ctx.hasUI) return false;
-					return ctx.ui.confirm("确认执行能力？", `${name} 将执行：${sideEffects.join(", ")}。确认继续？`);
+					return ctx.ui.confirm("确认执行能力？", `${definition.name} 将执行：${definition.sideEffects.join(", ")}。确认继续？`);
 				},
 			});
+			const result = await service.invoke({
+				protocolVersion: CAPABILITY_PROTOCOL_VERSION,
+				capability: { name: typedParams.name },
+				arguments: typedParams.args ?? {},
+				context: {
+					cwd,
+					mode: mode.snapshot(),
+					taskId: projectProvider.getCurrentTask()?.stableId ?? "pi-session",
+					stepId: `capability-${Date.now()}`,
+				},
+				correlation: {
+					requestId: request?.requestId ?? `pi-${Date.now()}`,
+					hostSessionId: sessionId,
+					providerTaskId: projectProvider.getCurrentTask()?.stableId,
+					toolCallId: _toolCallId,
+				},
+				approval: ctx.hasUI ? "granted" : "unavailable",
+			}, signal);
 			return { content: [{ type: "text", text: JSON.stringify(compactModelPayload(result), null, 2) }], details: result };
 		},
 	});
@@ -777,15 +739,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		description: "List reusable capabilities before deciding whether to generate new commands.",
 		parameters: Type.Object({}),
 		async execute() {
-			const capabilities = registry.list().map(({ name, version, description, platforms, sideEffects, status }) => ({
-				name,
-				version,
-				description,
-				platforms,
-				sideEffects,
-				status,
-			}));
-			return { content: [{ type: "text", text: JSON.stringify(capabilities, null, 2) }], details: { capabilities } };
+			const core = new CapabilityInvocationService(registry, ledger).discover();
+			const extensionReport = await inspectExtensionProfile("max", { cwd, piVersion: getPiVersion(), checkExecutables: false });
+			const host = projectExtensionCapabilities(extensionReport.configuredPackages, pi.getAllTools().map((tool) => tool.name));
+			const capabilities = { core, host };
+			return { content: [{ type: "text", text: JSON.stringify(capabilities, null, 2) }], details: capabilities };
 		},
 	});
 
@@ -826,6 +784,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const documentCount = (kind: "spec" | "task" | "memory" | "journal" | "workflow") => projectContext.documents.filter((document) => document.kind === kind).length;
 			const powershell = await inspectWindowsEnvironment(cwd);
 			const allToolNames = pi.getAllTools().map((tool) => tool.name);
+			const extensionReport = await inspectExtensionProfile("max", { cwd, piVersion: getPiVersion(), checkExecutables: false });
+			const hostCapabilities = projectExtensionCapabilities(extensionReport.configuredPackages, allToolNames);
+			const contextProjection = readInteroperableContextProjection(projectProvider);
 			const thinkingLevel = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : undefined);
 			const model = ctx.model;
 			const report = {
@@ -843,6 +804,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					cacheRetention: process.env.PI_CACHE_RETENTION ?? "short",
 				},
 				cache: inspectCacheDiagnostics(ctx.sessionManager.getEntries()),
+				hostCapabilities,
+				contextAuthorities: { authorities: contextProjection.authorities, conflicts: contextProjection.conflicts },
 				powershell,
 				trellis: { enabled: project.provider === "trellis", provider: project.provider, root: project.projectRoot, version: project.trellisVersion, capabilities: project.capabilities, issues: project.issues, specFiles: documentCount("spec"), taskFiles: documentCount("task"), memoryFiles: documentCount("memory") + documentCount("journal"), workflowFiles: documentCount("workflow") },
 			};
@@ -882,7 +845,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		async execute(_toolCallId, params) {
 			const query = (params as { query?: string }).query?.trim() ?? "";
 			const context = projectProvider.getContext();
-			const compiled = buildProjectContext(projectProvider, query, mode.current);
+			const interoperable = buildInteroperableProjectContext(projectProvider, query, mode.current);
+			const compiled = interoperable.context;
 			const documents = compiled.items.map(({ id, kind, sourceRef, relevance, content }) => ({ id, kind, sourceRef, relevance, content }));
 			const tasks = context.tasks.slice(0, 50).map(({ stableId, providerTaskId, title, status, priority, path }) => ({ stableId, providerTaskId, title, status, priority, path }));
 			const result = {
@@ -893,6 +857,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				tasks,
 				taskCount: context.tasks.length,
 				tasksOmitted: Math.max(0, context.tasks.length - tasks.length),
+				authorities: interoperable.projection.authorities,
+				authorityConflicts: interoperable.projection.conflicts,
+				externalIndex: interoperable.projection.index,
 				documents,
 				contextChars: compiled.charCount,
 				estimatedTokens: compiled.estimatedTokens,

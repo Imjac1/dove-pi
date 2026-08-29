@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { EXTENSION_CATALOG, getExtension, getProfilePackages, isExtensionProfile, matchesConfiguredPackage, type ExtensionProfile, type ExtensionPackageDefinition } from "./catalog.ts";
+import { projectExtensionCapabilities, type HostCapabilityProjection } from "./capabilities.ts";
 
 export type ExtensionIssueLevel = "error" | "warning" | "info";
 
@@ -38,6 +39,7 @@ export interface ExtensionDoctorReport {
 	readonly configuredPackages: readonly string[];
 	readonly packages: readonly ExtensionPackageCheck[];
 	readonly issues: readonly ExtensionDoctorIssue[];
+	readonly capabilities: readonly HostCapabilityProjection[];
 }
 
 interface DoctorOptions {
@@ -116,6 +118,7 @@ export async function inspectExtensionProfile(profile: ExtensionProfile, options
 		configuredPackages: settings.packages,
 		packages,
 		issues,
+		capabilities: projectExtensionCapabilities(settings.packages),
 	};
 }
 

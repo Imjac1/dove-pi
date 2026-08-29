@@ -534,6 +534,8 @@ Compatibility aliases remain available: --extensions and --skip-checks.
 After installation:
   dove-pi doctor
   dove-pi update | dove-pi update --check
+  dove-pi capability list | dove-pi capability run <name>
+  dove-pi rpc | dove-pi mcp
   dove-pi skills [query]
   dove-pi web status | dove-pi web auth <hosts...> [profile=name]
   dove-pi project doctor
@@ -563,7 +565,7 @@ def main(arguments: Sequence[str]) -> int:
         return run_managed_maintenance(arguments[0], arguments[1:])
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project", "skills", "web"):
+    if arguments and arguments[0] in ("doctor", "project", "skills", "web", "capability", "rpc", "mcp"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])

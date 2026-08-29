@@ -7,8 +7,18 @@ import { exactInstallSpec, getProfilePackages } from "../src/extensions/catalog.
 import { getExtension } from "../src/extensions/catalog.ts";
 import { checkProfileConflicts, inspectExtensionProfile } from "../src/extensions/doctor.ts";
 import { installExtensionProfile } from "../src/extensions/install.ts";
+import { projectExtensionCapabilities } from "../src/extensions/capabilities.ts";
 
 describe("extension profiles", () => {
+	it("projects configured Pi plugins as host-owned capabilities without registering Core executors", () => {
+		const configured = ["npm:pi-open-tui@0.2.15", "npm:pi-web-access@0.24.2", "npm:pi-mcp-adapter@2.27.0"];
+		const projected = projectExtensionCapabilities(configured, ["web_search"]);
+		assert.equal(projected.find((entry) => entry.id === "host.telemetry")?.status, "available");
+		assert.equal(projected.find((entry) => entry.id === "host.web_access")?.status, "available");
+		assert.deepEqual(projected.find((entry) => entry.id === "host.mcp_client")?.missingTools, ["mcp"]);
+		assert.ok(projected.every((entry) => entry.provider === "pi-extension"));
+	});
+
 	it("keeps settings before the single preferred TUI renderer", () => {
 		assert.deepEqual(getProfilePackages("minimal").map((entry) => entry.id).slice(0, 2), ["extension-settings", "open-tui"]);
 		assert.equal(getProfilePackages("minimal").some((entry) => entry.id === "powerbar"), false);

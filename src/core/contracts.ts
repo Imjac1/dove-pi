@@ -10,6 +10,18 @@ export type CapabilityStatus = "draft" | "tested" | "verified" | "stable" | "dep
 
 export type SideEffect = "read_only" | "workspace_write" | "network" | "system_change" | "destructive";
 
+export interface CapabilityPrecondition {
+	readonly id: string;
+	readonly description: string;
+	readonly required: boolean;
+}
+
+export interface CapabilityEvidenceContract {
+	readonly kind: "artifact" | "log" | "summary" | "verification";
+	readonly description: string;
+	readonly required: boolean;
+}
+
 export interface CapabilityContext {
 	readonly cwd: string;
 	readonly signal?: AbortSignal;
@@ -24,6 +36,10 @@ export interface CapabilityDefinition<TArgs = Record<string, unknown>, TResult =
 	readonly sideEffects: readonly SideEffect[];
 	readonly idempotent: boolean;
 	readonly status: CapabilityStatus;
+	/** JSON Schema advertised at host boundaries. Runtime validation remains authoritative. */
+	readonly parameterSchema?: Readonly<Record<string, unknown>>;
+	readonly preconditions?: readonly CapabilityPrecondition[];
+	readonly evidence?: readonly CapabilityEvidenceContract[];
 	readonly requiredArgs?: readonly string[];
 	/** Shell command prefixes this capability replaces; used to offer a reuse hint when the model would otherwise type them by hand. */
 	readonly hintCommands?: readonly string[];
@@ -42,6 +58,8 @@ export interface CapabilityResult<TResult = unknown> {
 	readonly error?: string;
 	readonly durationMs: number;
 	readonly evidenceRefs: readonly string[];
+	readonly executionId?: string;
+	readonly outcome?: "completed" | "failed" | "approval_denied" | "cancelled" | "timed_out";
 	readonly interrupted?: boolean;
 	readonly retries?: number;
 }

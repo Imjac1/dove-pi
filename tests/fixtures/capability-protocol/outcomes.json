@@ -1,0 +1,55 @@
+[
+  {
+    "protocolVersion": "1.0.0",
+    "capability": { "name": "fixture.read", "version": "1.0.0" },
+    "status": "success",
+    "correlation": { "requestId": "fixture-success", "executionId": "exec-success" },
+    "durationMs": 1,
+    "evidenceRefs": ["evidence://safe/success"]
+  },
+  {
+    "protocolVersion": "1.0.0",
+    "capability": { "name": "fixture.read", "version": "1.0.0" },
+    "status": "failure",
+    "correlation": { "requestId": "fixture-failure", "executionId": "exec-failure" },
+    "durationMs": 1,
+    "evidenceRefs": [],
+    "error": "fixture failure"
+  },
+  {
+    "protocolVersion": "1.0.0",
+    "capability": { "name": "fixture.wait", "version": "1.0.0" },
+    "status": "timeout",
+    "correlation": { "requestId": "fixture-timeout", "executionId": "exec-timeout" },
+    "durationMs": 10,
+    "evidenceRefs": [],
+    "error": "timed out"
+  },
+  {
+    "protocolVersion": "1.0.0",
+    "capability": { "name": "fixture.wait", "version": "1.0.0" },
+    "status": "cancelled",
+    "correlation": { "requestId": "fixture-cancelled", "executionId": "exec-cancelled" },
+    "durationMs": 1,
+    "evidenceRefs": [],
+    "error": "cancelled"
+  },
+  {
+    "protocolVersion": "1.0.0",
+    "capability": { "name": "fixture.write", "version": "1.0.0" },
+    "status": "approval_denied",
+    "correlation": { "requestId": "fixture-denied", "executionId": "exec-denied" },
+    "durationMs": 0,
+    "evidenceRefs": [],
+    "error": "approval denied"
+  },
+  {
+    "protocolVersion": "1.0.0",
+    "capability": { "name": "fixture.windows", "version": "1.0.0" },
+    "status": "unsupported_platform",
+    "correlation": { "requestId": "fixture-platform", "executionId": "exec-platform" },
+    "durationMs": 0,
+    "evidenceRefs": [],
+    "error": "unsupported platform"
+  }
+]

@@ -1,6 +1,6 @@
 import { relative } from "node:path";
 import type { AgentMode } from "../core/contracts.ts";
-import { ContextCompiler, type CompiledContext, type ContextCompileOptions } from "../core/context-compiler.ts";
+import { ContextCompiler, type CompiledContext, type ContextCompileOptions, type ContextDocument } from "../core/context-compiler.ts";
 import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../project-provider/index.ts";
 
 /**
@@ -11,7 +11,11 @@ import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvide
  * the lightweight fallback) authoritative and prevents a stale Trellis read
  * from leaking into the model prompt.
  */
-export function buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode, options: ContextCompileOptions = {}): CompiledContext {
+export interface ProjectContextCompileOptions extends ContextCompileOptions {
+	readonly additionalDocuments?: readonly ContextDocument[];
+}
+
+export function buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode, options: ProjectContextCompileOptions = {}): CompiledContext {
 	const compiler = new ContextCompiler();
 	const context = provider.getContext();
 	const activeTask = context.currentTask;
@@ -60,7 +64,9 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 		}
 	}
 
-	return compiler.compile(query, mode, options);
+	for (const document of options.additionalDocuments ?? []) compiler.add(document);
+
+	return compiler.compile(query, mode, { maxChars: options.maxChars });
 }
 
 interface ContextIntent {

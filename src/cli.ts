@@ -27,6 +27,11 @@ import { inspectProjectStatus } from "./project-status.ts";
 import { runTokenAudit, formatTokenAudit } from "./commands/token-audit.ts";
 import { runCacheAudit, formatCacheAudit } from "./commands/cache-audit.ts";
 import { inspectManagedInstall } from "./managed-install-status.ts";
+import { join, resolve } from "node:path";
+import { LocalCapabilityAdapter, runLocalRpcStdio } from "./adapters/local-rpc.ts";
+import { CAPABILITY_PROTOCOL_VERSION } from "./core/capability-protocol.ts";
+import { runDoveMcpStdio } from "./adapters/mcp.ts";
+import { readInteroperableContextProjection } from "./context/interoperable.ts";
 
 const args = process.argv.slice(2);
 
@@ -36,6 +41,8 @@ if (args[0] === "doctor") {
 	const context = provider.getContext();
 	const powershell = await inspectWindowsEnvironment(process.cwd());
 	const managedInstall = inspectManagedInstall();
+	const extensions = await inspectExtensionProfile("max", { cwd: process.cwd(), piVersion: getPiVersion(), checkExecutables: false });
+	const interoperableContext = readInteroperableContextProjection(provider);
 	console.log(
 		JSON.stringify(
 			{
@@ -43,6 +50,14 @@ if (args[0] === "doctor") {
 				platform: process.platform,
 				powershell,
 				managedInstall,
+				adapters: {
+					protocolVersion: CAPABILITY_PROTOCOL_VERSION,
+					pi: { status: "available", version: getPiVersion() },
+					cliRpc: { status: "available", transport: "local-jsonl-stdio" },
+					mcp: { status: "available", transport: "stdio", sdk: "@modelcontextprotocol/sdk" },
+				},
+				hostCapabilities: extensions.capabilities,
+				contextAuthorities: { authorities: interoperableContext.authorities, conflicts: interoperableContext.conflicts },
 				project: {
 					...health,
 					currentTask: context.currentTask,
@@ -119,6 +134,12 @@ if (args[0] === "doctor") {
 	}
 } else if (args[0] === "extensions") {
 	await runExtensionsCommand(args.slice(1));
+} else if (args[0] === "capability") {
+	await runCapabilityCommand(args.slice(1));
+} else if (args[0] === "rpc") {
+	await runLocalRpcStdio(createLocalAdapter(false), process.stdin, process.stdout);
+} else if (args[0] === "mcp") {
+	await runDoveMcpStdio({ cwd: process.cwd(), ledgerPath: localLedgerPath(), ownerPid: process.pid });
 } else if (args[0] === "skills") {
 	const query = args.slice(1).join(" ").trim().toLowerCase();
 	const skills = discoverSkills(process.cwd()).filter(
@@ -227,7 +248,7 @@ if (args[0] === "doctor") {
 	console.log(formatCacheAudit(audit));
 } else {
 	console.error(
-		"Usage: dove-pi doctor | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>",
+		"Usage: dove-pi doctor | dove-pi capability list | dove-pi capability run <name> [--args=<json>] [--approve] | dove-pi rpc | dove-pi mcp | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>",
 	);
 	process.exitCode = 1;
 }
@@ -276,4 +297,51 @@ async function runExtensionsCommand(commandArgs: string[]): Promise<void> {
 	throw new Error(
 		`Unknown extensions command '${command}'. Use list, show, doctor, or install.`,
 	);
+}
+
+async function runCapabilityCommand(commandArgs: string[]): Promise<void> {
+	const command = commandArgs[0] ?? "list";
+	const adapter = createLocalAdapter(commandArgs.includes("--approve"));
+	if (command === "list") {
+		console.log(JSON.stringify({ protocolVersion: CAPABILITY_PROTOCOL_VERSION, capabilities: adapter.discover() }, null, 2));
+		return;
+	}
+	if (command !== "run" || !commandArgs[1]) throw new Error("Usage: dove-pi capability run <name> [--args=<json>] [--approve]");
+	const name = commandArgs[1];
+	const argumentsValue = readJsonFlag(commandArgs, "--args") ?? {};
+	if (typeof argumentsValue !== "object" || argumentsValue === null || Array.isArray(argumentsValue)) throw new Error("--args must be a JSON object.");
+	const sideEffects = adapter.sideEffects(name);
+	const requiresApproval = sideEffects.some((effect) => effect !== "read_only");
+	const approved = commandArgs.includes("--approve");
+	const requestId = `cli-${Date.now()}`;
+	const result = await adapter.invoke({
+		protocolVersion: CAPABILITY_PROTOCOL_VERSION,
+		capability: { name },
+		arguments: argumentsValue as Record<string, unknown>,
+		context: { cwd: process.cwd(), mode: "standard", taskId: "cli-session", stepId: requestId },
+		correlation: { requestId, hostSessionId: `pid:${process.pid}` },
+		approval: requiresApproval ? (approved ? "granted" : "unavailable") : "not_required",
+	});
+	console.log(JSON.stringify(result, null, 2));
+	if (result.status !== "success") process.exitCode = 1;
+}
+
+function createLocalAdapter(trustedCliApproval = false): LocalCapabilityAdapter {
+	return new LocalCapabilityAdapter(localLedgerPath(), {
+		ownerPid: process.pid,
+		...(trustedCliApproval ? { authorize: () => true } : {}),
+	});
+}
+
+function localLedgerPath(): string {
+	const stateDir = process.env.DOVE_PI_STATE_DIR?.trim() ? resolve(process.env.DOVE_PI_STATE_DIR) : join(process.cwd(), ".agent-data");
+	return join(stateDir, "execution.jsonl");
+}
+
+function readJsonFlag(commandArgs: readonly string[], name: string): unknown {
+	const exact = commandArgs.find((value) => value.startsWith(`${name}=`));
+	const raw = exact?.slice(name.length + 1) ?? (commandArgs.includes(name) ? commandArgs[commandArgs.indexOf(name) + 1] : undefined);
+	if (raw === undefined) return undefined;
+	if (Buffer.byteLength(raw, "utf8") > 64 * 1024) throw new Error(`${name} exceeds 65536 bytes.`);
+	return JSON.parse(raw);
 }

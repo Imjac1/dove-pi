@@ -278,7 +278,7 @@ describe("Pi adapter", () => {
 			const patch = await tools.get("agent_workspace_patch")?.execute("call", { operations: [] }, undefined, undefined, context);
 			assert.equal(patch?.details?.appliedOperations, 0);
 			const capability = await tools.get("agent_run_capability")?.execute("call", { name: "dev.project_test" }, undefined, undefined, context);
-			assert.equal(capability?.details?.status, "blocked");
+			assert.equal(capability?.details?.status, "approval_denied");
 			assert.equal(confirmations.length, 0, "read-only mode must not surface an approval that can re-enable side effects");
 		} finally {
 			if (previous === undefined) delete process.env.DOVE_PI_READ_ONLY;

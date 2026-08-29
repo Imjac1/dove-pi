@@ -1,6 +1,17 @@
 export type ExtensionProfile = "minimal" | "dev" | "research" | "security" | "max";
 export type ExtensionPlatform = "windows" | "cross-platform" | "unknown";
 
+export type ExtensionCapabilityKind = "ui" | "tool" | "middleware" | "transport" | "workflow";
+
+export interface ExtensionCapabilityDeclaration {
+	readonly id: string;
+	readonly kind: ExtensionCapabilityKind;
+	readonly authority: string;
+	readonly description: string;
+	/** Pi tool names used only to verify runtime availability; Dove never executes them from Core. */
+	readonly toolNames?: readonly string[];
+}
+
 export interface ExtensionPackageDefinition {
 	readonly id: string;
 	readonly packageName: string;
@@ -16,6 +27,7 @@ export interface ExtensionPackageDefinition {
 	readonly loadAfter?: readonly string[];
 	readonly risk: "low" | "medium" | "high";
 	readonly notes?: string;
+	readonly provides?: readonly ExtensionCapabilityDeclaration[];
 }
 
 export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
@@ -31,6 +43,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minNode: "20.0.0",
 		risk: "low",
 		notes: "Load before extensions that register settings.",
+		provides: [{ id: "host.settings", kind: "ui", authority: "pi-extension", description: "Extension settings management" }],
 	},
 	{
 		id: "open-tui",
@@ -45,6 +58,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		loadAfter: ["extension-settings"],
 		risk: "medium",
 		notes: "Preferred single TUI authority; uses provider-reported usage and has Nerd Font plus ASCII fallback. Refreshes telemetry at about 1 Hz.",
+		provides: [{ id: "host.telemetry", kind: "ui", authority: "pi-extension", description: "Terminal telemetry and status rendering" }],
 	},
 	{
 		id: "powerbar",
@@ -97,6 +111,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		profiles: ["minimal", "dev", "research", "security", "max"],
 		minPi: "0.75.0",
 		risk: "low",
+		provides: [{ id: "host.raw_input", kind: "ui", authority: "pi-extension", description: "One-shot raw input" }],
 	},
 	{
 		id: "caffeinate",
@@ -109,6 +124,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minPi: "0.80.0",
 		risk: "medium",
 		notes: "Uses PowerShell SetThreadExecutionState on Windows.",
+		provides: [{ id: "host.keep_awake", kind: "middleware", authority: "pi-extension", description: "Keep-awake lifecycle integration" }],
 	},
 	{
 		id: "hashline-edit",
@@ -122,6 +138,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minNode: "22.19.0",
 		risk: "medium",
 		notes: "Replaces built-in read/edit; enable only after a canary check.",
+		provides: [{ id: "host.workspace_edit", kind: "tool", authority: "pi-extension", description: "Hash-anchored workspace reads and edits", toolNames: ["replace", "insert"] }],
 	},
 	{
 		id: "pi-lsp",
@@ -134,6 +151,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minPi: "0.80.0",
 		risk: "medium",
 		notes: "Starts language servers on demand; configure servers separately.",
+		provides: [{ id: "host.language_diagnostics", kind: "tool", authority: "pi-extension", description: "Language-server diagnostics" }],
 	},
 	{
 		id: "cache-optimizer",
@@ -146,6 +164,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minPi: "0.82.0",
 		risk: "medium",
 		notes: "The fix command changes models.json only after explicit confirmation.",
+		provides: [{ id: "host.cache_optimization", kind: "middleware", authority: "pi-extension", description: "Provider prompt-cache optimization" }],
 	},
 	{
 		id: "mcp-adapter",
@@ -159,6 +178,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minNode: "20.0.0",
 		risk: "high",
 		notes: "Keep MCP servers disabled until explicitly needed and scoped.",
+		provides: [{ id: "host.mcp_client", kind: "transport", authority: "pi-extension", description: "Lazy MCP client discovery and invocation", toolNames: ["mcp"] }],
 	},
 	{
 		id: "web-access",
@@ -171,6 +191,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minPi: "0.80.0",
 		risk: "high",
 		notes: "External network access; apply SSRF, scope, and data-handling policy.",
+		provides: [{ id: "host.web_access", kind: "tool", authority: "pi-extension", description: "Web search and content extraction", toolNames: ["web_search"] }],
 	},
 	{
 		id: "agent-browser-native",
@@ -184,6 +205,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minNode: "22.19.0",
 		risk: "high",
 		notes: "Browser sessions and authenticated targets require explicit scope.",
+		provides: [{ id: "host.browser", kind: "tool", authority: "pi-extension", description: "Native browser automation", toolNames: ["agent_browser"] }],
 	},
 	{
 		id: "ask-user-question",
@@ -195,6 +217,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		profiles: ["dev", "research", "security", "max"],
 		minPi: "0.80.0",
 		risk: "low",
+		provides: [{ id: "host.user_question", kind: "tool", authority: "pi-extension", description: "Structured user questions", toolNames: ["ask_user_question"] }],
 	},
 	{
 		id: "plan-mode",
@@ -208,6 +231,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minNode: "20.0.0",
 		risk: "medium",
 		notes: "Native PowerShell inspection requires Pi 0.84.3 or newer.",
+		provides: [{ id: "host.plan_mode", kind: "workflow", authority: "pi-extension", description: "Read-only collaborative planning", toolNames: ["plan_mode_question", "plan_mode_complete"] }],
 	},
 	{
 		id: "lens",
@@ -222,6 +246,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		conflicts: ["pi-lsp"],
 		risk: "high",
 		notes: "Heavier than targeted pi-lsp; may run checks after edits.",
+		provides: [{ id: "host.code_intelligence", kind: "tool", authority: "pi-extension", description: "Structural code diagnostics", toolNames: ["lens_diagnostics"] }],
 	},
 	{
 		id: "background-tasks",
@@ -235,6 +260,7 @@ export const EXTENSION_CATALOG: readonly ExtensionPackageDefinition[] = [
 		minNode: "22.19.0",
 		risk: "high",
 		notes: "Use only through a Dove Pi dispatch adapter.",
+		provides: [{ id: "host.background_tasks", kind: "workflow", authority: "pi-extension", description: "Durable background work", toolNames: ["bg_run"] }],
 	},
 	{
 		id: "rtk-optimizer",

@@ -2,7 +2,7 @@ import type { AgentMode } from "./contracts.ts";
 
 export interface ContextDocument {
 	readonly id: string;
-	readonly kind: "task" | "spec" | "memory" | "journal" | "workflow" | "evidence" | "runtime";
+	readonly kind: "task" | "spec" | "memory" | "journal" | "workflow" | "evidence" | "runtime" | "instruction" | "skill" | "resource";
 	readonly content: string;
 	readonly priority?: number;
 	readonly required?: boolean;

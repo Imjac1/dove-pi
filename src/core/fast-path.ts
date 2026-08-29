@@ -2,6 +2,7 @@ import type { CapabilityRegistry } from "./capability-registry.ts";
 import type { CapabilityResult, AgentMode } from "./contracts.ts";
 import { ExecutionLedger } from "./execution-ledger.ts";
 import { createCapabilityExecution, transitionCapabilityExecution, type CapabilityExecutionSnapshot } from "./capability-runtime.ts";
+import { sanitizeEvidenceReferences } from "./evidence.ts";
 
 export interface CapabilityAuthorization {
 	/** Require an explicit decision for capabilities with side effects. */
@@ -12,6 +13,7 @@ export interface CapabilityAuthorization {
 }
 
 export interface CapabilityExecutionOptions {
+	readonly executionId?: string;
 	readonly timeoutMs?: number;
 	/** Retries are allowed only for idempotent capabilities. */
 	readonly retries?: number;
@@ -29,7 +31,7 @@ export async function executeFastPath(
 	execution: CapabilityExecutionOptions = {},
 ): Promise<CapabilityResult> {
 	const capability = registry.require(name);
-	const executionId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	const executionId = execution.executionId ?? `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 	let executionState: CapabilityExecutionSnapshot = createCapabilityExecution({ executionId, capability: name, version: capability.version });
 	for (const required of capability.requiredArgs ?? []) {
 		if (args[required] === undefined || args[required] === null || args[required] === "") {
@@ -58,7 +60,7 @@ export async function executeFastPath(
 				correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 				details: { capability: name, version: capability.version, executionId, reason: "approval_required" },
 			});
-			return { status: "blocked", capability: name, version: capability.version, error: "Capability approval was not granted.", durationMs: 0, evidenceRefs: [] };
+			return { status: "blocked", capability: name, version: capability.version, error: "Capability approval was not granted.", durationMs: 0, evidenceRefs: [], executionId, outcome: "approval_denied" };
 		}
 		if (authorization.recordPending && authorization.authorize) await ledger.appendCapabilityApproved({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
 		executionState = transitionCapabilityExecution(executionState, "approved");
@@ -91,6 +93,7 @@ export async function executeFastPath(
 			}
 			const timer = execution.timeoutMs && execution.timeoutMs > 0 ? setTimeout(() => controller.abort(), execution.timeoutMs) : undefined;
 			try {
+				if (controller.signal.aborted) throw new Error("Capability execution was cancelled before start.");
 				result = await capability.execute(args, { cwd: context.cwd, mode: context.mode, signal: controller.signal });
 				if (timer) clearTimeout(timer);
 				if (context.signal) context.signal.removeEventListener("abort", parentAbort);
@@ -109,7 +112,7 @@ export async function executeFastPath(
 					}
 					if (!interrupted) executionState = transitionCapabilityExecution(executionState, "failed", message);
 					await ledger.append({ taskId: context.taskId, stepId: context.stepId, kind: "capability.completed", timestamp: new Date().toISOString(), mode: context.mode, correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId }, details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message, interrupted, retries: attempts - 1 } });
-					return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], interrupted, retries: attempts - 1 };
+					return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], interrupted, retries: attempts - 1, executionId, outcome: interrupted ? (execution.timeoutMs && !context.signal?.aborted ? "timed_out" : "cancelled") : "failed" };
 				}
 			}
 		}
@@ -120,14 +123,14 @@ export async function executeFastPath(
 				const message = typeof verification === "string" ? verification : "Capability postcondition verification failed.";
 				executionState = transitionCapabilityExecution(executionState, "failed", message);
 				await ledger.append({ taskId: context.taskId, stepId: context.stepId, kind: "capability.completed", timestamp: new Date().toISOString(), mode: context.mode, correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId }, details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message, verified: false } });
-				return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], retries: Math.max(0, attempts - 1) };
+				return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], retries: Math.max(0, attempts - 1), executionId, outcome: "failed" };
 			}
 		}
 		executionState = transitionCapabilityExecution(executionState, "completed");
 		let evidenceRefs: string[] = [];
 		let evidenceError: string | undefined;
 		if (execution.captureEvidence) {
-			try { evidenceRefs = [...await execution.captureEvidence(result)]; }
+			try { evidenceRefs = [...sanitizeEvidenceReferences(await execution.captureEvidence(result))]; }
 			catch (error) { evidenceError = error instanceof Error ? error.message : String(error); }
 		}
 		await ledger.append({
@@ -139,7 +142,7 @@ export async function executeFastPath(
 		correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 		details: { capability: name, version: capability.version, executionId, status: "success", durationMs, evidenceRefs, ...(evidenceError ? { evidenceError } : {}) },
 		});
-		return { status: "success", capability: name, version: capability.version, result, durationMs, evidenceRefs, retries: Math.max(0, attempts - 1) };
+		return { status: "success", capability: name, version: capability.version, result, durationMs, evidenceRefs, retries: Math.max(0, attempts - 1), executionId, outcome: "completed" };
 	} catch (error) {
 		const durationMs = Date.now() - started;
 		const message = error instanceof Error ? error.message : String(error);
@@ -153,6 +156,6 @@ export async function executeFastPath(
 			correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 			details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message },
 		});
-		return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [] };
+		return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], executionId, outcome: "failed" };
 	}
 }
