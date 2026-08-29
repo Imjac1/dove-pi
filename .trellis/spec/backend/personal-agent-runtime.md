@@ -24,6 +24,21 @@ interface PowerShellResult {
   durationMs: number;
   interrupted: boolean;
 }
+
+providerOutputTokenLimit(payload: unknown): number | undefined;
+limitProviderOutputTokens<TPayload>(payload: TPayload, maxTokens: number): TPayload;
+boundedOutputReservation(input: {
+  contextWindow: number;
+  providerRequestedOutput?: number;
+  planOutputBudget: number;
+  fixedOverhead?: number;
+  inputTokens?: number;
+  canWriteProviderLimit?: boolean;
+}): number;
+
+interface RecoveryOwnerOptions {
+  isProcessActive?: (pid: number) => boolean;
+}
 ```
 
 ## 3. Contracts
@@ -50,12 +65,19 @@ interface PowerShellResult {
 | User abort / timeout | Return `interrupted: true`; never report success |
 | Pi API incompatibility | Adapter doctor reports the version issue; core remains loadable |
 | Trellis absent | Use lightweight state behavior; do not fail startup |
+| Provider output limit exceeds the remaining model window through a known field | Clamp that same field and validate accounting against the transmitted value |
+| Provider output must be reduced but no supported output field is writable | Fail closed and abort the Pi operation; do not claim an accounting-only clamp |
+| Pi provider hook rejects a request | Call `ctx.abort()` because a thrown hook exception alone is swallowed by Pi |
+| Incomplete ledger record belongs to a live process | Leave it pending; recover only legacy, unowned, or inactive-owner records |
 
 ## 5. Good / Base / Bad Cases
 
 - Good: resolve `windows.host_info`, run it directly, return typed JSON and a ledger record.
+- Good: preserve a large safe Ultra output request, or clamp a known provider field to the actual remaining capacity.
 - Base: no matching capability; let the planner create or select a reusable capability outside the Fast Path.
+- Base: preserve an explicit provider output limit that is already smaller than Dove's desired response headroom.
 - Bad: embed a Pi `ExtensionAPI` object in a core capability or regenerate a long PowerShell script for an already-registered capability.
+- Bad: reserve fewer tokens in accounting without updating the provider payload, or impose the plan's 4,096-token target as an Ultra ceiling.
 
 ## 6. Tests Required
 
@@ -65,6 +87,10 @@ interface PowerShellResult {
 - Assert PowerShell exit code, stderr, timeout, cancellation, and fallback behavior.
 - Assert Pi adapter registers tools/commands/shortcuts without changing core contracts.
 - Assert Trellis absence does not prevent runtime initialization.
+- Assert a 12.8K model with a 16,384 requested output limit clamps a known provider field and still dispatches when the final request fits.
+- Assert large-window Ultra may exceed the 4,096 planning target, while a smaller explicit provider limit is preserved.
+- Assert an unknown/unwritable output limit fails closed through `ctx.abort()` and never records a started provider call.
+- Assert live-owner records are not recovered, stop reasons are normalized, and negated/explanatory execution phrases remain read-only.
 
 ## 7. Wrong vs Correct
 
@@ -85,6 +111,28 @@ export function run(pi: ExtensionAPI) {
 // runtime owns PowerShell process details.
 registry.register(windowsHostInfoCapability);
 const result = await executeFastPath(registry, ledger, "windows.host_info", {}, context);
+```
+
+#### Provider Budget: Wrong
+
+```typescript
+// Accounting claims a smaller response, but transport still asks for 16,384.
+const gateway = new ModelGateway({ contextWindow: 12_800, reservedOutput: 4_096 });
+return originalPayload;
+```
+
+#### Provider Budget: Correct
+
+```typescript
+const reservedOutput = boundedOutputReservation({
+  contextWindow,
+  providerRequestedOutput: providerOutputTokenLimit(payload) ?? model.maxTokens,
+  planOutputBudget: plan.outputBudget,
+  inputTokens,
+  fixedOverhead,
+  canWriteProviderLimit: providerOutputTokenLimit(payload) !== undefined,
+});
+return limitProviderOutputTokens(payload, reservedOutput);
 ```
 
 ## Design Decision: Adapter Firewall
@@ -126,6 +174,9 @@ prompt/context. Intent classes are `chat`, `lookup`, `project-work`, and
 `execution`; ordinary conversation has no project-task context or capability
 requirements. Mutation/execution language always wins over a caller-provided
 `explicitIntent`, so an untrusted hint cannot downgrade approval requirements.
+Negated or explanatory mentions of an execution verb remain read-only, while
+a later comma- or semicolon-delimited imperative is classified independently
+and still requires the execution boundary.
 
 The Pi adapter treats chat isolation as an active boundary, not only a prompt
 selection hint: chat turns do not read the full project projection for tool
@@ -139,7 +190,13 @@ subtracts reserved output, reasoning, tool-schema, and provider-overhead tokens
 from the model context window, validates the complete request before transport
 dispatch, and throws a structured diagnostic on overflow. Required segments are
 ranked first but never bypass the final budget check. Provider stop reasons are
-normalized once at this boundary.
+normalized once at this boundary. A request plan's output budget is minimum
+response headroom, not a fixed provider-output ceiling; a large-window Ultra
+request may retain a larger provider-requested limit when the final payload fits.
+When Dove clamps output, it must write the same value through a known provider
+field (`max_tokens`, `max_output_tokens`, or `max_completion_tokens`) so
+accounting and transport remain synchronized. If no known field can be updated,
+the request fails closed instead of pretending the transport limit changed.
 
 `executeFastPath` accepts an optional authorization boundary:
 
@@ -164,7 +221,9 @@ fit. It may remove only Dove-derived context and retry the deterministic check;
 user history is never silently truncated. Accepted and rejected calls are
 correlated in the execution ledger with request, session, task, and
 provider-call identifiers, while `after_provider_response` records the HTTP
-outcome and usage projection.
+outcome and usage projection. Pi records and swallows extension-hook exceptions,
+so a rejected `before_provider_request` must call the host `ctx.abort()` boundary;
+throwing alone is only the fallback for hosts that do not expose that boundary.
 
 Capability executions receive a unique `executionId` and optional request,
 session, and tool-call correlation. Host integrations may persist an explicit
@@ -175,7 +234,11 @@ non-idempotent side effect. A user must explicitly retry through the normal
 approval boundary after reconciliation. Approved decisions are recorded
 separately from blocked decisions. Optional evidence capture is best-effort:
 an unavailable artifact is reported in ledger details without converting an
-already completed side effect into a false execution failure.
+already completed side effect into a false execution failure. Started
+capability and provider records carry an optional host-owned process ID;
+recovery must leave records owned by a live process untouched, while legacy,
+unowned, or inactive-owner records remain recoverable. Core receives the
+liveness callback and never imports host process APIs.
 
 ## Scenario: Dispatch Cost Calibration
 
