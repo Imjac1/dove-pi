@@ -153,3 +153,26 @@ Completed and validated the Dove-Pi clean-slate V2 runtime slice: immutable requ
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: Transactional Dove Pi managed installation and stable updates
+
+**Date**: 2026-08-29
+**Task**: Transactional Dove Pi managed installation and stable updates
+**Branch**: `master`
+
+### Summary
+
+Replaced checkout-backed Git updates with a transactional managed installer and stable GitHub release flow; pinned bundled Pi, TUI, Trellis and Dove-managed extensions; added repair, rollback, bounded uninstall, offline diagnostics, release/bootstrap validation, tests, and complete Chinese/English documentation.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bef03be` | (see git log) |
+| `3584aa9` | (see git log) |
+| `ebb8020` | (see git log) |
+
+### Status
+
+[OK] **Completed**

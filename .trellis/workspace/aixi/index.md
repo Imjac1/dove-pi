@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 2
+- **Total Sessions**: 3
 - **Last Active**: 2026-08-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~155 | Active |
+| `journal-1.md` | ~178 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 3 | 2026-08-29 | Transactional Dove Pi managed installation and stable updates | `bef03be`, `3584aa9`, `ebb8020` | `master` |
 | 2 | 2026-08-29 | Complete Dove-Pi V2 runtime architecture | `1add042`, `4bee290`, `5689998` | `master` |
 | 1 | 2026-08-28 | Auto-update Pi extensions during Dove install | `a3e0c41`, `d077164` | `master` |
 <!-- @@@/auto:session-history -->
