@@ -26,6 +26,7 @@ import { discoverSkills } from "./skills/discovery.ts";
 import { inspectProjectStatus } from "./project-status.ts";
 import { runTokenAudit, formatTokenAudit } from "./commands/token-audit.ts";
 import { runCacheAudit, formatCacheAudit } from "./commands/cache-audit.ts";
+import { inspectManagedInstall } from "./managed-install-status.ts";
 
 const args = process.argv.slice(2);
 
@@ -34,12 +35,14 @@ if (args[0] === "doctor") {
 	const health = provider.getHealth();
 	const context = provider.getContext();
 	const powershell = await inspectWindowsEnvironment(process.cwd());
+	const managedInstall = inspectManagedInstall();
 	console.log(
 		JSON.stringify(
 			{
 				node: process.version,
 				platform: process.platform,
 				powershell,
+				managedInstall,
 				project: {
 					...health,
 					currentTask: context.currentTask,
