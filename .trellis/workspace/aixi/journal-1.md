@@ -176,3 +176,25 @@ Replaced checkout-backed Git updates with a transactional managed installer and 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Harden provider token guard
+
+**Date**: 2026-08-30
+**Task**: Harden provider token guard
+**Branch**: `master`
+
+### Summary
+
+Completed provider budget safety hardening without imposing an Ultra output cap; synchronized known provider limits with accounting, aborted unsafe Pi requests, preserved live-owner ledger records, stabilized prompt prefixes, normalized stop reasons, corrected negated intent detection, isolated Trellis context tests, and documented the runtime contracts.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b5df03` | (see git log) |
+| `3856a2e` | (see git log) |
+
+### Status
+
+[OK] **Completed**
