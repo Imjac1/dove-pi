@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Authoritative request planning, Pi lifecycle, context, tool, provider budget, and managed runtime contracts"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Prompt-to-provider and adapter boundary tracing for the E2E journey"}
+{"file": ".trellis/tasks/08-30-request-middleware-optimization/prd.md", "reason": "Previous live baseline and the middleware behavior this E2E must validate"}
+
