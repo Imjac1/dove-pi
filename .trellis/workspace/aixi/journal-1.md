@@ -220,3 +220,24 @@ Completed and verified the Personal Agent OS architecture and provider safety co
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: Dove Pi normal-user E2E evaluation
+
+**Date**: 2026-08-30
+**Task**: Dove Pi normal-user E2E evaluation
+**Branch**: `master`
+
+### Summary
+
+Recorded a real TUI prompt-to-agent journey, verified the coding loop, and identified Dove-side intent and Trellis-provider continuation regressions without changing Trellis.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bb407cd` | (see git log) |
+
+### Status
+
+[OK] **Completed**
