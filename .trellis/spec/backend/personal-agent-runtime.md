@@ -450,88 +450,6 @@ const devNodeVersion = "node --version"; // reviewed, versioned capability
 return runPowerShell(devNodeVersion, { cwd, signal, timeoutMs: 15_000 });
 ```
 
-## Scenario: Dove Pi Installation Boundary
-
-### 1. Scope / Trigger
-
-- Trigger: installing the repository on Windows or launching the configured Agent from a target project.
-- Scope: `dove_pi.py` is the combined installer and launcher; `bin/dove-pi.cjs` is only the npm shim. The official Pi package remains an implementation dependency and is not renamed or forked.
-
-### 2. Signatures
-
-```powershell
-python dove_pi.py install [--profile PROFILE] [--verify quick|full|none] [--no-font] [--no-path] [--clean]
-python dove_pi.py setup [same options as install]
-python dove_pi.py update [--check] [--force] [--verify quick|full|none] [--no-trellis-update]
-dove-pi [official-pi-options]
-```
-
-### 3. Contracts
-
-- The installer requires Python, Node.js `>=22.19.0`, and npm. On the first install (or with `--clean`) it uses `npm ci`; subsequent installs use lockfile-aware `npm install --prefer-offline` instead of a broad `npm update`, so repeated setup is faster and does not unexpectedly upgrade the dependency graph. When a selected profile already has configured Pi packages, it first delegates extension updates to Pi's official `pi update --extensions`, then installs only missing profile entries through Pi's official `pi install` command. Update failure is reported as a warning and does not prevent profile reconciliation; `--no-extension-updates` opts out. It installs the `max` extension profile by default (or the selected profile, unless `--no-extensions` is supplied), attempts the Windows Nerd Font installation through winget unless `--no-font` is supplied, and runs quick type-check/Pi smoke verification by default. `--verify full` adds the complete test suite and `--verify none` skips checks. If winget is unavailable or the font install fails, it configures the TUI to use ASCII icons and continues. `setup` is a user-friendly alias for `install`; `--profile` and `--verify` are the primary options, while `--extensions` and `--skip-checks` remain compatibility aliases.
-- The same `dove_pi.py` entry point launches the configured Pi host when invoked without the `install` subcommand.
-- Invoking `python dove_pi.py` with no arguments must launch Pi (it must not index an empty argv list); installer help
-  keeps the common controls (`--verify`, `--no-font`, `--no-path`, `--clean`) separate from advanced profile controls.
-- Repeated setup should keep extension installation output concise: already configured packages are skipped without one
-  noisy line per package unless verbose diagnostics are explicitly requested.
-- The launcher keeps `process.cwd()` as the target workspace and injects `.pi/extensions/personal-agent.ts` from the installed Dove Pi source tree.
-- By default the installer creates `%LOCALAPPDATA%\DovePi\bin\dove-pi.ps1` and `dove-pi.cmd`, and adds that directory to the user PATH. `--no-path` suppresses the PATH mutation. The `.cmd` file is ASCII-only and resolves its sibling PowerShell launcher via `%~dp0`, so non-ASCII user/repository paths never need to be encoded into the batch file; the PowerShell launcher is UTF-8 with BOM for PowerShell 5.1/7 compatibility.
-- The underlying `@earendil-works/pi-coding-agent` executable remains `pi`; only the user-facing project launcher is named `dove-pi`.
-- `dove-pi update` self-updates from the git origin, tracking `master`: fetch + `merge --ff-only`, never a forced/persistent branch switch, never a tag-based release flow. It must classify HEAD relationships explicitly: `up-to-date`, `remote-ahead` (the only state that updates), `local-ahead` (safe no-op), and `diverged` (manual-resolution error). A dirty working tree aborts unless `--force` (which runs `git reset --hard`); a detached HEAD, non-`master` branch, or missing `origin` aborts with an actionable command.
-- The extension profile is persisted in `.dove/manifest.json` (gitignored; `schemaVersion`, `profile`, `previousCommit`, `currentCommit`, `lastUpdatedAt`). `install`/`update` reuse the stored profile instead of silently falling back to `max`; a missing or malformed manifest falls back to `max` without blocking.
-- Before an update, `previousCommit` is recorded in the manifest so rollback is `git reset --hard <previousCommit>` followed by a re-run of `dove-pi install`. `update --check` only fetches and reports `{currentCommit, targetCommit, updateAvailable}` without changing the working tree.
-- `install` (and the post-update phase) updates the global Trellis CLI via `npm update -g @mindfoldhq/trellis`; a failure is a warning and never blocks the install. `--no-trellis-update` opts out. Update/install network access is explicit: startup and `doctor` never fetch.
-
-### 4. Validation & Error Matrix
-
-| Condition | Required behavior |
-|---|---|
-| Node or npm missing | Stop before dependency mutation |
-| Node below 22.19.0 | Stop with an actionable version error |
-| Lockfile present and dependencies absent (or `--clean`) | Use `npm ci` for reproducible installation |
-| Lockfile present and dependencies already present | Use `npm install --prefer-offline` and retain the lockfile |
-| Quality gate fails | Stop unless `-SkipChecks` was explicitly supplied |
-| User PATH already contains launcher directory | Do not duplicate the entry |
-| Target project launched from another directory | Preserve that directory as Pi's working directory |
-| Dirty working tree on update without `--force` | Abort with the dirty file list; do not fetch or mutate |
-| `--force` on update with a dirty tree | `git reset --hard` then continue normally |
-| Local HEAD equals `origin/master` after fetch | Report already-up-to-date with zero git/npm side effects |
-| Local HEAD is an ancestor of `origin/master` | Fast-forward, then run the normal dependency/extension/Trellis/verification tail |
-| `origin/master` is an ancestor of local HEAD | Report `local-ahead`; do not overwrite or reinstall anything |
-| Local history diverged from `origin/master` | Abort with a manual-resolution hint; never merge non-fast-forward |
-| Current branch is not `master` | Abort with `git switch master`; never merge `origin/master` into an arbitrary branch |
-| `.dove/manifest.json` missing or malformed | Fall back to defaults (`profile: max`); do not block install/update |
-| Global Trellis CLI update fails | Warn and continue; never block install/update |
-| `update --check` offline/unreachable | Report a clear error and exit non-zero; never touch the working tree |
-
-### 5. Good/Base/Bad Cases
-
-- Good: clone Dove Pi, run `python dove_pi.py install`, open a new PowerShell window, and invoke `dove-pi` from a target project.
-- Base: use the generated absolute launcher path when PATH changes are not desired.
-- Bad: rename or replace the official Pi package, or launch with the Agent repository as the working directory when the target project is elsewhere.
-
-### 6. Tests Required
-
-- Assert the package exposes a `dove-pi` bin entry and the shim delegates to `dove_pi.py`.
-- Run Python syntax/parameter checks in CI or a Windows smoke job.
-- Assert the launcher preserves the caller's working directory and forwards Pi arguments.
-
-### 7. Wrong vs Correct
-
-#### Wrong
-
-```powershell
-pi -e C:\path\to\extension.ts
-# Uses whichever global Pi happens to be first in PATH.
-```
-
-#### Correct
-
-```powershell
-dove-pi
-# Uses the installed Dove Pi launcher and its tested Pi dependency.
-```
-
 ## Scenario: Extension Profiles and Doctor
 
 ### 1. Scope / Trigger
@@ -694,3 +612,119 @@ duplicating skill parsing or changing project files.
 - The Dove boundary must not install Trellis' competing `.pi` extension; it
   reports provider health and discovered Trellis skill count after init.
 - A missing Trellis project must not block Pi's startup lifecycle with a synchronous confirmation. Startup shows a non-blocking hint; bootstrap confirmation is deferred to the first implementation, planning, or task-oriented request, while `/project init` remains an explicit immediate path.
+
+## Scenario: Managed Dove Pi Installation and Stable Updates
+
+### 1. Scope / Trigger
+
+- Trigger: changing `dove_pi.py`, `installer/**`, release packaging, the stable launcher, managed extension reconciliation, or the bundled Trellis dependency.
+- Scope: Windows V2 installs under `%LOCALAPPDATA%\DovePi`; Pi user state, project `.trellis/`, global Trellis, and development checkouts remain external.
+
+### 2. Signatures
+
+```text
+dove-pi update [--check] [--verify quick|full|none] [--json] [--no-extensions]
+dove-pi repair [--verify quick|full|none] [--json]
+dove-pi rollback [--json]
+dove-pi uninstall --yes [--json]
+DOVE_PI_HOME=<absolute test root>
+```
+
+```python
+ComponentReconciler = Callable[[InstallState], Sequence[ManagedExtensionState]]
+
+ManagedInstaller.install_source(
+    source: Path,
+    profile: str | None,
+    verify: str,
+    reconcile_components: ComponentReconciler | None,
+    source_asset: tuple[Path, Path, str] | None,
+) -> MaintenanceResult
+ManagedInstaller.update(
+    check: bool,
+    verify: str,
+    reconcile_components: ComponentReconciler | None,
+) -> MaintenanceResult
+ManagedInstaller.repair(
+    verify: str,
+    reconcile_components: ComponentReconciler | None,
+) -> MaintenanceResult
+ManagedInstaller.rollback() -> MaintenanceResult
+ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
+```
+
+### 3. Contracts
+
+- The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
+- Install into a staging sibling, run locked dependency installation and verification, move to an immutable version, then activate with atomic state replacement. Retain current and previous.
+- Install, update, and repair hold the same cross-process maintenance lock through application activation, managed-component reconciliation, final state persistence, launcher rewrite, and pruning. The component reconciler is an injected callback so the Python installer does not duplicate the TypeScript extension catalog; never release the maintenance lock and reacquire a separate component lock between these steps.
+- A healthy current release with the same stable version is an application no-op: no archive download and no `npm ci`. Launcher repair and Dove-managed extension reconciliation may still run.
+- `repair --verify none` checks the local manifest and required runtime files. `quick` additionally runs typecheck and Pi smoke against each candidate; `full` also runs the complete test suite. A candidate that fails the requested level is not healthy and repair proceeds to previous, verified cache, or stable release.
+- A source checkout without complete `release.json` component/profile metadata is hydrated only after `npm ci` by the existing TypeScript `release:manifest` generator. The generated manifest preserves the source release ID/commit and becomes the installed manifest. A formal release manifest must instead match the lockfile and TypeScript extension catalog exactly; mismatch aborts before activation.
+- GitHub stable releases, not a checkout branch, are the update authority. Managed update never fetches, merges, or resets a checkout and never updates global Trellis.
+- `@mindfoldhq/trellis` is an exact application dependency. Project init/update invokes its absolute bundled entry; application updates never rewrite existing project `.trellis/`.
+- Reconcile only selected-profile extension identities through `pi install npm:<name>@<exact-version>`. Untargeted `pi update --extensions` is forbidden.
+- Optional component failures do not roll back an already verified application release; the reconciler records each failure as `degraded`, final state is written under the same maintenance lock, and offline doctor exposes the degraded ledger.
+- `--json` reserves stdout for exactly one JSON document on both success and failure. Human diagnostics and subprocess progress must not corrupt stdout. Mutating maintenance writes a bounded local success/failure log; `update --check` may read remote metadata but must not acquire the mutation lock, write state, or create a maintenance log.
+- A bootstrap-provided archive/checksum/tag is SHA-verified again and copied into the managed release cache before activation so `repair` can rebuild offline. Release tag, advertised version, and archive manifest version must match.
+- Tests and development E2E set a temporary `DOVE_PI_HOME`; they never modify real `%LOCALAPPDATA%\DovePi`, `~/.pi/agent`, global npm, or project state.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| SHA mismatch, unsafe zip entry, `npm ci`, or verification failure | Abort before activation; current remains unchanged |
+| Current exists but required files are missing | Validate and run previous with a repair warning |
+| Install path escapes `app/versions` | Reject it; never execute or delete it |
+| Live maintenance lock exists | Exit with owner PID/command; do not overwrite it |
+| Dead maintenance lock exists | Rotate it to a stale diagnostic before retrying |
+| Maintenance lock metadata is malformed or unreadable | Fail closed with an actionable diagnostic; never guess that the owner is stale |
+| `repair --verify quick/full` candidate fails its requested commands | Reject that candidate and continue the documented recovery order |
+| Packaged manifest differs from generated lock/catalog metadata | Abort before activation; do not silently rewrite a formal release |
+| GitHub tag/version differs from archive manifest | Reject the asset and preserve current |
+| Optional managed extension fails | Activate app and record `degraded` |
+| JSON maintenance command fails | Emit one parseable error document on stdout and put human details in the local log/stderr |
+| `update --force` is supplied | Reject with a repair instruction; never reset a checkout |
+| Uninstall lacks `--yes` | Refuse and preserve all data |
+
+### 5. Good / Base / Bad Cases
+
+- Good: under one maintenance lock, verify a versioned release, prepare/activate a sibling, reconcile exact Dove extension specs, persist final state, rewrite launchers, and prune.
+- Base: stable matches a healthy current; repair launcher/state and skip archive/dependency work.
+- Bad: release the application lock before extension reconciliation, duplicate the TypeScript catalog in Python, point the launcher at a checkout, run `git pull`, update global Trellis, or broadly update every Pi extension.
+
+### 6. Tests Required
+
+- Test state schema/path filtering, activation failure, zip-slip, and checksum rejection.
+- Use a separate process to prove only one maintenance command owns the lock.
+- Execute the PowerShell launcher with incomplete current and complete previous; assert previous runs.
+- Assert same-version update performs no download and invokes no npm runner.
+- Assert another maintenance process cannot interleave between activation, component reconciliation, and final state persistence.
+- Assert `repair` applies `none`, `quick`, and `full` verification to existing current/previous candidates and falls through on failure.
+- Assert a source checkout with no generated metadata is hydrated after `npm ci`, while a mismatched formal release manifest is rejected.
+- Assert malformed lock metadata fails closed and JSON success/failure paths each produce exactly one parseable stdout document.
+- Assert bootstrap assets populate a verified cache usable by offline repair, and tag/archive version mismatch is rejected.
+- Assert offline doctor reports current/previous managed state and degraded managed extensions without network access.
+- Assert valid V1 profile migration and corrupt-manifest fallback leave the checkout unchanged.
+- Assert uninstall removes only known managed children while preserving Pi data, project `.trellis/`, checkouts, third-party extensions, and unknown caller-owned files.
+- Validate release metadata against exact `package.json` and `package-lock.json` Pi, TUI, and Trellis versions.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+subprocess.run(["git", "reset", "--hard", "origin/master"], cwd=checkout)
+subprocess.run(["npm", "update", "-g", "@mindfoldhq/trellis"])
+```
+
+#### Correct
+
+```python
+with MaintenanceLock(layout.lock_path, "update"):
+    prepared = transaction.prepare_source(release_root, manifest, verify="quick")
+    state = transaction.activate(prepared, state, command="update")
+    state.managed_extensions = list(reconcile_components(state))
+    write_state(layout, state, command="update")
+    write_managed_launchers(layout)
+```

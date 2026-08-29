@@ -1,133 +1,79 @@
 # Dove Pi
 
-中文文档：[README.md](README.md)
+Dove Pi is a Windows-first personal agent runtime built on [Pi](https://github.com/badlogic/pi-mono). It keeps Pi's open extension model while adding sensible defaults, project context, Trellis project management, curated extensions, diagnostics, and recoverable updates.
 
-Dove Pi is a Windows-first personal Agent runtime. Users interact with Dove Pi as the single front door: Pi hosts the TUI and model, Dove executes verified work, and Trellis manages project context and tasks behind the scenes.
+## Shortest path
 
-## Requirements
+### 1. Install
 
-- Windows 10/11
-- Python 3.10+
-- Node.js `>=22.19.0`
-- Windows PowerShell 5.1 or PowerShell 7 (7 recommended)
-
-The installer selects the complete `max` extension profile by default. This `max` is only an extension collection name, not a Dove execution mode.
-
-Installing the complete profile does not mean sending every tool to the model on every turn. Dove starts in the `auto` tool set: Pi's basic tools, Dove project tools, and essential interaction tools. When the request clearly needs browser, MCP, LSP, planning, or background-task capabilities, Dove adds only the matching tools automatically. A simple `hi` therefore does not pay a fixed tens-of-thousands-of-token metadata cost.
-
-## The shortest path
+Requires Windows, PowerShell 5.1+, Python 3.10+, and Node.js 22.19+. End users do not need Git or a source checkout.
 
 ```powershell
-python .\dove_pi.py install
-cd path\to\your\project
+irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
+```
+
+To inspect the bootstrap first:
+
+```powershell
+Invoke-WebRequest https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 -OutFile .\install-dove-pi.ps1
+Get-Content .\install-dove-pi.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install-dove-pi.ps1
+```
+
+The installer selects the full `max` extension profile and installs the application under `%LOCALAPPDATA%\DovePi`. It verifies the release zip with SHA-256, runs `npm ci` and quick verification, and activates the release only after those checks pass.
+
+### 2. Enter your project
+
+```powershell
+cd C:\path\to\your-project
 dove-pi
 ```
 
-When a project has no `.trellis/`, Dove no longer blocks startup waiting for initialization confirmation. Pi becomes interactive immediately and shows a hint; Dove asks only when the first implementation, fix, planning, or task request arrives. Accepting creates Trellis, selects the provider, and loads context. Declining keeps the project in lightweight mode. You can also run `/project init` at any time.
+Dove Pi treats the directory where you run the command as the target project. Your project never needs to live inside Dove Pi's installation directory.
 
-Initialization and update commands request a Pi resource reload when the host lifecycle allows it. If the current lifecycle cannot hot-reload, run `/reload` once.
+### 3. Ask for the work
 
-## The architecture in one picture
+Conversation, lookup, project work, and execution requests automatically select suitable context and tools. Common modes are:
 
 ```text
-User → Dove Pi → Agent
-               ├─ discovers the project
-               ├─ reads normalized context
-               ├─ suggests a workflow
-               └─ calls Trellis for task changes when needed
+/mode fast
+/mode standard
+/mode ultra
 ```
 
-| Component | Owns |
+`Ultra` is an execution/reasoning policy. `max` is an installed extension profile; the two are independent.
+
+## How Trellis works
+
+Dove Pi bundles a tested, release-locked Trellis CLI. It does not depend on a global `trellis` installation and does not silently update Trellis during ordinary startup.
+
+Run these commands inside a project:
+
+```powershell
+dove-pi project init
+dove-pi project doctor
+dove-pi project update
+```
+
+- `project init` creates `.trellis/` in the current directory and installs the shared skills for that project.
+- `project update` refreshes that project's Trellis templates only when explicitly requested.
+- Updating Dove Pi never rewrites existing project `.trellis/` directories.
+- After initialization, Pi can invoke `/skill:trellis-start`, `/skill:trellis-brainstorm`, `/skill:trellis-continue`, and `/skill:trellis-check`; Codex uses the corresponding `$trellis-start` syntax. The host may also select a skill automatically when its trigger applies.
+
+You normally do not run `trellis init` yourself or install Trellis globally.
+
+## Agent, Pi, Dove, and Trellis
+
+| Layer | Ownership |
 | --- | --- |
-| Pi | Model, TUI, native shortcuts, and sessions |
-| Dove | Capabilities, modes, approvals, dispatch, evidence, and execution ledger |
-| Project Provider | Project discovery, context normalization, and task operations |
-| Trellis | Projects, tasks, specs, workflow, memory, and journals |
+| Pi | Model, TUI, sessions, and native tool host |
+| Dove | Request policy, capabilities, approvals, tool loading, evidence, and execution records |
+| Project Provider | Project discovery and normalized context boundary |
+| Trellis | Tasks, specs, workflow, memory, and journals under `.trellis/` |
 
-Trellis is the single authority for project data. Dove is the authority for execution data. Dove does not maintain a second task/spec database and never edits `.trellis/` files directly.
+Trellis is authoritative for project data. Dove does not maintain a second task/spec database or mutate `.trellis/` directly from core. Dove execution records may correlate with Trellis task IDs, but the two are not collapsed into one state store.
 
-Context has one path:
-
-```text
-Project Provider → ProjectContextSnapshot → Context Compiler → Agent
-```
-
-Binding a project to lightweight therefore changes status, task operations, and model context together.
-
-## Daily work
-
-After startup, describe the work naturally:
-
-```text
-Fix the login timeout and add tests.
-```
-
-Dove classifies the request, loads relevant project context, suggests a workflow skill, prefers verified capabilities/recipes, and records execution results. Ordinary conversation does not create a Trellis task. Explicit tracking requests and clear multi-step changes do.
-
-## Task lifecycle
-
-You can say:
-
-```text
-Start tracking this development task.
-Finish the current task.
-Archive this task.
-```
-
-The Agent can call Dove's `agent_project_task` tool for `create`, `start`, `finish`, or `archive`. The tool requires interactive confirmation and uses the same Provider and mutation ledger as the compatibility command.
-
-Compatibility commands remain available:
-
-```text
-/task create <title>
-/task start <task directory or name>
-/task finish
-/task archive <task directory or name>
-```
-
-## Skills
-
-Skills are Agent workflow instructions, not Trellis CLI commands. Dove provides advisory suggestions based on intent:
-
-- requirements and design → `trellis-brainstorm`
-- implementation or bug fixing → `trellis-before-dev`
-- tests and review → `trellis-check`
-- resuming work → `trellis-continue`
-- finishing and archiving → `trellis-finish-work`
-
-Suggestions are advisory and do not mutate the project by themselves. Explicit invocation is always available:
-
-```text
-/skill:trellis-start
-/skill:trellis-continue
-/skill:trellis-brainstorm
-/skill:trellis-before-dev
-/skill:trellis-check
-/skill:trellis-update-spec
-/skill:trellis-finish-work
-```
-
-Inspect discovery with:
-
-```text
-/skills
-/skills trellis
-```
-
-## Automatic versus explicit behavior
-
-| Behavior | Default |
-| --- | --- |
-| Discover project/provider and read context | Automatic |
-| Select context depth and dispatch route | Automatic |
-| Suggest a workflow skill | Automatic advisory |
-| Execute a skill | Explicit or workflow-confirmed |
-| Create/finish/archive a task | Explicit intent + interactive confirmation |
-| Initialize Trellis | One startup prompt or `/project init` |
-| Update Trellis templates | Explicit `/project update` |
-| Bind a provider | Advanced configuration only |
-
-## Commands you may need
+Useful Pi commands:
 
 ```text
 /status
@@ -136,108 +82,118 @@ Inspect discovery with:
 /project doctor
 /project init
 /project update
-/project bind trellis
-/project bind lightweight
 /memory [query]
 /capabilities
 /mode fast|standard|ultra
-/dove-thinking auto|lock <level>|off|status  # Dove policy; Pi's native /thinking remains unchanged
-/dove-tools                 # show the current tool set (auto by default)
-/dove-tools full            # temporarily enable all installed tools
-/dove-tools auto            # return to intent-based loading
-/dove-tools core            # force the low-token core set
-/dove-tools reset            # reset the auto session stage and clear accumulated intent tools
-Ctrl+Alt+M
+/dove-thinking auto|lock <level>|off|status
+/dove-tools auto|core|full|reset
 ```
 
-`/thinking` is Pi's built-in command for the native thinking level. Dove's auto/lock/manual policy is exposed as `/dove-thinking`, so the extension does not shadow the host command.
+`/thinking` remains Pi's native command. Dove's automatic/locked policy uses `/dove-thinking` and does not shadow the host. Task creation, completion, and archival require explicit intent and confirmation; ordinary chat does not create a Trellis task.
 
-`/status full` reports both the latest request cache hit rate (`Last CH`) and the cumulative session rate (`Session CH`), using provider-reported Pi usage rather than estimates.
+## Daily maintenance
 
-Dove project context is emitted as a versioned, append-only session snapshot. A new snapshot is added only when the mode or Trellis revision changes; workflow hints and auto tool growth do not rebuild the snapshot on every intent flip, which keeps the provider cache prefix stable. The per-request context hook never reorders the current snapshot after tool calls. Legacy unversioned snapshots are filtered for compatibility.
+```powershell
+dove-pi update
+dove-pi repair
+dove-pi rollback
+```
 
-Most users do not need `/project bind`, `/task ...`, or `/skill:*`. They remain useful for diagnostics, scripting, and compatibility.
+- `update` checks the latest stable GitHub Release. When the version is unchanged and the current release is healthy, it does not download the zip or run `npm ci`; it only repairs the launcher and reconciles Dove-managed extensions.
+- `repair` checks the current release and launcher. If current is damaged, it first recovers a runnable previous release, then rebuilds from stable when needed.
+- `rollback` atomically switches the application to previous. Pi extensions live in user state, so Dove does not pretend they roll back atomically with the app.
 
-## Execution modes
+Read-only update checks:
 
-Standard is the default. Modes affect context depth and dispatch aggressiveness, not permissions, approvals, target scope, or model limits.
+```powershell
+dove-pi update --check
+dove-pi update --check --json
+```
 
-| Mode | Best for |
-| --- | --- |
-| Fast | Small, deterministic work with exact capability matches |
-| Standard | Normal development and multi-step work |
-| Ultra | Complex work requiring more related specs and memory |
+With `--json`, stdout is one JSON document and diagnostics go to stderr. Startup, `doctor`, and ordinary chat do not query GitHub, npm, or winget.
 
-Dove has no `max` execution mode. Pi's `max` thinking level and the installer's `max` extension profile are separate concepts.
+## Managed boundary and recovery
 
-Context is not a raw dump of the whole `.trellis/` tree on every turn: Fast keeps the active task PRD and runtime contract to relevant excerpts; Standard/Ultra retrieve specs, workflow, or memory only when the request signals that intent, and an empty query never expands the whole project. Oversized documents are compacted around relevant sections. For billing, Pi/provider-reported usage remains authoritative.
-
-Large projects have three additional guardrails: Fast/Standard context retrieval has a total character budget and drops lower-ranked documents for broad queries; Ultra intentionally has no artificial fixed cap and relies on relevance, deduplication, per-document compaction, and Pi/provider model limits; project task listings return only the first 50 entries plus an omission count; Dove context is now a request-scoped system prompt instead of a persisted message. Context records written by older Dove versions are filtered before the provider request, so resuming an old session does not keep growing linearly.
-
-### Tool sets and token usage
-
-The `max` extension profile answers “which capabilities are installed”; `core/full` answers “which tool schemas are sent on this turn.” They are independent settings:
-
-- `auto` (default): add only the tools implied by the current request;
-- `core`: force low-token conversations and ordinary development;
-- `full`: temporarily enable all installed tools;
-- `DOVE_PI_TOOL_PROFILE=full`: start a session with the complete tool set.
-
-`auto` considers both the current prompt and the active Trellis task's status and file paths. For example, continuing a task that contains `.c`, `.go`, or `.ts` files can automatically add diagnostic and symbol tools. Switching affects subsequent model turns and does not uninstall anything. To stabilize the cache prefix, auto keeps intent tools active for the current session; on a long session, use `/dove-tools reset` to return to core and let intent discovery add tools again. `/status` shows the active tool set and Pi thinking level; Pi/provider usage remains the authoritative billing metric.
-
-For custom OpenRouter providers, Dove automatically sends the current Pi session ID as `x-session-affinity` so a locked upstream can reuse its prompt-cache prefix. Set `DOVE_PI_DISABLE_SESSION_AFFINITY=1` if a proxy rejects that header. Cache retention remains Pi's responsibility through `PI_CACHE_RETENTION`; use `long` only when the selected upstream supports long TTLs.
-
-When an OpenRouter DeepSeek compatibility layer returns tool calls as `<｜DSML｜tool_calls>` text, Dove converts complete calls at Pi's `message_end` boundary into standard tool blocks and sends them through Pi's existing approval and execution path. Incomplete or malformed DSML is left as ordinary text; Dove never guesses a command from a partial marker.
-
-When `pi-hashline-edit-pro` is installed, Dove automatically hides the built-in `edit` tool and keeps hashline `replace`/`insert` as the editing path, so two edit authorities are not exposed at once. `dove-pi extensions doctor` reports this compatibility boundary.
-
-Ultra does not force every tool or sub-agent to run. It permits more capable context and dispatch decisions, while shared mutable state, short work, and tightly coupled debugging remain inline to avoid unsafe parallel edits.
-
-## Updating Trellis
-
-Updates are explicit:
+Managed layout:
 
 ```text
-/project update
+%LOCALAPPDATA%\DovePi\
+  bin\
+  app\versions\<release-id>\
+  cache\releases\
+  staging\
+  state\install.json
+  logs\
 ```
 
-or:
+The stable launcher only runs path-validated releases under `app\versions`. If current is damaged while previous is complete, it falls back to previous and asks you to run `dove-pi repair`.
+
+The following data is outside the managed application and is preserved by install, update, rollback, and the default uninstall:
+
+- credentials, models, sessions, settings, and user extensions under `~/.pi/agent`;
+- every project's `.trellis/` directory;
+- source checkouts and uncommitted changes;
+- user-installed third-party Pi extensions and global Trellis installations.
+
+Remove the managed application:
 
 ```powershell
-dove-pi project update
+dove-pi uninstall --yes
 ```
 
-Trellis handles template hashes, user modifications, conflicts, and `.new` files. Dove calls the Provider, refreshes status, and records the result.
+## Extension management
 
-## Troubleshooting
+The default profile is `max`. Available profiles are `minimal`, `dev`, `research`, `security`, and `max`.
 
 ```powershell
-dove-pi doctor
-dove-pi project
-dove-pi skills trellis
-```
-
-Inside Pi:
-
-```text
-/project doctor
-/skills trellis
-```
-
-- No Trellis: accept the startup prompt or run `/project init`.
-- Skills missing: run `/reload` and trust the project directory.
-- Provider degraded: inspect `/project doctor`, repair `.trellis/`, then update.
-- Temporarily bypass Trellis: `/project bind lightweight`.
-
-## Installation options and verification
-
-```powershell
-python .\dove_pi.py install --verify full
-python .\dove_pi.py install --no-font
-python .\dove_pi.py install --no-path
-python .\dove_pi.py install --clean
+python .\dove_pi.py install --profile dev
+python .\dove_pi.py install --no-extensions
 python .\dove_pi.py install --no-extension-updates
+```
 
+Dove reconciles only package identities it owns in the selected profile, using Pi's official exact-spec installation:
+
+```text
+pi install npm:<package>@<exact-version>
+```
+
+It never runs an untargeted `pi update --extensions`, so user-installed packages are not upgraded or rewritten as a side effect. Optional extension failures are recorded as degraded and the remaining components continue; required application verification failures prevent activation.
+
+## Migrating from the checkout-backed installer
+
+Run once from the old source checkout:
+
+```powershell
+python .\dove_pi.py install
+```
+
+This compatibility command now copies and verifies the source into an independent managed version. It no longer points the global launcher at the checkout. A valid profile from the old `.dove/manifest.json` is imported, while the checkout's files, branch, commits, and uncommitted changes remain untouched.
+
+## Advanced options
+
+```powershell
+dove-pi update --verify quick
+dove-pi update --verify full
+dove-pi update --no-extensions
+dove-pi repair --verify full --json
+```
+
+- `quick`: typecheck plus Pi smoke; the default.
+- `full`: quick checks plus the full test suite.
+- `none`: intended only for controlled diagnostics or development.
+- V2 does not support `update --force`. Use `repair` for a damaged install; Dove never runs `git reset --hard` against your checkout.
+
+For isolated tests or development, set a temporary managed root:
+
+```powershell
+$env:DOVE_PI_HOME = Join-Path $env:TEMP 'DovePi-test'
+python .\dove_pi.py install --verify none --no-extensions --no-font --no-path
+```
+
+## Development and verification
+
+```powershell
+npm ci
 npm run typecheck
 npm test
 npm run test:installer
@@ -245,25 +201,12 @@ npm run doctor
 npm run pi:smoke
 ```
 
-`setup` aliases `install`. Repeated installs reuse the lockfile and npm cache; when the selected profile already has configured Pi extensions, the installer first delegates to Pi's official `pi update --extensions`, then fills in missing components. Update failures are warned but do not block installation; use `--no-extension-updates` to skip the update step.
+Publishing is triggered only by a `v*` tag that matches `package.json`. Ordinary pushes do not publish or modify user installations. Releases currently use SHA-256 integrity verification; publisher code signing is not yet included.
 
-The installer prints a stage-level summary for three cases: configured extensions updated, first install with no configured extensions (update skipped), or updates explicitly disabled. `--no-extension-updates` skips only the update step and still installs missing profile entries; `--no-extensions` skips the entire third-party extension phase.
+## Troubleshooting
 
-### Self-update from GitHub
-
-For a normal installation, just run:
-
-```powershell
-dove-pi update
-dove-pi update --check       # inspect status without installing anything
-```
-
-Dove tracks the repository's `master` branch and automatically distinguishes an up-to-date checkout, a newer GitHub checkout, local-only commits, and diverged history. A local checkout that is ahead of GitHub is reported as `local-ahead` and is never overwritten. Self-update is accepted only on `master`; running it from another branch prints the exact `git switch master` command to use. Uncommitted changes stop the update unless `--force` is explicitly supplied.
-
-Extension installation is failure-tolerant by default: when an optional extension such as `pi-lens` (which uses a Windows native binary) fails, Dove removes stale JS/native package directories, force-reifies the matching `@ast-grep/cli` and platform package, and retries once; if it still fails, the reason is shown, the remaining components continue, and the structured result lists the `failed` entry. Close other Node/Pi processes if Windows is locking a binary, then rerun the same install command.
-
-The installer also supports usernames and repository paths containing non-ASCII characters. The generated `.cmd` launcher contains ASCII only and resolves its sibling PowerShell launcher at runtime, while the PowerShell launcher is written as UTF-8 with a BOM for reliable PowerShell 5.1/7 decoding.
-
-This is a runnable foundation MVP. Task replay, a full remote control plane, a second native project database, and automatic memory promotion are intentionally out of scope for the first release.
-
-Project guidelines live in [.trellis/spec/](.trellis/spec/), and the active task is [.trellis/tasks/08-26-personal-agent-os/](.trellis/tasks/08-26-personal-agent-os/).
+- `dove-pi` is not found: open a new terminal or run `%LOCALAPPDATA%\DovePi\bin\dove-pi.cmd` directly.
+- Current is damaged: run `dove-pi repair`; the launcher can fall back when previous is complete.
+- An extension is degraded: close Pi/Node processes that may lock native binaries, then run `dove-pi repair`.
+- The project has no Trellis state: run `dove-pi project init` at its root.
+- You need every extension tool: use `/dove-tools full` inside Pi. Normal turns load tools by intent to reduce prompt tokens.

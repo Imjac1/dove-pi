@@ -1,134 +1,237 @@
-# dove-pi 自更新与插件更新功能 — 设计
+# Dove Pi V2 托管安装与更新 — Technical Design
 
-## 1. 架构与边界
+## 1. Architecture
 
-```
-┌─ 用户命令（任意 cwd）───────────────────────────┐
-│  dove-pi update [--check] [--force] [--verify] │
-│  dove-pi install [既有 flags]                   │
-└────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─ dove_pi.py（Python 入口）──────────────────────┐
-│  main(): 路由命令                               │
-│    update → run_python_update()（主体在 Python）│
-│    install → install()（既有）                  │
-└────────────────────────────────────────────────┘
-```
+```text
+GitHub latest stable release
+  ├─ install.ps1
+  ├─ dove-pi-windows.zip
+  ├─ dove-pi-windows.zip.sha256
+  └─ release.json
+             |
+             v
+%LOCALAPPDATA%\DovePi\staging\<transaction-id>
+  download -> hash verify -> extract -> npm ci -> quick verify
+             |
+             | atomic activation only after required checks pass
+             v
+%LOCALAPPDATA%\DovePi\app\versions\<release-id>
+%LOCALAPPDATA%\DovePi\state\install.json
+%LOCALAPPDATA%\DovePi\bin\dove-pi.ps1 + dove-pi.cmd
+             |
+             +---- current release
+             +---- previous release (rollback)
 
-**关键决策：update 主体放 Python 而非 TS。** 理由：
-
-1. **自更新期间代码会变**：TS 侧 `src/` 在执行中可能被新代码覆盖，但 `dove_pi.py` 是入口且很少变，Python 侧脚本在 pull 前后都可用。若放 TS，pull 后需要重新用 tsx 加载新代码，增加"旧代码跑新逻辑"的复杂度。
-2. **与 install() 同构**：install 已在 Python 侧做了 npm/扩展/字体/启动器编排，update 复用同一套 `run()`/`executable()`/`write_launchers()`。
-3. **测试面**：现有 `tests/installer_test.py` 已是 Python unittest 风格，update 测试可同域。
-
-Python 侧只做 **git 编排 + npm + 启动器**；扩展对齐继续委托 `run_local_cli(["extensions", "install", profile])`（TS 侧既有能力，避免重写）。
-
-## 2. 数据流
-
-### 2.1 `dove-pi update`（默认路径）
-
-```
-1. 解析 flags: --check / --force / --verify
-2. 定位仓库根: PROJECT_ROOT（__file__ 所在目录，与 cwd 无关）
-3. 预检（本地，无网络）:
-   - 是 git 仓库？origin 存在？当前不在 detached HEAD？（detached 时中止并提示）
-   - git status --porcelain 非空 → 无 --force 则中止；有 --force 则 git reset --hard
-4. --check 路径: git fetch origin master → 比较 HEAD vs origin/master
-   → 输出 { currentCommit, targetCommit, updateAvailable }，返回，不落地
-5. 更新前: 读 manifest，写 previousCommit=<当前 HEAD> + profile（沿用或默认 max）
-6. git fetch origin master
-7. 比较 HEAD vs origin/master:
-   - 相等 → 输出"已是最新"，跳过 8-10，进入 11（无副作用）
-   - origin/master 在 HEAD 之后 → git merge --ff-only
-   - 分叉（本地有私有提交）→ 中止提示（需人工处理，--force 已在上游处理）
-8. 依赖安装: npm ci（或 npm install --prefer-offline，沿用 install() 的 lockfile 逻辑）
-9. 扩展对齐: run_local_cli(["extensions", "install", profile]) （更新 Pi 扩展 + 补装缺失）
-10. Trellis CLI 更新: npm update -g @mindfoldhq/trellis（失败仅警告，不阻断）
-11. 启动器: write_launchers() + PATH（复用 install 逻辑，幂等）
-12. 验证: --verify quick（npm run typecheck + pi:smoke，复用 install 的 check 逻辑）
-13. 写 manifest: currentCommit=<新 HEAD>，输出结构化结果
+External user state (never moved into app versions)
+  ~/.pi/agent                  Pi settings, sessions, package root
+  <project>/.trellis           project data and generated workflows
+  arbitrary development clone user work
 ```
 
-### 2.2 `dove-pi install`（变更点）
+The stable launcher is the only permanent executable surface. It reads `state/install.json`, validates that `current.installPath` stays below the managed versions root, and starts that release's `dove_pi.py`. It never discovers a source checkout implicitly.
 
-既有 install() 流程中，第 3 步扩展对齐前**读取 manifest 的 profile**（未记录则默认 max），扩展对齐后**新增 Trellis CLI 更新**（`npm update -g @mindfoldhq/trellis`，失败警告不阻断），并在成功后**写回 manifest**（profile + currentCommit）。
+## 2. Source boundaries
 
-## 3. Manifest 契约（.dove/manifest.json）
+### Application-owned and transactional
 
-```jsonc
+- Dove Python launcher/maintenance code.
+- Dove TypeScript runtime and extension.
+- locked `node_modules`, including exact Pi core/TUI and bundled Trellis CLI.
+- release metadata required to validate compatibility.
+
+### User-scoped and non-transactional
+
+- Pi settings, models, credentials, sessions and package root.
+- Dove-managed Pi extensions recorded by identity/spec in install state.
+- user-installed Pi extensions not recorded as Dove-managed.
+- project `.trellis/` directories.
+- terminal font and Terminal settings.
+
+The application transaction may not claim that external components rolled back. External components are reconciled separately and reported as healthy/degraded.
+
+## 3. Release contract
+
+The GitHub workflow runs only for `v*` tags matching `package.json` and produces immutable assets. A release contains a machine-readable manifest similar to:
+
+```json
 {
   "schemaVersion": 1,
-  "profile": "max",                // 扩展 profile：minimal/dev/research/security/max
-  "previousCommit": "73abdb2…",    // 最近一次 update 前的 commit（回滚依据）
-  "currentCommit": "9f3e5c1…",     // 当前 commit
-  "lastUpdatedAt": "2025-08-28T10:30:00+08:00"  // ISO 8601
+  "version": "0.2.0",
+  "releaseId": "0.2.0+abcdef0",
+  "commit": "abcdef012345...",
+  "platform": "windows",
+  "runtime": { "python": ">=3.10", "node": ">=22.19.0" },
+  "components": {
+    "pi": "0.84.3",
+    "piTui": "0.84.3",
+    "trellis": "0.6.16"
+  },
+  "profiles": {
+    "max": ["npm:package-a@1.2.3"]
+  }
 }
 ```
 
-- 位置：`PROJECT_ROOT/.dove/manifest.json`（dev 与 install 同目录，天然对齐"安装位置=仓库"）。
-- **gitignore**：`.dove/` 必须加入 .gitignore（机器状态，不入库）。已在 PRD R8。
-- **读**：缺失/损坏 → 用默认值（profile=max），不阻塞。
-- **写**：每次 update 成功/install 成功都原子写（temp + rename），避免半写。
+The checked-in catalog remains the authoring source for extension identity/order/compatibility notes. Release packaging resolves every managed npm package to an exact version and writes the release manifest. Packaging fails if a profile still contains an unpinned resolved spec or if package-lock disagrees with Pi/TUI/Trellis versions.
 
-## 4. git 操作契约
+`@mindfoldhq/trellis` becomes a locked application dependency. The project provider invokes its bundled bin by absolute path. A user's unrelated global Trellis remains untouched.
 
-| 操作 | 命令 | 说明 |
-| --- | --- | --- |
-| 仓库校验 | `git rev-parse --is-inside-work-tree` + `git remote get-url origin` | 非仓库/无 origin → 中止，报"dove-pi 不是 git 安装，无法自更新" |
-| 脏树检测 | `git status --porcelain` | 非空 → 默认中止 |
-| 丢弃本地 | `git reset --hard HEAD`（--force 时） | 丢弃未提交改动 |
-| 快进 | `git fetch origin master` + `git merge --ff-only origin/master` | 保证线性；分叉时报错 |
-| 检测 detached | `git symbolic-ref -q HEAD` | 无输出 → detached，中止 |
-| --check | `git fetch origin master` + `git rev-parse HEAD` / `git rev-parse origin/master` | 只读远端引用，不改工作区 |
+## 4. Managed layout and state
 
-**注意**：`git fetch` 会更新 `.git/FETCH_HEAD` 和远端追踪引用 —— 这属于"工作区内文件未变但 git 状态变"。AC4 判定"工作区没有任何变化"应宽松解释为 `git status --porcelain` 无源码级变化（fetch 不产生）。设计上接受，测试断言用 `git status --porcelain`（fetch 不改 tracked/untracked 文件）。
+```text
+DovePi/
+  bin/
+    dove-pi.cmd
+    dove-pi.ps1
+  app/versions/
+    0.2.0+abcdef0/
+    0.1.0+1234567/
+  cache/releases/
+  staging/<uuid>/
+  state/
+    install.json
+    maintenance.lock
+  logs/maintenance-YYYYMMDD-HHMMSS.log
+```
 
-## 5. Windows 兼容设计
+`install.json` stores no secrets:
 
-- **文件锁（EPERM）**：更新 npm 依赖时，若 Windows 上 `node_modules` 被 Pi TUI/其他 Node 进程占用，`npm ci` 可能 EPERM。处理：
-  - 复用 install.ts 已有思路（`maxRetries`/`retryDelay`、明确报错+提示关闭其他 Node 进程）；
-  - update 入口打印提示「建议关闭其它 Pi/Node 会话后更新」。
-- **进程自重**：`dove_pi.py` 由 PowerShell 启动器 spawn；update 会替换 src/ 但 python 进程已加载到内存，不受影响。npm 更新的是 node_modules 下包，与运行中的 python 无关。唯一风险是 npm 正在重写 `@ast-grep` 原生二进制时被 AV 锁——沿用 `repairNativeDependency` 的重试逻辑。
-- **编码**：manifest 用 UTF-8（ensure_ascii=False 与 open-tui 配置一致）；git 输出解析用 `text=True, encoding="utf-8"`，失败兜底 locale。
+```json
+{
+  "schemaVersion": 2,
+  "current": { "releaseId": "0.2.0+abcdef0", "installPath": "..." },
+  "previous": { "releaseId": "0.1.0+1234567", "installPath": "..." },
+  "profile": "max",
+  "managedExtensions": [
+    { "identity": "npm:package-a", "spec": "npm:package-a@1.2.3", "status": "healthy" }
+  ],
+  "lastMaintenance": { "command": "update", "status": "ready", "at": "..." }
+}
+```
 
-## 6. 回滚
+Writes use a temp file in the same state directory, flush/close, then `os.replace`. Readers reject install paths that resolve outside `app\versions`. If current is missing/invalid and previous validates, the launcher falls back to previous and prints one repair notice.
 
-- 回滚点 = `previousCommit`（manifest 记录）。
-- 命令：`git reset --hard <previousCommit>` + `dove-pi install`（重新对齐依赖/扩展/启动器）。
-- 无整目录备份（决策 6）。风险：上游已有新提交时 reset 是"往回走"，之后 `update` 会再快进回来——符合预期。
-- update 失败于步骤 8-12 时：仓库 HEAD 已是新 commit，但依赖/扩展可能未对齐。下次 update 会重新走 8-12（幂等），失败不影响已有安装的启动。
+## 5. Maintenance planner and executor
 
-## 7. 离线-first
+All commands build the same internal plan:
 
-- `update` / `update --check` 是唯一联网路径（`git fetch`）。
-- `install` 保持现状（npm 可能联网，但不是"检查更新"——有 `--prefer-offline`）。
-- 启动/doctor 不加任何 fetch。doctor 可选在未来从 manifest 读 `currentCommit` 展示本地版本（无网络），本轮不做。
+```text
+discover local state
+  -> acquire lock
+  -> resolve requested release
+  -> compute steps (download/stage/reconcile/activate/cleanup)
+  -> execute with per-step result
+  -> atomically persist final state
+  -> release lock
+```
 
-## 8. 错误输出约定
+This avoids separate install/update implementations drifting again. `install`, `update`, and `repair` differ only in target selection and which health failures schedule work.
 
-- stdout 保留给结构化结果（JSON，一行），延续 CLI 现状。
-- 进度/警告走 stderr（`console.error` / python `print(..., file=sys.stderr)`）。
-- 退出码：成功 0；中止/失败 1；--check 有更新 0（信息性输出，不因"有更新"而失败）。
+### Lock contract
 
-## 9. 测试
+- Create lock atomically with exclusive create.
+- Store PID, command, start time and process start identity where available.
+- An existing live owner causes a fast actionable exit.
+- A dead PID/expired lock is renamed to a diagnostic stale file before retry; never blindly overwrite an ambiguous live lock.
+- Lock acquisition and release are covered by multi-process tests.
 
-- `tests/installer_test.py` 增加：
-  - manifest 读写（缺失/损坏/默认 profile）
-  - 脏树检测逻辑（mock git status）
-  - --force 路径（mock git reset）
-  - 版本比较（HEAD vs origin/master 相等/落后/分叉）
-- TS 侧不改动（update 主体在 Python）。若 extensions/cli.ts 有 routing 改动，补 cli 测试。
+## 6. Command flows
 
-## 10. 兼容性与迁移
+### Bootstrap install
 
-- manifest 是新增文件，无迁移。
-- `.gitignore` 追加 `.dove/`：现有机器上 `.dove/` 空目录，git 本就不跟踪空目录，无影响。
-- `dove_pi.py` main() 增加 `update` 路由；不影响既有命令。
-- 未来如需 tag 发布：`update` 的 fetch+ff-only 逻辑架构上可扩展为"比较 tag"，但本轮不做（决策 1）。
+1. `install.ps1` validates Windows, PowerShell, Python and Node.
+2. Resolve GitHub latest non-prerelease assets.
+3. Download zip and checksum to a unique temp directory.
+4. Verify SHA-256, then invoke the packaged Python maintenance entry with explicit managed root.
+5. Stage/extract, validate `release.json`, run `npm ci` and quick verification.
+6. Move staged app into `app\versions\<release-id>`.
+7. Reconcile default `max` managed extensions through bundled Pi using exact specs; optional failures become degraded entries.
+8. Install font only when missing; failure selects ASCII and remains non-fatal.
+9. Write state and launchers atomically, add bin to user PATH idempotently.
+10. Print the installed version and `dove-pi doctor` next step.
 
-## 11. 关键权衡
+### Update
 
-- **Python 而非 TS 承载 update**：牺牲 TS 类型安全换取自更新稳定性与 install 复用（前文理由）。代价是 git 操作无 TS 单测覆盖，用 Python mock 测试弥补。
-- **git 而非 zip/tarball 分发**：维持现状（安装位置=clone），零新增分发机制。代价是不适合非 git 用户——PRD 已确认此模型为 Out of Scope。
-- **fetch 也算联网**：`--check` 会联网（fetch 远端引用），符合决策 5"显式触发"。
+1. Acquire lock and fetch only explicit stable release metadata.
+2. If release differs, perform the same staging and verification path as bootstrap.
+3. If release is unchanged, skip archive/npm work.
+4. Reconcile launcher/state and only missing or mismatched Dove-managed exact extension specs.
+5. Activate a new app only after app checks pass; record external degraded components separately.
+6. Keep previous version, prune older safe versions after path validation.
+
+### Check
+
+`update --check` fetches release metadata, compares release ids, and reads local component state. It never acquires a write transaction, runs npm, changes settings or cleans staging. Network errors produce an `unavailable` result rather than implying the installation is outdated.
+
+### Repair
+
+Repair verifies current files/manifest, launcher target, runtime availability and managed extension state. A damaged app is rebuilt into a sibling version directory from cache first, then the stable asset if needed. It never edits the current directory in place.
+
+### Rollback
+
+Rollback validates previous, swaps current/previous atomically, and leaves external extensions unchanged. It then runs local doctor and reports any compatibility warning honestly.
+
+### Uninstall
+
+Uninstall validates the managed root and requires confirmation. It removes launchers and managed application/state/cache only. Pi user data, projects, external extensions and development clones remain unless a future explicit purge command is designed.
+
+## 7. Managed extension reconciliation
+
+Pi's package manager compares npm identity independent of version and replaces the configured spec when an exact version changes. Dove therefore calls Pi official install once per mismatched Dove-managed package:
+
+```text
+pi install npm:<name>@<exact-version>
+```
+
+Rules:
+
+- Never call untargeted `pi update --extensions` from Dove maintenance.
+- Never alter a package identity absent from the Dove ownership ledger unless it is part of the selected profile and the user is installing/migrating that profile.
+- Preserve package filters/metadata where Pi's persisted object form is present.
+- Install in catalog load order.
+- Retry known optional native dependency failures once; never kill processes or delete the entire Pi npm root.
+- Record required/optional result per component for doctor and JSON output.
+
+## 8. V1 migration
+
+The installer recognizes old launchers whose target is outside the managed versions root. It reads the old `.dove/manifest.json` only for a valid profile; commit fields are diagnostic, not trusted as installed version.
+
+Migration sequence:
+
+1. Snapshot old launcher target and profile.
+2. Perform a complete V2 install without modifying old launcher.
+3. Verify the new managed launch directly.
+4. Atomically replace launchers/state.
+5. Report the old checkout path and explicitly leave it untouched.
+
+If migration fails before step 4, the old launcher remains active. `--force` is removed from this path.
+
+## 9. Output and diagnostics
+
+Human mode emits stable stages such as `Resolve`, `Download`, `Verify`, `Install`, `Extensions`, `Activate`. It does not stream duplicate JSON objects from child commands; detailed child output goes to the maintenance log unless a failure occurs.
+
+`--json` emits one final JSON document to stdout. Progress and diagnostics use stderr. Error documents include code, failed step, current release, whether fallback remains runnable and log path; they exclude environment dumps and secrets.
+
+## 10. Compatibility and rollout
+
+- Windows managed install is the supported V2 path.
+- `python dove_pi.py install` delegates to managed install for one compatibility cycle.
+- Existing `dove-pi` launch behavior and target project cwd remain unchanged after launcher resolution.
+- Developers continue to run `python dove_pi.py` from a checkout. No implicit global dev link is created.
+- README stops recommending clone-as-install after V2 assets exist.
+- The first implementation PR may prepare release workflow and local fixtures without publishing a GitHub release; publication remains an explicit release operation.
+
+## 11. Security and rollback considerations
+
+- SHA-256 is verified before extraction; archive entries are rejected if they escape staging (zip-slip).
+- Every recursive delete/move resolves the absolute target and proves it is below the expected managed root.
+- Release directories become read-only by convention after activation; repair creates a replacement instead of editing current.
+- The running updater never deletes its own current/previous version.
+- Release signing is deferred and documented as a limitation.
+
+## 12. Key trade-offs
+
+- Managed releases use more disk than in-place git pull, but make failure recovery and developer isolation possible.
+- Bundling Trellis duplicates a user's optional global Trellis installation, but gives Dove a tested deterministic runtime.
+- Exact extension versions reduce surprise; users who want latest unrelated extensions manage them through Pi separately.
+- App rollback cannot atomically downgrade user-level extensions, so Dove core must remain usable when optional extensions are newer or degraded.
