@@ -68,6 +68,7 @@ dove-pi project update
 - `project update` refreshes that project's Trellis templates only when explicitly requested.
 - Updating Dove Pi never rewrites existing project `.trellis/` directories.
 - After initialization, Pi can invoke `/skill:trellis-start`, `/skill:trellis-brainstorm`, `/skill:trellis-continue`, and `/skill:trellis-check`; Codex uses the corresponding `$trellis-start` syntax. The host may also select a skill automatically when its trigger applies.
+- You can also say “continue the current project task.” Dove reads the structured Project Provider status once: it returns the current task, selects the only in-progress candidate, asks you to choose among multiple candidates, or reports that none exists. It does not guess Trellis private runtime paths.
 
 You normally do not run `trellis init` yourself or install Trellis globally.
 
@@ -80,7 +81,7 @@ You normally do not run `trellis init` yourself or install Trellis globally.
 | Project Provider | Project discovery and normalized context boundary |
 | Trellis | Tasks, specs, workflow, memory, and journals under `.trellis/` |
 
-Trellis is authoritative for project data. Dove does not maintain a second task/spec database or mutate `.trellis/` directly from core. Dove execution records may correlate with Trellis task IDs, but the two are not collapsed into one state store.
+Trellis is authoritative for project data. Dove does not maintain a second task/spec database or mutate `.trellis/` directly from core. Dove execution records may correlate with Trellis task IDs, but the two are not collapsed into one state store. Future Trellis updates remain owned by its explicit `project update`; Dove adapts through the public Project Provider contract and does not fork or patch Trellis.
 
 Useful Pi commands:
 
@@ -146,7 +147,14 @@ dove-pi update --check
 dove-pi update --check --json
 ```
 
-With `--json`, stdout is one JSON document and diagnostics go to stderr. Startup, `doctor`, and ordinary chat do not query GitHub, npm, or winget.
+With `--json`, stdout is one JSON document and diagnostics go to stderr. Dove itself does not query GitHub, npm, or winget during startup, `doctor`, or ordinary chat, but Pi may run its own version/package checks. Disable them explicitly for one launch when needed:
+
+```powershell
+dove-pi --skip-version-check  # skip only Pi's version check
+dove-pi --offline             # skip all Pi startup network/package checks
+```
+
+Both controls are off by default, preserve normal online update notices, and do not disable a later explicit `dove-pi update`.
 
 ## Managed boundary and recovery
 
@@ -167,9 +175,12 @@ The stable launcher only runs path-validated releases under `app\versions`. If c
 The following data is outside the managed application and is preserved by install, update, rollback, and the default uninstall:
 
 - credentials, models, sessions, settings, and user extensions under `~/.pi/agent`;
+- workspace-isolated Dove runtime state and execution ledgers under `~/.pi/agent/dove/workspaces/<hash>`; `DOVE_PI_STATE_DIR` remains an explicit override;
 - every project's `.trellis/` directory;
 - source checkouts and uncommitted changes;
 - user-installed third-party Pi extensions and global Trellis installations.
+
+Ordinary sessions no longer create `.agent-data/execution.jsonl` inside source repositories. Known legacy Dove state files are copied once to the new location without deleting the source or continuing dual writes. Transactional workspace snapshots remain explicit capability artifacts rather than ordinary session state.
 
 Remove the managed application:
 

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"RequestPlan、Provider Firewall、ProjectProvider、provider cache/ledger 与 Pi adapter 的主运行时契约。"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"ProgressGuard advisory、provider 拒绝、legacy 状态迁移和失败策略。"}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Execution ledger 新诊断字段、敏感信息边界与关联字段。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"请求从 planner、Pi middleware、provider payload 到 audit 的跨层一致性。"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"共享 RequestPlan、continuation projection 和 state resolver，避免重复判定。"}

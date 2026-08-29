@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"核对 Dove/Trellis 边界、工具权限、续接投影、缓存和 provider gate 契约。"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"核对测试覆盖、共享逻辑与禁止模式。"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"核对 advisory warning、fallback 与不误报成功。"}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"核对 ledger 字段、隐私与可诊断性。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"核对 planner、tool profile、Pi、ProjectProvider、launcher 和文档全链路。"}

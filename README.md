@@ -68,6 +68,7 @@ dove-pi project update
 - `project update` 仅在你显式执行时更新当前项目的 Trellis 模板。
 - Dove Pi 更新应用本身时，不改写任何项目的 `.trellis/`。
 - 初始化后，在 Pi 中可以用 `/skill:trellis-start`、`/skill:trellis-brainstorm`、`/skill:trellis-continue`、`/skill:trellis-check`；在 Codex 中使用 `$trellis-start` 等对应语法。符合 skill 触发条件时，宿主也可自动选择。
+- 也可以直接说“继续当前项目任务”。Dove 只读取一次 Project Provider 的结构化状态：有 current task 就返回它；只有一个进行中任务就作为唯一候选；多个候选会让你选择；没有候选则明确说明。它不会猜测 Trellis 的私有运行目录。
 
 通常不需要先手动运行 `trellis init`，也不需要单独安装全局 Trellis。
 
@@ -80,7 +81,7 @@ dove-pi project update
 | Project Provider | 项目发现和统一上下文边界 |
 | Trellis | `.trellis/` 内的任务、spec、workflow、memory 和 journal |
 
-Trellis 是项目数据的权威，Dove 不维护第二套任务/spec 数据库，也不从 core 直接改写 `.trellis/`。Dove 的执行记录与 Trellis 任务 ID 关联，但两者不混成一个状态文件。
+Trellis 是项目数据的权威，Dove 不维护第二套任务/spec 数据库，也不从 core 直接改写 `.trellis/`。Dove 的执行记录与 Trellis 任务 ID 关联，但两者不混成一个状态文件。Trellis 后续更新由它自己的 `project update` 负责；Dove 只通过 Project Provider 公共契约适配，不 fork 或 patch Trellis。
 
 常用 Pi 命令：
 
@@ -146,7 +147,16 @@ dove-pi update --check
 dove-pi update --check --json
 ```
 
-`--json` 的 stdout 是单个 JSON 文档，诊断信息写入 stderr。启动、`doctor` 和普通聊天不会检查 GitHub、npm 或 winget。
+`--json` 的 stdout 是单个 JSON 文档，诊断信息写入 stderr。Dove 的维护层只在显式维护命令中检查 GitHub、npm 或 winget。
+
+Dove 自己不会在启动时访问 GitHub、npm 或 winget，但 Pi 可能执行自己的版本/扩展包检查。需要快速启动时可按本次启动显式关闭：
+
+```powershell
+dove-pi --skip-version-check  # 只跳过 Pi 版本检查
+dove-pi --offline             # 跳过 Pi 的全部启动网络和扩展包检查
+```
+
+两项默认都关闭，不会改变正常在线更新提醒；它们也不会禁用后续显式执行的 `dove-pi update`。
 
 ## 安装边界与恢复
 
@@ -167,9 +177,12 @@ dove-pi update --check --json
 以下内容不属于托管应用目录，安装、更新、回滚和默认卸载都不会删除：
 
 - `~/.pi/agent` 中的凭据、模型、会话、settings 和用户扩展；
+- `~/.pi/agent/dove/workspaces/<hash>` 中按项目隔离的 Dove 运行状态和 execution ledger；`DOVE_PI_STATE_DIR` 仍可显式覆盖；
 - 任意项目的 `.trellis/`；
 - 你的源码仓库和未提交修改；
 - 用户自行安装的第三方 Pi 扩展或全局 Trellis。
+
+Dove 不再为普通会话在源码仓库生成 `.agent-data/execution.jsonl`。旧 `.agent-data` 中已知的 Dove 状态文件只会安全复制一次到新位置，原文件不会被删除，也不会继续双写。事务型 workspace snapshot 仍是显式能力产物，不属于普通会话状态。
 
 卸载托管应用：
 

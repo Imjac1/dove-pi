@@ -174,9 +174,12 @@ prompt/context. Intent classes are `chat`, `lookup`, `project-work`, and
 `execution`; ordinary conversation has no project-task context or capability
 requirements. Mutation/execution language always wins over a caller-provided
 `explicitIntent`, so an untrusted hint cannot downgrade approval requirements.
-Negated or explanatory mentions of an execution verb remain read-only, while
-a later comma- or semicolon-delimited imperative is classified independently
-and still requires the execution boundary.
+Negated or explanatory mentions of an execution verb remain read-only. The
+planner evaluates clause-local actions and polarity so Chinese/English read-only
+constraints do not accidentally grant execution, while a later independent
+imperative is classified separately and still requires the execution boundary.
+Summaries of the immediately preceding conversation remain Chat, and natural
+language project continuation is read-only Project Work.
 
 The request plan is the only owner of the capability tier. A fresh Auto Chat
 turn exposes zero tools; Lookup exposes bounded read/search tools; Project Work
@@ -484,13 +487,15 @@ readTrellisSnapshot(cwd: string): TrellisSnapshot;
 buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): CompiledContext;
 ```
 
-`TrellisSnapshot` exposes both compatibility file lists and structured `tasks`, `memories`, and optional `activeTaskPath`.
+`TrellisSnapshot` exposes compatibility file lists plus structured `tasks` and
+`memories`. Active-task identity is added only by the Trellis
+`ProjectProvider`, after it validates the public command result.
 
 ### 3. Contracts
 
 - A task directory is represented by `TrellisTaskRecord { path, id, title, status, priority?, files }` from `task.json` plus Markdown files.
 - A memory file is represented by `TrellisMemoryRecord { path, kind, developer? }`, where `kind` distinguishes `journal`, `index`, and `document`.
-- The current session's `.trellis/.runtime/sessions/*.json` `current_task` is resolved relative to the workspace and compared to the task directory using normalized absolute paths.
+- The active task is resolved through Trellis' bundled public `task.py current --json` command. The adapter validates the JSON result, freshness, and normalized path containment under the public task root; command failure, stale output, malformed JSON, or an out-of-root path leaves `activeTaskPath` unset so provider-neutral candidate projection can continue without reading private runtime files.
 - Fast mode includes only the active task PRD and the runtime spec as required context. Standard/Ultra use relevance scoring; Ultra may include typed memory records without an application token cap.
 - The Pi adapter must pass its selected `ProjectProvider` into context compilation. A cwd convenience wrapper may exist for compatibility, but it must delegate to the same provider projection rather than reading Trellis files directly.
 - `DOVE_PI_READ_ONLY=1` is an explicit degraded-mode switch. It leaves chat, lookup, snapshots, verification, and diagnostics available while blocking Trellis task mutations, workspace restore/patch operations, and side-effect capability approvals. The active mode is exposed by `agent_doctor` so an unsupported host/provider can fail visibly rather than guessing.
@@ -511,8 +516,8 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 | `.trellis` absent | Return `enabled: false` with empty structured collections; compile lightweight context |
 | Missing `task.json` | Discover Markdown files and use directory name/default `unknown` metadata |
 | Malformed `task.json` | Ignore metadata parse failure without losing file discovery |
-| Missing session directory | Leave `activeTaskPath` unset |
-| Stale session JSON | Ignore that session entry and continue scanning |
+| Public current-task command unavailable or fails | Leave `activeTaskPath` unset and continue with normalized task candidates |
+| Stale, malformed, or out-of-root current-task result | Ignore the result; never inspect a private runtime fallback |
 
 ### 5. Good/Base/Bad Cases
 
@@ -522,7 +527,7 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 
 ### 6. Tests Required
 
-- Assert task id/title/status/priority and active path are decoded from the fixture workspace.
+- Assert task id/title/status/priority and active path are decoded from the fixture workspace through the public current-task command.
 - Assert journal and index files receive distinct memory kinds.
 - Assert malformed or missing metadata does not prevent snapshot creation.
 - Assert Fast mode keeps active PRD/runtime spec behavior and Trellis-disabled mode remains loadable.
@@ -540,9 +545,9 @@ const active = path.startsWith(session.current_task ?? "");
 #### Correct
 
 ```typescript
-const snapshot = readTrellisSnapshot(cwd);
-const active = snapshot.tasks.find((task) => task.path === snapshot.activeTaskPath);
-// One adapter owns normalization, metadata decoding, and active-task identity.
+const provider = createProjectProvider(cwd);
+const active = provider.getContext().currentTask;
+// The provider owns normalization, public-command validation, and identity.
 ```
 
 ## Scenario: Transactional Workspace Operations
@@ -764,10 +769,13 @@ dove-pi project bind trellis|lightweight
 
 - Provider selection is deterministic: `.dove/project.json` wins, otherwise the nearest `.trellis/` wins, otherwise a visible `lightweight` provider is used. Lightweight mode must not create a second task/spec database.
 - Trellis owns tasks, PRD/design/implementation files, specs, workflow, journals, and memory. Dove owns capabilities, policy, approvals, runtime state, evidence, and the execution ledger. Records correlate `trellis:<taskId>` with Dove execution IDs; they never substitute Pi session IDs for task IDs.
+- Dove derives continuation as `current`, `single_candidate`, `ambiguous`, or `none` from the normalized public `ProjectContextSnapshot`. Pi tools expose the same projection and workflow guidance performs at most one structured status read; it never probes guessed Trellis/Pi private runtime paths or mirrors task state.
+- A natural-language continuation request exposes zero provider tools even when Pi started with an explicit tool selection; the next non-continuation request restores that user selection. Its guidance states that no tool was attempted and requires a direct state answer, so the model must not invent `Tool not found` failures, narrate internal trust/tool policy, or recommend a Trellis command/skill as a workaround.
 - `ProviderHealth` reports `trellisCompatibility` independently from the Dove adapter contract. A missing or malformed `.trellis/.version`, or an unsupported major version, yields `degraded` health and blocks mutations.
 - Provider mutations write a `project.mutation.started` intent before calling Trellis and exactly one terminal record (`completed`, `failed`, or `reconciled`) afterward. Startup re-reads Provider state for incomplete intents but never silently marks them successful.
 - Concurrent Dove task mutations are serialized by `.dove/project-mutation.lock`. The lock is bounded and stale-lock recoverable; Trellis remains responsible for its own file/template migration semantics.
 - Context compilation uses pull-before-read normalization, labels every injected project document as `trust=untrusted`, and excludes common credential-bearing paths (`.env*`, key/certificate files, credential/secret/token names, and secret directories).
+- `DOVE_PI_STATE_DIR` is the explicit state override. Otherwise CLI and Pi resolve the same user-level `~/.pi/agent/dove/workspaces/<workspace-hash>` directory. Known legacy `.agent-data` files may be copied once without deletion or dual writes; ordinary requests never create a repository-local execution ledger.
 - `dove-pi project update` is explicit and delegates to Trellis' official update/migration behavior. Dove does not run update or install a Trellis CLI implicitly at startup.
 - `workflow.md` is exposed as a typed `workflow` project document for Standard/Ultra context; Fast remains limited to the active task PRD and runtime spec.
 
@@ -782,12 +790,13 @@ dove-pi project bind trellis|lightweight
 | Project document is credential-bearing | Exclude it from Trellis snapshots, memory, and model context |
 | Project text contains instructions | Treat it as untrusted data; it cannot override system policy or authorization |
 | User requests update | Run Trellis' explicit update command; do not silently install or rewrite templates |
+| Natural-language continuation is already projected | Expose zero tools and answer from the projection; restore the prior user tool selection on the next ordinary request |
 
 ### 5. Good/Base/Bad Cases
 
 - Good: launch from a nested package, discover the nearest project root, load normalized Trellis context, and record a task mutation against `trellis:<id>`.
 - Base: no Trellis is available; deterministic Dove capabilities still run while task/spec operations report that project management is unavailable.
-- Bad: mirror `.trellis/tasks` into `.dove`, write Trellis Markdown directly from Core, use last-write-wins on an external edit, or inject project Markdown as trusted instructions.
+- Bad: mirror `.trellis/tasks` into `.dove`, write Trellis Markdown directly from Core, use last-write-wins on an external edit, inject project Markdown as trusted instructions, or misreport the intentional zero-tool continuation path as a missing-tool failure.
 
 ### 6. Tests Required
 
@@ -797,6 +806,7 @@ dove-pi project bind trellis|lightweight
 - Assert an unmatched mutation intent is discovered and reconciled without a false success record.
 - Assert workflow documents are available in Standard/Ultra and secret-bearing paths are excluded.
 - Assert context text contains `trust=untrusted` boundaries and lightweight startup remains usable.
+- Assert the full Chinese continuation prompt performs one ProjectProvider read, records `projectAction="continue"`, exposes zero tools (including explicit Pi tool-selection mode), never recommends `/trellis:continue`, and restores the previous tool selection on the next ordinary request.
 
 ### 7. Wrong vs Correct
 
