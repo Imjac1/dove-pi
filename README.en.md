@@ -91,6 +91,28 @@ Useful Pi commands:
 
 `/thinking` remains Pi's native command. Dove's automatic/locked policy uses `/dove-thinking` and does not shadow the host. Task creation, completion, and archival require explicit intent and confirmation; ordinary chat does not create a Trellis task.
 
+## Interoperability interfaces
+
+Dove Capability Protocol `1.0.0` defines a host-neutral contract for capability versions, parameter schemas, platforms, side effects, idempotency, lifecycle, correlation IDs, and evidence references. Pi, CLI/JSON-RPC, and MCP share the same Core registry, invocation service, and ledger:
+
+```powershell
+dove-pi capability list
+dove-pi capability run workspace.inspect --args='{"path":"package.json"}'
+# Side-effecting capabilities require explicit local authorization:
+dove-pi capability run dev.project_test --approve
+```
+
+Local JSON-RPC is bounded JSONL over stdio and exposes only `capabilities/list` and `capabilities/invoke`:
+
+```powershell
+'{"jsonrpc":"2.0","id":1,"method":"capabilities/list"}' | dove-pi rpc
+'{"jsonrpc":"2.0","id":2,"method":"capabilities/invoke","params":{"protocolVersion":"1.0.0","capability":{"name":"workspace.inspect"},"arguments":{"path":"package.json"},"context":{"cwd":"C:\\path\\to\\project","mode":"standard","taskId":"rpc-session","stepId":"inspect"},"correlation":{"requestId":"rpc-1"},"approval":"not_required"}}' | dove-pi rpc
+```
+
+An MCP client can configure the stdio server as `{"command":"dove-pi","args":["mcp"]}` and call `dove_capabilities`, `dove_context`, and `dove_invoke`. `dove_context` projects Trellis, `AGENTS.md`, `CLAUDE.md`, Agent Skills, and MCP resources index-first; conflicting authorities stay separately labeled instead of being silently merged.
+
+Authorization is fail-closed: Pi uses its native confirmation UI, CLI trusts only a local `--approve`, and RPC/MCP callers cannot self-authorize through request payloads. Pi-specific TUI, browser, planning, diagnostics, and background-work features reuse reviewed plugins first; Dove projects their availability and does not duplicate them as Core executors.
+
 ## Daily maintenance
 
 ```powershell

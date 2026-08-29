@@ -29,20 +29,39 @@ policy, approvals, evidence, and durable project context that multiple hosts can
 
 ## Acceptance Criteria
 
-- [ ] A reviewed capability can be invoked through Pi and returns the same structured result and evidence record as
+- [x] A reviewed capability can be invoked through Pi and returns the same structured result and evidence record as
       its direct Core invocation.
-- [ ] The Capability Protocol has a semver contract, schema validation, and fixtures for success, failure, timeout,
+- [x] The Capability Protocol has a semver contract, schema validation, and fixtures for success, failure, timeout,
       cancellation, approval denial, and unsupported platform cases.
-- [ ] A minimal MCP adapter exposes capability discovery and execution without importing Pi or Trellis into Core.
-- [ ] A CLI/RPC adapter can execute the same capability with bounded arguments and the same ledger correlation IDs.
-- [ ] A project with Trellis, `AGENTS.md`, `CLAUDE.md`, or Agent Skills produces one normalized context projection;
+- [x] A minimal MCP adapter exposes capability discovery and execution without importing Pi or Trellis into Core.
+- [x] A CLI/RPC adapter can execute the same capability with bounded arguments and the same ledger correlation IDs.
+- [x] A project with Trellis, `AGENTS.md`, `CLAUDE.md`, or Agent Skills produces one normalized context projection;
       duplicate authorities are reported instead of silently merged.
-- [ ] Ordinary turns load only an index/current-task summary; explicit workflow, spec, or memory requests load
+- [x] Ordinary turns load only an index/current-task summary; explicit workflow, spec, or memory requests load
       relevance-ranked excerpts and report estimated context size.
-- [ ] 100% of started executions have a terminal ledger record, and evidence excludes secret-bearing paths by default.
-- [ ] Adapter doctor reports host/provider incompatibility without preventing lightweight read-only startup.
-- [ ] The first interoperability smoke matrix covers Pi plus at least one external-host adapter fixture; no product
+- [x] 100% of started executions have a terminal ledger record, and evidence excludes secret-bearing paths by default.
+- [x] Adapter doctor reports host/provider incompatibility without preventing lightweight read-only startup.
+- [x] The first interoperability smoke matrix covers Pi plus at least one external-host adapter fixture; no product
       claim depends on a live vendor account.
+
+## Acceptance Evidence
+
+- `tests/interop-smoke-matrix.test.ts` runs `workspace.inspect` through Direct
+  Core, CLI/JSON-RPC, official MCP in-memory transport, and Pi's registered tool,
+  then compares protocol version, capability identity, terminal status,
+  evidence projection, and correlation IDs.
+- `tests/capability-protocol.test.ts` validates the semver/schema fixtures,
+  terminal outcomes, ledger reconciliation, trusted approval boundary, and
+  default evidence-reference filtering.
+- `tests/local-rpc.test.ts` proves RPC method/argument bounds, shared ledger
+  correlation, and denial of payload-forged approval. `tests/mcp-adapter.test.ts`
+  proves discovery/context/invocation over the official SDK and confirms MCP
+  does not expose an approval field.
+- `tests/interoperable-context.test.ts`, context compiler tests, and project
+  provider tests cover separately labeled authorities, explicit conflict
+  diagnostics, index-first disclosure, targeted excerpts, estimates, and
+  lightweight/degraded startup. Doctor output reports protocol/adapter, plugin,
+  provider, and context-authority health without using a vendor account.
 
 ## Out of Scope
 
@@ -64,3 +83,9 @@ policy, approvals, evidence, and durable project context that multiple hosts can
 - Vendor adapters may change quickly; keep them thin and version-gated.
 - External hosts may have different permission models; Dove must fail closed when a boundary cannot be represented.
 - Live cloud integrations are deferred until the local protocol and replay-ready ledger are stable.
+- A future protocol revision must decide one serialized/depth budget for nested Direct/MCP arguments instead of relying
+  only on property-count and transport-line limits.
+- External adapter responses need an explicit inline-versus-artifact envelope before large capability results can be
+  exposed safely; `result`, `error`, and evidence-reference totals are not globally capped in protocol `1.0.0`.
+- MCP `ultra` context needs a host-supplied window/budget contract before it can promise the same final provider gate as
+  Pi. Hard timeouts for non-cooperative executors require process/worker isolation beyond `AbortSignal` cancellation.

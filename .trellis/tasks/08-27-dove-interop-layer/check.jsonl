@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"Verify Core/Pi/plugin boundaries and terminal ledger guarantees."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run required typecheck, tests, doctor, and Pi smoke gates."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify Pi command/tool behavior and accessible degraded states."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit shared decoding and correlation across every adapter."}

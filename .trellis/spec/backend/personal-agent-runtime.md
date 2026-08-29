@@ -240,6 +240,147 @@ recovery must leave records owned by a live process untouched, while legacy,
 unowned, or inactive-owner records remain recoverable. Core receives the
 liveness callback and never imports host process APIs.
 
+## Scenario: Capability Protocol and External Adapters
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing a Dove capability, Capability Protocol field,
+  host adapter, project-context authority, or evidence reference.
+- Scope: Direct Core, Pi, local CLI/JSON-RPC, MCP, the shared execution ledger,
+  projected Pi plugin capabilities, and normalized project context.
+
+### 2. Signatures
+
+```text
+dove-pi capability list
+dove-pi capability run <name> [--args=<json>] [--approve]
+dove-pi rpc
+dove-pi mcp
+
+JSON-RPC: capabilities/list | capabilities/invoke
+MCP tools: dove_capabilities | dove_context | dove_invoke
+```
+
+```typescript
+new CapabilityInvocationService(registry, ledger, {
+  authorize?: (request: CapabilityInvocationRequest) => boolean | Promise<boolean>;
+}).invoke(request, signal?): Promise<CapabilityInvocationResponse>;
+```
+
+### 3. Contracts
+
+#### Protocol and composition
+
+- `CAPABILITY_PROTOCOL_VERSION` is an exact semantic version. Protocol request
+  and response schemas reject an unsupported protocol literal, non-semver
+  capability versions, unknown object properties, overlong identifiers, and
+  argument maps beyond the declared bound before capability dispatch.
+- Discovery returns the same reviewed manifest fields for every host:
+  capability name/version, parameter schema, required arguments, platforms,
+  side effects, idempotency, lifecycle, preconditions, and evidence contract.
+- `createDoveRuntime()` is the single composition root for Direct Core, Pi,
+  CLI/JSON-RPC, and MCP. Adapters construct `CapabilityInvocationService` over
+  that registry and the execution ledger; they must not copy executor logic or
+  register a host plugin as a second Core capability.
+- Each response contains the protocol/capability version, normalized terminal
+  status, duration, evidence references, and a new `executionId` correlated
+  with the caller's `requestId` plus optional host session, provider task, and
+  tool-call identifiers.
+
+#### Trusted authorization boundaries
+
+| Entry point | Trusted authorization source | Required behavior |
+|---|---|---|
+| Direct Core | An injected host-owned `authorize` callback | A payload value of `approval: "granted"` is insufficient by itself |
+| Pi | Native interactive `ctx.ui.confirm` after read-only policy checks | Headless or read-only execution cannot approve side effects |
+| Local CLI | The local process parses the explicit `--approve` flag and injects the callback | Omitting the flag denies side effects |
+| JSON-RPC stdio | None in protocol `1.0.0` | Request payloads cannot self-authorize; side effects fail closed |
+| MCP stdio | None in protocol `1.0.0` | `dove_invoke` exposes no approval argument; side effects fail closed |
+
+JSON-RPC is newline-delimited JSON over local stdio, limits each input line to
+128 KiB, and accepts only `capabilities/list` and `capabilities/invoke`. MCP is
+implemented through the official SDK and exposes only `dove_capabilities`,
+`dove_context`, and `dove_invoke`. Network/cloud transport, arbitrary shell
+fields, and implicit vendor accounts are outside these adapter contracts.
+
+#### Plugin capability projection
+
+Reviewed Pi plugins remain host-owned providers for Pi-specific TUI, web and
+browser access, MCP clients, diagnostics, structured questions, planning, and
+background work. The extension catalog projects package/tool availability as
+`available`, `configured`, or `degraded` for doctor and discovery. A projected
+plugin capability never becomes a Core executor and cannot bypass Dove's
+request plan, approval service, ledger, or evidence policy.
+
+#### Interoperable project context and evidence
+
+- Trellis/the selected `ProjectProvider`, `AGENTS.md`, `CLAUDE.md`, Agent
+  Skills, and MCP resources are separately labeled authorities in one
+  projection. Duplicate instruction or resource authorities are reported in
+  `conflicts`; no last-write-wins or semantic merge is allowed.
+- Ordinary context requests receive the index and estimates. Full external
+  text is added only for a targeted instruction, skill, or MCP-resource query,
+  then remains subject to the shared context compiler's relevance and size
+  bounds.
+- Context and evidence references exclude `.env*`, credential/secret/token/API
+  key names, private-key names, and key/certificate/keystore extensions by
+  default. Evidence filtering is defense in depth at the shared execution
+  boundary and applies consistently to every adapter.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Unsupported protocol or invalid capability semver | Reject before dispatch |
+| Arguments fail the capability's declared parameter schema | Reject before approval or execution |
+| Request claims approval without a trusted host callback | Deny side effects; never start the executor |
+| RPC input line exceeds 128 KiB | Return one bounded parse error for that line, discard through its newline, then continue |
+| Duplicate project authorities | Preserve source labels and report a conflict; never silently merge |
+| Evidence reference names credential/key material | Exclude it at the shared execution boundary |
+| Capability platform is unsupported | Return `unsupported_platform` with an execution correlation ID |
+
+### 5. Good / Base / Bad Cases
+
+- Good: Pi, CLI/RPC, and MCP invoke the same reviewed registry entry and
+  receive the same versioned result/evidence shape with distinct correlations.
+- Base: a read-only capability needs no approval, but still passes schema,
+  platform, ledger, evidence, and response validation.
+- Bad: trust `approval: "granted"` or `approval: "not_required"` from an RPC/MCP
+  payload, copy a Pi plugin executor into Core, or buffer an unbounded RPC line
+  before checking its size.
+
+### 6. Tests Required
+
+The vendor-account-free smoke matrix must exercise one read-only capability
+through Direct Core, CLI/JSON-RPC, official MCP transport, and Pi's registered
+`agent_run_capability` tool. Every row must return the Capability Protocol
+version, the same capability name/version and success status, a caller request
+ID, and a non-empty execution ID. The Pi row must also demonstrate that the
+registered tool is backed by the shared invocation service. Separate contract
+tests cover terminal outcomes, ledger correlation, bounded RPC methods,
+fail-closed RPC/MCP authorization, normalized context conflicts, and evidence
+secret filtering. No interoperability claim requires a live provider account.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+// The untrusted request decides whether a mutating capability needs approval.
+const required = request.approval !== "not_required";
+```
+
+#### Correct
+
+```typescript
+// The reviewed capability declaration is the authority; the host supplies the
+// trusted approval decision only when side effects require one.
+const required = definition.sideEffects.some((effect) => effect !== "read_only");
+const approved = required && request.approval === "granted"
+  ? await hostAuthorize(request)
+  : !required;
+```
+
 ## Scenario: Dispatch Cost Calibration
 
 ### 1. Scope / Trigger
@@ -719,6 +860,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 ### 3. Contracts
 
 - The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
+- The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; unknown/interactive arguments alone may fall through to Pi. Adding a CLI command without updating and testing this router is an incomplete cross-layer change.
 - Install into a staging sibling, run locked dependency installation and verification, move to an immutable version, then activate with atomic state replacement. Retain current and previous.
 - Install, update, and repair hold the same cross-process maintenance lock through application activation, managed-component reconciliation, final state persistence, launcher rewrite, and pruning. The component reconciler is an injected callback so the Python installer does not duplicate the TypeScript extension catalog; never release the maintenance lock and reacquire a separate component lock between these steps.
 - A healthy current release with the same stable version is an application no-op: no archive download and no `npm ci`. Launcher repair and Dove-managed extension reconciliation may still run.
@@ -746,6 +888,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 | Packaged manifest differs from generated lock/catalog metadata | Abort before activation; do not silently rewrite a formal release |
 | GitHub tag/version differs from archive manifest | Reject the asset and preserve current |
 | Optional managed extension fails | Activate app and record `degraded` |
+| A documented Dove command reaches the launcher | Route it to the bundled local CLI; never pass it through as a Pi prompt/argument |
 | JSON maintenance command fails | Emit one parseable error document on stdout and put human details in the local log/stderr |
 | `update --force` is supplied | Reject with a repair instruction; never reset a checkout |
 | Uninstall lacks `--yes` | Refuse and preserve all data |
@@ -768,6 +911,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Assert malformed lock metadata fails closed and JSON success/failure paths each produce exactly one parseable stdout document.
 - Assert bootstrap assets populate a verified cache usable by offline repair, and tag/archive version mismatch is rejected.
 - Assert offline doctor reports current/previous managed state and degraded managed extensions without network access.
+- Invoke each documented non-maintenance command family through `dove_pi.py` and assert it reaches the Dove CLI rather than Pi; keep this routing test isolated from the real user installation and Pi state.
 - Assert valid V1 profile migration and corrupt-manifest fallback leave the checkout unchanged.
 - Assert uninstall removes only known managed children while preserving Pi data, project `.trellis/`, checkouts, third-party extensions, and unknown caller-owned files.
 - Validate release metadata against exact `package.json` and `package-lock.json` Pi, TUI, and Trellis versions.

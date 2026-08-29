@@ -91,6 +91,28 @@ Trellis 是项目数据的权威，Dove 不维护第二套任务/spec 数据库�
 
 `/thinking` 仍是 Pi 的原生命令；Dove 的自动/锁定策略使用 `/dove-thinking`，不会覆盖宿主命令。任务创建、完成和归档需要明确意图及确认；普通聊天不会创建 Trellis 任务。
 
+## 互操作接口
+
+Dove Capability Protocol `1.0.0` 把能力版本、参数 schema、平台、副作用、幂等性、生命周期、关联 ID 和证据引用定义为宿主无关合同。Pi、CLI/JSON-RPC 和 MCP 共用同一个 Core 能力注册表、执行服务和 ledger：
+
+```powershell
+dove-pi capability list
+dove-pi capability run workspace.inspect --args='{"path":"package.json"}'
+# 有副作用的能力只接受本地显式授权：
+dove-pi capability run dev.project_test --approve
+```
+
+本地 JSON-RPC 是有界的 JSONL stdio，只提供 `capabilities/list` 和 `capabilities/invoke`：
+
+```powershell
+'{"jsonrpc":"2.0","id":1,"method":"capabilities/list"}' | dove-pi rpc
+'{"jsonrpc":"2.0","id":2,"method":"capabilities/invoke","params":{"protocolVersion":"1.0.0","capability":{"name":"workspace.inspect"},"arguments":{"path":"package.json"},"context":{"cwd":"C:\\path\\to\\project","mode":"standard","taskId":"rpc-session","stepId":"inspect"},"correlation":{"requestId":"rpc-1"},"approval":"not_required"}}' | dove-pi rpc
+```
+
+MCP 客户端可把 stdio server 配置为 `{"command":"dove-pi","args":["mcp"]}`，然后调用 `dove_capabilities`、`dove_context` 和 `dove_invoke`。`dove_context` 以索引优先方式投影 Trellis、`AGENTS.md`、`CLAUDE.md`、Agent Skills 和 MCP resources，冲突权威会分开标记，不静默合并。
+
+授权边界默认关闭：Pi 使用原生确认 UI，CLI 只信任本地 `--approve`，RPC 和 MCP 不接受请求体自行声明授权。Pi 专用的 TUI、浏览器、规划、诊断和后台任务等能力优先复用经审核插件，Dove 只投影它们的可用性，不在 Core 中复制一套执行器。
+
 ## 日常维护
 
 ```powershell

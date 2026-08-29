@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"Core capability, adapter firewall, ledger, provider, and Pi extension contracts."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Structured cross-host failures and fail-closed mutation behavior."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Boundary tests, forbidden imports, and full validation gate."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Pi plugin and command/tool ownership boundaries."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Runtime validation for host and protocol payloads."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse registries and plugin capabilities rather than duplicate implementations."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Protocol payloads flow across Core, Pi, MCP, CLI, and ledger layers."}
