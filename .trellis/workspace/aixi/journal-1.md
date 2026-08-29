@@ -241,3 +241,25 @@ Recorded a real TUI prompt-to-agent journey, verified the coding loop, and ident
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: Harden Dove request and project flow
+
+**Date**: 2026-08-30
+**Task**: Harden Dove request and project flow
+**Branch**: `master`
+
+### Summary
+
+Hardened request intent and tool authority, added provider-neutral one-read continuation through Trellis public current API, moved runtime state outside repositories, improved cache/provider observability and launcher options, and verified the original eight-prompt E2E flow.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `65554bd` | (see git log) |
+| `279006e` | (see git log) |
+
+### Status
+
+[OK] **Completed**
