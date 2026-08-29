@@ -178,19 +178,34 @@ Negated or explanatory mentions of an execution verb remain read-only, while
 a later comma- or semicolon-delimited imperative is classified independently
 and still requires the execution boundary.
 
-The Pi adapter treats chat isolation as an active boundary, not only a prompt
-selection hint: chat turns do not read the full project projection for tool
-heuristics or task correlation, and the context projection removes persisted
-Dove project snapshots from the model-facing history for that turn. Browser
-phrases such as opening a webpage or taking a screenshot are classified as
-lookup work, while repair/fix language is classified as project work.
+The request plan is the only owner of the capability tier. A fresh Auto Chat
+turn exposes zero tools; Lookup exposes bounded read/search tools; Project Work
+adds read-only diagnostics and planning; and Execution alone adds shell, edit,
+task, capability, and workspace mutation tools. At each user-request boundary,
+Auto activates exactly the current RequestPlan-selected set and keeps it stable
+through that request's provider/tool continuations. It reasserts that exact set
+when another extension changes host state, but never absorbs the foreign names.
+The next user request replaces the set, so Execution authority cannot remain on
+a later Chat or Lookup. Generic MCP dispatch, browser automation, and
+background helpers remain Execution-only because their hosts may expose
+mutations without enforcing Dove's request tier. Lookup may add only bounded
+read-only web retrieval helpers.
+
+Chat turns do not retrieve a fresh project projection for tool heuristics or
+task correlation, but the provider-facing history remains append-only: the
+context projection never removes or recreates a current v2 Dove message based
+on intent. Browser phrases such as opening a webpage or taking a screenshot are
+Lookup, read-only analysis with English or Chinese negation stays Lookup, and
+repair/fix/implementation or explicit run/test imperatives are Execution.
 
 The host-independent `ModelGateway` owns provider payload accounting. It
 subtracts reserved output, reasoning, tool-schema, and provider-overhead tokens
 from the model context window, validates the complete request before transport
 dispatch, and throws a structured diagnostic on overflow. Required segments are
 ranked first but never bypass the final budget check. Provider stop reasons are
-normalized once at this boundary. A request plan's output budget is minimum
+normalized once at this boundary. The final provider gate estimates tool-schema
+tokens from the serialized `tools` array in the actual payload; count-based
+estimation is only a pre-payload fallback. A request plan's output budget is minimum
 response headroom, not a fixed provider-output ceiling; a large-window Ultra
 request may retain a larger provider-requested limit when the final payload fits.
 When Dove clamps output, it must write the same value through a known provider
@@ -479,11 +494,12 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - Fast mode includes only the active task PRD and the runtime spec as required context. Standard/Ultra use relevance scoring; Ultra may include typed memory records without an application token cap.
 - The Pi adapter must pass its selected `ProjectProvider` into context compilation. A cwd convenience wrapper may exist for compatibility, but it must delegate to the same provider projection rather than reading Trellis files directly.
 - `DOVE_PI_READ_ONLY=1` is an explicit degraded-mode switch. It leaves chat, lookup, snapshots, verification, and diagnostics available while blocking Trellis task mutations, workspace restore/patch operations, and side-effect capability approvals. The active mode is exposed by `agent_doctor` so an unsupported host/provider can fail visibly rather than guessing.
-- Dove's stable instructions are returned as `before_agent_start.systemPrompt`; dynamic project guidance is emitted as a versioned `personal-agent-context` custom message only when its context epoch changes (`mode + Trellis revision`). Prompt-specific workflow hints and monotonic auto-tool growth must not rebuild the snapshot on every intent flip, because that churns the provider cache prefix. Unchanged epochs do not append another snapshot.
+- Dove's stable instructions are returned as `before_agent_start.systemPrompt`; meaningful project context is emitted as a versioned `personal-agent-context` custom message only when its context epoch changes (`mode + Trellis revision`). Empty or provider-budget-omitted retrievals emit no wrapper and do not consume the epoch, so a later relevant request at the same revision can retry. Prompt-specific workflow hints are attached once to the current request (and may share its message with a newly emitted snapshot) rather than being stranded in a reused epoch. Request-exact Auto tool changes must not rebuild the project snapshot on every intent flip.
 - Keep provider prompt-cache prefixes stable: the static Dove system-prompt section must not include per-request mode, task, workflow, or project text. The `context` transform may remove legacy unversioned `personal-agent-context` entries for compatibility, but must never move or rebuild the current v2 snapshot on each provider request.
-- In `auto` tool mode, intent-specific tools are session-monotonic: once enabled they remain active until the user explicitly changes the tool profile or starts a new session. Avoid repeated `setActiveTools()` calls when the effective set is unchanged, because tool definitions participate in the provider prompt prefix.
+- A final provider-budget recovery may omit Dove-derived context only by the exact timestamp/content identity recorded by the `context` projection. It must not remove a user message merely because the user text contains a Dove context marker.
+- In `auto` tool mode, intent-specific tools are request-exact: apply the selected set once at `before_agent_start`, retain it during that request's tool-call continuations, and replace it at the next user request. Avoid repeated `setActiveTools()` calls when consecutive requests select the same set. Tier changes may reduce provider-cache reuse because tool definitions participate in the prefix; least authority and reduced per-turn schema cost take precedence over retaining stale Execution tools.
 - When `pi-hashline-edit-pro` is present, the Pi adapter treats hashline `replace`/`insert` (and undo when available) as the edit authority and must suppress the built-in `edit` tool in every profile, including explicit `full`; this prevents another extension from reintroducing the built-in mutation path.
-- `/dove-tools reset` is an explicit session-stage reset: it returns to the compact core set and lets a later `auto` request add intent tools again. The reset is allowed to change the tool prefix because it is user initiated.
+- `/dove-tools reset` explicitly returns to Auto's zero-tool Chat baseline; the next user request applies its exact intent set. The reset is allowed to change the tool prefix because it is user initiated.
 - Fast and Standard apply bounded total context-character budgets for broad retrieval. Ultra has no artificial application token cap and relies on relevance scoring, content deduplication, per-document compaction, and Pi/provider model-context limits.
 - When Pi exposes current context usage and model window, the adapter derives a remaining-character budget with response headroom and passes it to the compiler. On a first request, before usage is available, it falls back to the model's declared window, reserves space for system/tool/output tokens, and limits project context to a conservative window share. This is a dynamic model limit guard, not a fixed Ultra budget.
 - Model-facing project indexes use bounded previews for large collections (for example, the first 50 task records plus an omission count); complete raw collections remain provider-local details.
@@ -510,7 +526,7 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - Assert journal and index files receive distinct memory kinds.
 - Assert malformed or missing metadata does not prevent snapshot creation.
 - Assert Fast mode keeps active PRD/runtime spec behavior and Trellis-disabled mode remains loadable.
-- Assert request-scoped Dove context is not persisted, legacy context messages are filtered, and broad Standard retrieval stays within its character budget.
+- Assert request-scoped Dove context is not persisted, legacy context messages are filtered, empty/budget-omitted snapshots can retry their epoch, exact Dove-only budget recovery preserves marker-bearing user text, and broad Standard retrieval stays within its character budget.
 
 ### 7. Wrong vs Correct
 

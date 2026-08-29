@@ -70,6 +70,22 @@ class InstallerCliTests(unittest.TestCase):
             self.assertEqual(main([]), 0)
             launch.assert_called_once_with([])
 
+    def test_finite_diagnostics_route_to_local_cli(self):
+        for arguments in (["cache", "audit", "--min-requests=2"], ["token", "audit", "--since=1h"]):
+            with self.subTest(command=arguments[0]), \
+                    patch("dove_pi.run_local_cli", return_value=0) as local_cli, \
+                    patch("dove_pi.launch") as launch:
+                self.assertEqual(main(arguments), 0)
+                local_cli.assert_called_once_with(arguments)
+                launch.assert_not_called()
+
+    def test_unknown_arguments_still_pass_through_to_pi(self):
+        with patch("dove_pi.run_local_cli") as local_cli, \
+                patch("dove_pi.launch", return_value=0) as launch:
+            self.assertEqual(main(["--model", "provider/model"]), 0)
+            launch.assert_called_once_with(["--model", "provider/model"])
+            local_cli.assert_not_called()
+
 
 class ManagedUpdateCliTests(unittest.TestCase):
     def test_managed_extension_json_allows_progress_on_stderr_only(self):

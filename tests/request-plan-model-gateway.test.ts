@@ -1,12 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createRequestPlan } from "../src/core/request-plan.ts";
-import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, providerOutputTokenLimit } from "../src/core/model-gateway.ts";
+import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, providerOutputTokenLimit, providerToolSchemaTokens } from "../src/core/model-gateway.ts";
 import { requestPolicy } from "../src/core/prompt-policy.ts";
 
 describe("request planning", () => {
 	it("keeps policy ownership single-sourced by intent", () => {
-		assert.match(requestPolicy("chat"), /agent_run_capability/);
+		assert.match(requestPolicy("chat"), /registered Dove capabilities/);
 		assert.doesNotMatch(requestPolicy("chat"), /Web access/);
 		assert.match(requestPolicy("lookup"), /Web access/);
 		assert.match(requestPolicy("execution"), /Parallelize/);
@@ -22,7 +22,7 @@ describe("request planning", () => {
 
 	it("distinguishes lookup, project work, and execution", () => {
 		assert.equal(createRequestPlan({ message: "show project status", projectAvailable: true }).intent, "lookup");
-		assert.equal(createRequestPlan({ message: "implement the login feature", projectAvailable: true }).intent, "project-work");
+		assert.equal(createRequestPlan({ message: "implement the login feature", projectAvailable: true }).intent, "execution");
 		assert.equal(createRequestPlan({ message: "work on the project plan", projectAvailable: true }).intent, "project-work");
 	});
 
@@ -33,6 +33,7 @@ describe("request planning", () => {
 
 	it("does not treat negated or explanatory action language as execution", () => {
 		assert.equal(createRequestPlan({ message: "分析登录模块的代码结构，不要修改文件" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "分析 src/pi-adapter/tool-profile.ts，不修改文件" }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "告诉我怎么运行测试，但不要执行" }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "show me how to run tests without executing them" }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "do not wait; run the tests" }).intent, "execution");
@@ -40,6 +41,37 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "不要等待，执行测试" }).intent, "execution");
 		assert.equal(createRequestPlan({ message: "do not execute, just explain the test plan" }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "不要执行，只分析测试方案" }).intent, "lookup");
+	});
+
+	it("keeps response-only probes cheap but preserves independent actions", () => {
+		assert.equal(createRequestPlan({ message: "这是缓存测试第一轮，只回复：第一轮完成" }).intent, "chat");
+		assert.equal(createRequestPlan({ message: "测试一下回复，只回复完成" }).intent, "chat");
+		assert.equal(createRequestPlan({ message: "cache test; only reply: done" }).intent, "chat");
+		assert.equal(createRequestPlan({ message: "test the project" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "修复登录超时问题" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "运行测试并修复失败" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "修复问题，只回复完成" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "测试当前项目" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "请帮我测试这个项目" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "test the current project" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "please test this project" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "先查看代码，然后测试当前项目" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "inspect the code and then test this project" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "不要修改，但请测试当前项目" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "do not edit and then test this project" }).intent, "execution");
+		assert.notEqual(createRequestPlan({ message: "测试用例有哪些" }).intent, "execution");
+	});
+
+	it("routes browser viewing and interaction through the single intent owner", () => {
+		assert.equal(createRequestPlan({ message: "打开登录页面" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "open the website" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "take a screenshot" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "点击登录按钮" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "please click the login button" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "打开网页并点击登录" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "open the website and then click login" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "do not click the ad and then click login" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "如何点击登录按钮，不要实际操作" }).intent, "lookup");
 	});
 });
 
@@ -57,6 +89,38 @@ describe("model gateway budget", () => {
 		const budget = accountModelBudget({ payload: {}, segments: [{ id: "user", source: "user", content: "a".repeat(120) }] }, config);
 		assert.equal(budget.availableInput, 60);
 		assert.equal(budget.overflowTokens, 0); // ASCII estimate is 30 tokens.
+	});
+
+	it("accounts for the serialized tools in common provider envelopes", () => {
+		const tools = [{ type: "function", function: { name: "read", description: "x".repeat(400), parameters: { type: "object" } } }];
+		const direct = providerToolSchemaTokens({ messages: [], tools });
+		const nested = providerToolSchemaTokens({ input: { messages: [], tools } });
+		const body = providerToolSchemaTokens({ body: { messages: [], tools } });
+		const request = providerToolSchemaTokens({ request: { messages: [], tools } });
+		assert.equal(direct, nested);
+		assert.equal(direct, body);
+		assert.equal(direct, request);
+		assert.ok((direct ?? 0) > 100);
+		assert.equal(providerToolSchemaTokens({ messages: [] }), 0);
+		assert.equal(providerToolSchemaTokens("opaque"), undefined);
+	});
+
+	it("does not double count duplicate message envelopes", () => {
+		const request = modelPayloadFromProvider({
+			system: "system",
+			messages: [{ role: "user", content: "root" }],
+			input: { messages: [{ role: "user", content: "nested duplicate" }] },
+		});
+		assert.deepEqual(request.segments.map((segment) => segment.content), ["system", "root"]);
+		assert.deepEqual(modelPayloadFromProvider({ body: { system: "nested-system", messages: [{ role: "user", content: "nested-body" }] } }).segments.map((segment) => segment.content), ["nested-system", "nested-body"]);
+		assert.deepEqual(modelPayloadFromProvider({ request: { messages: [{ role: "user", content: "nested-request" }] } }).segments.map((segment) => segment.content), ["nested-request"]);
+	});
+
+	it("rejects a small-window payload using its real serialized tool schema", () => {
+		const payload = { messages: [{ role: "user", content: "hi" }], tools: [{ type: "function", function: { name: "large", description: "x".repeat(1_000), parameters: {} } }] };
+		const toolSchemaOverhead = providerToolSchemaTokens(payload) ?? 0;
+		assert.throws(() => new ModelGateway({ contextWindow: 300, reservedOutput: 40, toolSchemaOverhead, providerOverhead: 20 }).validate(modelPayloadFromProvider(payload)), ModelBudgetError);
+		assert.doesNotThrow(() => new ModelGateway({ contextWindow: 10_000, reservedOutput: 40, toolSchemaOverhead, providerOverhead: 20 }).validate(modelPayloadFromProvider(payload)));
 	});
 
 	it("rejects an over-budget required segment before transport dispatch", async () => {

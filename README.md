@@ -100,6 +100,8 @@ Trellis 是项目数据的权威，Dove 不维护第二套任务/spec 数据库�
 
 `/thinking` 仍是 Pi 的原生命令；Dove 的自动/锁定策略使用 `/dove-thinking`，不会覆盖宿主命令。任务创建、完成和归档需要明确意图及确认；普通聊天不会创建 Trellis 任务。
 
+`/dove-tools auto` 由同一个请求计划逐级开放工具：普通 Chat 为零工具，Lookup 只有读取、搜索和只读网页检索工具，Project Work 增加只读代码诊断和规划工具，只有 Execution 才开放 shell、编辑、任务、工作区变更、浏览器自动化、通用 MCP 和后台任务。每个用户请求开始时，Auto 会精确切换到该请求所需的集合，并在本次请求及其工具续调用期间保持不变；下一请求会重新收窄，因此 Execution 工具不会残留到后续 Chat/Lookup。意图层级切换时工具前缀会变化，可能少复用一部分 Provider 缓存，但换来请求级最小权限和更低的 schema Token；连续同层级请求仍保持稳定，第三方扩展临时激活的工具也不会被吸收。
+
 ## 互操作接口
 
 Dove Capability Protocol `1.0.0` 把能力版本、参数 schema、平台、副作用、幂等性、生命周期、关联 ID 和证据引用定义为宿主无关合同。Pi、CLI/JSON-RPC 和 MCP 共用同一个 Core 能力注册表、执行服务和 ledger：
@@ -128,11 +130,14 @@ MCP 客户端可把 stdio server 配置为 `{"command":"dove-pi","args":["mcp"]}
 dove-pi update
 dove-pi repair
 dove-pi rollback
+dove-pi cache audit --min-requests=2
+dove-pi token audit --since=1h
 ```
 
 - `update` 通过 stable GitHub Release 的直接 manifest 查询更新，不依赖 GitHub REST API。版本未变化且当前安装健康时，不下载 zip、不执行 `npm ci`；只修复 launcher 并对齐 Dove 自己管理的扩展。
 - `repair` 检查当前 release 和 launcher；当前版本损坏时优先恢复可运行的 previous，再按需重建 stable release。
 - `rollback` 原子切回 previous 应用版本。Pi 用户扩展位于用户目录，因此不会被伪装成与应用一起原子回滚。
+- `cache audit` 和 `token audit` 是会正常结束的本地诊断命令，不会误启动 Pi 交互会话。
 
 只检查更新而不写入：
 

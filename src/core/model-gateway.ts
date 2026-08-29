@@ -87,10 +87,13 @@ export interface ModelTransport<TPayload = unknown, TResult = unknown> {
 export function providerPayloadSegments(payload: unknown): readonly ModelPayloadSegment[] {
 	const segments: ModelPayloadSegment[] = [];
 	const messages = findMessages(payload);
-	if (typeof payload === "object" && payload !== null) {
-		const system = (payload as { system?: unknown }).system;
+	for (const envelope of providerEnvelopeCandidates(payload)) {
+		const system = envelope.system;
 		const systemText = extractText(system);
-		if (systemText) segments.push({ id: "provider-system", source: "provider:system", content: systemText });
+		if (systemText) {
+			segments.push({ id: "provider-system", source: "provider:system", content: systemText });
+			break;
+		}
 	}
 	if (messages.length > 0) {
 		messages.forEach((message, index) => {
@@ -108,6 +111,25 @@ export function providerPayloadSegments(payload: unknown): readonly ModelPayload
 export function modelPayloadFromProvider<TPayload>(payload: TPayload): ModelPayload<TPayload> {
 	const segments = providerPayloadSegments(payload);
 	return { payload, segments };
+}
+
+/**
+ * Estimate the final serialized provider tool definitions. A missing `tools`
+ * field on an otherwise valid request means zero tools; `undefined` is
+ * reserved for payloads whose envelope cannot be inspected.
+ */
+export function providerToolSchemaTokens(payload: unknown): number | undefined {
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return undefined;
+	for (const candidate of providerEnvelopeCandidates(payload)) {
+		const tools = candidate.tools;
+		if (!Array.isArray(tools)) continue;
+		try {
+			return estimateTextTokens(JSON.stringify(tools));
+		} catch {
+			return undefined;
+		}
+	}
+	return 0;
 }
 
 /**
@@ -176,14 +198,21 @@ export function boundedOutputReservation(input: {
 }
 
 function findMessages(payload: unknown): readonly unknown[] {
-	if (typeof payload !== "object" || payload === null) return [];
-	const candidate = (payload as { messages?: unknown; input?: unknown }).messages;
-	if (Array.isArray(candidate)) return candidate;
-	const input = (payload as { input?: unknown }).input;
-	if (typeof input === "object" && input !== null && Array.isArray((input as { messages?: unknown }).messages)) {
-		return (input as { messages: unknown[] }).messages;
-	}
+	for (const envelope of providerEnvelopeCandidates(payload)) if (Array.isArray(envelope.messages)) return envelope.messages;
 	return [];
+}
+
+/** Root-first, one-level provider envelopes. Consumers stop at the first field
+ * they own so duplicate compatibility projections are never double counted. */
+function providerEnvelopeCandidates(payload: unknown): readonly Record<string, unknown>[] {
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return [];
+	const root = payload as Record<string, unknown>;
+	const candidates: Record<string, unknown>[] = [root];
+	for (const key of ["input", "body", "request"] as const) {
+		const candidate = root[key];
+		if (typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)) candidates.push(candidate as Record<string, unknown>);
+	}
+	return candidates;
 }
 
 function extractText(value: unknown): string {
@@ -210,11 +239,15 @@ function finiteNonNegative(value: number | undefined, fallback = 0): number {
 	return value === undefined ? fallback : Number.isFinite(value) && value >= 0 ? Math.floor(value) : Number.NaN;
 }
 
+function estimateTextTokens(content: string): number {
+	let estimate = 0;
+	for (const character of content) estimate += /[\u0000-\u007f]/.test(character) ? 0.25 : 1;
+	return Math.ceil(estimate);
+}
+
 function estimateSegmentTokens(segment: ModelPayloadSegment): number {
 	if (segment.estimatedTokens !== undefined) return finiteNonNegative(segment.estimatedTokens);
-	let estimate = 0;
-	for (const character of segment.content) estimate += /[\u0000-\u007f]/.test(character) ? 0.25 : 1;
-	return Math.ceil(estimate);
+	return estimateTextTokens(segment.content);
 }
 
 export function accountModelBudget<TPayload>(request: ModelPayload<TPayload>, config: ModelBudgetConfig): BudgetAccounting {

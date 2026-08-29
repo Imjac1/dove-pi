@@ -607,7 +607,7 @@ def main(arguments: Sequence[str]) -> int:
         return run_managed_maintenance(arguments[0], arguments[1:])
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project", "skills", "web", "capability", "rpc", "mcp"):
+    if arguments and arguments[0] in ("doctor", "project", "skills", "web", "cache", "token", "capability", "rpc", "mcp"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])

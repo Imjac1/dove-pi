@@ -13,7 +13,6 @@ import { normalizeAgentMode, type AgentMode } from "../core/contracts.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
 import { applyWorkspacePatch, createWorkspaceSnapshot, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
 import { createProjectProvider, initializeTrellis, readProjectManifest, updateProjectManifest, updateTrellis, type ProjectTask, type TrellisTaskOperation } from "../project-provider/index.ts";
-import { buildProjectContext } from "../trellis-adapter/context.ts";
 import { buildInteroperableProjectContext, readInteroperableContextProjection } from "../context/interoperable.ts";
 import type { ContextSegment } from "../core/context-compiler.ts";
 import { getPiVersion } from "./host-version.ts";
@@ -28,7 +27,7 @@ import { formatProgressSnapshot, ProgressGuard } from "./progress-guard.ts";
 import { formatCacheDiagnostics, inspectCacheDiagnostics } from "./cache-diagnostics.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan } from "../core/request-plan.ts";
-import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, type BudgetAccounting } from "../core/model-gateway.ts";
+import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, providerToolSchemaTokens, type BudgetAccounting } from "../core/model-gateway.ts";
 import { stablePromptPolicy } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
 import { inspectExtensionProfile } from "../extensions/doctor.ts";
@@ -145,16 +144,23 @@ function payloadMessageText(message: unknown): string {
 }
 
 /** Remove only Dove's derived context messages when a final payload is over budget. */
-function stripDoveContextFromPayload<T>(payload: T): T {
+function stripDoveContextFromPayload<T>(payload: T, doveContextPayloads: ReadonlyMap<number, string>): T {
 	if (typeof payload !== "object" || payload === null) return payload;
-	if (Array.isArray(payload)) return payload.filter((item) => !payloadMessageText(item).includes("[PERSONAL AGENT REQUEST CONTEXT]")) as T;
+	const isDoveGuidance = (item: unknown) => {
+		if (typeof item !== "object" || item === null) return false;
+		const timestamp = (item as { timestamp?: unknown }).timestamp;
+		if (typeof timestamp !== "number") return false;
+		const expected = doveContextPayloads.get(timestamp);
+		return expected !== undefined && payloadMessageText(item) === expected;
+	};
+	if (Array.isArray(payload)) return payload.filter((item) => !isDoveGuidance(item)) as T;
 	const object = payload as Record<string, unknown>;
 	if (Array.isArray(object.messages)) {
-		return { ...object, messages: object.messages.filter((item) => !payloadMessageText(item).includes("[PERSONAL AGENT REQUEST CONTEXT]")) } as T;
+		return { ...object, messages: object.messages.filter((item) => !isDoveGuidance(item)) } as T;
 	}
 	if (typeof object.input === "object" && object.input !== null && Array.isArray((object.input as Record<string, unknown>).messages)) {
 		const input = object.input as Record<string, unknown>;
-		return { ...object, input: { ...input, messages: (input.messages as unknown[]).filter((item) => !payloadMessageText(item).includes("[PERSONAL AGENT REQUEST CONTEXT]")) } } as T;
+		return { ...object, input: { ...input, messages: (input.messages as unknown[]).filter((item) => !isDoveGuidance(item)) } } as T;
 	}
 	return payload;
 }
@@ -175,6 +181,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let requestContextRevision: string | undefined;
 	let requestContextEpoch: string | undefined;
 	let requestContextSegments: readonly ContextSegment[] = [];
+	const doveContextPayloads = new Map<number, string>();
 	let currentRequestPlan: ReturnType<typeof createRequestPlan> | undefined;
 	let currentProviderCall: { id: string; requestId: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number } | undefined;
 	let appliedToolSetKey: string | undefined;
@@ -260,14 +267,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	}
 
 	function applyAutoTools(requested: readonly string[]): void {
-		// Tool definitions are part of the provider prompt prefix. Once an
-		// intent-specific tool is enabled, keep it active for the remainder of
-		// this session instead of removing it on the next unrelated prompt.
-		// This makes auto mode monotonic and avoids repeated cache-prefix churn.
-		const current = typeof pi.getActiveTools === "function" ? pi.getActiveTools() : activeToolSnapshot;
+		// Tool definitions and their authority are request-scoped. Select the
+		// exact RequestPlan set once at the user-turn boundary; Pi keeps it stable
+		// for provider/tool continuations until the next before_agent_start.
 		const allToolNames = pi.getAllTools().map((tool) => tool.name);
 		const hashline = hasHashlineEditTools(allToolNames);
-		applyActiveTools([...new Set([...current, ...requested])].filter((name) => !(hashline && name === "edit")));
+		const authoritative = [...new Set(requested)].filter((name) => !(hashline && name === "edit"));
+		const hostActive = typeof pi.getActiveTools === "function" ? pi.getActiveTools() : activeToolSnapshot;
+		const hostMatches = hostActive.length === authoritative.length && hostActive.every((name, index) => name === authoritative[index]);
+		if (!hostMatches) {
+			// The host state is observed only to detect drift. It is never unioned
+			// into Dove's policy, so another extension cannot silently widen tools.
+			appliedToolSetKey = undefined;
+		}
+		applyActiveTools(authoritative);
 	}
 	function updateStatus(ctx: ExtensionContext): void {
 		// pi-open-tui renders provider telemetry (context, tokens, TPS, TTFT, cost).
@@ -473,9 +486,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			if (args.trim().toLowerCase() === "reset") {
 				const names = pi.getAllTools().map((tool) => tool.name);
-				applyActiveTools(selectDoveToolNames(names, "core"));
+				applyActiveTools(selectDoveToolNames(names, "auto", "chat"));
 				toolProfile = "auto";
-				ctx.ui.notify("Dove 自动工具阶段已重置为 core；后续请求会按意图重新加入工具。", "info");
+				ctx.ui.notify("Dove 自动工具阶段已清空；后续请求会按意图重新加入工具。", "info");
 				return;
 			}
 			const requested = parseDoveToolProfile(args);
@@ -484,7 +497,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			toolProfile = requested;
-			applyActiveTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile));
+			applyActiveTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile, "chat"));
 			ctx.ui.notify(`Dove 工具集合已切换为 ${toolProfile}；下一个模型回合生效。`, "info");
 		},
 	});
@@ -965,7 +978,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (resumedMode) mode.change(resumedMode, "session-resume");
 		operation = "idle";
 		if (!hasExplicitToolSelection) {
-			applyActiveTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile));
+			applyActiveTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile, "chat"));
 		}
 		const allToolNames = pi.getAllTools().map((tool) => tool.name);
 		const hashline = hasHashlineEditTools(allToolNames);
@@ -1071,11 +1084,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const taskId = currentRequestPlan?.intent === "chat" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? "pi-session";
 		const stepId = `provider:${plan.requestId}`;
 		const providerCallId = `provider-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-		const toolSchemaOverhead = 512 + (typeof pi.getActiveTools === "function" ? pi.getActiveTools().length * 128 : 0);
+		const fallbackToolSchemaOverhead = 512 + (typeof pi.getActiveTools === "function" ? pi.getActiveTools().length * 128 : 0);
 		const providerOverhead = 256;
 		const modelMaxTokens = typeof model?.maxTokens === "number" && Number.isFinite(model.maxTokens) ? model.maxTokens : undefined;
 		function preparePayload(candidate: unknown): { payload: unknown; budget: BudgetAccounting } {
 			const request = modelPayloadFromProvider(candidate);
+			const toolSchemaOverhead = providerToolSchemaTokens(candidate) ?? fallbackToolSchemaOverhead;
 			const inputAccounting = accountModelBudget(request, {
 				contextWindow: validContextWindow,
 				reservedOutput: 0,
@@ -1111,7 +1125,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			rejection = error;
 			// First remove only derived Dove context. This is deterministic and
 			// preserves user/project history while recovering output headroom.
-			const compacted = stripDoveContextFromPayload(event.payload);
+			const compacted = stripDoveContextFromPayload(event.payload, doveContextPayloads);
 			if (compacted !== event.payload) {
 				try {
 					({ payload, budget: finalBudget } = preparePayload(compacted));
@@ -1180,7 +1194,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				const project = projectProvider.getContext();
 				return project.currentTask ? [project.currentTask.status, ...project.currentTask.files.slice(0, 20)].join(" ") : "";
 			})();
-			applyAutoTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile, event.prompt, taskHint));
+			applyAutoTools(selectDoveToolNames(pi.getAllTools().map((tool) => tool.name), toolProfile, requestPlan.intent, event.prompt, taskHint));
 		}
 		const usage = typeof ctx.getContextUsage === "function" ? ctx.getContextUsage() : undefined;
 		const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
@@ -1193,7 +1207,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 
 		const suggestion = requestPlan.intent === "chat" ? undefined : suggestWorkflowSkill(event.prompt);
-		const workflowHint = suggestion ? `\nWorkflow suggestion (advisory only): /skill:${suggestion.skill} — ${suggestion.reason}. Do not execute the skill or mutate project state unless the user explicitly asks and the relevant approval is present.` : "";
+		const workflowGuidance = suggestion ? `Workflow suggestion (advisory only): /skill:${suggestion.skill} — ${suggestion.reason}. Do not execute the skill or mutate project state unless the user explicitly asks and the relevant approval is present.` : undefined;
 		// The context snapshot is append-only and Pi reuses it across tool-call
 		// continuations. The epoch MUST stay stable across turns unless the project
 		// content or execution mode genuinely changed: prompt-dependent signals
@@ -1202,21 +1216,27 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// prompt-cache prefix (observed as frequent full cacheRead=0 misses).
 		const isChat = requestPlan.intent === "chat";
 		const epoch = isChat ? undefined : `${mode.current}:${projectProvider.getContext().revision}`;
-		const shouldAppendContext = !isChat && (!requestContextText || requestContextEpoch !== epoch);
-		if (isChat) {
-			// Ordinary chat must not inherit project/task context from a prior
-			// tracked turn. The context transform below removes persisted Dove
-			// snapshots for this request without touching user/assistant history.
-			// Keep the cached snapshot metadata intact so the next project turn
-			// can reuse the same provider-cache prefix without rebuilding it.
-		} else if (shouldAppendContext) {
+		const shouldRefreshSnapshot = !isChat && requestContextEpoch !== epoch;
+		let snapshotForTurn: string | undefined;
+		if (shouldRefreshSnapshot) {
 			const contextQuery = event.prompt;
-			const context = buildProjectContext(projectProvider, contextQuery, mode.current, { maxChars: remainingContextChars });
-			requestContextText = `[PERSONAL AGENT REQUEST CONTEXT]\nMode: ${displayMode(mode.current)}${workflowHint}${contextGuard.compactAdvised && contextGuard.hint ? `\n\n${contextGuard.hint}` : ""}\n\n${context.text}`;
-			requestContextEpoch = epoch;
-			requestContextRevision = `${epoch}:${context.charCount}`;
-			requestContextSegments = context.segments;
+			const context = buildInteroperableProjectContext(projectProvider, contextQuery, mode.current, { maxChars: remainingContextChars }).context;
+			if (context.segments.length > 0 && context.text.trim()) {
+				requestContextRevision = `${epoch}:${context.charCount}`;
+				requestContextSegments = context.segments;
+				requestContextText = `[PERSONAL AGENT REQUEST CONTEXT]\nMode: ${displayMode(mode.current)}\n\n${context.text}`;
+				snapshotForTurn = requestContextText;
+			} else {
+				// An empty retrieval is not a snapshot. Do not consume the epoch so a
+				// later, relevant request at the same project revision can try again.
+				requestContextRevision = `${epoch}:empty`;
+				requestContextSegments = [];
+				requestContextText = undefined;
+			}
 		}
+		const requestGuidance = [workflowGuidance, contextGuard.compactAdvised ? contextGuard.hint : undefined].filter((value): value is string => Boolean(value));
+		const guidanceForTurn = requestGuidance.length > 0 ? `[PERSONAL AGENT REQUEST GUIDANCE]\n${requestGuidance.join("\n")}` : undefined;
+		let messageForTurn = [snapshotForTurn, guidanceForTurn].filter((value): value is string => Boolean(value)).join("\n\n") || undefined;
 		const reasoningVoiceInstruction = reasoningVoice ? ` In your internal reasoning, speak in a concise, action-oriented first-person-plural voice ("We need …" / "We should …") instead of generic lead-ins like "Let me think…". This is a style preference; keep the final answer's substance and correctness unchanged.` : "";
 		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} Dove execution mode and project context are supplied separately at request time. Workflow suggestions, when present, are advisory and never execute by themselves.${reasoningVoiceInstruction}`;
 		// Preflight the newly compiled request fragment against the active model
@@ -1225,7 +1245,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// the remaining headroom and reproducing the max_tokens truncation seen in
 		// real `hi` requests.
 		const modelWindow = ctx.model?.contextWindow;
-		if (shouldAppendContext && typeof modelWindow === "number" && Number.isFinite(modelWindow) && modelWindow > 0) {
+		if (messageForTurn && typeof modelWindow === "number" && Number.isFinite(modelWindow) && modelWindow > 0) {
 			const gateway = new ModelGateway({
 				contextWindow: modelWindow,
 				reservedOutput: requestPlan.outputBudget,
@@ -1239,29 +1259,38 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					segments: [
 						{ id: "host-system", source: "pi", content: builtSystemPrompt },
 						{ id: "user-prompt", source: "user", content: event.prompt },
-						{ id: "dove-context", source: "dove", content: requestContextText ?? "", required: true },
+						{ id: "dove-context", source: "dove", content: messageForTurn, required: true },
 					],
 				});
 			} catch (error) {
 				if (error instanceof ModelBudgetError) {
-					requestContextText = `[PERSONAL AGENT REQUEST CONTEXT]\nMode: ${displayMode(mode.current)}\n[context omitted: provider budget preflight exceeded by ${error.diagnostic.overflowTokens} token(s)]`;
+					requestContextText = undefined;
 					requestContextRevision = `${epoch}:budget-omitted`;
 					requestContextSegments = [];
+					snapshotForTurn = undefined;
+					messageForTurn = guidanceForTurn;
 					if (ctx.hasUI) ctx.ui.notify("Dove 已在发送前移除项目上下文以保留模型输出空间。", "warning");
 				}
 			}
 		}
+		if (snapshotForTurn) requestContextEpoch = epoch;
 		lastSystemPrompt = builtSystemPrompt;
 		return {
 			// The stable system prompt is kept separate from the append-only context
 			// snapshot. The snapshot is emitted only when its epoch changes.
 			systemPrompt: builtSystemPrompt,
-			...(shouldAppendContext ? {
+			...(messageForTurn ? {
 				message: {
 					customType: "personal-agent-context",
-					content: requestContextText ?? "",
+					content: messageForTurn,
 					display: false,
-					details: { schemaVersion: 2, epoch: requestContextEpoch, revision: requestContextRevision, segments: requestContextSegments },
+					details: {
+						schemaVersion: 2,
+						epoch: snapshotForTurn ? requestContextEpoch : `${epoch ?? "chat"}:request:${requestPlan.requestId}`,
+						revision: snapshotForTurn ? requestContextRevision : undefined,
+						segments: snapshotForTurn ? requestContextSegments : [],
+						guidance: Boolean(guidanceForTurn),
+					},
 				},
 			} : {}),
 		};
@@ -1272,15 +1301,16 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// historical per-turn context payload forever. The entries remain in the
 	// session file for backwards-compatible rendering/inspection.
 	pi.on("context", async (event) => {
-		const chatIsolation = currentRequestPlan?.intent === "chat";
 		// Context transforms run before every provider request. Only remove
 		// legacy Dove entries that have no v2 schema marker; never reorder the
 		// current append-only context message.
+		doveContextPayloads.clear();
 		const messages = event.messages.filter((message) => {
 			if (message.role !== "custom" || message.customType !== "personal-agent-context") return true;
-			if (chatIsolation) return false;
 			const details = message.details;
-			return typeof details === "object" && details !== null && (details as { schemaVersion?: unknown }).schemaVersion === 2;
+			const isCurrent = typeof details === "object" && details !== null && (details as { schemaVersion?: unknown }).schemaVersion === 2;
+			if (isCurrent && typeof message.timestamp === "number") doveContextPayloads.set(message.timestamp, payloadMessageText(message));
+			return isCurrent;
 		});
 		return messages.length === event.messages.length ? undefined : { messages };
 	});

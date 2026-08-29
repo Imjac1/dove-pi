@@ -7,6 +7,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension, { compactModelPayload, compactToolResultContent, getProjectContextBudget, getRemainingContextChars, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
+import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 
 const adapterStateDir = mkdtempSync(join(tmpdir(), "pi-adapter-state-"));
 const previousStateDir = process.env.DOVE_PI_STATE_DIR;
@@ -27,6 +28,7 @@ describe("Pi adapter", () => {
 		const statusColors: string[] = [];
 		const notifications: string[] = [];
 		const activeToolSets: string[][] = [];
+		let hostActiveTools: string[] = [];
 		let providerAborted = false;
 		const api = {
 			registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
@@ -34,9 +36,9 @@ describe("Pi adapter", () => {
 			registerTool(definition: { name: string }) { tools.set(definition.name, definition); },
 			registerFlag() {},
 			appendEntry() {},
-			getAllTools() { return [{ name: "read" }, { name: "agent_doctor" }, { name: "agent_browser" }]; },
-			setActiveTools(names: string[]) { activeToolSets.push(names); },
-			getActiveTools() { return activeToolSets.at(-1) ?? []; },
+			getAllTools() { return representativeTools.map((name) => ({ name })); },
+			setActiveTools(names: string[]) { hostActiveTools = [...names]; activeToolSets.push(names); },
+			getActiveTools() { return hostActiveTools; },
 			getThinkingLevel() { return "max"; },
 			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
 		} as unknown as ExtensionAPI;
@@ -90,7 +92,7 @@ describe("Pi adapter", () => {
 		await beforeProviderRequest({ type: "before_provider_request", payload: { max_tokens: 20, messages: [{ role: "user", content: "x".repeat(2_000) }] } }, { ...context, model: { contextWindow: 100, maxTokens: 20 } });
 		assert.equal(providerAborted, true, "an over-budget Pi request must abort the host operation instead of relying on a swallowed exception");
 		await events.get("session_start")?.(undefined, context);
-		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
+		assert.deepEqual(activeToolSets.at(-1), []);
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
 		assert.ok(statuses.some((value) => value.includes("Pi max")));
 		assert.ok(notifications.some((value) => value.includes("Ctrl+P 切换模型")));
@@ -111,7 +113,13 @@ describe("Pi adapter", () => {
 		providerAborted = false;
 		const boundedProviderPayload = await beforeProviderRequest({ type: "before_provider_request", payload: { max_tokens: 16_384, messages: [{ role: "user", content: "ok" }] } }, { ...context, model: { contextWindow: 12_800, maxTokens: 16_384 } });
 		assert.equal(providerAborted, false);
-		assert.equal((boundedProviderPayload as { max_tokens?: number })?.max_tokens, 11_775, "the payload sent by Pi must use the larger safe output reservation Dove accounted for");
+		assert.equal((boundedProviderPayload as { max_tokens?: number })?.max_tokens, 12_543, "the payload sent by Pi must use the larger safe output reservation Dove accounted for");
+		providerAborted = false;
+		await beforeProviderRequest({
+			type: "before_provider_request",
+			payload: { max_tokens: 20, messages: [{ role: "user", content: "ok" }], tools: [{ type: "function", function: { name: "large", description: "x".repeat(1_000), parameters: {} } }] },
+		}, { ...context, model: { contextWindow: 400, maxTokens: 20 } });
+		assert.equal(providerAborted, true, "the final Pi gate must reject the real serialized tool schema rather than a count-only estimate");
 		const dsmlResult = await events.get("message_end")?.({
 			message: {
 				role: "assistant",
@@ -132,17 +140,42 @@ describe("Pi adapter", () => {
 		assert.ok(notifications.some((value) => value.includes("trellis-start")));
 		await commands.get("project")?.handler("doctor", context);
 		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
+		hostActiveTools = ["mcp", "fusion_reason", "bg_delegate"];
+		const freshChat = await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.deepEqual(activeToolSets.at(-1), [], "fresh Chat must expose zero tools and reassert Dove policy after third-party activation");
+		assert.equal((freshChat as { message?: unknown })?.message, undefined, "fresh Chat must not append project context");
 		const firstStartResult = await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
 		const firstStartMessage = (firstStartResult as { message?: { customType?: string; details?: { schemaVersion?: number; segments?: unknown[] } } })?.message;
 		const firstSystemPrompt = String((firstStartResult as { systemPrompt?: string })?.systemPrompt);
-		assert.equal(firstStartMessage?.customType, "personal-agent-context");
-		assert.equal(firstStartMessage?.details?.schemaVersion, 2);
-		assert.ok(Array.isArray(firstStartMessage?.details?.segments));
-		assert.ok(activeToolSets.at(-1)?.includes("agent_browser"));
+		assert.equal(firstStartMessage, undefined, "a lookup with no relevant project segments must not append an empty context wrapper");
+		const lookupToolSet = activeToolSets.at(-1) ?? [];
+		for (const name of ["web_search", "source_check", "fetch_content", "get_search_content"]) assert.ok(lookupToolSet.includes(name));
+		assert.equal(lookupToolSet.includes("agent_browser"), false, "Lookup must not expose browser automation");
+		assert.equal(lookupToolSet.includes("mcp"), false, "Lookup must not expose generic MCP dispatch");
 		const autoToolSetCount = activeToolSets.length;
 		const hiStart = await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.equal(activeToolSets.length, autoToolSetCount, "auto mode keeps intent tools instead of rebuilding the set");
+		assert.equal(activeToolSets.length, autoToolSetCount + 1, "Lookup -> Chat must remove the prior request's schemas");
+		assert.deepEqual(activeToolSets.at(-1), []);
 		assert.equal(String((hiStart as { systemPrompt?: string })?.systemPrompt), firstSystemPrompt, "Dove's provider-prefix policy stays stable across intent changes");
+		const consecutiveChatCount = activeToolSets.length;
+		await events.get("before_agent_start")?.({ prompt: "hello", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.equal(activeToolSets.length, consecutiveChatCount, "consecutive requests with the same exact set must not call setActiveTools again");
+		hostActiveTools = [...hostActiveTools, "mcp", "fusion_reason", "bg_delegate"];
+		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.equal(activeToolSets.length, consecutiveChatCount + 1, "Dove reasserts its request-exact set after later third-party activation");
+		assert.deepEqual(activeToolSets.at(-1), []);
+		await events.get("before_agent_start")?.({ prompt: "修复登录问题，打开浏览器并通过 MCP 委派后台任务", systemPrompt: "", type: "before_agent_start" }, context);
+		const executionToolSet = activeToolSets.at(-1) ?? [];
+		for (const name of ["bash", "write", "replace", "insert", "agent_workspace_patch", "agent_browser", "mcp", "bg_delegate"]) assert.ok(executionToolSet.includes(name), `Execution must expose ${name}`);
+		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
+		assert.deepEqual(activeToolSets.at(-1), [], "Execution -> Chat must drop every mutation schema");
+		await events.get("before_agent_start")?.({ prompt: "修复登录问题，打开浏览器并通过 MCP 委派后台任务", systemPrompt: "", type: "before_agent_start" }, context);
+		await events.get("before_agent_start")?.({ prompt: "读取 package.json", systemPrompt: "", type: "before_agent_start" }, context);
+		const exactLookupToolSet = activeToolSets.at(-1) ?? [];
+		for (const name of ["bash", "powershell", "write", "replace", "insert", "agent_workspace_patch", "agent_project_task", "agent_browser", "mcp", "mcpScript", "fusion_reason", "bg_delegate"]) {
+			assert.equal(exactLookupToolSet.includes(name), false, `Execution -> Lookup must drop ${name}`);
+		}
+		assert.deepEqual(exactLookupToolSet, selectDoveToolNames(representativeTools, "auto", "lookup", "读取 package.json"));
 		assert.match(firstSystemPrompt, /\[DOVE REGISTERED CAPABILITIES\]/);
 		const isolatedChat = await events.get("context")?.({
 			type: "context",
@@ -152,21 +185,36 @@ describe("Pi adapter", () => {
 				{ role: "assistant", content: [{ type: "text", text: "hello" }], timestamp: 3 },
 			],
 		}, context);
-		const isolatedMessages = (isolatedChat as { messages?: Array<{ role?: string; customType?: string; content?: unknown }> } | undefined)?.messages ?? [];
-		assert.equal(isolatedMessages.some((message) => message.customType === "personal-agent-context"), false, "ordinary chat must not inherit a persisted project context snapshot");
+		assert.equal(isolatedChat, undefined, "ordinary Chat must preserve the current v2 message and provider ordering");
 		const notificationCount = notifications.length;
 		await commands.get("mode")?.handler("max", context);
 		assert.equal(notifications.length, notificationCount + 1);
 		assert.equal(notifications.at(-1), "Mode must be fast, standard, or ultra.");
 		await commands.get("dove-tools")?.handler("full", context);
-		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor", "agent_browser"]);
+		assert.deepEqual(activeToolSets.at(-1), selectDoveToolNames(representativeTools, "full"));
 		await commands.get("dove-tools")?.handler("reset", context);
-		assert.deepEqual(activeToolSets.at(-1), ["read", "agent_doctor"]);
-		const beforeStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
-		// Epoch is stable (mode + project revision): a prompt that only changes the
-		// workflow-skill suggestion must NOT re-emit the context snapshot, so the
-		// provider prompt-cache prefix survives intent flips.
-		assert.equal((beforeStart as { message?: unknown })?.message, undefined, "prompt-dependent suggestion must not re-emit the context snapshot");
+		assert.deepEqual(activeToolSets.at(-1), [], "reset returns Auto to its zero-tool Chat baseline");
+		const emptyLookup = await events.get("before_agent_start")?.(
+			{ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" },
+			{ ...context, model: { contextWindow: 100_000 } },
+		);
+		assert.equal((emptyLookup as { message?: unknown })?.message, undefined, "an empty lookup must not emit a wrapper or consume the project epoch");
+		const budgetOmitted = await events.get("before_agent_start")?.(
+			{ prompt: "修复 Provider Prompt-Cache Boundary", systemPrompt: "", type: "before_agent_start" },
+			{ ...context, model: { contextWindow: 1_000 } },
+		);
+		assert.doesNotMatch(String((budgetOmitted as { message?: { content?: string } })?.message?.content), /\[PERSONAL AGENT REQUEST CONTEXT\]/);
+		const beforeStart = await events.get("before_agent_start")?.(
+			{ prompt: "修复 Provider Prompt-Cache Boundary", systemPrompt: "", type: "before_agent_start" },
+			{ ...context, model: { contextWindow: 100_000 } },
+		);
+		// Prompt-specific guidance is delivered for the current request, while the
+		// project snapshot itself stays tied to the stable mode/revision epoch.
+		const beforeStartMessage = (beforeStart as { message?: { content?: string; details?: { guidance?: boolean; segments?: unknown[] } } })?.message;
+		assert.match(beforeStartMessage?.content ?? "", /trellis-before-dev/);
+		assert.match(beforeStartMessage?.content ?? "", /\[PERSONAL AGENT REQUEST CONTEXT\]/);
+		assert.equal(beforeStartMessage?.details?.guidance, true);
+		assert.ok((beforeStartMessage?.details?.segments?.length ?? 0) > 0, "an empty lookup must not consume the epoch needed by a later relevant project request");
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
 		const sysCaptured = notifications.length;
@@ -180,7 +228,7 @@ describe("Pi adapter", () => {
 		const withVoiceStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.match(String((withVoiceStart as { systemPrompt?: string })?.systemPrompt), /first-person-plural/);
 		const repeatedStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.equal((repeatedStart as { message?: unknown })?.message, undefined, "unchanged context epochs must not append another snapshot");
+		assert.match(String((repeatedStart as { message?: { content?: string } })?.message?.content), /trellis-before-dev/, "current-turn guidance must not be stranded in an older snapshot");
 		const contextResult = await events.get("context")?.({
 			type: "context",
 			messages: [
@@ -203,6 +251,34 @@ describe("Pi adapter", () => {
 			],
 		}, context);
 		assert.equal(appendOnlyResult, undefined, "v2 context history remains append-only across provider requests");
+
+		const derivedContext = `[PERSONAL AGENT REQUEST CONTEXT]\n${"d".repeat(250)}`;
+		await events.get("context")?.({
+			type: "context",
+			messages: [
+				{ role: "user", content: [{ type: "text", text: "keep" }], timestamp: 29 },
+				{ role: "custom", customType: "personal-agent-context", content: derivedContext, display: false, details: { schemaVersion: 2, epoch: "budget" }, timestamp: 30 },
+			],
+		}, context);
+		providerAborted = false;
+		const literalUserContext = `[PERSONAL AGENT REQUEST CONTEXT]\n${"u".repeat(250)}`;
+		const compactedProviderPayload = await beforeProviderRequest({
+			type: "before_provider_request",
+			payload: {
+				max_tokens: 20,
+				messages: [
+					{ role: "user", content: literalUserContext, timestamp: 29 },
+					{ role: "user", content: derivedContext, timestamp: 30 },
+				],
+			},
+		}, { ...context, model: { contextWindow: 380, maxTokens: 20 } });
+		assert.equal(providerAborted, false);
+		assert.deepEqual(
+			(compactedProviderPayload as { messages?: Array<{ timestamp?: number }> })?.messages?.map((message) => message.timestamp),
+			[29],
+			"budget fallback removes only the exact Dove-derived message and preserves user text containing the same marker",
+		);
+
 	});
 
 	it("warns once for a repeated failure and resets after progress", () => {
@@ -218,13 +294,14 @@ describe("Pi adapter", () => {
 
 	it("keeps only the compact core tool set by default", () => {
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "core"), ["read", "agent_doctor"]);
-		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "auto", "打开网页并截图"), ["read", "agent_doctor", "agent_browser", "web_search"]);
-		assert.deepEqual(selectDoveToolNames(["read", "plan_mode_question"], "auto", "explain this error"), ["read", "plan_mode_question"]);
-		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "继续当前任务", "08-25-execute-assembly-impl e2e protocol"), ["read", "lsp_diagnostics", "symbol_search"]);
-		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "继续", "Personal Agent OS"), ["read"]);
+		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "auto", "lookup", "打开网页并截图"), ["read", "agent_doctor", "web_search"]);
+		assert.deepEqual(selectDoveToolNames(["read", "plan_mode_question"], "auto", "lookup", "explain this error"), ["read"]);
+		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "project-work", "继续当前任务", "08-25-execute-assembly-impl e2e protocol"), ["read", "lsp_diagnostics", "symbol_search"]);
+		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "project-work", "继续", "Personal Agent OS"), ["read", "lsp_diagnostics", "symbol_search"]);
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser"], "full"), ["read", "agent_doctor", "agent_browser"]);
 		assert.equal(hasHashlineEditTools(["read", "replace", "insert", "grep"]), true);
-		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "core"), ["read", "grep", "replace", "insert"]);
+		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "core"), ["read", "grep"]);
+		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "auto", "execution"), ["read", "grep", "replace", "insert"]);
 		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "full"), ["read", "grep", "replace", "insert"]);
 	});
 

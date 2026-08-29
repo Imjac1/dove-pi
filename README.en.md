@@ -100,6 +100,8 @@ Useful Pi commands:
 
 `/thinking` remains Pi's native command. Dove's automatic/locked policy uses `/dove-thinking` and does not shadow the host. Task creation, completion, and archival require explicit intent and confirmation; ordinary chat does not create a Trellis task.
 
+`/dove-tools auto` opens tools in intent-owned tiers from the same request plan: ordinary Chat has zero tools, Lookup gets read/search and read-only web retrieval, Project Work adds read-only code diagnostics and planning, and only Execution receives shell, edit, task, workspace mutation, browser automation, generic MCP, and background tools. At each user-request boundary, Auto switches to exactly that request's set and keeps it stable through its tool-call continuations; the next request narrows it again, so Execution authority never remains on a later Chat/Lookup. Changing tiers changes the tool prefix and can sacrifice some provider-cache reuse, but preserves per-request least authority and lowers schema tokens. Consecutive same-tier requests stay stable, and temporary third-party activations are never absorbed.
+
 ## Interoperability interfaces
 
 Dove Capability Protocol `1.0.0` defines a host-neutral contract for capability versions, parameter schemas, platforms, side effects, idempotency, lifecycle, correlation IDs, and evidence references. Pi, CLI/JSON-RPC, and MCP share the same Core registry, invocation service, and ledger:
@@ -128,11 +130,14 @@ Authorization is fail-closed: Pi uses its native confirmation UI, CLI trusts onl
 dove-pi update
 dove-pi repair
 dove-pi rollback
+dove-pi cache audit --min-requests=2
+dove-pi token audit --since=1h
 ```
 
 - `update` checks the direct stable GitHub Release manifest without relying on the GitHub REST API. When the version is unchanged and the current release is healthy, it does not download the zip or run `npm ci`; it only repairs the launcher and reconciles Dove-managed extensions.
 - `repair` checks the current release and launcher. If current is damaged, it first recovers a runnable previous release, then rebuilds from stable when needed.
 - `rollback` atomically switches the application to previous. Pi extensions live in user state, so Dove does not pretend they roll back atomically with the app.
+- `cache audit` and `token audit` are finite local diagnostics; they do not accidentally start an interactive Pi session.
 
 Read-only update checks:
 
