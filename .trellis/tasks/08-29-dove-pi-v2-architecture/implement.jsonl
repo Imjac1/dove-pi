@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"Cross-layer runtime contracts, adapter firewall, provider budget, and recovery rules for the V2 implementation."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Strict TypeScript, boundary ownership, failure/recovery, and required validation commands."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Pi/Core/Trellis state ownership and prohibition on duplicate project stores."}

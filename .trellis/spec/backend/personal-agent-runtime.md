@@ -89,7 +89,93 @@ const result = await executeFastPath(registry, ledger, "windows.host_info", {}, 
 
 ## Design Decision: Adapter Firewall
 
-Pi and Trellis are replaceable adapters, not core dependencies. This keeps Pi upgrades localized to `src/pi-adapter/**` and allows lightweight operation without full Trellis workflow injection.
+**Context**: Dove is primarily used through Pi, and forcing every Pi callback
+through a generic host abstraction would add indirection without improving the
+user experience.
+
+**Options considered**:
+
+1. Make `src/pi-adapter/**` a minimal event translation layer.
+2. Keep all logic in the Pi extension.
+3. Keep Pi-specific lifecycle/UX specialization, while isolating only
+   safety-critical runtime decisions.
+
+**Decision**: Use option 3. Pi and Trellis are replaceable boundaries, not
+dependencies of the host-independent Kernel. Pi may own rich lifecycle,
+shortcut, tool-profile, streaming, and TUI behavior. Budget validation,
+approval policy, capability execution, provider mutation, and recovery state
+must remain in shared runtime modules.
+
+**Example**:
+
+```typescript
+// Pi-specific UX can remain here.
+pi.on("before_agent_start", async (event, ctx) => {
+  const plan = createRequestPlan({ message: event.prompt, mode: mode.current });
+  return runtime.prepareRequest(plan, ctx.model);
+});
+```
+
+**Extensibility**: A future CLI or MCP host can reuse the Kernel contracts, but
+must not require moving Pi-only behavior into generic abstractions first.
+
+## V2 Request Planning and Provider Budget Firewall
+
+The clean-slate runtime derives an immutable `RequestPlan` before compiling
+prompt/context. Intent classes are `chat`, `lookup`, `project-work`, and
+`execution`; ordinary conversation has no project-task context or capability
+requirements. Mutation/execution language always wins over a caller-provided
+`explicitIntent`, so an untrusted hint cannot downgrade approval requirements.
+
+The Pi adapter treats chat isolation as an active boundary, not only a prompt
+selection hint: chat turns do not read the full project projection for tool
+heuristics or task correlation, and the context projection removes persisted
+Dove project snapshots from the model-facing history for that turn. Browser
+phrases such as opening a webpage or taking a screenshot are classified as
+lookup work, while repair/fix language is classified as project work.
+
+The host-independent `ModelGateway` owns provider payload accounting. It
+subtracts reserved output, reasoning, tool-schema, and provider-overhead tokens
+from the model context window, validates the complete request before transport
+dispatch, and throws a structured diagnostic on overflow. Required segments are
+ranked first but never bypass the final budget check. Provider stop reasons are
+normalized once at this boundary.
+
+`executeFastPath` accepts an optional authorization boundary:
+
+```typescript
+executeFastPath(registry, ledger, name, args, context, {
+  required: true,
+  authorize: async ({ name, sideEffects, args }) => boolean,
+});
+```
+
+When `required` is enabled, any capability with a non-`read_only` side effect
+must receive an explicit approval callback. Missing or denied approval returns
+`status: "blocked"`, writes `capability.blocked`, and never invokes the
+capability executor. The Pi layer may supply the callback through its native
+confirmation UI; it does not bypass the shared runtime check.
+
+Provider calls are runtime decisions rather than incidental transport details.
+The Pi `before_provider_request` hook converts the final opaque payload into
+shared ModelGateway segments, reserves model output/tool/provider headroom,
+and rejects the request before HTTP dispatch when the complete payload cannot
+fit. It may remove only Dove-derived context and retry the deterministic check;
+user history is never silently truncated. Accepted and rejected calls are
+correlated in the execution ledger with request, session, task, and
+provider-call identifiers, while `after_provider_response` records the HTTP
+outcome and usage projection.
+
+Capability executions receive a unique `executionId` and optional request,
+session, and tool-call correlation. Host integrations may persist an explicit
+`capability.approval.pending` transition. Cancellation and timeout are
+terminally distinguished, and startup scans incomplete `capability.started`
+records and marks them `capability.recovered` without replaying a potentially
+non-idempotent side effect. A user must explicitly retry through the normal
+approval boundary after reconciliation. Approved decisions are recorded
+separately from blocked decisions. Optional evidence capture is best-effort:
+an unavailable artifact is reported in ledger details without converting an
+already completed side effect into a false execution failure.
 
 ## Scenario: Dispatch Cost Calibration
 
@@ -188,6 +274,7 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - The current session's `.trellis/.runtime/sessions/*.json` `current_task` is resolved relative to the workspace and compared to the task directory using normalized absolute paths.
 - Fast mode includes only the active task PRD and the runtime spec as required context. Standard/Ultra use relevance scoring; Ultra may include typed memory records without an application token cap.
 - The Pi adapter must pass its selected `ProjectProvider` into context compilation. A cwd convenience wrapper may exist for compatibility, but it must delegate to the same provider projection rather than reading Trellis files directly.
+- `DOVE_PI_READ_ONLY=1` is an explicit degraded-mode switch. It leaves chat, lookup, snapshots, verification, and diagnostics available while blocking Trellis task mutations, workspace restore/patch operations, and side-effect capability approvals. The active mode is exposed by `agent_doctor` so an unsupported host/provider can fail visibly rather than guessing.
 - Dove's stable instructions are returned as `before_agent_start.systemPrompt`; dynamic project guidance is emitted as a versioned `personal-agent-context` custom message only when its context epoch changes (`mode + Trellis revision`). Prompt-specific workflow hints and monotonic auto-tool growth must not rebuild the snapshot on every intent flip, because that churns the provider cache prefix. Unchanged epochs do not append another snapshot.
 - Keep provider prompt-cache prefixes stable: the static Dove system-prompt section must not include per-request mode, task, workflow, or project text. The `context` transform may remove legacy unversioned `personal-agent-context` entries for compatibility, but must never move or rebuild the current v2 snapshot on each provider request.
 - In `auto` tool mode, intent-specific tools are session-monotonic: once enabled they remain active until the user explicitly changes the tool profile or starts a new session. Avoid repeated `setActiveTools()` calls when the effective set is unchanged, because tool definitions participate in the provider prompt prefix.
