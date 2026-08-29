@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
+import { createRequestPlan } from "../src/core/request-plan.ts";
 import { representativeMutationTools as mutationTools, representativeTools } from "./fixtures/representative-tool-catalog.ts";
 
 describe("Dove intent-owned tool tiers", () => {
@@ -17,6 +18,28 @@ describe("Dove intent-owned tool tiers", () => {
 		assert.deepEqual(selected, ["read", "grep", "find", "ls", "agent_list_capabilities", "agent_doctor", "agent_project_status", "agent_project_context", "agent_workspace_verify"]);
 		assert.equal(selected.some((name) => mutationTools.has(name)), false);
 		assert.equal(selected.some((name) => name.startsWith("fusion_") || name.startsWith("bg_") || name === "mcp"), false);
+	});
+
+	it("keeps real Chinese read-only prompts free of provider-visible mutation tools", () => {
+		for (const prompt of [
+			"分析 src/invoice.js 和测试，说明失败根因并给出修复计划，但不要修改文件、不要运行命令。",
+			"现在只读说明 src/invoice.js 修复后的计算公式，别修改或运行任何命令。",
+		]) {
+			const plan = createRequestPlan({ message: prompt, projectAvailable: true });
+			const selected = selectDoveToolNames(representativeTools, "auto", plan.intent, prompt);
+			assert.equal(plan.intent, "lookup");
+			assert.equal(selected.some((name) => mutationTools.has(name)), false);
+		}
+		const summary = "用一句话总结我们刚才完成了什么。";
+		assert.deepEqual(selectDoveToolNames(representativeTools, "auto", createRequestPlan({ message: summary }).intent, summary), []);
+	});
+
+	it("exposes no generic tools after Core selects deterministic continuation", () => {
+		const plan = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true });
+		assert.equal(plan.projectAction, "continue");
+		assert.deepEqual(selectDoveToolNames(representativeTools, "auto", plan, "继续当前项目任务"), []);
+		assert.deepEqual(selectDoveToolNames(representativeTools, "core", plan, "继续当前项目任务"), []);
+		assert.deepEqual(selectDoveToolNames(representativeTools, "full", plan, "继续当前项目任务"), []);
 	});
 
 	it("keeps Lookup web helpers read-only and browser automation behind Execution", () => {

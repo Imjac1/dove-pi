@@ -25,13 +25,13 @@ function usage(inp: number, cr: number, ts: number): unknown {
 	};
 }
 
-function contextMessage(epoch: string): unknown {
+function contextMessage(epoch: string, cachePolicyVersion?: number, schemaVersion = 2): unknown {
 	return {
 		type: "custom_message",
 		customType: "personal-agent-context",
 		content: "ctx",
 		display: false,
-		details: { schemaVersion: 2, epoch },
+		details: { schemaVersion, epoch, ...(cachePolicyVersion === undefined ? {} : { cachePolicyVersion }) },
 	};
 }
 
@@ -143,7 +143,7 @@ describe("dove-pi cache audit", () => {
 			await writeFile(
 				join(projectDir, "v2.jsonl"),
 				makeSession([
-					contextMessage("ultra:abc123"),
+					contextMessage("ultra:0.6.15:1787887048823:task:request:req-123", 2),
 					usage(1000, 0, now - 2000),
 					usage(300, 5000, now - 1000),
 				]),
@@ -152,7 +152,7 @@ describe("dove-pi cache audit", () => {
 			await writeFile(
 				join(projectDir, "v1.jsonl"),
 				makeSession([
-					contextMessage("ultra:0.6.15:1787887048823:.trellis:trellis-brainstorm:readbashwrite"),
+					contextMessage("ultra:0.6.15:1787887048823:.trellis:trellis-brainstorm:readbashwrite", undefined, 1),
 					usage(1000, 0, now - 2000),
 					usage(300, 5000, now - 1000),
 				]),

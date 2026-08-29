@@ -1,12 +1,39 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { createProjectProvider, discoverProject, readProjectManifest, updateProjectManifest, withProjectMutationLock, writeProjectManifest, TrellisProvider } from "../src/project-provider/index.ts";
+import { createProjectProvider, discoverProject, parseTrellisCurrentTaskPath, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, writeProjectManifest, TrellisProvider, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../src/project-status.ts";
 
 describe("project provider firewall", () => {
+	it("accepts only bounded, non-stale public current-task command output", () => {
+		const root = resolve("project-root");
+		assert.equal(
+			parseTrellisCurrentTaskPath(root, JSON.stringify({ current_task: { dir: ".trellis/tasks/demo" }, stale: false })),
+			resolve(root, ".trellis", "tasks", "demo"),
+		);
+		assert.equal(parseTrellisCurrentTaskPath(root, JSON.stringify({ current_task: { dir: ".trellis/tasks/demo" }, stale: true })), undefined);
+		assert.equal(parseTrellisCurrentTaskPath(root, JSON.stringify({ current_task: { dir: ".trellis/tasks/demo" } })), undefined);
+		assert.equal(parseTrellisCurrentTaskPath(root, JSON.stringify({ current_task: { dir: ".trellis/tasks/demo" }, stale: "false" })), undefined);
+		assert.equal(parseTrellisCurrentTaskPath(root, JSON.stringify({ current_task: { dir: "../outside" }, stale: false })), undefined);
+		assert.equal(parseTrellisCurrentTaskPath(root, "not-json"), undefined);
+	});
+
+	it("projects deterministic provider-neutral continuation state", () => {
+		const task = (id: string, status: string): ProjectTask => ({ stableId: `trellis:${id}`, provider: "trellis", providerTaskId: id, path: `C:/project/.trellis/tasks/${id}`, title: id, status, files: [] });
+		const context = (tasks: readonly ProjectTask[], currentTask?: ProjectTask): ProjectContextSnapshot => ({ provider: "trellis", projectRoot: "C:/project", revision: "opaque:revision:value", tasks, ...(currentTask ? { currentTask } : {}), documents: [] });
+		const current = task("current", "in_progress");
+		assert.equal(summarizeProjectContinuation(context([current], current)).kind, "current");
+		const single = summarizeProjectContinuation(context([task("done", "completed"), task("only", "in_progress")]));
+		assert.equal(single.kind, "single_candidate");
+		if (single.kind === "single_candidate") assert.equal(single.task.stableId, "trellis:only");
+		const ambiguous = summarizeProjectContinuation(context([task("z", "active"), task("a", "started")]));
+		assert.equal(ambiguous.kind, "ambiguous");
+		if (ambiguous.kind === "ambiguous") assert.deepEqual(ambiguous.candidates.map((candidate) => candidate.stableId), ["trellis:a", "trellis:z"]);
+		assert.equal(summarizeProjectContinuation(context([task("done", "completed")])).kind, "none");
+	});
+
 	it("reconciles Trellis task mutations from observed state without replay", async () => {
 		const cases = [
 			{ operation: "start" as const, status: "in_progress", expected: "observed" as const },

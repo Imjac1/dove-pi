@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ContextCompiler } from "../src/core/context-compiler.ts";
 import { buildProjectContext, buildTrellisContext } from "../src/trellis-adapter/context.ts";
+import { createProjectProvider } from "../src/project-provider/index.ts";
 import { LightweightProvider } from "../src/project-provider/lightweight-provider.ts";
 import { isSensitiveProjectPath, readTrellisSnapshot } from "../src/trellis-adapter/index.ts";
 
@@ -58,24 +59,18 @@ describe("context compiler", () => {
 });
 
 describe("Trellis context", () => {
-	it("reads task metadata, active task, and typed memory records", async () => {
+	it("reads task metadata and typed memory records without private runtime state", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-metadata-"));
 		const taskDir = join(temporary, ".trellis", "tasks", "demo-task");
 		const workspaceDir = join(temporary, ".trellis", "workspace");
 		const developerDir = join(workspaceDir, "dev");
-		const sessionsDir = join(temporary, ".trellis", ".runtime", "sessions");
-		const contextId = "context-test";
-		const previous = process.env.TRELLIS_CONTEXT_ID;
-		process.env.TRELLIS_CONTEXT_ID = contextId;
 		try {
 			await mkdir(taskDir, { recursive: true });
 			await mkdir(developerDir, { recursive: true });
-			await mkdir(sessionsDir, { recursive: true });
 			await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo-task", title: "Demo Task", status: "in_progress", priority: "P1" }), "utf8");
 			await writeFile(join(taskDir, "prd.md"), "# Demo", "utf8");
 			await writeFile(join(developerDir, "journal-1.md"), "# Journal", "utf8");
 			await writeFile(join(workspaceDir, "index.md"), "# Workspace", "utf8");
-			await writeFile(join(sessionsDir, `${contextId}.json`), JSON.stringify({ current_task: ".trellis/tasks/demo-task" }), "utf8");
 
 			const snapshot = readTrellisSnapshot(temporary);
 			assert.equal(snapshot.tasks.length, 1);
@@ -84,13 +79,11 @@ describe("Trellis context", () => {
 			assert.equal(task?.status, "in_progress");
 			assert.equal(task?.title, "Demo Task");
 			assert.equal(task?.priority, "P1");
-			assert.equal(task?.path, snapshot.activeTaskPath);
+			assert.equal(snapshot.activeTaskPath, undefined);
 			assert.ok(task?.files.some((path) => path.endsWith("prd.md")));
 			assert.ok(snapshot.memories.some((memory) => memory.kind === "journal" && memory.developer === "dev"));
 			assert.ok(snapshot.memories.some((memory) => memory.path.endsWith("workspace\\index.md") && memory.kind === "index" && memory.developer === undefined));
 		} finally {
-			if (previous === undefined) delete process.env.TRELLIS_CONTEXT_ID;
-			else process.env.TRELLIS_CONTEXT_ID = previous;
 			await rm(temporary, { recursive: true, force: true });
 		}
 	});
@@ -108,13 +101,33 @@ describe("Trellis context", () => {
 		await rm(temporary, { recursive: true, force: true });
 	});
 
-	it("loads active task and runtime spec in fast mode", () => {
-		const context = buildTrellisContext(process.cwd(), "PowerShell runtime", "fast");
-		const snapshot = readTrellisSnapshot(process.cwd());
-		const activeTask = snapshot.tasks.find((entry) => entry.path === snapshot.activeTaskPath);
-		assert.ok(context.items.some((item) => item.id.includes("personal-agent-runtime.md")));
-		assert.ok(activeTask);
-		assert.ok(context.items.some((item) => item.id.includes(activeTask.id)));
+	it("loads the public current task and runtime spec in fast mode", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-public-current-"));
+		const taskDir = join(temporary, ".trellis", "tasks", "demo-task");
+		const specDir = join(temporary, ".trellis", "spec", "backend");
+		const scriptsDir = join(temporary, ".trellis", "scripts");
+		try {
+			await mkdir(taskDir, { recursive: true });
+			await mkdir(specDir, { recursive: true });
+			await mkdir(scriptsDir, { recursive: true });
+			await writeFile(join(temporary, ".trellis", ".version"), "0.6.16\n", "utf8");
+			await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo-task", title: "Demo Task", status: "in_progress" }), "utf8");
+			await writeFile(join(taskDir, "prd.md"), "# Demo task\n", "utf8");
+			await writeFile(join(specDir, "personal-agent-runtime.md"), "# Runtime\nPowerShell runtime contract.\n", "utf8");
+			await writeFile(
+				join(scriptsDir, "task.py"),
+				'import json\nprint(json.dumps({"current_task":{"dir":".trellis/tasks/demo-task"},"source":"fixture","stale":False}))\n',
+				"utf8",
+			);
+
+			const activeTask = createProjectProvider(temporary).getContext().currentTask;
+			const context = buildTrellisContext(temporary, "PowerShell runtime", "fast");
+			assert.equal(activeTask?.providerTaskId, "demo-task");
+			assert.ok(context.items.some((item) => item.id.includes("personal-agent-runtime.md")));
+			assert.ok(context.items.some((item) => item.id.includes("demo-task")));
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
 	});
 
 	it("does not inject the runtime contract on an unrelated standard turn", () => {
@@ -151,19 +164,12 @@ describe("Trellis context", () => {
 		await rm(temporary, { recursive: true, force: true });
 	});
 
-	it("does not borrow another session's active task when the requested session is missing", async () => {
+	it("ignores Trellis private session files", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-sessions-"));
 		const sessions = join(temporary, ".trellis", ".runtime", "sessions");
 		await mkdir(sessions, { recursive: true });
 		await writeFile(join(sessions, "other.json"), JSON.stringify({ current_task: ".trellis/tasks/other" }), "utf8");
-		const previous = process.env.TRELLIS_CONTEXT_ID;
-		process.env.TRELLIS_CONTEXT_ID = "missing-session";
-		try {
-			assert.equal(readTrellisSnapshot(temporary).activeTaskPath, undefined);
-		} finally {
-			if (previous === undefined) delete process.env.TRELLIS_CONTEXT_ID;
-			else process.env.TRELLIS_CONTEXT_ID = previous;
-		}
+		assert.equal(readTrellisSnapshot(temporary).activeTaskPath, undefined);
 		await rm(temporary, { recursive: true, force: true });
 	});
 });

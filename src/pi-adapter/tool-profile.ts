@@ -1,4 +1,4 @@
-import type { RequestIntent } from "../core/request-plan.ts";
+import type { RequestIntent, RequestPlan } from "../core/request-plan.ts";
 
 export type DoveToolProfile = "auto" | "core" | "full";
 
@@ -75,11 +75,17 @@ function baseNamesForIntent(intent: RequestIntent): ReadonlySet<string> {
 export function selectDoveToolNames(
 	allToolNames: readonly string[],
 	profile: DoveToolProfile,
-	intent: RequestIntent = "lookup",
+	request: RequestIntent | Pick<RequestPlan, "intent" | "projectAction"> = "lookup",
 	prompt = "",
 	contextHint = "",
 ): string[] {
+	const plan = typeof request === "string" ? { intent: request } : request;
+	const intent = plan.intent;
 	const hashline = hasHashlineEditTools(allToolNames);
+	// The Pi request boundary has already resolved and injected the public
+	// ProjectProvider continuation projection. Giving the model generic read or
+	// search tools here would only reopen guessed-path archaeology.
+	if (plan.projectAction === "continue") return [];
 	if (profile === "full") return [...new Set(allToolNames)].filter((name) => !(hashline && name === "edit"));
 
 	const selected = new Set(profile === "core" ? CORE_TOOL_NAMES : baseNamesForIntent(intent));

@@ -1,6 +1,6 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { readTrellisSnapshot, readTrellisText } from "../trellis-adapter/index.ts";
 import { withProjectMutationLock } from "./lock.ts";
@@ -71,9 +71,11 @@ export class TrellisProvider implements ProjectProvider {
 		// turns; mutations recreate the provider and therefore invalidate it.
 		const now = Date.now();
 		if (this.contextCache && this.contextCache.expiresAt > now) return this.contextCache.context;
-		const snapshot = readTrellisSnapshot(this.projectRoot);
-		const tasks = snapshot.tasks.map((task) => toProjectTask(task));
-		const currentTask = tasks.find((task) => snapshot.activeTaskPath !== undefined && task.path === snapshot.activeTaskPath);
+		const discovered = readTrellisSnapshot(this.projectRoot);
+		const tasks = discovered.tasks.map((task) => toProjectTask(task));
+		const publicCurrentTaskPath = readPublicTrellisCurrentTaskPath(this.projectRoot);
+		const currentTask = tasks.find((task) => task.path === publicCurrentTaskPath);
+		const snapshot = currentTask ? { ...discovered, activeTaskPath: currentTask.path } : discovered;
 		const documents: ProjectDocument[] = [];
 		for (const task of snapshot.tasks) for (const path of task.files) addDocument(documents, path, "task");
 		for (const path of snapshot.specFiles) addDocument(documents, path, "spec");
@@ -143,6 +145,46 @@ function readTrellisVersion(trellisRoot: string): string | undefined {
 	} catch {
 		// Treat an unreadable marker like a missing marker so health reporting
 		// degrades safely instead of taking down project discovery.
+		return undefined;
+	}
+}
+
+interface TrellisCurrentTaskOutput {
+	readonly current_task?: { readonly dir?: unknown } | null;
+	readonly stale?: unknown;
+}
+
+/** Parse only the documented `task.py current --json` result shape. */
+export function parseTrellisCurrentTaskPath(projectRoot: string, output: string): string | undefined {
+	try {
+		const payload = JSON.parse(output) as TrellisCurrentTaskOutput;
+		if (payload.stale !== false || !payload.current_task || typeof payload.current_task.dir !== "string") return undefined;
+		const taskRoot = resolve(projectRoot, ".trellis", "tasks");
+		const candidate = resolve(projectRoot, payload.current_task.dir);
+		const relativeTask = relative(taskRoot, candidate);
+		if (!relativeTask || relativeTask.startsWith("..") || isAbsolute(relativeTask)) return undefined;
+		return candidate;
+	} catch {
+		return undefined;
+	}
+}
+
+function readPublicTrellisCurrentTaskPath(projectRoot: string): string | undefined {
+	const script = join(projectRoot, ".trellis", "scripts", "task.py");
+	if (!existsSync(script)) return undefined;
+	try {
+		const output = execFileSync("python", [script, "current", "--json"], {
+			cwd: projectRoot,
+			encoding: "utf8",
+			windowsHide: true,
+			timeout: 3_000,
+			maxBuffer: 256 * 1024,
+		});
+		return parseTrellisCurrentTaskPath(projectRoot, output);
+	} catch {
+		// Public current-task lookup is optional. If Python or the project-owned
+		// Trellis command is unavailable, continuation safely falls back to the
+		// normalized single/ambiguous/none candidate projection.
 		return undefined;
 	}
 }

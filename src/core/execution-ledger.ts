@@ -50,6 +50,7 @@ export class ExecutionLedger {
 			details: {
 				requestId: plan.requestId,
 				intent: plan.intent,
+				projectAction: plan.projectAction,
 				contextClasses: plan.contextClasses,
 				capabilityIds: plan.capabilityIds,
 				approval: plan.approval,
@@ -66,8 +67,8 @@ export class ExecutionLedger {
 		await this.append({ taskId, stepId, kind: "model.budget.rejected", timestamp: new Date().toISOString(), mode, correlation: { requestId, sessionId, taskId }, details: { requestId, ...diagnostic } });
 	}
 
-	public async appendProviderRequestStarted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; providerCallId: string; inputTokens: number; ownerPid?: number }): Promise<void> {
-		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, providerCallId: input.providerCallId, inputTokens: input.inputTokens, ownerPid: input.ownerPid } });
+	public async appendProviderRequestStarted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; providerCallId: string; inputTokens: number; providerToolCount: number; providerToolSchemaBytes: number; cachePolicyVersion: number; ownerPid?: number }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, providerCallId: input.providerCallId, inputTokens: input.inputTokens, providerToolCount: input.providerToolCount, providerToolSchemaBytes: input.providerToolSchemaBytes, cachePolicyVersion: input.cachePolicyVersion, ownerPid: input.ownerPid } });
 	}
 
 	public async appendProviderRequestCompleted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; providerCallId: string; stopReason?: string; usage?: Readonly<Record<string, number>> }): Promise<void> {

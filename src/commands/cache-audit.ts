@@ -67,18 +67,24 @@ async function readSessionEntries(filePath: string): Promise<unknown[]> {
  * revisionMs:project:skill:toolset → rebuilds the snapshot on every intent flip).
  */
 function detectCachePolicy(entries: readonly unknown[]): string {
-	const epochs: string[] = [];
+	let latest: { epoch?: string; schemaVersion?: number; cachePolicyVersion?: number } | undefined;
 	for (const entry of entries) {
 		if (!entry || typeof entry !== "object") continue;
-		const e = entry as { type?: string; customType?: string; details?: { epoch?: unknown } };
+		const e = entry as { type?: string; customType?: string; details?: { epoch?: unknown; schemaVersion?: unknown; cachePolicyVersion?: unknown } };
 		if (e.type !== "custom_message" || e.customType !== "personal-agent-context") continue;
-		if (typeof e.details?.epoch === "string") epochs.push(e.details.epoch);
+		latest = {
+			...(typeof e.details?.epoch === "string" ? { epoch: e.details.epoch } : {}),
+			...(typeof e.details?.schemaVersion === "number" ? { schemaVersion: e.details.schemaVersion } : {}),
+			...(typeof e.details?.cachePolicyVersion === "number" ? { cachePolicyVersion: e.details.cachePolicyVersion } : {}),
+		};
 	}
-	const last = epochs.at(-1);
-	if (!last) return "n/a";
-	// v1 legacy epochs carry mode:version:revisionMs:project:skill:toolset (6 segments);
-	// v2 uses mode:revision (2 segments). Anything else → unknown shape.
-	return last.split(":").length === 2 ? "v2" : "v1";
+	if (!latest) return "n/a";
+	if (latest.cachePolicyVersion !== undefined) return `v${latest.cachePolicyVersion}`;
+	// Existing v2 sessions already carry the versioned append-only message
+	// schema. Epoch is opaque and may contain provider revisions/request IDs
+	// with any number of colons, so never infer v2 from segment count.
+	if (latest.schemaVersion === 2) return "v2";
+	return latest.epoch ? "v1" : "n/a";
 }
 
 export async function runCacheAudit(

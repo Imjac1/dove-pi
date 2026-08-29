@@ -129,11 +129,14 @@ describe("provider request recovery", () => {
 	it("closes an interrupted provider intent without claiming success", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-provider-recovery-"));
 		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
-		await ledger.appendProviderRequestStarted({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-1", providerCallId: "call-1", inputTokens: 42 });
+		await ledger.appendProviderRequestStarted({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-1", providerCallId: "call-1", inputTokens: 42, providerToolCount: 1, providerToolSchemaBytes: 128, cachePolicyVersion: 2 });
 		assert.equal((await ledger.findIncompleteProviderRequests()).length, 1);
 		await ledger.appendProviderRequestRecovered({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-1", providerCallId: "call-1" });
 		assert.equal((await ledger.findIncompleteProviderRequests()).length, 0);
 		const records = await ledger.read();
+		assert.equal(records[0]?.details.providerToolCount, 1);
+		assert.equal(records[0]?.details.providerToolSchemaBytes, 128);
+		assert.equal(records[0]?.details.cachePolicyVersion, 2);
 		assert.equal(records.at(-1)?.details.recovered, true);
 		await rm(temporary, { recursive: true, force: true });
 	});
@@ -141,7 +144,7 @@ describe("provider request recovery", () => {
 	it("does not recover a provider request owned by another live process", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-provider-owner-"));
 		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
-		await ledger.appendProviderRequestStarted({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-live", providerCallId: "call-live", inputTokens: 42, ownerPid: 4242 });
+		await ledger.appendProviderRequestStarted({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-live", providerCallId: "call-live", inputTokens: 42, providerToolCount: 0, providerToolSchemaBytes: 0, cachePolicyVersion: 2, ownerPid: 4242 });
 		assert.equal((await ledger.findIncompleteProviderRequests({ isProcessActive: (pid) => pid === 4242 })).length, 0);
 		assert.equal((await ledger.findIncompleteProviderRequests({ isProcessActive: () => false })).length, 1);
 		await rm(temporary, { recursive: true, force: true });
@@ -152,12 +155,13 @@ describe("request and model observability", () => {
 	it("records the request plan and model budget decision in the ledger", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-request-ledger-"));
 		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
-		const plan = createRequestPlan({ message: "hi", projectAvailable: true, requestId: "req-1" });
+		const plan = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true, requestId: "req-1" });
 		await ledger.appendRequestPlan("session:test", "request:req-1", plan, "sess-1");
 		await ledger.appendModelBudgetChecked("session:test", "request:req-1", plan.mode, plan.requestId, accountModelBudget({ payload: {}, segments: [{ id: "user", source: "user", content: "hi" }] }, { contextWindow: 12800, reservedOutput: 1024 }), "sess-1");
 		const records = await ledger.read();
 		assert.deepEqual(records.map((record) => record.kind), ["request.planned", "model.budget.checked"]);
-		assert.equal(records[0]?.details.intent, "chat");
+		assert.equal(records[0]?.details.intent, "project-work");
+		assert.equal(records[0]?.details.projectAction, "continue");
 		assert.equal(records[1]?.details.requestId, "req-1");
 		assert.equal(records[0]?.correlation?.sessionId, "sess-1");
 		await rm(temporary, { recursive: true, force: true });

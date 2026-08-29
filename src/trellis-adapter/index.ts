@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, normalize, resolve } from "node:path";
+import { join, normalize } from "node:path";
 
 export interface TrellisTaskRecord {
 	readonly path: string;
@@ -41,7 +41,10 @@ export function readTrellisSnapshot(cwd: string): TrellisSnapshot {
 	const memories = isDirectory(memoryRoot) ? collectMemories(memoryRoot) : [];
 	const workflowPath = join(root, "workflow.md");
 	const workflowFiles = existsSync(workflowPath) && !isSensitiveProjectPath(workflowPath) ? [workflowPath] : [];
-	return { enabled: true, root, specFiles, taskFiles, memoryFiles, workflowFiles, tasks, memories, activeTaskPath: readActiveTaskPath(cwd) };
+	// Active-task identity is intentionally not inferred from Trellis private
+	// runtime files. The ProjectProvider obtains it through Trellis' public
+	// `task.py current --json` command and may add it to its normalized snapshot.
+	return { enabled: true, root, specFiles, taskFiles, memoryFiles, workflowFiles, tasks, memories };
 }
 
 export function readTrellisText(path: string): string {
@@ -111,32 +114,4 @@ function collectMemories(root: string): TrellisMemoryRecord[] {
 		const name = segments.at(-1) ?? "";
 		return { path, kind: name === "index.md" ? "index" : /^journal-\d+\.md$/i.test(name) ? "journal" : "document", developer };
 	});
-}
-
-function readActiveTaskPath(cwd: string): string | undefined {
-	const sessionsRoot = join(cwd, ".trellis", ".runtime", "sessions");
-	if (!isDirectory(sessionsRoot)) return undefined;
-	const entries = readdirSync(sessionsRoot).filter((entry) => entry.endsWith(".json"));
-	const contextId = process.env.TRELLIS_CONTEXT_ID?.trim();
-	const preferred = contextId && /^[A-Za-z0-9_.-]+$/.test(contextId) ? `${contextId}.json` : undefined;
-	const ordered = preferred
-		// An explicit session identity must never fall back to another window's
-		// task pointer when its file is missing or stale.
-		? (entries.includes(preferred) ? [preferred] : [])
-		: entries
-			.slice()
-			.sort((left, right) => safeMtime(join(sessionsRoot, right)) - safeMtime(join(sessionsRoot, left)));
-	for (const entry of ordered) {
-		try {
-			const session = JSON.parse(readFileSync(join(sessionsRoot, entry), "utf8")) as { current_task?: string };
-			if (session.current_task) return resolve(cwd, isAbsolute(session.current_task) ? session.current_task : session.current_task);
-		} catch {
-			// Ignore stale or partially-written session state.
-		}
-	}
-	return undefined;
-}
-
-function safeMtime(path: string): number {
-	try { return statSync(path).mtimeMs; } catch { return 0; }
 }

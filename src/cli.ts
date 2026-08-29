@@ -1,5 +1,6 @@
 import {
 	createProjectProvider,
+	summarizeProjectContinuation,
 	updateProjectManifest,
 } from "./project-provider/index.ts";
 import {
@@ -27,11 +28,12 @@ import { inspectProjectStatus } from "./project-status.ts";
 import { runTokenAudit, formatTokenAudit } from "./commands/token-audit.ts";
 import { runCacheAudit, formatCacheAudit } from "./commands/cache-audit.ts";
 import { inspectManagedInstall } from "./managed-install-status.ts";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { LocalCapabilityAdapter, runLocalRpcStdio } from "./adapters/local-rpc.ts";
 import { CAPABILITY_PROTOCOL_VERSION } from "./core/capability-protocol.ts";
 import { runDoveMcpStdio } from "./adapters/mcp.ts";
 import { readInteroperableContextProjection } from "./context/interoperable.ts";
+import { resolveDoveStateDir } from "./core/state-dir.ts";
 
 const args = process.argv.slice(2);
 
@@ -61,6 +63,7 @@ if (args[0] === "doctor") {
 				project: {
 					...health,
 					currentTask: context.currentTask,
+					continuation: summarizeProjectContinuation(context),
 					taskCount: context.tasks.length,
 					revision: context.revision,
 				},
@@ -124,9 +127,10 @@ if (args[0] === "doctor") {
 	} else if (args[1] === "doctor") {
 		console.log(JSON.stringify(inspectProjectStatus(provider), null, 2));
 	} else {
+		const context = provider.getContext();
 		console.log(
 			JSON.stringify(
-				{ health: provider.getHealth(), context: provider.getContext() },
+				{ health: provider.getHealth(), context, continuation: summarizeProjectContinuation(context) },
 				null,
 				2,
 			),
@@ -334,8 +338,7 @@ function createLocalAdapter(trustedCliApproval = false): LocalCapabilityAdapter 
 }
 
 function localLedgerPath(): string {
-	const stateDir = process.env.DOVE_PI_STATE_DIR?.trim() ? resolve(process.env.DOVE_PI_STATE_DIR) : join(process.cwd(), ".agent-data");
-	return join(stateDir, "execution.jsonl");
+	return join(resolveDoveStateDir(process.cwd()), "execution.jsonl");
 }
 
 function readJsonFlag(commandArgs: readonly string[], name: string): unknown {

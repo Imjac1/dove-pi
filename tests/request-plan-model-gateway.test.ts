@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createRequestPlan } from "../src/core/request-plan.ts";
-import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, providerOutputTokenLimit, providerToolSchemaTokens } from "../src/core/model-gateway.ts";
+import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens } from "../src/core/model-gateway.ts";
 import { requestPolicy } from "../src/core/prompt-policy.ts";
 
 describe("request planning", () => {
@@ -41,6 +41,27 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "不要等待，执行测试" }).intent, "execution");
 		assert.equal(createRequestPlan({ message: "do not execute, just explain the test plan" }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "不要执行，只分析测试方案" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "分析 src/invoice.js 和测试，说明失败根因并给出修复计划，但不要修改文件、不要运行命令。" }).intent, "lookup");
+		assert.equal(createRequestPlan({ message: "现在只读说明 src/invoice.js 修复后的计算公式，别修改或运行任何命令。" }).intent, "lookup");
+	});
+
+	it("keeps conversational summaries cheap and continuation read-only", () => {
+		assert.equal(createRequestPlan({ message: "用一句话总结我们刚才完成了什么。" }).intent, "chat");
+		assert.equal(createRequestPlan({ message: "Briefly summarize what we just changed." }).intent, "chat");
+		const continuation = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true });
+		assert.equal(continuation.intent, "project-work");
+		assert.equal(continuation.approval, "none");
+		assert.equal(continuation.projectAction, "continue");
+		assert.equal(createRequestPlan({ message: "Resume the current project task", projectAvailable: true }).projectAction, "continue");
+		assert.equal(createRequestPlan({ message: "继续工作", projectAvailable: true }).projectAction, "continue");
+		assert.equal(createRequestPlan({ message: "Continue current work", projectAvailable: true }).projectAction, "continue");
+		const originalE2ePrompt = createRequestPlan({ message: "继续当前项目任务；如果没有活动任务，就告诉我下一步应该怎么开始，不要创建或完成任务。", projectAvailable: true });
+		assert.equal(originalE2ePrompt.intent, "project-work");
+		assert.equal(originalE2ePrompt.projectAction, "continue");
+		assert.equal(createRequestPlan({ message: "查看如何继续当前任务", projectAvailable: true }).projectAction, undefined);
+		const executingContinuation = createRequestPlan({ message: "继续当前项目任务，然后修复登录问题", projectAvailable: true });
+		assert.equal(executingContinuation.intent, "execution");
+		assert.equal(executingContinuation.projectAction, undefined);
 	});
 
 	it("keeps response-only probes cheap but preserves independent actions", () => {
@@ -93,6 +114,7 @@ describe("model gateway budget", () => {
 
 	it("accounts for the serialized tools in common provider envelopes", () => {
 		const tools = [{ type: "function", function: { name: "read", description: "x".repeat(400), parameters: { type: "object" } } }];
+		assert.deepEqual(providerToolSchemaMetrics({ body: { tools } }), { toolCount: 1, schemaBytes: Buffer.byteLength(JSON.stringify(tools), "utf8") });
 		const direct = providerToolSchemaTokens({ messages: [], tools });
 		const nested = providerToolSchemaTokens({ input: { messages: [], tools } });
 		const body = providerToolSchemaTokens({ body: { messages: [], tools } });

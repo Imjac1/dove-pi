@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from dove_pi import format_version, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json
+from dove_pi import format_version, launch, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json
 from installer.manager import MaintenanceResult
 
 
@@ -85,6 +85,24 @@ class InstallerCliTests(unittest.TestCase):
             self.assertEqual(main(["--model", "provider/model"]), 0)
             launch.assert_called_once_with(["--model", "provider/model"])
             local_cli.assert_not_called()
+
+    def test_launch_network_controls_use_official_pi_environment_flags(self):
+        with TemporaryDirectory() as temporary:
+            pi_entry = Path(temporary) / "cli.js"
+            pi_entry.write_text("fixture", encoding="utf-8")
+            completed = subprocess.CompletedProcess(args=[], returncode=0)
+            with patch.dict(os.environ, {}, clear=True), \
+                    patch("dove_pi.PI_ENTRY", pi_entry), \
+                    patch("dove_pi.executable", return_value="node"), \
+                    patch("dove_pi.subprocess.run", return_value=completed) as child:
+                self.assertEqual(launch(["--skip-version-check", "--offline", "--model", "provider/model"]), 0)
+            command = child.call_args.args[0]
+            environment = child.call_args.kwargs["env"]
+            self.assertNotIn("--skip-version-check", command)
+            self.assertNotIn("--offline", command)
+            self.assertEqual(command[-2:], ["--model", "provider/model"])
+            self.assertEqual(environment["PI_SKIP_VERSION_CHECK"], "1")
+            self.assertEqual(environment["PI_OFFLINE"], "1")
 
 
 class ManagedUpdateCliTests(unittest.TestCase):

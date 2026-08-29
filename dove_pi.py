@@ -6,6 +6,7 @@ Usage:
     python dove_pi.py setup [same options as install]
     python dove_pi.py update [--check] [--json] [--verify quick|full|none]
     python dove_pi.py icons setup|install|status
+    python dove_pi.py [--skip-version-check|--offline] [official Pi arguments]
     python dove_pi.py [official Pi arguments]
 """
 
@@ -303,7 +304,20 @@ def launch(arguments: Sequence[str]) -> int:
     node = executable("node")
     if not PI_ENTRY.exists():
         raise RuntimeError("Dove Pi dependencies are missing. Run 'python dove_pi.py install' first.")
-    completed = subprocess.run([node, str(PI_ENTRY), "-e", str(EXTENSION), *arguments], cwd=Path.cwd())
+    pi_arguments: list[str] = []
+    launch_env = os.environ.copy()
+    for argument in arguments:
+        if argument == "--skip-version-check":
+            launch_env["PI_SKIP_VERSION_CHECK"] = "1"
+        elif argument == "--offline":
+            launch_env["PI_OFFLINE"] = "1"
+        else:
+            pi_arguments.append(argument)
+    completed = subprocess.run(
+        [node, str(PI_ENTRY), "-e", str(EXTENSION), *pi_arguments],
+        cwd=Path.cwd(),
+        env=launch_env,
+    )
     return completed.returncode
 
 
@@ -580,6 +594,8 @@ After installation:
   dove-pi project doctor
   dove-pi project init
   dove-pi
+  dove-pi --skip-version-check  skip only Pi's version check for this launch
+  dove-pi --offline             skip all Pi startup network/package checks for this launch
   Ordinary sessions use automatic intent-based tool loading to keep prompt
   tokens low. Use /dove-tools full inside Pi, or set
   DOVE_PI_TOOL_PROFILE=full, when you need every installed extension tool.
@@ -588,6 +604,9 @@ Cache compatibility:
   Custom OpenRouter providers receive Pi session affinity automatically.
   Set DOVE_PI_DISABLE_SESSION_AFFINITY=1 only for proxies that reject it.
   Set PI_CACHE_RETENTION=long when the selected upstream supports long TTLs.
+
+Startup network controls are explicit and do not change the default online
+behavior. --offline does not patch Pi or disable Dove's install/update command.
 """)
 
 

@@ -132,6 +132,26 @@ export function providerToolSchemaTokens(payload: unknown): number | undefined {
 	return 0;
 }
 
+export interface ProviderToolSchemaMetrics {
+	readonly toolCount: number;
+	readonly schemaBytes: number;
+}
+
+/** Exact metrics from the final provider-visible tools array. */
+export function providerToolSchemaMetrics(payload: unknown): ProviderToolSchemaMetrics | undefined {
+	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return undefined;
+	for (const candidate of providerEnvelopeCandidates(payload)) {
+		const tools = candidate.tools;
+		if (!Array.isArray(tools)) continue;
+		try {
+			return { toolCount: tools.length, schemaBytes: Buffer.byteLength(JSON.stringify(tools), "utf8") };
+		} catch {
+			return undefined;
+		}
+	}
+	return { toolCount: 0, schemaBytes: 0 };
+}
+
 /**
  * Bound common provider output fields to the budget actually reserved by the
  * gateway. Returning a replacement envelope keeps accounting and transport in

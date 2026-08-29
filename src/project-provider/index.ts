@@ -12,6 +12,7 @@ export * from "./lightweight-provider.ts";
 export * from "./trellis-provider.ts";
 export * from "./trellis-cli.ts";
 export * from "./lock.ts";
+export * from "./continuation.ts";
 
 /** Deterministically select a provider; an explicit manifest wins over discovery. */
 export function createProjectProvider(startPath = process.cwd()): ProjectProvider {
