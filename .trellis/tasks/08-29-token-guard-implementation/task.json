@@ -1,8 +1,0 @@
-{
-  "id": "08-29-token-guard-implementation",
-  "title": "Token guard & capability activation implementation",
-  "status": "active",
-  "created": "2026-08-28",
-  "tags": ["dove-pi", "tokens", "capability", "extension"],
-  "dependsOn": ["08-28-dove-pi-usage-review"]
-}
