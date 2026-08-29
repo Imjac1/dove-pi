@@ -22,6 +22,21 @@ export interface CompiledContext {
 	readonly charCount: number;
 	/** Conservative estimate; provider-reported usage remains authoritative. */
 	readonly estimatedTokens: number;
+	/** Per-document inclusion and budget decisions for diagnostics/replay. */
+	readonly segments: readonly ContextSegment[];
+	/** Required documents that could not fit the supplied budget. */
+	readonly omittedRequired: readonly string[];
+}
+
+export interface ContextSegment {
+	readonly id: string;
+	readonly kind: ContextDocument["kind"];
+	readonly sourceRef?: string;
+	readonly trust: "untrusted";
+	readonly included: boolean;
+	readonly estimatedChars: number;
+	readonly estimatedTokens: number;
+	readonly reason: "included" | "duplicate" | "irrelevant" | "budget" | "empty";
 }
 
 export interface ContextCompileOptions {
@@ -46,24 +61,40 @@ export class ContextCompiler {
 			.sort((left, right) => right.relevance - left.relevance || (right.priority ?? 0) - (left.priority ?? 0));
 
 		const deduped: ContextItem[] = [];
+		const segments: ContextSegment[] = [];
+		const omittedRequired: string[] = [];
+		const scoredIds = new Set(scored.map((item) => item.id));
+		for (const document of this.documents) {
+			if (!scoredIds.has(document.id)) segments.push(segment({ ...document, relevance: 0 }, false, document.content.length, "irrelevant"));
+		}
 		const seenContent = new Set<string>();
 		let usedChars = 0;
 		let omittedItems = 0;
 		for (const item of scored) {
 			const content = compactContent(item.content, query, mode, item.required === true);
 			const normalized = content.replace(/\s+/g, " ").trim();
-			if (!normalized || seenContent.has(normalized)) continue;
+			if (!normalized) {
+				segments.push(segment(item, false, 0, "empty"));
+				continue;
+			}
+			if (seenContent.has(normalized)) {
+				segments.push(segment(item, false, content.length, "duplicate"));
+				continue;
+			}
 			seenContent.add(normalized);
 			const renderedLength = content.length + item.id.length + (item.sourceRef?.length ?? 0) + 96;
-			// Required contracts are allowed through even when they exceed the soft
-			// budget. Optional retrieval must have a hard upper bound so a broad query
-			// (for example "spec") cannot dump an entire large repository.
-			if (!item.required && Number.isFinite(contextBudget) && usedChars > 0 && usedChars + renderedLength > contextBudget) {
+			// Every document, including required contracts, is subject to the final
+			// compiler budget. A required flag controls ranking, not permission to
+			// overflow the provider window.
+			if (Number.isFinite(contextBudget) && usedChars + renderedLength > contextBudget) {
 				omittedItems++;
+				if (item.required) omittedRequired.push(item.id);
+				segments.push(segment(item, false, renderedLength, "budget"));
 				continue;
 			}
 			deduped.push({ ...item, content });
 			usedChars += renderedLength;
+			segments.push(segment(item, true, renderedLength, "included"));
 		}
 
 		const text = deduped.map((item) => {
@@ -78,8 +109,23 @@ export class ContextCompiler {
 			text,
 			charCount: text.length,
 			estimatedTokens: estimateTokens(text),
+			segments,
+			omittedRequired,
 		};
 	}
+}
+
+function segment(item: ContextItem, included: boolean, estimatedChars: number, reason: ContextSegment["reason"]): ContextSegment {
+	return {
+		id: item.id,
+		kind: item.kind,
+		sourceRef: item.sourceRef,
+		trust: "untrusted",
+		included,
+		estimatedChars,
+		estimatedTokens: estimateTokens(item.content),
+		reason,
+	};
 }
 
 function contextBudgetChars(mode: AgentMode, maxChars?: number): number {

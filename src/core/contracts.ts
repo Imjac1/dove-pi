@@ -27,6 +27,10 @@ export interface CapabilityDefinition<TArgs = Record<string, unknown>, TResult =
 	readonly requiredArgs?: readonly string[];
 	/** Shell command prefixes this capability replaces; used to offer a reuse hint when the model would otherwise type them by hand. */
 	readonly hintCommands?: readonly string[];
+	/** Deterministic runtime validation; throws or returns a message on invalid args. */
+	readonly validateArgs?: (args: TArgs) => void | string;
+	/** Optional postcondition check. A false/string result turns execution into failed. */
+	readonly verify?: (result: TResult, args: TArgs, context: CapabilityContext) => boolean | string | Promise<boolean | string>;
 	readonly execute: (args: TArgs, context: CapabilityContext) => Promise<TResult>;
 }
 
@@ -38,15 +42,19 @@ export interface CapabilityResult<TResult = unknown> {
 	readonly error?: string;
 	readonly durationMs: number;
 	readonly evidenceRefs: readonly string[];
+	readonly interrupted?: boolean;
+	readonly retries?: number;
 }
 
 export interface ExecutionRecord {
 	readonly taskId: string;
 	readonly stepId: string;
-	readonly kind: "mode.changed" | "capability.started" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled";
+	readonly kind: "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.planned" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered";
 	readonly timestamp: string;
 	readonly mode: AgentMode;
 	readonly details: Record<string, unknown>;
+	/** Correlation identifiers are optional for legacy records but required for new runs. */
+	readonly correlation?: Readonly<{ requestId?: string; sessionId?: string; taskId?: string; providerCallId?: string; executionId?: string; toolCallId?: string }>;
 }
 
 export interface DispatchEstimate {

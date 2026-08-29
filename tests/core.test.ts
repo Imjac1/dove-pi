@@ -10,6 +10,24 @@ import { ModeController } from "../src/core/mode-controller.ts";
 import { executeDispatch } from "../src/core/dispatcher.ts";
 import { executeRecipe, RecipeRegistry } from "../src/core/recipe-registry.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
+import { executeFastPath } from "../src/core/fast-path.ts";
+import { createRequestPlan } from "../src/core/request-plan.ts";
+import { accountModelBudget } from "../src/core/model-gateway.ts";
+import { canTransitionCapabilityExecution, createCapabilityExecution, transitionCapabilityExecution } from "../src/core/capability-runtime.ts";
+
+describe("capability execution state machine", () => {
+	it("allows approval and terminal recovery paths but rejects skips", () => {
+		let execution = createCapabilityExecution({ executionId: "exec-1", capability: "test.write", version: "1.0.0" });
+		execution = transitionCapabilityExecution(execution, "approval_pending");
+		execution = transitionCapabilityExecution(execution, "approved");
+		execution = transitionCapabilityExecution(execution, "started");
+		execution = transitionCapabilityExecution(execution, "timed_out", "deadline");
+		execution = transitionCapabilityExecution(execution, "recovered", "reconciled");
+		assert.equal(execution.state, "recovered");
+		assert.equal(canTransitionCapabilityExecution("planned", "completed"), false);
+		assert.throws(() => transitionCapabilityExecution(execution, "started"), /Invalid capability transition/);
+	});
+});
 
 describe("mode controller", () => {
 	it("applies a change at the next step boundary", () => {
@@ -82,6 +100,93 @@ describe("project mutation recovery", () => {
 		await ledger.appendProjectMutationReconciled("trellis:demo", "step-1", "standard", "mutation-1", "start", "trellis", "after", "observed");
 		pending = await ledger.findIncompleteProjectMutations();
 		assert.equal(pending.length, 0);
+		await rm(temporary, { recursive: true, force: true });
+	});
+});
+
+describe("capability recovery", () => {
+	it("finds started executions and closes them without replay", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-capability-recovery-"));
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		await ledger.append({ taskId: "task", stepId: "step", kind: "capability.started", timestamp: new Date().toISOString(), mode: "standard", details: { executionId: "exec-1", capability: "test.write", version: "1.0.0" } });
+		assert.equal((await ledger.findIncompleteCapabilityExecutions()).length, 1);
+		await ledger.appendCapabilityTerminal({ taskId: "task", stepId: "step", mode: "standard", executionId: "exec-1", capability: "test.write", status: "recovered", reason: "test" });
+		assert.equal((await ledger.findIncompleteCapabilityExecutions()).length, 0);
+		await rm(temporary, { recursive: true, force: true });
+	});
+});
+
+describe("provider request recovery", () => {
+	it("closes an interrupted provider intent without claiming success", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-provider-recovery-"));
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		await ledger.appendProviderRequestStarted({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-1", providerCallId: "call-1", inputTokens: 42 });
+		assert.equal((await ledger.findIncompleteProviderRequests()).length, 1);
+		await ledger.appendProviderRequestRecovered({ taskId: "task", stepId: "step", mode: "standard", requestId: "req-1", providerCallId: "call-1" });
+		assert.equal((await ledger.findIncompleteProviderRequests()).length, 0);
+		const records = await ledger.read();
+		assert.equal(records.at(-1)?.details.recovered, true);
+		await rm(temporary, { recursive: true, force: true });
+	});
+});
+
+describe("request and model observability", () => {
+	it("records the request plan and model budget decision in the ledger", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-request-ledger-"));
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		const plan = createRequestPlan({ message: "hi", projectAvailable: true, requestId: "req-1" });
+		await ledger.appendRequestPlan("session:test", "request:req-1", plan, "sess-1");
+		await ledger.appendModelBudgetChecked("session:test", "request:req-1", plan.mode, plan.requestId, accountModelBudget({ payload: {}, segments: [{ id: "user", source: "user", content: "hi" }] }, { contextWindow: 12800, reservedOutput: 1024 }), "sess-1");
+		const records = await ledger.read();
+		assert.deepEqual(records.map((record) => record.kind), ["request.planned", "model.budget.checked"]);
+		assert.equal(records[0]?.details.intent, "chat");
+		assert.equal(records[1]?.details.requestId, "req-1");
+		assert.equal(records[0]?.correlation?.sessionId, "sess-1");
+		await rm(temporary, { recursive: true, force: true });
+	});
+});
+
+describe("capability authorization", () => {
+	it("blocks side-effect capabilities without explicit approval and records it", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-approval-"));
+		const registry = new CapabilityRegistry();
+		let executions = 0;
+		registry.register({ name: "test.write", version: "1.0.0", description: "write", platforms: ["any"], sideEffects: ["workspace_write"], idempotent: false, status: "stable", async execute() { executions++; return "ok"; } });
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		const blocked = await executeFastPath(registry, ledger, "test.write", {}, { cwd: temporary, mode: "standard", taskId: "task", stepId: "blocked" }, { required: true });
+		assert.equal(blocked.status, "blocked");
+		assert.equal(executions, 0);
+		const approved = await executeFastPath(registry, ledger, "test.write", {}, { cwd: temporary, mode: "standard", taskId: "task", stepId: "approved" }, { required: true, recordPending: true, authorize: () => true });
+		assert.equal(approved.status, "success");
+		assert.equal(executions, 1);
+		assert.deepEqual((await ledger.read()).map((record) => record.kind), ["capability.blocked", "capability.approval.pending", "capability.approved", "capability.started", "capability.completed"]);
+		await rm(temporary, { recursive: true, force: true });
+	});
+
+	it("captures evidence without turning evidence failure into execution failure", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-evidence-"));
+		const registry = new CapabilityRegistry();
+		registry.register({ name: "test.read", version: "1.0.0", description: "read", platforms: ["any"], sideEffects: ["read_only"], idempotent: true, status: "stable", async execute() { return "ok"; } });
+		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
+		const result = await executeFastPath(registry, ledger, "test.read", {}, { cwd: temporary, mode: "fast", taskId: "task", stepId: "evidence" }, {}, { captureEvidence: () => { throw new Error("artifact unavailable"); } });
+		assert.equal(result.status, "success");
+		assert.deepEqual(result.evidenceRefs, []);
+		await rm(temporary, { recursive: true, force: true });
+	});
+
+	it("retries idempotent capabilities and marks cancellation", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-retry-"));
+		const registry = new CapabilityRegistry();
+		let attempts = 0;
+		registry.register({ name: "test.retry", version: "1.0.0", description: "retry", platforms: ["any"], sideEffects: ["read_only"], idempotent: true, status: "stable", async execute(_args, context) { attempts++; if (context.signal?.aborted) throw new Error("aborted"); if (attempts < 2) throw new Error("transient"); return "ok"; } });
+		const result = await executeFastPath(registry, new ExecutionLedger(join(temporary, "ledger.jsonl")), "test.retry", {}, { cwd: temporary, mode: "fast", taskId: "task", stepId: "retry" }, {}, { retries: 1 });
+		assert.equal(result.status, "success");
+		assert.equal(result.retries, 1);
+		const controller = new AbortController();
+		controller.abort();
+		const cancelled = await executeFastPath(registry, new ExecutionLedger(join(temporary, "cancel.jsonl")), "test.retry", {}, { cwd: temporary, mode: "fast", taskId: "task", stepId: "cancel", signal: controller.signal });
+		assert.equal(cancelled.status, "failed");
+		assert.equal(cancelled.interrupted, true);
 		await rm(temporary, { recursive: true, force: true });
 	});
 });
