@@ -306,3 +306,26 @@ Added stable logical request leases across Pi redelivery, retry, compaction, con
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: Publish and verify Dove Pi v0.1.2
+
+**Date**: 2026-08-30
+**Task**: Publish and verify Dove Pi v0.1.2
+**Branch**: `master`
+
+### Summary
+
+Completed Release-locked Pi update, safe Windows uninstall, bootstrap controls, native runtime detection, and public v0.1.2 install/update/uninstall acceptance.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cac5021` | (see git log) |
+| `558d6dc` | (see git log) |
+| `e07788c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
