@@ -329,3 +329,24 @@ Completed Release-locked Pi update, safe Windows uninstall, bootstrap controls, 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: Complete Dove planning workflow handshake
+
+**Date**: 2026-08-31
+**Task**: Complete Dove planning workflow handshake
+**Branch**: `master`
+
+### Summary
+
+Added a host-independent PlanningSession and restricted agent_project_task workflow so planning questions advance to one native Trellis confirmation instead of repeating. Added lifecycle intent routing, provider refresh after task creation, regression replay coverage, and updated runtime/project specs. Verified typecheck, 220 Node tests, 90 installer tests, doctor, Pi smoke, and activated managed source release 0.1.2+source.d6d4d9fde25c.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2206668` | (see git log) |
+
+### Status
+
+[OK] **Completed**

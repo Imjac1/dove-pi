@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-08-30
+- **Total Sessions**: 11
+- **Last Active**: 2026-08-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~331 | Active |
+| `journal-1.md` | ~352 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-08-31 | Complete Dove planning workflow handshake | `2206668` | `master` |
 | 10 | 2026-08-30 | Publish and verify Dove Pi v0.1.2 | `cac5021`, `558d6dc`, `e07788c` | `master` |
 | 9 | 2026-08-30 | Dove request lifecycle idempotency | `60a5960` | `master` |
 | 8 | 2026-08-30 | Dove extension identity and spec context budget | `3f926d5`, `0741298` | `master` |
