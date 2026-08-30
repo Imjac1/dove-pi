@@ -73,6 +73,10 @@ the repository, profiles, release assets, or recovery internals.
 - `dove-pi update` checks the stable release channel, downloads only when
   needed, verifies checksum and manifest identity, installs in staging, runs
   the selected verification, and atomically activates.
+- The Pi runtime is a release-locked Dove component. Updating Dove must install
+  the exact Pi version declared by the new manifest/lockfile, report the
+  current/latest Pi versions during check/update, and never delegate to Pi's
+  global self-updater.
 - Network, checksum, dependency, verification, or activation failures preserve
   the previous working release.
 - `dove-pi update --check --json` remains finite, read-only, and machine
@@ -88,6 +92,10 @@ the repository, profiles, release assets, or recovery internals.
   network is unavailable.
 - Installer tests never write to the real `%LOCALAPPDATA%\DovePi`, user Pi
   state, PATH, or the current checkout.
+- `dove-pi uninstall --yes` removes only Dove-managed application files and
+  the Dove launcher entry from user PATH. It preserves Pi credentials,
+  sessions, settings, extensions, project `.trellis`, development checkouts,
+  Python, and Node.js.
 
 ### R5. Documentation and release readiness
 
@@ -118,6 +126,10 @@ the repository, profiles, release assets, or recovery internals.
 - [x] Installer/unit/E2E tests use isolated temporary roots and leave the real
   user environment unchanged.
 - [x] Chinese and English README commands and behavior are synchronized.
+- [x] A Release update proves that the active Pi runtime moves from the old
+  manifest version to the new exact manifest version and reports the change.
+- [x] Uninstall removes managed files and the persisted launcher PATH entry
+  while preserving all user/project/Pi data.
 
 ## Out of Scope
 

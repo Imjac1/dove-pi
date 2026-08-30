@@ -36,6 +36,10 @@ class MaintenanceResult:
     profile: str = "max"
     message: str = ""
     degraded_extensions: tuple[str, ...] = ()
+    current_pi_version: str | None = None
+    previous_pi_version: str | None = None
+    latest_pi_version: str | None = None
+    path_removed: bool | None = None
 
     def to_json(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -49,6 +53,18 @@ class MaintenanceResult:
         }
         if self.command == "update-check":
             payload["updateAvailable"] = self.changed
+        if any((self.current_pi_version, self.previous_pi_version, self.latest_pi_version)):
+            payload["pi"] = {
+                "currentVersion": self.current_pi_version,
+                "previousVersion": self.previous_pi_version,
+                "latestVersion": self.latest_pi_version,
+            }
+        if self.command == "update-check" and self.latest_pi_version:
+            payload["piUpdateAvailable"] = self.current_pi_version != self.latest_pi_version
+        if self.command == "update" and self.changed and self.current_pi_version:
+            payload["piChanged"] = self.current_pi_version != self.previous_pi_version
+        if self.path_removed is not None:
+            payload["pathRemoved"] = self.path_removed
         return payload
 
 
@@ -227,18 +243,22 @@ class ManagedInstaller:
     ) -> MaintenanceResult:
         state = load_state(self.layout)
         asset = self.fetch_release()
+        latest_pi_version = _asset_pi_version(asset)
         current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
         if check:
             current = state.current.release_id if state.current else None
             update_available = not current_matches_asset or not self._is_runnable_ref(state.current)
             return MaintenanceResult(
-                "update-check",
-                update_available,
-                current,
-                state.previous.release_id if state.previous else None,
-                state.profile,
-                f"Latest stable release: {asset.tag}",
-                tuple(entry.identity for entry in state.managed_extensions if entry.status != "healthy"),
+                command="update-check",
+                changed=update_available,
+                current_release=current,
+                previous_release=state.previous.release_id if state.previous else None,
+                profile=state.profile,
+                message=f"Latest stable release: {asset.tag}",
+                degraded_extensions=tuple(entry.identity for entry in state.managed_extensions if entry.status != "healthy"),
+                current_pi_version=_release_pi_version(state.current),
+                previous_pi_version=_release_pi_version(state.previous),
+                latest_pi_version=latest_pi_version,
             )
         with MaintenanceLock(self.layout.lock_path, "update"):
             state = load_state(self.layout)
@@ -248,7 +268,13 @@ class ManagedInstaller:
                 write_managed_launchers(self.layout)
                 if reconcile_components is None:
                     write_state(self.layout, state, command="update")
-                return _result("update", False, state, f"Dove Pi {asset.version} is already current.")
+                return _result(
+                    "update",
+                    False,
+                    state,
+                    f"Dove Pi {asset.version} is already current.",
+                    latest_pi_version=latest_pi_version,
+                )
             with TemporaryDirectory(prefix="dove-pi-release-") as temporary:
                 source, manifest = self._download_release(asset, Path(temporary))
                 prepared = self.transaction.prepare_source(source, manifest, verify=verify)
@@ -256,7 +282,13 @@ class ManagedInstaller:
                 state = self._reconcile_components(state, reconcile_components, command="update")
             write_managed_launchers(self.layout)
             self.transaction.prune(state)
-            return _result("update", not prepared.reused, state, f"Dove Pi is ready at {manifest.release_id}.")
+            return _result(
+                "update",
+                not prepared.reused,
+                state,
+                f"Dove Pi is ready at {manifest.release_id}.",
+                latest_pi_version=latest_pi_version,
+            )
 
     def repair(
         self,
@@ -466,7 +498,29 @@ class ManagedInstaller:
         return state
 
 
-def _result(command: str, changed: bool, state: InstallState, message: str) -> MaintenanceResult:
+def _release_pi_version(reference: ReleaseRef | None) -> str | None:
+    if reference is None:
+        return None
+    try:
+        version = ReleaseManifest.read(reference.install_path / "release.json").components.get("pi")
+    except RuntimeError:
+        return None
+    return version if isinstance(version, str) and version.strip() else None
+
+
+def _asset_pi_version(asset: ReleaseAsset) -> str | None:
+    version = asset.manifest.components.get("pi") if asset.manifest is not None else None
+    return version if isinstance(version, str) and version.strip() else None
+
+
+def _result(
+    command: str,
+    changed: bool,
+    state: InstallState,
+    message: str,
+    *,
+    latest_pi_version: str | None = None,
+) -> MaintenanceResult:
     return MaintenanceResult(
         command=command,
         changed=changed,
@@ -475,4 +529,7 @@ def _result(command: str, changed: bool, state: InstallState, message: str) -> M
         profile=state.profile,
         message=message,
         degraded_extensions=tuple(entry.identity for entry in state.managed_extensions if entry.status != "healthy"),
+        current_pi_version=_release_pi_version(state.current),
+        previous_pi_version=_release_pi_version(state.previous),
+        latest_pi_version=latest_pi_version,
     )

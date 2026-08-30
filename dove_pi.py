@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+from dataclasses import replace
+import ntpath
 import os
 from pathlib import Path
 import shutil
@@ -147,6 +149,43 @@ def add_user_path(directory: Path) -> None:
             winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, ";".join(entries + [value]))
             broadcast_environment_change()
             print(f"Added {value} to the user PATH. Open a new terminal to use dove-pi.")
+
+
+def without_user_path_entry(current: str, directory: Path) -> tuple[str, bool]:
+    """Remove only the exact managed launcher directory from a Windows PATH."""
+    target = ntpath.normcase(ntpath.normpath(ntpath.expandvars(str(directory).strip().strip('"'))))
+    kept: list[str] = []
+    removed = False
+    for entry in current.split(";"):
+        candidate = ntpath.normcase(ntpath.normpath(ntpath.expandvars(entry.strip().strip('"')))) if entry.strip() else ""
+        if candidate and candidate == target:
+            removed = True
+        else:
+            kept.append(entry)
+    return ";".join(kept), removed
+
+
+def remove_user_path(directory: Path) -> bool:
+    if os.name != "nt":
+        return False
+
+    import winreg
+
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+        try:
+            current, value_type = winreg.QueryValueEx(key, "Path")
+        except FileNotFoundError:
+            return False
+        updated, removed = without_user_path_entry(str(current or ""), directory)
+        if not removed:
+            return False
+        if updated:
+            persisted_type = value_type if value_type in {winreg.REG_SZ, winreg.REG_EXPAND_SZ} else winreg.REG_EXPAND_SZ
+            winreg.SetValueEx(key, "Path", 0, persisted_type, updated)
+        else:
+            winreg.DeleteValue(key, "Path")
+    broadcast_environment_change()
+    return True
 
 
 def broadcast_environment_change() -> None:
@@ -306,6 +345,10 @@ def launch(arguments: Sequence[str]) -> int:
         raise RuntimeError("Dove Pi dependencies are missing. Run 'python dove_pi.py install' first.")
     pi_arguments: list[str] = []
     launch_env = os.environ.copy()
+    # The managed Release/lockfile owns the Pi runtime version. Suppress Pi's
+    # package-manager self-update prompt because it cannot preserve Dove's
+    # manifest identity or atomic rollback; `dove-pi update` is authoritative.
+    launch_env["PI_SKIP_VERSION_CHECK"] = "1"
     for argument in arguments:
         if argument == "--skip-version-check":
             launch_env["PI_SKIP_VERSION_CHECK"] = "1"
@@ -465,6 +508,18 @@ def emit_maintenance_result(result: MaintenanceResult, *, json_output: bool, lay
         print(f"Current release: {payload['currentRelease']}")
     if payload.get("previousRelease"):
         print(f"Previous release: {payload['previousRelease']}")
+    if result.command == "update-check" and result.latest_pi_version:
+        current = result.current_pi_version or "not installed"
+        suffix = " (update available)" if current != result.latest_pi_version else " (current)"
+        print(f"Pi: {current} -> {result.latest_pi_version}{suffix}")
+    elif result.command == "update" and result.changed and result.current_pi_version:
+        previous = result.previous_pi_version or "not installed"
+        if previous == result.current_pi_version:
+            print(f"Pi: {result.current_pi_version} (unchanged)")
+        else:
+            print(f"Pi: {previous} -> {result.current_pi_version}")
+    elif result.current_pi_version:
+        print(f"Pi: {result.current_pi_version}")
     degraded = payload.get("degradedExtensions")
     if isinstance(degraded, list) and degraded:
         print(f"Degraded extensions: {', '.join(str(value) for value in degraded)}", file=sys.stderr)
@@ -543,6 +598,13 @@ def run_managed_maintenance(command: str, arguments: Sequence[str]) -> int:
         result = installer.rollback()
     elif command == "uninstall":
         result = installer.uninstall(confirmed=options.yes)
+        try:
+            path_removed = remove_user_path(installer.layout.bin_dir)
+        except OSError as error:
+            path_removed = False
+            print(f"Warning: Dove Pi files were removed, but user PATH cleanup failed: {error}", file=sys.stderr)
+        path_message = " The Dove launcher was removed from user PATH." if path_removed else " The Dove launcher was not present in user PATH."
+        result = replace(result, path_removed=path_removed, message=result.message + path_message)
     else:
         raise RuntimeError(f"Unknown maintenance command: {command}")
     emit_maintenance_result(result, json_output=options.json, layout=installer.layout)
@@ -588,11 +650,11 @@ def print_help() -> None:
 
 Install or maintain the managed Dove Pi application:
   irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
-  dove-pi update          install the latest stable GitHub release atomically
+  dove-pi update          atomically update Dove and its release-locked Pi runtime
   dove-pi update --check  report available stable updates without changing anything
   dove-pi repair          repair the current managed release or recover the previous one
   dove-pi rollback        switch to the previous managed application release
-  dove-pi uninstall       preserve user/project data; requires --yes
+  dove-pi uninstall --yes remove Dove files/PATH; preserve Pi and project data
 
 Update controls:
   --json                 emit one machine-readable maintenance result
@@ -610,7 +672,7 @@ Advanced controls:
   --profile PROFILE        max, or minimal/dev/research/security (default: stored profile, else max)
   --no-extensions          skip Pi extension installation
 
-Compatibility aliases remain available: --extensions and --skip-checks.
+Compatibility aliases remain available: --extensions, --skip-checks, and --skip-version-check.
 
 After installation:
   dove-pi doctor
@@ -622,7 +684,6 @@ After installation:
   dove-pi project doctor
   dove-pi project init
   dove-pi
-  dove-pi --skip-version-check  skip only Pi's version check for this launch
   dove-pi --offline             skip all Pi startup network/package checks for this launch
   Ordinary sessions use automatic intent-based tool loading to keep prompt
   tokens low. Use /dove-tools full inside Pi, or set
@@ -634,7 +695,9 @@ Cache compatibility:
   Set PI_CACHE_RETENTION=long when the selected upstream supports long TTLs.
 
 Startup network controls are explicit and do not change the default online
-behavior. --offline does not patch Pi or disable Dove's install/update command.
+behavior. Managed Dove launches suppress Pi's direct self-updater because Pi
+is version-locked by the Dove Release; use dove-pi update instead. --offline
+does not patch Pi or disable Dove's install/update command.
 """)
 
 

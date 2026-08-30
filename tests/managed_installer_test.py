@@ -18,12 +18,12 @@ from installer.state import InstallState, ManagedExtensionState, ReleaseRef, loa
 from installer.transaction import ManagedTransaction, TransactionError
 
 
-def complete_manifest(version: str, release_id: str, commit: str) -> ReleaseManifest:
+def complete_manifest(version: str, release_id: str, commit: str, *, pi_version: str = "0.84.3") -> ReleaseManifest:
     return ReleaseManifest(
         version,
         release_id,
         commit,
-        components={"pi": "0.84.3", "piTui": "0.84.3", "trellis": "0.6.16"},
+        components={"pi": pi_version, "piTui": pi_version, "trellis": "0.6.16"},
         runtime={"python": ">=3.10", "node": ">=22.19.0"},
         profiles={
             "minimal": [],
@@ -33,6 +33,21 @@ def complete_manifest(version: str, release_id: str, commit: str) -> ReleaseMani
             "max": ["npm:example-extension@1.0.0"],
         },
     )
+
+
+def write_installed_components(root: Path, components: dict[str, str]) -> None:
+    package_names = {
+        "pi": "@earendil-works/pi-coding-agent",
+        "piTui": "@earendil-works/pi-tui",
+        "trellis": "@mindfoldhq/trellis",
+    }
+    for component, package_name in package_names.items():
+        package_path = root / "node_modules" / Path(*package_name.split("/"))
+        package_path.mkdir(parents=True, exist_ok=True)
+        (package_path / "package.json").write_text(
+            json.dumps({"name": package_name, "version": components[component]}),
+            encoding="utf-8",
+        )
 
 
 def make_source(root: Path, release_id: str = "0.2.0+abcdef0") -> tuple[Path, ReleaseManifest]:
@@ -48,13 +63,23 @@ def make_source(root: Path, release_id: str = "0.2.0+abcdef0") -> tuple[Path, Re
 def successful_runner(command, cwd: Path) -> None:
     if "ci" in command:
         (cwd / "node_modules").mkdir(exist_ok=True)
+        package = json.loads((cwd / "package.json").read_text(encoding="utf-8"))
+        dependencies = package.get("dependencies") if isinstance(package, dict) else None
+        pi_version = dependencies.get("@earendil-works/pi-coding-agent", "0.84.3") if isinstance(dependencies, dict) else "0.84.3"
+        write_installed_components(cwd, {
+            "pi": pi_version,
+            "piTui": dependencies.get("@earendil-works/pi-tui", pi_version) if isinstance(dependencies, dict) else pi_version,
+            "trellis": dependencies.get("@mindfoldhq/trellis", "0.6.16") if isinstance(dependencies, dict) else "0.6.16",
+        })
     if "release:manifest" in command:
         destination = Path(command[command.index("--") + 1])
         release_id = command[command.index("--release-id") + 1]
         commit = command[command.index("--commit") + 1]
         package = json.loads((cwd / "package.json").read_text(encoding="utf-8"))
+        dependencies = package.get("dependencies") if isinstance(package, dict) else None
+        pi_version = dependencies.get("@earendil-works/pi-coding-agent", "0.84.3") if isinstance(dependencies, dict) else "0.84.3"
         destination.write_text(
-            json.dumps(complete_manifest(package["version"], release_id, commit).to_json()),
+            json.dumps(complete_manifest(package["version"], release_id, commit, pi_version=pi_version).to_json()),
             encoding="utf-8",
         )
 
@@ -192,6 +217,24 @@ class ManagedTransactionTests(unittest.TestCase):
                 ManagedTransaction(layout, runner=failing_runner).prepare_source(source, manifest)
             loaded = load_state(layout)
             self.assertEqual(loaded.current.release_id, "existing")
+
+    def test_prepare_rejects_an_installed_pi_version_that_differs_from_the_manifest(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            source, manifest = make_source(root)
+
+            def mismatched_pi_runner(command, cwd: Path) -> None:
+                successful_runner(command, cwd)
+                if "ci" in command:
+                    package = cwd / "node_modules" / "@earendil-works" / "pi-coding-agent" / "package.json"
+                    package.write_text(json.dumps({"version": "0.83.0"}), encoding="utf-8")
+
+            transaction = ManagedTransaction(layout, runner=mismatched_pi_runner)
+            with self.assertRaisesRegex(TransactionError, "Installed pi version 0.83.0 does not match release manifest 0.84.3") as raised:
+                transaction.prepare_source(source, manifest, verify="none")
+            self.assertEqual(raised.exception.step, "dependencies")
+            self.assertFalse(any(layout.versions_dir.glob("*")))
 
     def test_existing_healthy_release_is_reused(self):
         with TemporaryDirectory() as temporary:
@@ -392,6 +435,62 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             repaired = installer.repair(verify="none")
             self.assertTrue(repaired.changed)
             self.assertTrue((load_state(layout).current.install_path / "node_modules").is_dir())
+
+    def test_update_atomically_switches_to_the_release_locked_pi_version(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            source, _manifest = make_source(root)
+            installer = ManagedInstaller(layout)
+            installer.transaction = ManagedTransaction(layout, runner=successful_runner)
+            installed = installer.install_source(source, verify="none")
+            self.assertEqual(installed.current_pi_version, "0.84.3")
+
+            release_root = root / "release-with-new-pi"
+            release_root.mkdir()
+            (release_root / "dove_pi.py").write_text("print('release')\n", encoding="utf-8")
+            (release_root / "package.json").write_text(
+                json.dumps({
+                    "name": "dove-pi",
+                    "version": "0.3.0",
+                    "dependencies": {"@earendil-works/pi-coding-agent": "0.85.0"},
+                }) + "\n",
+                encoding="utf-8",
+            )
+            (release_root / "package-lock.json").write_text('{"lockfileVersion":3}\n', encoding="utf-8")
+            manifest = complete_manifest("0.3.0", "0.3.0+newpi00", "newpi00", pi_version="0.85.0")
+            (release_root / "release.json").write_text(json.dumps(manifest.to_json()), encoding="utf-8")
+            archive = root / "dove-pi-new-pi.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                for path in release_root.rglob("*"):
+                    if path.is_file():
+                        bundle.write(path, path.relative_to(release_root))
+            checksum = root / "dove-pi-new-pi.zip.sha256"
+            checksum.write_text(hashlib.sha256(archive.read_bytes()).hexdigest(), encoding="ascii")
+            asset = ReleaseAsset(
+                "v0.3.0",
+                "0.3.0",
+                archive.as_uri(),
+                checksum.as_uri(),
+                release_id=manifest.release_id,
+                manifest=manifest,
+            )
+            installer.fetch_release = lambda: asset
+
+            check = installer.update(check=True)
+            self.assertTrue(check.to_json()["piUpdateAvailable"])
+            self.assertEqual(check.latest_pi_version, "0.85.0")
+            result = installer.update(verify="none")
+
+            state = load_state(layout)
+            self.assertEqual(result.current_pi_version, "0.85.0")
+            self.assertEqual(result.previous_pi_version, "0.84.3")
+            self.assertEqual(result.latest_pi_version, "0.85.0")
+            self.assertTrue(result.to_json()["piChanged"])
+            self.assertEqual(ReleaseManifest.read(state.current.install_path / "release.json").components["pi"], "0.85.0")
+            self.assertEqual(ReleaseManifest.read(state.previous.install_path / "release.json").components["pi"], "0.84.3")
+            installed_pi = json.loads((state.current.install_path / "node_modules" / "@earendil-works" / "pi-coding-agent" / "package.json").read_text(encoding="utf-8"))
+            self.assertEqual(installed_pi["version"], "0.85.0")
 
     def test_update_check_reads_remote_metadata_without_writing_managed_state(self):
         with TemporaryDirectory() as temporary:
@@ -603,7 +702,7 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             (previous / "dove_pi.py").write_text("print('ok')\n", encoding="utf-8")
             previous_manifest = complete_manifest("0.1.0", "previous", "abcdef0")
             (previous / "release.json").write_text(json.dumps(previous_manifest.to_json()), encoding="utf-8")
-            (previous / "node_modules").mkdir()
+            write_installed_components(previous, previous_manifest.components)
             write_state(layout, InstallState(current=ReleaseRef("broken", broken), previous=ReleaseRef("previous", previous)), command="install")
             result = ManagedInstaller(layout).repair(verify="none")
             self.assertTrue(result.changed)

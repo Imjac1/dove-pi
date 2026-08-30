@@ -7,9 +7,9 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from dove_pi import format_version, launch, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json
+from dove_pi import format_version, launch, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json, without_user_path_entry
 from installer.manager import MaintenanceResult
 
 
@@ -104,6 +104,21 @@ class InstallerCliTests(unittest.TestCase):
             self.assertEqual(environment["PI_SKIP_VERSION_CHECK"], "1")
             self.assertEqual(environment["PI_OFFLINE"], "1")
 
+    def test_managed_launch_always_suppresses_pi_self_update(self):
+        completed = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("dove_pi.executable", return_value="node"), \
+                patch("dove_pi.PI_ENTRY") as pi_entry, \
+                patch("dove_pi.subprocess.run", return_value=completed) as run:
+            pi_entry.exists.return_value = True
+            self.assertEqual(launch([]), 0)
+        self.assertEqual(run.call_args.kwargs["env"]["PI_SKIP_VERSION_CHECK"], "1")
+
+    def test_windows_path_cleanup_removes_only_the_managed_launcher(self):
+        current = r'C:\Tools;"C:\Users\Alice\AppData\Local\DovePi\bin\";C:\Other;'
+        updated, removed = without_user_path_entry(current, Path(r"c:\users\alice\appdata\local\dovepi\bin"))
+        self.assertTrue(removed)
+        self.assertEqual(updated, r"C:\Tools;C:\Other;")
+
 
 class ManagedUpdateCliTests(unittest.TestCase):
     def test_managed_extension_json_allows_progress_on_stderr_only(self):
@@ -194,6 +209,22 @@ class ManagedUpdateCliTests(unittest.TestCase):
     def test_managed_update_rejects_legacy_force(self):
         with self.assertRaisesRegex(RuntimeError, "do not use --force"):
             parse_managed_update(["--force"])
+
+    def test_uninstall_removes_managed_path_and_keeps_json_stdout_clean(self):
+        layout = Mock()
+        layout.bin_dir = Path(r"C:\Users\Alice\AppData\Local\DovePi\bin")
+        result = MaintenanceResult("uninstall", True, None, message="removed")
+        output = io.StringIO()
+        with patch("dove_pi.ManagedLayout.default", return_value=layout), \
+                patch("dove_pi.ManagedInstaller") as installer_type, \
+                patch("dove_pi.remove_user_path", return_value=True) as remove_path, \
+                contextlib.redirect_stdout(output):
+            installer_type.return_value.layout = layout
+            installer_type.return_value.uninstall.return_value = result
+            self.assertEqual(main(["uninstall", "--yes", "--json"]), 0)
+        installer_type.return_value.uninstall.assert_called_once_with(confirmed=True)
+        remove_path.assert_called_once_with(layout.bin_dir)
+        self.assertEqual(json.loads(output.getvalue())["pathRemoved"], True)
 
     def test_managed_json_failure_is_one_document_and_uses_temp_root(self):
         with TemporaryDirectory() as temporary:

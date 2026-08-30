@@ -51,6 +51,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
 - The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; unknown/interactive arguments alone may fall through to Pi. Adding a CLI command without updating and testing this router is an incomplete cross-layer change.
 - Exact `version` and `--version` requests are handled before Pi launch and read both release-locked identities from the packaged `package.json`, producing `Dove Pi <dove-version> (Pi <pi-version>)`.
+- Pi is an exact Release component, not an independently mutable global runtime. Managed launches suppress Pi's direct version/self-update path; `dove-pi update` installs the manifest/lockfile Pi version in staging, reads the actual installed Pi/TUI/Trellis package versions back from `node_modules`, and activates only when all three match. Check/update results project current, previous, and latest Pi versions and report whether Pi changes.
 - Install into a staging sibling, run locked dependency installation and verification, move to an immutable version, then activate with atomic state replacement. Retain current and previous.
 - Install, update, and repair hold the same cross-process maintenance lock through application activation, managed-component reconciliation, final state persistence, launcher rewrite, and pruning. The component reconciler is an injected callback so the Python installer does not duplicate the TypeScript extension catalog; never release the maintenance lock and reacquire a separate component lock between these steps.
 - A healthy current release with the same stable version is an application no-op: no archive download and no `npm ci`. Launcher repair and Dove-managed extension reconciliation may still run.
@@ -63,6 +64,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Optional component failures do not roll back an already verified application release; the reconciler records each failure as `degraded`, final state is written under the same maintenance lock, and offline doctor exposes the degraded ledger.
 - `--json` reserves stdout for exactly one JSON document on both success and failure. During managed extension reconciliation, TypeScript redirects both Pi/npm child streams to stderr; Python captures only the TypeScript result stdout and inherits stderr live. Human diagnostics and subprocess progress must not corrupt stdout, and captured failure excerpts must be bounded. Mutating maintenance writes a bounded local success/failure log; `update --check` may read remote metadata but must not acquire the mutation lock, write state, or create a maintenance log.
 - A bootstrap-provided archive/checksum/tag is SHA-verified again and copied into the managed release cache before activation so `repair` can rebuild offline. Release tag, advertised version, and archive manifest version must match.
+- Confirmed uninstall removes only Dove-owned managed children and the exact Dove `bin` entry from persisted user PATH. It never removes Pi credentials/sessions/settings/extensions, project `.trellis`, development checkouts, Python, Node.js, fonts, or unrelated PATH entries. JSON mode reports `pathRemoved` without adding human output to stdout.
 - Release publication is tag-only and fail-closed. Before the GitHub publish action, readiness validation requires a clean source checkout, `v<package-version>`, exact package/lock/manifest components, one valid archive root, matching embedded and external manifests, a matching checksum, parseable PowerShell bootstrap, and exactly the four documented assets.
 - Tests and development E2E set a temporary `DOVE_PI_HOME`; they never modify real `%LOCALAPPDATA%\DovePi`, `~/.pi/agent`, global npm, or project state.
 
@@ -83,6 +85,10 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 | Python/Node is absent or too old during bootstrap | Install the reviewed exact winget package, refresh PATH, and revalidate before downloading/activating Dove |
 | winget is absent or the installed runtime remains unavailable | Stop before activation and print one exact install-and-retry action |
 | Optional managed extension fails | Activate app and record `degraded` |
+| Latest Dove manifest declares a different Pi version | Report it during check; install/verify it in staging and switch it atomically with Dove |
+| Installed Pi/TUI/Trellis package version differs from the manifest | Reject staging before activation and preserve the current release |
+| Pi reports a newer upstream version outside the Dove channel | Do not self-update; wait for a Dove Release that locks and verifies that Pi version |
+| Confirmed uninstall | Remove Dove-managed files and exact launcher PATH entry; preserve all Pi/user/project/runtime data |
 | A documented Dove command reaches the launcher | Route it to the bundled local CLI; never pass it through as a Pi prompt/argument |
 | Managed extension child emits progress | Stream it on stderr while preserving exactly one TypeScript JSON document on stdout |
 | JSON maintenance command fails | Emit one parseable error document on stdout and put human details in the local log/stderr |
@@ -112,8 +118,10 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Assert offline doctor reports current/previous managed state and degraded managed extensions without network access.
 - Invoke each documented non-maintenance command family through `dove_pi.py` and assert it reaches the Dove CLI rather than Pi; keep this routing test isolated from the real user installation and Pi state.
 - Assert `dove-pi --version` reports both packaged Dove and Pi versions without launching Pi, and exact-spec extension reconciliation remains serial with bounded progress on stderr and one JSON stdout result.
+- Assert update/check reports manifest-owned Pi versions and a Release update moves current/previous Pi identities together with the atomic Dove activation.
+- Assert an actual installed Pi package-version mismatch fails at the dependency gate before activation.
 - Assert valid V1 profile migration and corrupt-manifest fallback leave the checkout unchanged.
-- Assert uninstall removes only known managed children while preserving Pi data, project `.trellis/`, checkouts, third-party extensions, and unknown caller-owned files.
+- Assert uninstall removes only known managed children and the exact persisted launcher PATH entry while preserving Pi data, project `.trellis/`, checkouts, third-party extensions, runtimes, unrelated PATH entries, and unknown caller-owned files.
 - Validate release metadata against exact `package.json` and `package-lock.json` Pi, TUI, and Trellis versions.
 
 ### 7. Wrong vs Correct
@@ -135,4 +143,3 @@ with MaintenanceLock(layout.lock_path, "update"):
     write_state(layout, state, command="update")
     write_managed_launchers(layout)
 ```
-

@@ -50,6 +50,10 @@ manifest test consumes its existing public projection.
 12. After both active tasks are integrated and committed, present the exact
     release commit/tag/assets for explicit user approval. Only then push the
     release commit/tag and verify the public one-line install from the Release.
+13. Project current/latest/previous Pi versions through maintenance results and
+    prove an update atomically switches the release-locked Pi runtime.
+14. Complete uninstall by removing the exact Dove launcher PATH entry after
+    managed files are removed; preserve user/Pi/project data and JSON purity.
 
 ## Validation Commands
 
@@ -140,3 +144,13 @@ are defined.
 - External acceptance remains intentionally open for a virgin Windows machine
   and the first public GitHub Release; no tag, push, real winget/PATH mutation,
   or user-root installation was performed.
+- Managed update now reports current/previous/latest Pi versions, rejects an
+  installed Pi/TUI/Trellis package version that differs from the Release
+  manifest, and has an atomic `0.84.3 -> 0.85.0` fixture proving current and
+  previous identities move together.
+- Confirmed uninstall now removes the exact persisted Dove launcher PATH entry
+  after deleting managed application files while preserving Pi/user/project
+  data. JSON mode reports `pathRemoved` without contaminating stdout.
+- Final augmentation gate: Node 201/201, installer 84/84, typecheck, doctor,
+  Pi smoke, task manifest validation, Python compile, and `git diff --check`
+  passed. No real PATH, user root, Release, tag, or remote was mutated.

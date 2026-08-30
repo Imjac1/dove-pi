@@ -15,6 +15,13 @@ from .release import ReleaseManifest
 from .state import InstallState, ReleaseRef, write_state
 
 
+COMPONENT_PACKAGES = {
+    "pi": "@earendil-works/pi-coding-agent",
+    "piTui": "@earendil-works/pi-tui",
+    "trellis": "@mindfoldhq/trellis",
+}
+
+
 class TransactionError(RuntimeError):
     def __init__(self, step: str, message: str) -> None:
         super().__init__(message)
@@ -88,6 +95,7 @@ class ManagedTransaction:
                 (staging / "release.json").write_text(json.dumps(manifest.to_json(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             elif generated.components != manifest.components or generated.profiles != manifest.profiles:
                 raise TransactionError("release", "Packaged release metadata does not match the locked components and extension catalog")
+            self._verify_installed_components(staging, manifest)
             if verify != "none":
                 self.runner([npm, "run", "typecheck"], staging)
                 self.runner([npm, "run", "pi:smoke"], staging)
@@ -103,12 +111,36 @@ class ManagedTransaction:
             if staging.exists():
                 shutil.rmtree(self.layout.require_managed_path(staging, boundary=self.layout.staging_dir), ignore_errors=True)
 
+    @staticmethod
+    def _verify_installed_components(staging: Path, manifest: ReleaseManifest) -> None:
+        # Legacy source installs may predate component metadata. Preserve their
+        # readability/recovery, but require every component once the manifest
+        # declares the managed component contract.
+        if not manifest.components:
+            return
+        for component, package_name in COMPONENT_PACKAGES.items():
+            expected = manifest.components.get(component)
+            if not expected:
+                raise TransactionError("dependencies", f"Release manifest is missing the locked {component} version")
+            package_path = staging / "node_modules" / Path(*package_name.split("/")) / "package.json"
+            try:
+                value = json.loads(package_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeError) as error:
+                raise TransactionError("dependencies", f"Installed {component} package metadata is unavailable at {package_path}") from error
+            actual = value.get("version") if isinstance(value, dict) else None
+            if actual != expected:
+                raise TransactionError(
+                    "dependencies",
+                    f"Installed {component} version {actual or 'missing'} does not match release manifest {expected}",
+                )
+
     def verify_existing(self, path: Path, *, verify: str = "quick") -> ReleaseManifest:
         path = self.layout.require_version_path(path)
         try:
             manifest = ReleaseManifest.read(path / "release.json")
             if not (path / "dove_pi.py").is_file() or not (path / "node_modules").is_dir():
                 raise TransactionError("verify", f"Managed release is incomplete at {path}")
+            self._verify_installed_components(path, manifest)
             if verify != "none":
                 npm = shutil.which("npm")
                 if not npm:
@@ -173,6 +205,7 @@ class ManagedTransaction:
         try:
             self.layout.require_version_path(reference.install_path)
             installed = ReleaseManifest.read(reference.install_path / "release.json")
+            self._verify_installed_components(reference.install_path, installed)
         except RuntimeError:
             return False
         return (
@@ -181,10 +214,10 @@ class ManagedTransaction:
             and (reference.install_path / "node_modules").is_dir()
         )
 
-    @staticmethod
-    def _is_prepared(path: Path, manifest: ReleaseManifest) -> bool:
+    def _is_prepared(self, path: Path, manifest: ReleaseManifest) -> bool:
         try:
             installed = ReleaseManifest.read(path / "release.json")
+            self._verify_installed_components(path, installed)
         except RuntimeError:
             return False
         return installed.release_id == manifest.release_id and (path / "dove_pi.py").is_file() and (path / "node_modules").is_dir()

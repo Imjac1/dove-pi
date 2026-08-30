@@ -102,9 +102,25 @@ identity contract.
 5. Preserve current as previous. Any pre-activation failure leaves state
    untouched; activation/state failures use existing transaction recovery.
 
+Pi is not an independently mutable global component in a managed Dove install.
+The manifest and lockfile own its exact version. Update/check results project
+the current, previous, and latest Pi versions from those manifests so the user
+can see whether a Dove Release also upgrades Pi. Pi's own self-update path is
+not used because it would break Release identity and rollback guarantees.
+
 `update --check --json` downloads metadata only, holds no mutation lock, writes
 no maintenance log, and emits exactly one JSON object. Ordinary Pi startup and
 doctor remain offline.
+
+## Uninstall Flow
+
+`dove-pi uninstall --yes` removes only known children below the managed Dove
+root, then removes the exact managed `bin` entry from the persisted user PATH.
+PATH comparison is case-insensitive and tolerates quotes/trailing separators.
+Unknown files under the managed root and all Pi/user/project state remain
+untouched. Python, Node.js, winget packages, fonts, and third-party extensions
+are never removed. JSON mode still emits one document and reports whether the
+PATH entry was removed.
 
 ## Release Publication Contract
 

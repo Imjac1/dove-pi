@@ -209,12 +209,18 @@ updated independently.
 ### Maintain the installation
 
 ```powershell
-dove-pi update --check   # check without changing anything
-dove-pi update           # install the latest stable Release
+dove-pi update --check   # check and report current/latest Pi versions
+dove-pi update           # atomically update Dove and its locked Pi runtime
 dove-pi repair           # repair current or recover previous
 dove-pi rollback         # switch to the previous app release
 dove-pi uninstall --yes  # remove Dove, preserve user/project data
 ```
+
+Pi is a release-locked Dove component, not a globally self-updated dependency. When a new Dove
+Release declares a newer Pi version, `dove-pi update` installs and verifies that exact version in
+staging and switches Dove and Pi together only after success. The update output reports the old and
+new Pi versions. Uninstall also removes Dove's persisted launcher PATH entry; new terminals see the
+change.
 
 Before the first Release, update a source installation with:
 
@@ -226,11 +232,12 @@ python .\dove_pi.py install
 ### Startup network controls
 
 ```powershell
-dove-pi --skip-version-check  # skip only Pi's version check for this launch
 dove-pi --offline             # skip Pi startup network/package checks for this launch
 ```
 
-Both are off by default and neither disables a later explicit `dove-pi update`.
+Managed launches suppress Pi's own update prompt because an independent Pi update would break Dove
+Release identity and rollback. Use `dove-pi update`; the compatibility flag `--skip-version-check`
+remains accepted. `--offline` does not disable a later explicit install or update command.
 
 ## Extension profiles
 
@@ -265,6 +272,7 @@ Install, update, rollback, and uninstall preserve:
 - workspace-scoped Dove state under `~/.pi/agent/dove/workspaces/<hash>`;
 - project `.trellis/` directories;
 - source code, Git branches, and uncommitted changes.
+- Python, Node.js, fonts, and Pi extensions installed by the user.
 
 Ordinary sessions do not create `.agent-data/execution.jsonl` inside source repositories.
 

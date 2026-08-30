@@ -200,12 +200,17 @@ Trellis 管项目数据，Dove 管执行数据。Dove 不复制一套 Trellis �
 ### 维护安装
 
 ```powershell
-dove-pi update --check   # 只检查，不修改
-dove-pi update           # 安装最新 stable Release
+dove-pi update --check   # 只检查，并显示当前/最新 Pi 版本
+dove-pi update           # 原子更新 Dove 及其锁定的 Pi 运行时
 dove-pi repair           # 修复当前版本或恢复 previous
 dove-pi rollback         # 切回 previous 应用版本
 dove-pi uninstall --yes  # 卸载 Dove，保留用户与项目数据
 ```
+
+Pi 是 Dove Release 中的锁定组件，不使用 Pi 的全局自更新。只要新 Dove Release
+声明了新的 Pi 版本，`dove-pi update` 就会在 staging 中安装并验证该精确版本，成功后
+与 Dove 一起原子切换；失败时继续使用旧版本。更新输出会显示 Pi 的旧版本和新版本。
+卸载会同时删除 Dove 托管应用和持久化的 launcher PATH 项，新终端生效。
 
 在首个 Release 发布前，从源码安装的用户通过下面的方式更新：
 
@@ -217,11 +222,12 @@ python .\dove_pi.py install
 ### 启动网络控制
 
 ```powershell
-dove-pi --skip-version-check  # 只跳过本次 Pi 版本检查
 dove-pi --offline             # 本次启动不做 Pi 网络/扩展包检查
 ```
 
-两项默认都关闭，也不会禁用之后显式执行的 `dove-pi update`。
+托管启动默认关闭 Pi 自身的版本更新提示，因为直接更新 Pi 会破坏 Dove Release 的一致性与
+回滚能力；统一使用 `dove-pi update`。兼容参数 `--skip-version-check` 仍可使用。
+`--offline` 不会禁用之后显式执行的安装或更新命令。
 
 ## 扩展组合
 
@@ -255,6 +261,7 @@ $env:LOCALAPPDATA\DovePi\
 - `~/.pi/agent/dove/workspaces/<hash>` 中按项目隔离的 Dove 运行状态；
 - 项目中的 `.trellis/`；
 - 你的源码、Git 分支和未提交修改。
+- Python、Node.js、字体和用户自己安装的 Pi 扩展。
 
 普通会话不会在源码仓库生成 `.agent-data/execution.jsonl`。
 
