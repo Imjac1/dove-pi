@@ -350,6 +350,39 @@ describe("Pi adapter", () => {
 		assert.equal(changingGuard.beforeToolCall("changing-5", "ls", { path: "." }, true).action, "allow", "changed arguments reset the contiguous stagnation window");
 	});
 
+	it("bounds repeated confirmation questions after affirmative answers", () => {
+		const guard = new ProgressGuard({ interactiveQuestionThreshold: 2, interactiveQuestionHardStopThreshold: 3 });
+		guard.start(1_000);
+		const firstQuestion = {
+			questions: [{
+				question: "确认创建 S7 任务并进入规划？",
+				header: "确认创建",
+				options: [{ label: "确认创建" }, { label: "取消创建" }],
+			}],
+		};
+		const rewrittenQuestion = {
+			questions: [{
+				question: "S7 创建前最后确认，之后进入规划并直接执行？",
+				header: "创建确认",
+				options: [{ label: "确认，执行创建" }, { label: "取消" }],
+			}],
+		};
+		assert.equal(guard.beforeToolCall("question-1", "ask_user_question", firstQuestion, false).action, "allow");
+		guard.recordToolResult({ toolName: "ask_user_question", input: firstQuestion, details: { answers: [{ answer: "确认创建" }] }, isError: false });
+		assert.equal(guard.beforeToolCall("question-2", "ask_user_question", rewrittenQuestion, false).action, "allow");
+		const warning = guard.recordToolResult({ toolName: "ask_user_question", input: rewrittenQuestion, details: { answers: [{ answer: "确认，执行创建" }] }, isError: false });
+		assert.equal(warning?.kind, "interactive-confirmation-loop");
+		assert.equal(guard.beforeToolCall("question-3", "ask_user_question", firstQuestion, false).action, "terminate");
+		assert.match(guard.beforeToolCall("question-4", "ask_user_question", firstQuestion, false).reason ?? "", /立即执行已确认的动作/);
+
+		guard.recordToolResult({ toolName: "write", input: { path: "task.md" }, isError: false });
+		assert.equal(guard.beforeToolCall("question-5", "ask_user_question", firstQuestion, false).action, "allow", "a real tool result opens a fresh question window");
+		const distinctQuestion = {
+			questions: [{ question: "确认删除 README？", header: "确认删除", options: [{ label: "确认删除" }, { label: "取消" }] }],
+		};
+		assert.equal(guard.beforeToolCall("question-6", "ask_user_question", distinctQuestion, false).action, "allow", "a different confirmation target remains allowed");
+	});
+
 	it("normalizes opaque tool fingerprints without retaining sensitive input", () => {
 		const ordered = progressFingerprint("read", { path: "README.md", token: "fixture-secret" });
 		const reordered = progressFingerprint("read", { token: "fixture-secret", path: "README.md" });
@@ -422,6 +455,50 @@ describe("Pi adapter", () => {
 		const secondWrite = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "write-2", toolName: "write", input: { path: "tmp.txt", content: "x" } }, context);
 		assert.equal(firstWrite, undefined);
 		assert.equal(secondWrite, undefined, "mutations must never be result-coalesced or replayed");
+	});
+
+	it("stops the Pi tool loop when confirmation answers are repeatedly affirmative", async () => {
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const notifications: string[] = [];
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return [{ name: "ask_user_question" }, { name: "write" }]; },
+			setActiveTools() {},
+			getActiveTools() { return ["ask_user_question", "write"]; },
+			getThinkingLevel() { return "high"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			hasUI: true,
+			ui: { theme: { fg: (_color, value) => value }, setStatus: () => {}, notify: (message) => notifications.push(message) },
+			sessionManager: { getEntries: () => [], getSessionId: () => "interactive-loop-session" },
+		};
+		await events.get("input")?.({ type: "input", text: "创建任务", source: "interactive", streamingBehavior: "immediate" }, context);
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建任务", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		await events.get("turn_start")?.({ type: "turn_start" }, context);
+		const question = (text: string) => ({
+			type: "tool_call",
+			toolName: "ask_user_question",
+			input: { questions: [{ question: text, header: "确认创建", options: [{ label: "确认创建" }, { label: "取消" }] }] },
+		});
+		const answer = (input: unknown) => ({ type: "tool_result", toolName: "ask_user_question", input, content: [{ type: "text", text: "User answered: 确认创建" }], details: { answers: [{ answer: "确认创建" }] }, isError: false });
+		const first = question("确认创建 S7 任务并进入规划？");
+		const second = question("S7 创建前最后确认，之后进入规划并执行？");
+		assert.equal(await events.get("tool_call")?.({ ...first, toolCallId: "question-1" }, context), undefined);
+		await events.get("tool_result")?.({ ...answer(first.input), toolCallId: "question-1" }, context);
+		assert.equal(await events.get("tool_call")?.({ ...second, toolCallId: "question-2" }, context), undefined);
+		await events.get("tool_result")?.({ ...answer(second.input), toolCallId: "question-2" }, context);
+		const blocked = await events.get("tool_call")?.({ ...first, toolCallId: "question-3" }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
+		assert.equal(blocked?.block, true);
+		assert.equal(blocked?.terminate, true);
+		assert.match(blocked?.reason ?? "", /执行已确认的动作/);
+		assert.ok(notifications.some((message) => message.includes("确认问题在收到肯定答复后重复 2 次")));
 	});
 
 	it("keeps only the compact core tool set by default", () => {

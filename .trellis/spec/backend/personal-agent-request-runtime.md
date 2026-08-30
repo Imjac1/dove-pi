@@ -59,6 +59,7 @@ interface RecoveryOwnerOptions {
 - Execution ledger records use JSONL and include task ID, step ID, mode, capability, status, timestamp, and duration.
 - Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
 - Tool-loop fingerprints are deterministic opaque hashes. `ls` with no path normalizes to `.`; same-batch duplicate idempotent calls are coalesced before execution, while mutation and unknown tools are never result-cached. Successful stagnation compares call and bounded observation fingerprints, warns at the soft threshold, terminates at the hard threshold, and resets on changed arguments, observations, errors, or mutations.
+- Structured `ask_user_question` confirmations are bounded independently from read-only result caching. Equivalent confirmation-shaped questions with affirmative answers and no intervening tool result warn at the interactive threshold (default 2), then return a blocking terminal decision at the hard threshold (default 3), directing the model to execute the confirmed action or return the result. Equivalence uses option intent shape plus normalized action/target text, so changed wording does not evade the bound while distinct targets remain allowed. Negative answers, question errors, meaningful tool results, a new `agent_start`, and explicit resets open a fresh window. Thresholds may be tuned with `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_THRESHOLD` and `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_HARD_STOP_THRESHOLD`.
 - Provider cache evidence is per-call and stores bounded digests/sizes for system policy, serialized tools, Dove context, and history. The first call in a session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and provider misses without treating cumulative cache-read counters as regressions.
 - Oversized built-in read/shell/search observations are compacted before re-entry into model context with original/retained/omitted sizes, a digest, and deterministic narrowing metadata. Complete output remains in tool details.
 
@@ -79,6 +80,8 @@ interface RecoveryOwnerOptions {
 | Incomplete ledger record belongs to a live process | Leave it pending; recover only legacy, unowned, or inactive-owner records |
 | Same idempotent call appears twice in one batch | Coalesce the later call before execution |
 | Same successful read repeats without a changed observation | Warn, then terminate at the configured hard bound |
+| Equivalent confirmation repeats after affirmative answers | Warn at the interactive threshold, then block and terminate at the hard bound |
+| Confirmation target/text changes, answer is negative, or another tool returns | Reset the interactive question window and allow the next question |
 | Provider cache scope changes | Start a new cold comparison chain |
 
 ## 5. Good / Base / Bad Cases
@@ -90,6 +93,7 @@ interface RecoveryOwnerOptions {
 - Bad: embed a Pi `ExtensionAPI` object in a core capability or regenerate a long PowerShell script for an already-registered capability.
 - Bad: reserve fewer tokens in accounting without updating the provider payload, or impose the plan's 4,096-token target as an Ultra ceiling.
 - Bad: key diagnostics by raw tool arguments, classify every zero cache-read value as a prefix rewrite, or share a mutation result by fingerprint.
+- Bad: treat `ask_user_question` as an unlimited non-idempotent escape hatch after the user has already confirmed the same action.
 
 ## 6. Tests Required
 
@@ -104,6 +108,7 @@ interface RecoveryOwnerOptions {
 - Assert an unknown/unwritable output limit fails closed through `ctx.abort()` and never records a started provider call.
 - Assert live-owner records are not recovered, stop reasons are normalized, and negated/explanatory execution phrases remain read-only.
 - Assert opaque input hashing, same-batch coalescing, unchanged-observation warning/stop, changed-result reset, bounded result metadata, and cold-first/provider-scope cache attribution.
+- Assert rewritten equivalent confirmations with affirmative answers warn and terminate at configured bounds, while distinct targets and post-progress retries remain allowed.
 
 ## 7. Wrong vs Correct
 

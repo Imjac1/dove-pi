@@ -5,6 +5,7 @@ export interface ProgressToolResult {
 	isError: boolean;
 	input?: unknown;
 	observation?: unknown;
+	details?: unknown;
 	idempotent?: boolean;
 }
 
@@ -13,6 +14,8 @@ export interface ProgressGuardOptions {
 	repeatedFailureThreshold?: number;
 	repeatedSuccessThreshold?: number;
 	repeatedSuccessHardStopThreshold?: number;
+	interactiveQuestionThreshold?: number;
+	interactiveQuestionHardStopThreshold?: number;
 	longRunMinutes?: number;
 }
 
@@ -27,12 +30,14 @@ export interface ProgressSnapshot {
 	lastFailureFingerprint?: string;
 	repeatedFailureCount: number;
 	repeatedSuccessCount: number;
+	interactiveQuestionRepeatCount: number;
+	interactivePositiveAnswerCount: number;
 	longRun: boolean;
-	warning?: "consecutive-errors" | "repeated-failure" | "repeated-success";
+	warning?: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop";
 }
 
 export interface ProgressWarning {
-	kind: "consecutive-errors" | "repeated-failure" | "repeated-success";
+	kind: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop";
 	message: string;
 	snapshot: ProgressSnapshot;
 }
@@ -66,6 +71,95 @@ function observationFingerprint(value: unknown): string {
 	return createHash("sha256").update(stableProgressSerialize(value)).digest("hex").slice(0, 24);
 }
 
+type InteractiveOptionIntent = "affirmative" | "negative" | "other";
+
+interface InteractiveQuestionProfile {
+	shapeFingerprint: string;
+	tokens: ReadonlySet<string>;
+}
+
+interface InteractiveQuestionState {
+	profile: InteractiveQuestionProfile;
+	repeatCount: number;
+	positiveAnswerCount: number;
+	lastAnswerAffirmative: boolean;
+}
+
+const INTERACTIVE_STOP_WORDS = new Set([
+	"a", "an", "and", "are", "as", "at", "before", "confirm", "confirmation", "do", "for", "in", "is", "it", "last", "of", "on", "the", "this", "to", "with",
+	"一个", "之后", "之前", "进入", "任务", "问题", "本轮", "现在", "收到", "确认", "创建后", "范围", "立即", "执行前", "执行后",
+]);
+
+function interactiveTextTokens(value: unknown): ReadonlySet<string> {
+	if (typeof value !== "string") return new Set();
+	const normalized = value
+		.toLocaleLowerCase()
+		.replace(/https?:\/\/\S+/g, " value ")
+		.replace(/`[^`]*`|"[^"]*"|'[^']*'/g, " value ")
+		.replace(/\d+/g, " value ")
+		.replace(/确认|任务|问题|本轮|之后|之前|进入|范围|立即|最后|直接|收到|现在|执行前|执行后/g, " ");
+	const tokens = normalized.match(/[a-z][a-z0-9_-]*|[\u3400-\u9fff]+/g) ?? [];
+	return new Set(tokens.filter((token) => !INTERACTIVE_STOP_WORDS.has(token)));
+}
+
+function interactiveOptionIntent(value: unknown): InteractiveOptionIntent {
+	if (typeof value !== "string") return "other";
+	const text = value.toLocaleLowerCase();
+	if (/\b(no|cancel|decline|reject|abort|defer|adjust|skip|not)\b|取消|否|拒绝|暂缓|调整|先改|不创建|不要/.test(text)) return "negative";
+	if (/\b(yes|ok|okay|confirm|approve|create|execute|proceed|continue|start|accept)\b|确认|创建|执行|继续|开始|同意|确定|好/.test(text)) return "affirmative";
+	return "other";
+}
+
+function interactiveQuestionProfile(input: unknown): InteractiveQuestionProfile | undefined {
+	if (typeof input !== "object" || input === null || Array.isArray(input)) return undefined;
+	const questions = (input as { questions?: unknown }).questions;
+	if (!Array.isArray(questions) || questions.length === 0) return undefined;
+	const profiles = questions.map((rawQuestion) => {
+		const question = rawQuestion && typeof rawQuestion === "object" ? rawQuestion as Record<string, unknown> : {};
+		const options = Array.isArray(question.options) ? question.options : [];
+		const optionIntents = options.map((rawOption) => {
+			const option = rawOption && typeof rawOption === "object" ? rawOption as Record<string, unknown> : {};
+			return interactiveOptionIntent(option.label);
+		});
+		return {
+			multiSelect: question.multiSelect === true,
+			optionIntents,
+			text: `${typeof question.header === "string" ? question.header : ""} ${typeof question.question === "string" ? question.question : ""}`,
+		};
+	});
+	const hasConfirmationShape = profiles.every((profile) => profile.optionIntents.includes("affirmative") && profile.optionIntents.includes("negative"));
+	if (!hasConfirmationShape) return undefined;
+	const shapeFingerprint = createHash("sha256").update(stableProgressSerialize(profiles.map(({ multiSelect, optionIntents }) => ({ multiSelect, optionIntents })))).digest("hex").slice(0, 24);
+	const tokens = new Set<string>();
+	for (const profile of profiles) for (const token of interactiveTextTokens(profile.text)) tokens.add(token);
+	return { shapeFingerprint, tokens };
+}
+
+function equivalentInteractiveQuestion(left: InteractiveQuestionProfile, right: InteractiveQuestionProfile): boolean {
+	if (left.shapeFingerprint !== right.shapeFingerprint) return false;
+	if (left.tokens.size === 0 && right.tokens.size === 0) return true;
+	const union = new Set([...left.tokens, ...right.tokens]);
+	const intersection = [...left.tokens].filter((token) => right.tokens.has(token)).length;
+	// Confirmation wording often adds a changing scope, slug, or sequencing
+	// phrase. The option shape carries the safety signal; retain enough shared
+	// action/target text to keep unrelated confirmations separate.
+	return intersection / union.size >= 0.3;
+}
+
+function interactiveAnswerIntents(details: unknown, observation: unknown): InteractiveOptionIntent[] {
+	const answers = details && typeof details === "object" && !Array.isArray(details) ? (details as { answers?: unknown }).answers : undefined;
+	if (Array.isArray(answers)) {
+		return answers.map((answer) => {
+			const value = answer && typeof answer === "object" ? (answer as { answer?: unknown }).answer : answer;
+			return interactiveOptionIntent(value);
+		});
+	}
+	if (Array.isArray(observation)) {
+		return observation.flatMap((part) => part && typeof part === "object" && (part as { type?: unknown }).type === "text" ? [interactiveOptionIntent((part as { text?: unknown }).text)] : []);
+	}
+	return [];
+}
+
 export interface ProgressToolCallDecision {
 	readonly action: "allow" | "coalesce" | "terminate";
 	readonly fingerprint: string;
@@ -78,17 +172,23 @@ export class ProgressGuard {
 	private readonly repeatedFailureThreshold: number;
 	private readonly repeatedSuccessThreshold: number;
 	private readonly repeatedSuccessHardStopThreshold: number;
+	private readonly interactiveQuestionThreshold: number;
+	private readonly interactiveQuestionHardStopThreshold: number;
 	private readonly longRunMs: number;
 	private state: ProgressSnapshot = this.emptySnapshot();
 	private lastFailureFingerprint?: string;
 	private readonly batchCalls = new Map<string, string>();
 	private lastSuccessfulObservation?: { callFingerprint: string; observationFingerprint: string; count: number };
+	private interactiveQuestion?: InteractiveQuestionState;
+	private interactiveWarningIssued = false;
 
 	constructor(options: ProgressGuardOptions = {}) {
 		this.consecutiveErrorThreshold = positiveInteger(options.consecutiveErrorThreshold, 3);
 		this.repeatedFailureThreshold = positiveInteger(options.repeatedFailureThreshold, 2);
 		this.repeatedSuccessThreshold = positiveInteger(options.repeatedSuccessThreshold, 2);
 		this.repeatedSuccessHardStopThreshold = Math.max(this.repeatedSuccessThreshold, positiveInteger(options.repeatedSuccessHardStopThreshold, 3));
+		this.interactiveQuestionThreshold = positiveInteger(options.interactiveQuestionThreshold, 2);
+		this.interactiveQuestionHardStopThreshold = Math.max(this.interactiveQuestionThreshold, positiveInteger(options.interactiveQuestionHardStopThreshold, 3));
 		this.longRunMs = positiveInteger(options.longRunMinutes, 20) * 60_000;
 	}
 
@@ -100,6 +200,8 @@ export class ProgressGuard {
 			consecutiveToolErrors: 0,
 			repeatedFailureCount: 0,
 			repeatedSuccessCount: 0,
+			interactiveQuestionRepeatCount: 0,
+			interactivePositiveAnswerCount: 0,
 			longRun: false,
 		};
 	}
@@ -109,6 +211,8 @@ export class ProgressGuard {
 		this.lastFailureFingerprint = undefined;
 		this.batchCalls.clear();
 		this.lastSuccessfulObservation = undefined;
+		this.interactiveQuestion = undefined;
+		this.interactiveWarningIssued = false;
 	}
 
 	beginToolBatch(): void {
@@ -117,6 +221,25 @@ export class ProgressGuard {
 
 	beforeToolCall(toolCallId: string, toolName: string, input: unknown, idempotent: boolean): ProgressToolCallDecision {
 		const fingerprint = progressFingerprint(toolName, input);
+		if (toolName === "ask_user_question") {
+			const profile = interactiveQuestionProfile(input);
+			if (profile) {
+				const previous = this.interactiveQuestion;
+				const equivalent = previous !== undefined && equivalentInteractiveQuestion(previous.profile, profile);
+				const repeatCount = equivalent && previous.lastAnswerAffirmative ? previous.repeatCount + 1 : equivalent ? previous.repeatCount : 1;
+				this.interactiveQuestion = equivalent && previous
+					? { ...previous, profile, repeatCount, lastAnswerAffirmative: false }
+					: { profile, repeatCount: 1, positiveAnswerCount: 0, lastAnswerAffirmative: false };
+				this.state = { ...this.state, interactiveQuestionRepeatCount: repeatCount, interactivePositiveAnswerCount: this.interactiveQuestion.positiveAnswerCount };
+				if (repeatCount >= this.interactiveQuestionHardStopThreshold) {
+					return {
+						action: "terminate",
+						fingerprint,
+						reason: `同一确认问题在收到肯定答复后已重复 ${repeatCount} 次；请立即执行已确认的动作或直接给出结果，不要再次询问确认`,
+					};
+				}
+			}
+		}
 		if (!idempotent) return { action: "allow", fingerprint };
 		const primaryToolCallId = this.batchCalls.get(fingerprint);
 		if (primaryToolCallId) {
@@ -154,6 +277,41 @@ export class ProgressGuard {
 			// prevent an old read from being hard-stopped after state may have changed.
 			this.lastSuccessfulObservation = undefined;
 		}
+		let interactiveWarning: ProgressWarning | undefined;
+		if (result.toolName === "ask_user_question") {
+			if (result.isError) {
+				this.interactiveQuestion = undefined;
+				this.interactiveWarningIssued = false;
+			} else {
+				const intents = interactiveAnswerIntents(result.details, result.observation);
+				const affirmative = intents.length > 0 && intents.every((intent) => intent === "affirmative");
+				const negative = intents.some((intent) => intent === "negative");
+				if (negative || !affirmative) {
+					if (negative) {
+						this.interactiveQuestion = undefined;
+						this.interactiveWarningIssued = false;
+					} else if (this.interactiveQuestion) {
+						this.interactiveQuestion.lastAnswerAffirmative = false;
+					}
+				} else if (this.interactiveQuestion) {
+					this.interactiveQuestion.lastAnswerAffirmative = true;
+					this.interactiveQuestion.positiveAnswerCount += 1;
+					if (this.interactiveQuestion.repeatCount >= this.interactiveQuestionThreshold && !this.interactiveWarningIssued) {
+						this.interactiveWarningIssued = true;
+						interactiveWarning = {
+							kind: "interactive-confirmation-loop",
+							message: `检测到确认问题在收到肯定答复后重复 ${this.interactiveQuestion.repeatCount} 次；请执行已确认的动作或直接给出结果，不要再次询问确认。`,
+							snapshot: this.snapshot(),
+						};
+					}
+				}
+			}
+		} else {
+			// Any other tool result is a progress boundary. A real operation, read,
+			// or failure means the next confirmation starts a fresh interaction window.
+			this.interactiveQuestion = undefined;
+			this.interactiveWarningIssued = false;
+		}
 		this.state = {
 			...this.state,
 			lastActivityAt: now,
@@ -164,9 +322,16 @@ export class ProgressGuard {
 			lastFailureFingerprint: fingerprint,
 			repeatedFailureCount,
 			repeatedSuccessCount,
+			interactiveQuestionRepeatCount: this.interactiveQuestion?.repeatCount ?? 0,
+			interactivePositiveAnswerCount: this.interactiveQuestion?.positiveAnswerCount ?? 0,
 			longRun: this.state.startedAt !== undefined && now - this.state.startedAt >= this.longRunMs,
 			warning: result.isError ? previousWarning : undefined,
 		};
+		if (interactiveWarning) {
+			this.state.warning = interactiveWarning.kind;
+			interactiveWarning = { ...interactiveWarning, snapshot: this.snapshot() };
+			return interactiveWarning;
+		}
 		if (!result.isError && result.idempotent && repeatedSuccessCount >= this.repeatedSuccessThreshold && previousWarning !== "repeated-success") {
 			this.state.warning = "repeated-success";
 			return {
@@ -204,6 +369,8 @@ export class ProgressGuard {
 		this.lastFailureFingerprint = undefined;
 		this.batchCalls.clear();
 		this.lastSuccessfulObservation = undefined;
+		this.interactiveQuestion = undefined;
+		this.interactiveWarningIssued = false;
 	}
 }
 
@@ -211,5 +378,5 @@ export function formatProgressSnapshot(snapshot: ProgressSnapshot, now = Date.no
 	if (!snapshot.active) return "idle";
 	const duration = snapshot.startedAt === undefined ? 0 : Math.max(0, Math.floor((now - snapshot.startedAt) / 60_000));
 	const warning = snapshot.warning ? `, warning=${snapshot.warning}` : "";
-	return `running ${duration}m, tools=${snapshot.toolCalls}, errors=${snapshot.toolErrors}, consecutiveErrors=${snapshot.consecutiveToolErrors}, repeatedSuccess=${snapshot.repeatedSuccessCount}${snapshot.longRun ? ", longRun=true" : ""}${warning}`;
+	return `running ${duration}m, tools=${snapshot.toolCalls}, errors=${snapshot.toolErrors}, consecutiveErrors=${snapshot.consecutiveToolErrors}, repeatedSuccess=${snapshot.repeatedSuccessCount}, interactiveRepeat=${snapshot.interactiveQuestionRepeatCount}${snapshot.longRun ? ", longRun=true" : ""}${warning}`;
 }

@@ -10,6 +10,7 @@
 - [x] Bound large read-only observations before provider-visible history and attach deterministic truncation/continuation metadata.
 - [x] Replay same-batch, unchanged-success, changed-result, error, mutation, and user-retry fixtures.
 - [x] Replay the exported five-call cache pattern and prove stable system/tool/Dove digests across attempts.
+- [x] Bound equivalent repeated confirmation questions after affirmative answers and preserve distinct questions, retries, and mutation behavior.
 - [x] Run typecheck, Pi/cache tests, doctor, and Pi smoke (launcher smoke blocked by sandbox child-process `EPERM`; direct doctor and all tests pass).
 
 ## Risky Files

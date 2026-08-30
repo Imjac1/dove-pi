@@ -454,6 +454,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const progressGuard = new ProgressGuard({
 		consecutiveErrorThreshold: Number(process.env.DOVE_PI_PROGRESS_ERROR_THRESHOLD),
 		repeatedFailureThreshold: Number(process.env.DOVE_PI_PROGRESS_REPEAT_THRESHOLD),
+		interactiveQuestionThreshold: Number(process.env.DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_THRESHOLD),
+		interactiveQuestionHardStopThreshold: Number(process.env.DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_HARD_STOP_THRESHOLD),
 		longRunMinutes: Number(process.env.DOVE_PI_PROGRESS_LONG_RUN_MINUTES),
 	});
 
@@ -1353,7 +1355,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 
 	pi.on("tool_result", async (event, ctx) => {
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
-		const warning = progressGuard.recordToolResult({ toolName: event.toolName, isError: event.isError, input: event.input, observation: event.content, idempotent });
+		const warning = progressGuard.recordToolResult({ toolName: event.toolName, isError: event.isError, input: event.input, observation: event.content, details: event.details, idempotent });
 		if (warning && ctx.hasUI) ctx.ui.notify(`Dove 进度守护：${warning.message}`, "warning");
 		updateStatus(ctx);
 		const compactable = event.toolName === "read" || event.toolName === "bash" || event.toolName === "powershell" || event.toolName === "grep" || event.toolName === "find" || event.toolName === "ls";
