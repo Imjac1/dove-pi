@@ -11,6 +11,8 @@ describe("PlanningSession", () => {
 		assert.equal(result.taskTitle, "缓存命中率优化");
 		assert.match(result.directive ?? "", /agent_project_task/);
 		assert.match(result.directive ?? "", /Do not ask for another confirmation/);
+		assert.equal(session.questionDecision().allowed, false);
+		assert.match(session.questionDecision().reason ?? "", /agent_project_task/);
 		assert.match(formatPlanningSessionGuidance(session.snapshot()), /"state":"awaiting-create"/);
 		assert.equal(session.begin({ requestId: "r1", intent: "project-work" }).state, "awaiting-create", "retries do not reset the planning handshake");
 	});

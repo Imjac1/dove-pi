@@ -18,6 +18,11 @@ export interface PlanningSessionQuestionResult {
 	readonly directive?: string;
 }
 
+export interface PlanningSessionQuestionDecision {
+	readonly allowed: boolean;
+	readonly reason?: string;
+}
+
 export function formatPlanningSessionGuidance(snapshot: PlanningSessionSnapshot): string {
 	const card = JSON.stringify({ schemaVersion: 1, state: snapshot.state, workflowAction: snapshot.workflowAction, taskId: snapshot.taskId, taskPath: snapshot.taskPath, taskTitle: snapshot.taskTitle, questionCount: snapshot.questionCount });
 	if (snapshot.state === "collecting-direction" || snapshot.state === "collecting-name") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nAsk one structured question for task direction/title and scope. This collects data, not confirmation. Then call agent_project_task with operation=create; it owns the single native confirmation.`;
@@ -92,6 +97,21 @@ export class PlanningSession {
 			...(taskTitle ? { taskTitle } : {}),
 			directive: "Planning input received. Call agent_project_task with operation=create and the collected task title/scope. Do not ask for another confirmation; that tool owns the single native confirmation.",
 		};
+	}
+
+	/**
+	 * Once planning input has been collected, the next action is the restricted
+	 * task lifecycle tool. This is enforced by the adapter before another
+	 * question reaches the third-party question extension.
+	 */
+	public questionDecision(): PlanningSessionQuestionDecision {
+		if (this.current.state === "awaiting-create") {
+			return {
+				allowed: false,
+				reason: "规划输入已经收到；请立即调用 agent_project_task 执行唯一一次任务变更确认，不要再次调用 ask_user_question。",
+			};
+		}
+		return { allowed: true };
 	}
 
 	public markTaskCreated(input: { taskId?: string; taskPath?: string; taskTitle?: string }): PlanningSessionSnapshot {

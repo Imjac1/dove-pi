@@ -352,8 +352,12 @@ describe("Pi adapter", () => {
 			await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-1", toolName: "ask_user_question", input: question }, context);
 			const questionResult = await events.get("tool_result")?.({ type: "tool_result", toolCallId: "question-1", toolName: "ask_user_question", input: question, content: [{ type: "text", text: "User answered: 缓存命中率优化" }], details: { answers: [{ answer: "缓存命中率优化" }] }, isError: false }, context) as { content?: Array<{ text?: string }> };
 			assert.match(questionResult.content?.map((part) => part.text ?? "").join("\n") ?? "", /agent_project_task/);
+			const repeatedQuestion = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-2", toolName: "ask_user_question", input: { questions: [{ question: "是否还要再次确认？", header: "范围", options: [{ label: "继续" }, { label: "先讨论" }] }] } }, context) as { block?: boolean; terminate?: boolean; reason?: string };
+			assert.equal(repeatedQuestion.block, true);
+			assert.equal(repeatedQuestion.terminate, true);
+			assert.match(repeatedQuestion.reason ?? "", /agent_project_task/);
 
-			const taskTool = tools.get("agent_project_task");
+		const taskTool = tools.get("agent_project_task");
 			assert.ok(taskTool);
 			const taskResult = await taskTool.execute("task-call", { operation: "create" }, undefined, undefined, context);
 			assert.equal(confirmations, 1);

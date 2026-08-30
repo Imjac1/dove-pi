@@ -59,6 +59,12 @@ git diff --check
 - Revert context emission independently while retaining legacy cleanup.
 - Revert Python routing independently from all TypeScript changes.
 
+## Follow-up Root-Cause Fix: Planning Question Loop
+
+1. Keep `PlanningSession` as the source of truth for whether planning input is still missing.
+2. Block a second `ask_user_question` at the Pi `tool_call` boundary after a non-cancelled scope/title answer, even when option labels do not look like confirmation choices.
+3. Verify the direct transition to `agent_project_task` with core and adapter tests, then run the complete quality gate and a fresh managed Pi session.
+
 ## Start Review Checklist
 
 - PRD contains observable acceptance criteria and no unresolved product decision.
@@ -77,3 +83,10 @@ git diff --check
 - Request-exact transition matrix: Lookup -> Chat = 0, Execution -> Chat = 0, and Execution -> Lookup drops every mutation/browser/MCP/background schema; consecutive equal sets avoid redundant host updates.
 - Final context regressions verify that empty or budget-omitted snapshots remain retryable at the same revision, provider-budget recovery removes only the exact Dove-derived message, marker-bearing user text is preserved, and relevant snapshot plus current-turn workflow guidance are emitted together.
 - Paid live-provider E2E was not run. Pi hook integration verifies the provider-bound payload shape without incurring a provider call.
+
+## Follow-up Validation Evidence (2026-08-31)
+
+- Full Node suite: 220/220 passed; installer suite: 90/90 passed; typecheck, doctor, Pi smoke, spec budget, and task validation passed.
+- Managed release updated to `0.1.2+source.850feed99747` and doctor reports the new implementation as managed-only.
+- Fresh Pi process in `C:\Users\rebot\Desktop\code` produced exactly one `ask_user_question` and one `agent_project_task`; it stopped at the latter's single native Yes/No confirmation without creating a task.
+- Cache audit reports the fresh three-request session at 64.9% cumulative, 95.6% warm, and 95.6% last-request hit rate. The 64.9% cumulative figure includes the expected cold request; the project-wide 15-session warm rate is 90.1%.

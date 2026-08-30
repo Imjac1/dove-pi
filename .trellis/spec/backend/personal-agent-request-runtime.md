@@ -48,20 +48,21 @@ interface RecoveryOwnerOptions {
 
 ## 3. Contracts
 
-- `src/core/**` must not import Pi packages. Pi-specific behavior belongs in `src/pi-adapter/**`.
+- `src/core/**` must not import Pi packages; Pi-specific behavior belongs in `src/pi-adapter/**`.
 - Capability names are stable dotted identifiers such as `windows.host_info` and `workspace.inspect`.
 - Every capability declares version, platform, side effects, idempotency, status, and execution function.
 - Mode changes are persisted as `personal-agent-mode` entries and apply only at the next not-yet-started step.
-- PowerShell output is structured; raw output is retained as an artifact and summaries reference evidence rather than copying large logs into model context.
+- PowerShell output is structured; raw output stays in an artifact and summaries reference evidence instead of copying large logs into model context.
 - Pi tool results must apply a model-facing output bound to large execution strings (stdout/stderr and nested recipe results); complete output remains in tool details and execution artifacts.
-- The Pi adapter also bounds oversized built-in read/shell/search results before they re-enter model context. When compacted, it preserves the original content in tool details and includes a clear request-narrowing marker.
+- The Pi adapter bounds oversized built-in read/shell/search results before re-entry into model context, preserving full output in tool details and adding a request-narrowing marker.
 - The Pi adapter normalizes complete DeepSeek DSML text tool calls (`<｜DSML｜tool_calls>...`) at the `message_end` boundary into standard Pi `toolCall` blocks. This compatibility path is strict (complete wrapper/invocation/parameter tags only), preserves non-DSML content, leaves malformed text unchanged, and still relies on Pi's normal `tool_call` policy and approval path.
-- Execution ledger records use JSONL and include task ID, step ID, mode, capability, status, timestamp, and duration.
+- Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
 - Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
 - Tool-loop fingerprints are deterministic opaque hashes. `ls` with no path normalizes to `.`; same-batch duplicate idempotent calls are coalesced before execution, while mutation and unknown tools are never result-cached. Successful stagnation compares call and bounded observation fingerprints, warns at the soft threshold, terminates at the hard threshold, and resets on changed arguments, observations, errors, or mutations.
-- Structured `ask_user_question` confirmations are bounded independently from read-only result caching. Equivalent confirmation-shaped questions with affirmative answers and no intervening tool result warn at the interactive threshold (default 2), then return a blocking terminal decision at the hard threshold (default 3), directing the model to execute the confirmed action or return the result. Equivalence uses option intent shape plus normalized action/target text, so changed wording does not evade the bound while distinct targets remain allowed. Negative answers, question errors, meaningful tool results, a new `agent_start`, and explicit resets open a fresh window. Thresholds may be tuned with `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_THRESHOLD` and `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_HARD_STOP_THRESHOLD`.
-- Provider cache evidence is per-call and stores bounded digests/sizes for system policy, serialized tools, Dove context, and history. The first call in a session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and provider misses without treating cumulative cache-read counters as regressions.
-- Cache diagnostics expose cumulative/session reuse, warm reuse, and a bounded recent-request window separately. Warm reuse excludes the expected first cold call and is token-weighted (`cacheRead / (input + cacheRead + cacheWrite)`); the recent window is request-weighted and defaults to the latest five provider calls. Audit summaries must preserve these labels and must not present the warm rate as a request count.
+- Structured `ask_user_question` confirmations are bounded separately from read caching. Equivalent affirmative questions without an intervening tool result warn at threshold 2, then block at hard threshold 3 and direct execution or a result. Option shape plus normalized action/target text defines equivalence; changed wording cannot evade the bound, while distinct targets remain allowed. Negative answers, errors, tool results, new `agent_start`, and resets open a fresh window. Thresholds use `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_THRESHOLD` and `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_HARD_STOP_THRESHOLD`.
+- During the Trellis planning handshake, any non-cancelled answer to the first scope/title question transitions `PlanningSession` to `awaiting-create`. The Pi `tool_call` boundary must block and terminate any subsequent `ask_user_question` in that state, regardless of whether the question options use explicit confirmation vocabulary, and direct the model to the restricted `agent_project_task` tool. This state-machine guard is separate from the generic repeated-confirmation heuristic.
+- Provider cache evidence is per-call with bounded digests/sizes for system policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and misses without treating cumulative reads as regressions.
+- Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call and is token-weighted (`cacheRead / (input + cacheRead + cacheWrite)`); the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
 - Oversized built-in read/shell/search observations are compacted before re-entry into model context with original/retained/omitted sizes, a digest, and deterministic narrowing metadata. Complete output remains in tool details.
 
 ## 4. Validation & Error Matrix
@@ -83,6 +84,7 @@ interface RecoveryOwnerOptions {
 | Same successful read repeats without a changed observation | Warn, then terminate at the configured hard bound |
 | Equivalent confirmation repeats after affirmative answers | Warn at the interactive threshold, then block and terminate at the hard bound |
 | Confirmation target/text changes, answer is negative, or another tool returns | Reset the interactive question window and allow the next question |
+| Planning input has been collected and the model asks another question | Block and terminate the question call; invoke `agent_project_task` instead |
 | Provider cache scope changes | Start a new cold comparison chain |
 
 ## 5. Good / Base / Bad Cases
@@ -110,6 +112,7 @@ interface RecoveryOwnerOptions {
 - Assert live-owner records are not recovered, stop reasons are normalized, and negated/explanatory execution phrases remain read-only.
 - Assert opaque input hashing, same-batch coalescing, unchanged-observation warning/stop, changed-result reset, bounded result metadata, and cold-first/provider-scope cache attribution.
 - Assert rewritten equivalent confirmations with affirmative answers warn and terminate at configured bounds, while distinct targets and post-progress retries remain allowed.
+- Assert planning questions with ordinary scope/title option labels transition to `awaiting-create`, and a second question is blocked before the third-party question tool runs.
 
 ## 7. Wrong vs Correct
 

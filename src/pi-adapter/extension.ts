@@ -1362,6 +1362,16 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 
 	pi.on("tool_call", async (event) => {
 		if (!requestLifecycle.activeLease()) return;
+		if (event.toolName === "ask_user_question") {
+			const planningDecision = planningSession.questionDecision();
+			if (!planningDecision.allowed) {
+				return {
+					block: true,
+					terminate: true,
+					reason: `[Dove workflow guard] ${planningDecision.reason}`,
+				};
+			}
+		}
 		normalizeLsToolInput(event.toolName, event.input);
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
 		const progressDecision = progressGuard.beforeToolCall(event.toolCallId, event.toolName, event.input, idempotent);

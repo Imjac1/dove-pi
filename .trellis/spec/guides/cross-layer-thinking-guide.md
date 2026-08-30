@@ -391,3 +391,17 @@ Regression checks must cover a user prompt followed by assistant/tool-result
 messages and assert that the context transform returns the same ordering. A
 large full miss during a short tool chain is evidence of a prefix mutation,
 not normal cache expiry.
+
+## Terminal State At Third-Party Tool Boundaries
+
+When a core state machine reaches a terminal or handoff state, its invariant
+must also be enforced at the host boundary that invokes third-party tools.
+Returning guidance from a prior tool result is advisory; the next
+`tool_call` must re-check the typed state before the external tool runs.
+
+Checklist:
+
+- [ ] Identify the core state that means "do not ask again" or "handoff now"
+- [ ] Enforce it in the host `tool_call` hook before third-party execution
+- [ ] Test ordinary option labels, not only confirmation-shaped labels
+- [ ] Run one fresh-process E2E with the real host tool catalog and count calls
