@@ -23,6 +23,10 @@ export interface CacheDiagnostics {
 	readonly cacheWriteTokens: number;
 	readonly lastHitRate?: number;
 	readonly sessionHitRate?: number;
+	/** Session reuse after excluding the expected first cold provider call. */
+	readonly warmHitRate?: number;
+	readonly warmPromptTokens: number;
+	readonly warmInputTokens: number;
 	readonly warmupRequests: number;
 	readonly fullMisses: number;
 	readonly lastMissReason?: "warmup" | "model-change" | "idle" | "prefix-change";
@@ -119,6 +123,11 @@ export function inspectCacheDiagnostics(entries: readonly unknown[]): CacheDiagn
 	}
 
 	const promptTokens = inputTokens + cacheReadTokens + cacheWriteTokens;
+	const warmSamples = samples.slice(1);
+	const warmInputTokens = warmSamples.reduce((total, sample) => total + sample.input, 0);
+	const warmCacheReadTokens = warmSamples.reduce((total, sample) => total + sample.cacheRead, 0);
+	const warmCacheWriteTokens = warmSamples.reduce((total, sample) => total + sample.cacheWrite, 0);
+	const warmPromptTokens = warmInputTokens + warmCacheReadTokens + warmCacheWriteTokens;
 	const last = samples.at(-1);
 	const lastPromptTokens = last ? last.input + last.cacheRead + last.cacheWrite : 0;
 	return {
@@ -129,6 +138,9 @@ export function inspectCacheDiagnostics(entries: readonly unknown[]): CacheDiagn
 		cacheWriteTokens,
 		lastHitRate: lastPromptTokens > 0 ? (last!.cacheRead / lastPromptTokens) * 100 : undefined,
 		sessionHitRate: promptTokens > 0 ? (cacheReadTokens / promptTokens) * 100 : undefined,
+		warmHitRate: warmPromptTokens > 0 ? (warmCacheReadTokens / warmPromptTokens) * 100 : undefined,
+		warmPromptTokens,
+		warmInputTokens,
 		warmupRequests,
 		fullMisses,
 		lastMissReason,
@@ -144,5 +156,6 @@ function formatTokens(value: number): string {
 export function formatCacheDiagnostics(diagnostics: CacheDiagnostics): string {
 	const last = diagnostics.lastHitRate === undefined ? "n/a" : `${diagnostics.lastHitRate.toFixed(1)}%`;
 	const session = diagnostics.sessionHitRate === undefined ? "n/a" : `${diagnostics.sessionHitRate.toFixed(1)}%`;
-	return `Last CH ${last} · Session CH ${session} · R ${formatTokens(diagnostics.cacheReadTokens)} · W ${formatTokens(diagnostics.cacheWriteTokens)} · ${diagnostics.fullMisses} full miss${diagnostics.fullMisses === 1 ? "" : "es"}`;
+	const warm = diagnostics.warmHitRate === undefined ? "n/a" : `${diagnostics.warmHitRate.toFixed(1)}%`;
+	return `Last CH ${last} · Warm CH ${warm} · Session CH ${session} · R ${formatTokens(diagnostics.cacheReadTokens)} · W ${formatTokens(diagnostics.cacheWriteTokens)} · ${diagnostics.fullMisses} full miss${diagnostics.fullMisses === 1 ? "" : "es"}`;
 }

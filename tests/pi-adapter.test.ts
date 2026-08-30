@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, compactToolResultContent, getProjectContextBudget, getRemainingContextChars, readProjectContinuationForPlan, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readProjectContinuationForPlan, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
-import { formatProgressSnapshot, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
+import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 import type { ProjectContextSnapshot, ProjectProvider, ProjectTask } from "../src/project-provider/index.ts";
 
@@ -133,7 +133,10 @@ describe("Pi adapter", () => {
 		const dsmlMessage = (dsmlResult as { message?: { content?: Array<{ type: string; name?: string }> } } | undefined)?.message;
 		assert.equal(dsmlMessage?.content?.[0]?.type, "toolCall");
 		assert.equal(dsmlMessage?.content?.[0]?.name, "read");
-		assert.match(readFileSync(join(adapterStateDir, "execution.jsonl"), "utf8"), /"stopReason":"tool_call"/);
+		const executionLog = readFileSync(join(adapterStateDir, "execution.jsonl"), "utf8");
+		assert.match(executionLog, /"stopReason":"tool_call"/);
+		assert.match(executionLog, /"cachePrefix":\{"sequence":1,"classification":"cold"/);
+		assert.match(executionLog, /"cache":\{"classification":"cold"/);
 
 		await commands.get("mode")?.handler("fast", context);
 		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Ready")));
@@ -313,6 +316,114 @@ describe("Pi adapter", () => {
 		assert.match(formatProgressSnapshot(guard.snapshot(61_001), 61_001), /longRun=true/);
 	});
 
+	it("coalesces same-batch reads and stops unchanged successful observations", () => {
+		const stagnantGuard = new ProgressGuard({ repeatedSuccessThreshold: 2, repeatedSuccessHardStopThreshold: 3 });
+		stagnantGuard.start(1_000);
+		stagnantGuard.beginToolBatch();
+		assert.equal(stagnantGuard.beforeToolCall("call-1", "ls", { path: "." }, true).action, "allow");
+		const duplicate = stagnantGuard.beforeToolCall("call-2", "ls", { path: "." }, true);
+		assert.equal(duplicate.action, "coalesce");
+		assert.equal(duplicate.primaryToolCallId, "call-1");
+		assert.equal(stagnantGuard.beforeToolCall("write-1", "write", { path: "x" }, false).action, "allow");
+		assert.equal(stagnantGuard.beforeToolCall("write-2", "write", { path: "x" }, false).action, "allow", "mutations are never coalesced");
+
+		stagnantGuard.recordToolResult({ toolName: "ls", input: { path: "." }, observation: ["same"], idempotent: true, isError: false });
+		assert.equal(stagnantGuard.recordToolResult({ toolName: "ls", input: { path: "." }, observation: ["same"], idempotent: true, isError: false })?.kind, "repeated-success");
+		stagnantGuard.beginToolBatch();
+		assert.equal(stagnantGuard.beforeToolCall("call-3", "ls", { path: "." }, true).action, "allow", "one final poll is allowed before the hard stop");
+		stagnantGuard.recordToolResult({ toolName: "ls", input: { path: "." }, observation: ["same"], idempotent: true, isError: false });
+		stagnantGuard.beginToolBatch();
+		assert.equal(stagnantGuard.beforeToolCall("call-4", "ls", { path: "." }, true).action, "terminate");
+
+		const changingGuard = new ProgressGuard({ repeatedSuccessThreshold: 2, repeatedSuccessHardStopThreshold: 3 });
+		changingGuard.start(1_000);
+		changingGuard.recordToolResult({ toolName: "ls", input: { path: "." }, observation: ["same"], idempotent: true, isError: false });
+		changingGuard.recordToolResult({ toolName: "ls", input: { path: "." }, observation: ["same"], idempotent: true, isError: false });
+		changingGuard.beginToolBatch();
+		assert.equal(changingGuard.beforeToolCall("changing-3", "ls", { path: "." }, true).action, "allow");
+		changingGuard.recordToolResult({ toolName: "ls", input: { path: "." }, observation: ["changed"], idempotent: true, isError: false });
+		changingGuard.beginToolBatch();
+		assert.equal(changingGuard.beforeToolCall("changing-4", "ls", { path: "." }, true).action, "allow", "changed observations reset stagnation");
+
+		changingGuard.recordToolResult({ toolName: "ls", input: { path: "other" }, observation: ["same"], idempotent: true, isError: false });
+		changingGuard.beginToolBatch();
+		assert.equal(changingGuard.beforeToolCall("changing-5", "ls", { path: "." }, true).action, "allow", "changed arguments reset the contiguous stagnation window");
+	});
+
+	it("normalizes opaque tool fingerprints without retaining sensitive input", () => {
+		const ordered = progressFingerprint("read", { path: "README.md", token: "fixture-secret" });
+		const reordered = progressFingerprint("read", { token: "fixture-secret", path: "README.md" });
+		assert.equal(ordered, reordered);
+		assert.equal(ordered.includes("fixture-secret"), false);
+		assert.equal(progressFingerprint("ls", {}), progressFingerprint("ls", { path: "." }));
+	});
+
+	it("normalizes ls defaults and exposes completion without claiming cursor support", () => {
+		const input: Record<string, unknown> = {};
+		assert.equal(normalizeLsToolInput("ls", input), true);
+		assert.deepEqual(input, { path: "." });
+		assert.equal(normalizeLsToolInput("ls", input), false);
+		assert.deepEqual(getLsObservationMetadata(input, undefined, [{ type: "text", text: "a.txt\ndir/" }]), {
+			schemaVersion: 1,
+			path: ".",
+			returnedEntries: 2,
+			complete: true,
+			cursor: { supported: false },
+		});
+		assert.deepEqual(getLsObservationMetadata({ path: ".", limit: 2 }, { entryLimitReached: 2 }, [{ type: "text", text: "a.txt\ndir/\n\n[2 entries limit reached. Use limit=4 for more]" }]), {
+			schemaVersion: 1,
+			path: ".",
+			returnedEntries: 2,
+			complete: false,
+			cursor: { supported: false },
+			continuation: { kind: "increase-limit", nextLimit: 4 },
+		});
+	});
+
+	it("blocks duplicate read-only Pi tool calls before execution but never coalesces mutations", async () => {
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return [{ name: "ls" }, { name: "write" }]; },
+			setActiveTools() {},
+			getActiveTools() { return ["read", "write"]; },
+			getThinkingLevel() { return "high"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			ui: { theme: { fg: (_color, value) => value }, setStatus: () => {}, notify: () => {} },
+			sessionManager: { getEntries: () => [], getSessionId: () => "tool-loop-session" },
+		};
+		await events.get("input")?.({ type: "input", text: "读取同一个文件", source: "interactive", streamingBehavior: "immediate" }, context);
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "读取同一个文件", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		await events.get("turn_start")?.({ type: "turn_start" }, context);
+
+		const firstInput: Record<string, unknown> = {};
+		const firstRead = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "read-1", toolName: "ls", input: firstInput }, context);
+		const duplicateReads = await Promise.all(Array.from({ length: 13 }, (_, index) => events.get("tool_call")?.({
+			type: "tool_call",
+			toolCallId: `read-${index + 2}`,
+			toolName: "ls",
+			input: {},
+		}, context))) as Array<{ block?: boolean; terminate?: boolean } | undefined>;
+		assert.equal(firstRead, undefined, "the first read remains executable");
+		assert.deepEqual(firstInput, { path: "." }, "ls receives an explicit default path before execution");
+		assert.equal(duplicateReads.length, 13);
+		assert.equal(duplicateReads.every((result) => result?.block === true), true, "all 13 duplicates are stopped before the underlying operation can run");
+		assert.equal(duplicateReads.every((result) => result?.terminate === false), true);
+
+		const firstWrite = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "write-1", toolName: "write", input: { path: "tmp.txt", content: "x" } }, context);
+		const secondWrite = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "write-2", toolName: "write", input: { path: "tmp.txt", content: "x" } }, context);
+		assert.equal(firstWrite, undefined);
+		assert.equal(secondWrite, undefined, "mutations must never be result-coalesced or replayed");
+	});
+
 	it("keeps only the compact core tool set by default", () => {
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "core"), ["read", "agent_doctor"]);
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "auto", "lookup", "打开网页并截图"), ["read", "agent_doctor", "web_search"]);
@@ -442,6 +553,13 @@ describe("Pi adapter", () => {
 		assert.match((compacted?.[0] as { text: string }).text, /tool result compacted/);
 		const withImage = compactToolResultContent([{ type: "text", text: "x".repeat(40_000) }, { type: "image", data: "abc", mimeType: "image/png" }], 1_000);
 		assert.equal(withImage?.some((part) => part.type === "image"), true);
+		const metadata = compactToolResultContentWithMetadata([{ type: "text", text: "z".repeat(20_000) }], 1_000)?.metadata;
+		assert.equal(metadata?.originalChars, 20_000);
+		assert.ok((metadata?.retainedChars ?? 0) <= 1_000);
+		assert.equal(metadata?.contentDigest.length, 24);
+		assert.equal(getToolResultCharBudget("read", "lookup"), 8_000);
+		assert.equal(getToolResultCharBudget("read", "project-work"), 12_000);
+		assert.equal(getToolResultCharBudget("bash", "project-work"), 32_000);
 	});
 
 	it("derives an Ultra context budget from the active model window", () => {

@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext, type ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -25,6 +26,7 @@ import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type D
 import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 import { formatProgressSnapshot, ProgressGuard } from "./progress-guard.ts";
 import { formatCacheDiagnostics, inspectCacheDiagnostics } from "./cache-diagnostics.ts";
+import { attributeProviderCache, inspectProviderCachePrefix, type CachePrefixSnapshot } from "../core/cache-prefix.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan, type RequestPlan } from "../core/request-plan.ts";
 import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
@@ -238,6 +240,52 @@ export function isPiToolInvocationIdempotent(
 	return false;
 }
 
+export interface LsObservationMetadata {
+	readonly schemaVersion: 1;
+	readonly path: string;
+	readonly returnedEntries: number;
+	readonly complete: boolean;
+	readonly cursor: { readonly supported: false };
+	readonly continuation?: { readonly kind: "increase-limit"; readonly nextLimit: number };
+}
+
+/** Pi 0.84.x makes built-in tool input mutable but does not expose a cursor
+ * parameter for ls. Normalize its documented default and report the supported
+ * limit-expansion continuation explicitly instead of inventing a cursor. */
+export function normalizeLsToolInput(toolName: string, input: Record<string, unknown>): boolean {
+	if (toolName !== "ls" || (typeof input.path === "string" && input.path.trim() !== "")) return false;
+	input.path = ".";
+	return true;
+}
+
+export function getLsObservationMetadata(
+	input: Readonly<Record<string, unknown>>,
+	details: unknown,
+	content: readonly { type: "text" | "image"; text?: string }[],
+): LsObservationMetadata {
+	const value = typeof details === "object" && details !== null ? details as Record<string, unknown> : {};
+	const entryLimitReached = typeof value.entryLimitReached === "number" && Number.isFinite(value.entryLimitReached) && value.entryLimitReached > 0
+		? Math.floor(value.entryLimitReached)
+		: undefined;
+	const truncation = typeof value.truncation === "object" && value.truncation !== null ? value.truncation as { truncated?: unknown } : undefined;
+	const byteLimitReached = truncation?.truncated === true;
+	const text = content.filter((part) => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("\n").trim();
+	const visibleEntries = text === "" || text === "(empty directory)"
+		? 0
+		: text.split(/\r?\n/).filter((line) => line.trim() !== "" && !/^\[(?:\d+ entries|\d+(?:\.\d+)?(?:B|KB|MB) limit)/i.test(line.trim())).length;
+	const returnedEntries = entryLimitReached ?? visibleEntries;
+	const requestedLimit = typeof input.limit === "number" && Number.isFinite(input.limit) && input.limit > 0 ? Math.floor(input.limit) : 500;
+	const complete = entryLimitReached === undefined && !byteLimitReached;
+	return {
+		schemaVersion: 1,
+		path: typeof input.path === "string" && input.path.trim() !== "" ? input.path : ".",
+		returnedEntries,
+		complete,
+		cursor: { supported: false },
+		...(!complete ? { continuation: { kind: "increase-limit" as const, nextLimit: Math.max(requestedLimit * 2, returnedEntries + 1) } } : {}),
+	};
+}
+
 interface PendingRequestTerminal {
 	readonly reason: RequestTerminalReason;
 	readonly detail?: string;
@@ -306,7 +354,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const doveContextPayloads = new Map<number, string>();
 	let currentRequestPlan: ReturnType<typeof createRequestPlan> | undefined;
 	let currentRequestTaskId: string | undefined;
-	let currentProviderCall: { id: string; requestId: string; attemptId?: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number } | undefined;
+	let currentProviderCall: { id: string; requestId: string; attemptId?: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number; cachePrefix?: CachePrefixSnapshot } | undefined;
+	// Keep one comparison chain per provider cache scope. Switching models and
+	// then returning to the previous model must not make an otherwise warm chain
+	// look like an unexplained first call.
+	const providerCachePrefixes = new Map<string, CachePrefixSnapshot>();
 	let appliedToolSetKey: string | undefined;
 	let activeToolSnapshot: string[] = [];
 	let explicitHostToolSnapshot: string[] | undefined;
@@ -1204,6 +1256,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			lastProviderFailure = undefined;
 		}
 		progressGuard.start();
+		progressGuard.beginToolBatch();
 		operation = "running";
 		updateStatus(ctx);
 	});
@@ -1240,7 +1293,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (currentProviderCall) {
 			const call = currentProviderCall;
 			if (lastProviderFailure) {
-				await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason: "error", usage: call.httpStatus === undefined ? undefined : { httpStatus: call.httpStatus } });
+				await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason: "error", usage: call.httpStatus === undefined ? undefined : { httpStatus: call.httpStatus }, cache: call.cachePrefix ? attributeProviderCache(call.cachePrefix) : undefined });
 			} else {
 				await ledger.appendProviderRequestRecovered({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id });
 			}
@@ -1276,30 +1329,51 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		lastProviderFailure = undefined;
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
+		providerCachePrefixes.clear();
+	});
+
+	pi.on("turn_start", async () => {
+		progressGuard.beginToolBatch();
 	});
 
 	pi.on("tool_call", async (event) => {
 		if (!requestLifecycle.activeLease()) return;
+		normalizeLsToolInput(event.toolName, event.input);
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
+		const progressDecision = progressGuard.beforeToolCall(event.toolCallId, event.toolName, event.input, idempotent);
+		if (progressDecision.action !== "allow") {
+			return {
+				block: true,
+				terminate: progressDecision.action === "terminate",
+				reason: `[Dove progress guard] ${progressDecision.reason ?? progressDecision.action}`,
+			};
+		}
 		requestLifecycle.markEffectStarted({ effectId: event.toolCallId, idempotent });
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
-		const warning = progressGuard.recordToolResult({ toolName: event.toolName, isError: event.isError, input: event.input });
+		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
+		const warning = progressGuard.recordToolResult({ toolName: event.toolName, isError: event.isError, input: event.input, observation: event.content, idempotent });
 		if (warning && ctx.hasUI) ctx.ui.notify(`Dove 进度守护：${warning.message}`, "warning");
 		updateStatus(ctx);
 		const compactable = event.toolName === "read" || event.toolName === "bash" || event.toolName === "powershell" || event.toolName === "grep" || event.toolName === "find" || event.toolName === "ls";
-		const compacted = compactable ? compactToolResultContent(event.content) : undefined;
-		let content = compacted ?? [...event.content];
-		let changed = compacted !== undefined;
+		const compacted = compactable ? compactToolResultContentWithMetadata(event.content, getToolResultCharBudget(event.toolName, currentRequestPlan?.intent)) : undefined;
+		let content = compacted?.content ?? [...event.content];
+		const lsObservation = event.toolName === "ls" ? getLsObservationMetadata(event.input, event.details, event.content) : undefined;
+		let changed = compacted !== undefined || lsObservation !== undefined;
 		let details: unknown = event.details;
 		if (compacted) {
 			details = event.details && typeof event.details === "object"
-				? { ...(event.details as Record<string, unknown>), doveCompacted: true, doveOriginalContent: event.content }
-				: { doveCompacted: true, doveOriginalContent: event.content };
+				? { ...(event.details as Record<string, unknown>), doveCompacted: true, doveCompaction: compacted.metadata, doveOriginalContent: event.content }
+				: { doveCompacted: true, doveCompaction: compacted.metadata, doveOriginalContent: event.content };
 			const reuseHint = (event.toolName === "bash" || event.toolName === "powershell") ? capabilityReuseHint(registry, event.input) : undefined;
 			const first = reuseHint ? content.find((block) => block.type === "text") : undefined;
 			if (reuseHint && first?.type === "text") content = [{ type: "text", text: `${reuseHint}\n${first.text}` }, ...content.filter((block) => block !== first)];
+		}
+		if (lsObservation) {
+			details = details && typeof details === "object"
+				? { ...(details as Record<string, unknown>), doveLs: lsObservation }
+				: { doveLs: lsObservation };
 		}
 		if (warning) {
 			changed = true;
@@ -1318,7 +1392,18 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const stopReason = normalizeStopReason(observed.stopReason);
 		if (currentProviderCall) {
 			const call = currentProviderCall;
-			await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason, usage: observed.usage });
+			await ledger.appendProviderRequestCompleted({
+				taskId: call.taskId,
+				stepId: call.stepId,
+				mode: call.mode,
+				requestId: call.requestId,
+				sessionId: call.sessionId,
+				attemptId: call.attemptId,
+				providerCallId: call.id,
+				stopReason,
+				usage: observed.usage,
+				cache: call.cachePrefix ? attributeProviderCache(call.cachePrefix, observed.usage) : undefined,
+			});
 			currentProviderCall = undefined;
 		}
 		if (stopReason === "error") {
@@ -1449,8 +1534,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		await ledger.appendModelBudgetChecked(taskId, stepId, plan.mode, plan.requestId, finalBudget, sessionId);
 		const toolMetrics = providerToolSchemaMetrics(payload) ?? { toolCount: 0, schemaBytes: 0 };
-		await ledger.appendProviderRequestStarted({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, attemptId, providerCallId, inputTokens: finalBudget.inputTokens, providerToolCount: toolMetrics.toolCount, providerToolSchemaBytes: toolMetrics.schemaBytes, cachePolicyVersion: 2, ownerPid: process.pid });
-		currentProviderCall = { id: providerCallId, requestId: plan.requestId, attemptId, taskId, stepId, mode: plan.mode, sessionId };
+		const providerName = typeof model?.provider === "string" ? model.provider : "unknown-provider";
+		const modelId = typeof model?.id === "string" ? model.id : "unknown-model";
+		const cacheScopeId = JSON.stringify([sessionId ?? "extension-session", providerName, modelId]);
+		const cachePrefix = inspectProviderCachePrefix(payload, plan.requestId, providerCachePrefixes.get(cacheScopeId), { scopeId: cacheScopeId });
+		providerCachePrefixes.set(cacheScopeId, cachePrefix);
+		await ledger.appendProviderRequestStarted({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, attemptId, providerCallId, inputTokens: finalBudget.inputTokens, providerToolCount: toolMetrics.toolCount, providerToolSchemaBytes: toolMetrics.schemaBytes, cachePolicyVersion: 3, cachePrefix: cachePrefix.evidence, ownerPid: process.pid });
+		currentProviderCall = { id: providerCallId, requestId: plan.requestId, attemptId, taskId, stepId, mode: plan.mode, sessionId, cachePrefix };
 		return payload === event.payload ? undefined : payload;
 	});
 
@@ -1733,23 +1823,62 @@ export function compactModelPayload(value: unknown, depth = 0): unknown {
 
 const MAX_MODEL_TOOL_RESULT_CHARS = 32_000;
 
-export function compactToolResultContent(content: readonly { type: "text" | "image"; text?: string; data?: string; mimeType?: string }[], maxChars = MAX_MODEL_TOOL_RESULT_CHARS): Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> | undefined {
+export interface ToolResultCompactionMetadata {
+	readonly schemaVersion: 1;
+	readonly originalChars: number;
+	readonly retainedChars: number;
+	readonly omittedChars: number;
+	readonly contentDigest: string;
+	readonly strategy: "head-tail";
+	readonly continuation: "narrow-query";
+}
+
+export interface CompactedToolResult {
+	readonly content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
+	readonly metadata: ToolResultCompactionMetadata;
+}
+
+/** Read-only observations get a tighter bound because every new result is
+ * uncached input on the next provider call. Shell output keeps the legacy
+ * ceiling; its side effects and complete evidence remain outside model text. */
+export function getToolResultCharBudget(toolName: string, intent: RequestPlan["intent"] | undefined): number {
+	if (REVIEWED_IDEMPOTENT_PI_TOOLS.has(toolName)) {
+		if (intent === "lookup") return 8_000;
+		if (intent === "execution") return 16_000;
+		return 12_000;
+	}
+	return MAX_MODEL_TOOL_RESULT_CHARS;
+}
+
+export function compactToolResultContentWithMetadata(content: readonly { type: "text" | "image"; text?: string; data?: string; mimeType?: string }[], maxChars = MAX_MODEL_TOOL_RESULT_CHARS): CompactedToolResult | undefined {
 	const text = content.filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("\n");
 	if (text.length <= maxChars) return undefined;
-	const marker = "[tool result compacted for model context: omitted characters; request a narrower range or inspect the saved details]";
-	const available = Math.max(0, maxChars - marker.length - 6);
+	const contentDigest = createHash("sha256").update(text).digest("hex").slice(0, 24);
+	const markerTemplate = `[tool result compacted for model context: omitted CHARS characters; digest=${contentDigest}; request a narrower range or inspect the saved details]`;
+	const available = Math.max(0, maxChars - markerTemplate.length - 6);
 	const headChars = Math.floor(available * 0.75);
 	const tailChars = Math.max(0, available - headChars);
 	const omitted = text.length - headChars - tailChars;
-	const compacted: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [{
-		type: "text",
-		text: `${text.slice(0, headChars)}\n\n${marker.replace("omitted characters", `omitted ${omitted} characters`)}\n\n${tailChars > 0 ? text.slice(-tailChars) : ""}`,
-	}];
-	// A large textual result must not make unrelated image blocks disappear.
-	// Keep images in their original order after the compacted text; Pi/provider
-	// remains responsible for image-size and input-modality limits.
+	const marker = markerTemplate.replace("CHARS", String(omitted));
+	const compactedText = `${text.slice(0, headChars)}\n\n${marker}\n\n${tailChars > 0 ? text.slice(-tailChars) : ""}`;
+	const compacted: CompactedToolResult["content"] = [{ type: "text", text: compactedText }];
 	for (const part of content) {
 		if (part.type === "image" && typeof part.data === "string" && typeof part.mimeType === "string") compacted.push({ type: "image", data: part.data, mimeType: part.mimeType });
 	}
-	return compacted;
+	return {
+		content: compacted,
+		metadata: {
+			schemaVersion: 1,
+			originalChars: text.length,
+			retainedChars: compactedText.length,
+			omittedChars: omitted,
+			contentDigest,
+			strategy: "head-tail",
+			continuation: "narrow-query",
+		},
+	};
+}
+
+export function compactToolResultContent(content: readonly { type: "text" | "image"; text?: string; data?: string; mimeType?: string }[], maxChars = MAX_MODEL_TOOL_RESULT_CHARS): Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> | undefined {
+	return compactToolResultContentWithMetadata(content, maxChars)?.content;
 }
