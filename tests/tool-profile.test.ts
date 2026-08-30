@@ -54,7 +54,9 @@ describe("Dove intent-owned tool tiers", () => {
 	it("gives Project Work diagnostics and planning without mutation", () => {
 		const selected = selectDoveToolNames(representativeTools, "auto", "project-work", "plan the TypeScript module architecture");
 		for (const name of ["plan_mode_question", "lsp_diagnostics", "symbol_search", "module_report"]) assert.ok(selected.includes(name));
-		assert.equal(selected.some((name) => mutationTools.has(name)), false);
+		assert.deepEqual(selected.filter((name) => mutationTools.has(name)), ["agent_project_task"]);
+		assert.equal(selected.includes("bash"), false);
+		assert.equal(selected.includes("agent_workspace_patch"), false);
 	});
 
 	it("reserves mutation and background helpers for Execution", () => {

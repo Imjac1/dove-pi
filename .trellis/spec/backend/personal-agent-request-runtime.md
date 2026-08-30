@@ -200,25 +200,21 @@ imperative is classified separately and still requires the execution boundary.
 Summaries of the immediately preceding conversation remain Chat, and natural
 language project continuation is read-only Project Work.
 
-The request plan is the only owner of the capability tier. A fresh Auto Chat
-turn exposes zero tools; Lookup exposes bounded read/search tools; Project Work
-adds read-only diagnostics and planning; and Execution alone adds shell, edit,
-task, capability, and workspace mutation tools. At each user-request boundary,
-Auto activates exactly the current RequestPlan-selected set and keeps it stable
-through that request's provider/tool continuations. It reasserts that exact set
-when another extension changes host state, but never absorbs the foreign names.
-The next user request replaces the set, so Execution authority cannot remain on
-a later Chat or Lookup. Generic MCP dispatch, browser automation, and
-background helpers remain Execution-only because their hosts may expose
-mutations without enforcing Dove's request tier. Lookup may add only bounded
-read-only web retrieval helpers.
+`RequestPlan.workflowAction` owns Trellis lifecycle intent; lifecycle authority
+is restricted to Project Work and cannot be downgraded by explicit hints.
 
-Chat turns do not retrieve a fresh project projection for tool heuristics or
-task correlation, but the provider-facing history remains append-only: the
-context projection never removes or recreates a current v2 Dove message based
-on intent. Browser phrases such as opening a webpage or taking a screenshot are
-Lookup, read-only analysis with English or Chinese negation stays Lookup, and
-repair/fix/implementation or explicit run/test imperatives are Execution.
+The request plan alone owns capability tiers: Auto Chat has zero tools, Lookup
+has bounded read/search tools, Project Work adds read-only diagnostics/planning,
+and Execution adds mutation tools. Auto activates the exact selected set for
+the request and its continuations, reasserting it after host drift without
+absorbing foreign names. The next request replaces the set; MCP, browser
+automation, and background helpers remain Execution-only.
+
+Chat turns do not retrieve a project projection for tool heuristics or task
+correlation; provider history remains append-only and v2 Dove context is not
+rebuilt on intent changes. Web viewing is Lookup; read-only analysis remains
+Lookup; repair, implementation, and explicit run/test imperatives are
+Execution.
 
 The host-independent `ModelGateway` owns provider payload accounting. It
 subtracts reserved output, reasoning, tool-schema, and provider-overhead tokens

@@ -29,6 +29,7 @@ import { formatCacheDiagnostics, inspectCacheDiagnostics } from "./cache-diagnos
 import { attributeProviderCache, inspectProviderCachePrefix, type CachePrefixSnapshot } from "../core/cache-prefix.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan, type RequestPlan } from "../core/request-plan.ts";
+import { formatPlanningSessionGuidance, PlanningSession } from "../core/planning-session.ts";
 import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
 import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens, type BudgetAccounting } from "../core/model-gateway.ts";
 import { stablePromptPolicy } from "../core/prompt-policy.ts";
@@ -432,6 +433,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			? Number(process.env.DOVE_PI_MAX_REQUEST_ATTEMPTS)
 			: 3,
 	});
+	const planningSession = new PlanningSession();
 	const requestMetadata = new Map<string, { taskId: string; sessionId?: string; mode: AgentMode }>();
 	let lastAttemptOutcome: RequestAttemptOutcome | undefined;
 	let lastProviderFailure: ProviderFailureClassification | undefined;
@@ -575,6 +577,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		try {
 			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, "before", operationArgs);
 			const result = await projectProvider.runTaskOperation(operation, operationArgs);
+			// Provider instances cache short-lived snapshots. Recreate after every
+			// lifecycle mutation so the next planning decision sees the new state.
+			projectProvider = createProjectProvider(projectProvider.projectRoot);
 			await ledger.appendProjectMutationCompleted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, projectProvider.getContext().revision);
 			return result || `Trellis task ${operation} 完成。`;
 		} catch (error) {
@@ -882,7 +887,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		label: "Project Task",
 		description: "Apply an explicitly requested Trellis task lifecycle operation through Dove. Use only when the user asks to create, start, finish, or archive a project task.",
 		promptSnippet: "Manage a project task when the user explicitly asks to track or finish work",
-		promptGuidelines: ["Do not call for ordinary conversation or code changes unless the user explicitly requests task tracking.", "Always explain the proposed operation before calling this tool; the tool requires interactive confirmation."],
+		promptGuidelines: ["Use only for Trellis task lifecycle operations. Do not use ask_user_question as a confirmation; this tool owns the single native confirmation before mutation."],
 		parameters: Type.Object({
 			operation: Type.Union([Type.Literal("create"), Type.Literal("start"), Type.Literal("finish"), Type.Literal("archive")]),
 			title: Type.Optional(Type.String()),
@@ -892,14 +897,29 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const typed = params as { operation: TrellisTaskOperation; title?: string; task?: string };
 			if (!ctx.hasUI) throw new Error("Project task changes require an interactive confirmation; use /task in Pi TUI.");
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "项目任务变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
-			const operationArgs = typed.operation === "create" ? (typed.title?.trim() ? [typed.title.trim()] : []) : typed.operation === "finish" ? [] : (typed.task?.trim() ? [typed.task.trim()] : []);
+			const planningTitle = planningSession.snapshot().taskTitle;
+			const operationArgs = typed.operation === "create" ? (typed.title?.trim() ? [typed.title.trim()] : planningTitle ? [planningTitle] : []) : typed.operation === "finish" ? [] : (typed.task?.trim() ? [typed.task.trim()] : []);
 			if ((typed.operation === "create" || typed.operation === "start" || typed.operation === "archive") && operationArgs.length === 0) {
 				throw new Error(`${typed.operation} requires ${typed.operation === "create" ? "a task title" : "a task directory or name"}.`);
 			}
 			const description = typed.operation === "create" ? `创建任务“${operationArgs[0]}”` : typed.operation === "finish" ? "完成当前任务" : `${typed.operation === "start" ? "开始" : "归档"}任务“${operationArgs[0]}”`;
 			if (!await ctx.ui.confirm("确认项目任务变更？", `${description}？这会修改 Trellis 项目状态。`)) return { content: [{ type: "text", text: "项目任务变更已取消。" }], details: { operation: typed.operation, cancelled: true } };
 			const result = await runProjectTaskMutation(typed.operation, operationArgs);
-			return { content: [{ type: "text", text: result }], details: { operation: typed.operation, result } };
+			const createdContext = typed.operation === "create" ? projectProvider.getContext() : undefined;
+			const task = createdContext ? createdContext.currentTask ?? createdContext.tasks.find((candidate) => candidate.title === operationArgs[0]) : undefined;
+			if (typed.operation === "create") {
+				currentRequestTaskId = task?.stableId ?? currentRequestTaskId;
+				planningSession.markTaskCreated({ taskId: task?.stableId, taskPath: task?.path, taskTitle: operationArgs[0] });
+				planningSession.enterPlanning();
+			}
+			return {
+				content: [{ type: "text", text: result }],
+				details: {
+					operation: typed.operation,
+					result,
+					workflow: { state: planningSession.snapshot().state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, taskId: task?.stableId, path: task?.path, next: typed.operation === "create" ? "planning" : undefined },
+				},
+			};
 		},
 	});
 
@@ -1315,6 +1335,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		lastProviderFailure = undefined;
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
+		planningSession.reset();
 	});
 
 	pi.on("session_compact", async (event) => {
@@ -1331,6 +1352,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		lastProviderFailure = undefined;
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
+		planningSession.reset();
 		providerCachePrefixes.clear();
 	});
 
@@ -1364,6 +1386,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const lsObservation = event.toolName === "ls" ? getLsObservationMetadata(event.input, event.details, event.content) : undefined;
 		let changed = compacted !== undefined || lsObservation !== undefined;
 		let details: unknown = event.details;
+		const planningQuestion = event.toolName === "ask_user_question" && !event.isError
+			? planningSession.observeQuestionResult(event.details, event.content)
+			: undefined;
 		if (compacted) {
 			details = event.details && typeof event.details === "object"
 				? { ...(event.details as Record<string, unknown>), doveCompacted: true, doveCompaction: compacted.metadata, doveOriginalContent: event.content }
@@ -1383,6 +1408,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			details = details && typeof details === "object"
 				? { ...(details as Record<string, unknown>), doveProgressWarning: { kind: warning.kind, snapshot: warning.snapshot } }
 				: { doveProgressWarning: { kind: warning.kind, snapshot: warning.snapshot } };
+		}
+		if (planningQuestion?.directive) {
+			changed = true;
+			content = [...content, { type: "text", text: `[Dove workflow advisory]\n${planningQuestion.directive}` }];
+			details = details && typeof details === "object"
+				? { ...(details as Record<string, unknown>), dovePlanning: { state: planningQuestion.state, affirmative: planningQuestion.affirmative, taskTitle: planningQuestion.taskTitle } }
+				: { dovePlanning: { state: planningQuestion.state, affirmative: planningQuestion.affirmative, taskTitle: planningQuestion.taskTitle } };
 		}
 		return changed ? { content, details } : undefined;
 	});
@@ -1576,6 +1608,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				? continuationTask?.stableId ?? "pi-session"
 				: projectProvider.getCurrentTask()?.stableId ?? "pi-session";
 		currentRequestTaskId = requestTaskId;
+		const planningTask = continuationTask ?? projectProvider.getCurrentTask();
+		const planningState = requestLease.isNewRequest
+			? planningSession.begin({ requestId: requestPlan.requestId, intent: requestPlan.intent, workflowAction: requestPlan.workflowAction, currentTaskId: planningTask?.stableId, currentTaskPath: planningTask?.path })
+			: planningSession.snapshot();
 		const requestSessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
 		requestMetadata.set(requestPlan.requestId, { taskId: requestTaskId, sessionId: requestSessionId, mode: requestPlan.mode });
 		if (requestLease.isNewRequest) await ledger.appendRequestPlan(requestTaskId, `request:${requestPlan.requestId}`, requestPlan, requestSessionId);
@@ -1623,7 +1659,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const suggestion = requestPlan.intent === "chat" || requestPlan.projectAction === "continue"
 			? undefined
 			: suggestWorkflowSkill(event.prompt);
-		const workflowGuidance = suggestion ? `Workflow suggestion (advisory only): /skill:${suggestion.skill} — ${suggestion.reason}. Do not execute the skill or mutate project state unless the user explicitly asks and the relevant approval is present.` : undefined;
+		const workflowGuidance = requestPlan.intent === "project-work" && requestPlan.projectAction !== "continue"
+			? formatPlanningSessionGuidance(planningState)
+			: suggestion ? `Workflow suggestion (advisory only): /skill:${suggestion.skill} — ${suggestion.reason}. Do not execute the skill or mutate project state unless the user explicitly asks and the relevant approval is present.` : undefined;
 		const continuationGuidance = continuationState
 			? formatProjectContinuationGuidance(continuationState.projection)
 			: undefined;

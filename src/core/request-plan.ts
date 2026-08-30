@@ -5,7 +5,10 @@ export type RequestIntent = "chat" | "lookup" | "project-work" | "execution";
 
 export type RequestApproval = "none" | "confirm" | "elevated";
 
-/** Provider-neutral project action that requires request-specific handling. */
+/** Provider-neutral workflow action that requires request-specific handling. */
+export type WorkflowAction = "continue" | "create-task" | "start-task" | "finish-task" | "archive-task";
+
+/** @deprecated Use WorkflowAction. Kept for ledger/session compatibility. */
 export type ProjectAction = "continue";
 
 export interface RequestPlanInput {
@@ -32,6 +35,8 @@ export interface RequestPlan {
 	readonly deadlineMs?: number;
 	readonly outputBudget: number;
 	readonly projectAvailable: boolean;
+	readonly workflowAction?: WorkflowAction;
+	/** @deprecated Use workflowAction. */
 	readonly projectAction?: ProjectAction;
 }
 
@@ -44,6 +49,13 @@ const PROJECT_CONTINUATION_PATTERN = /^\s*(?:(?:请(?:帮我)?|帮我)\s*)?(?:(?
 const TEST_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?test\s+(?:(?:the|this|that|current)\s+)*(?:project|code|build|suite|application|app|feature|login|fix)\b|(?:^|[.!?;,，。！？；\n])\s*(?:(?:请(?:帮我)?|帮我)\s*)?测试(?:一下|下)?\s*(?:当前|这个|该|本)?\s*(?:项目|代码|构建|功能|应用|登录|修复|测试套件)/i;
 const BROWSER_INTERACTION_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:click|tap|submit|log\s+in|sign\s+in)\b|(?:^|[.!?;,，。！？；\n])\s*(?:请(?:帮我)?|帮我)?(?:点击|点一下|轻触|提交|登录)(?:这个|该|当前)?/i;
 const BROWSER_LOOKUP_PATTERN = /\b(?:open|browse|view)\s+(?:(?:the|this|that|current)\s+)?(?:website|web\s*page|page|browser)\b|\b(?:take\s+)?(?:a\s+)?screenshot\b|打开(?:这个|该|当前)?(?:登录)?页面|查看(?:这个|该|当前)?(?:网页|页面)|网页|浏览器|截图/i;
+const WORKFLOW_ACTION_PATTERNS: readonly [WorkflowAction, RegExp][] = [
+	["continue", /(?:继续|恢复)(?:一下)?(?:当前|这个|该|本)?(?:项目)?(?:任务|工作)|\b(?:continue|resume)(?:\s+(?:the|this|that))?\s+(?:(?:current|existing)\s+)?(?:project\s+)?(?:task|work)\b/i],
+	["create-task", /(?:创建|新建|建立)(?:一个)?(?:Trellis)?(?:项目)?任务|\b(?:create|new)\s+(?:a\s+)?(?:Trellis\s+)?task\b|\btask\s+(?:create|new)\b/i],
+	["start-task", /(?:开始|启动)(?:当前|这个|该)?(?:项目)?任务|\b(?:start|begin)\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
+	["finish-task", /(?:完成|结束)(?:当前|这个|该)?(?:项目)?任务|\bfinish\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
+	["archive-task", /(?:归档)(?:当前|这个|该)?(?:项目)?任务|\barchive\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
+];
 
 function actionClauses(message: string): string[] {
 	const independentActions = message
@@ -70,10 +82,18 @@ function hasActionableExecution(message: string): boolean {
 	for (const clause of actionClauses(message)) {
 		if (TEST_IMPERATIVE_PATTERN.test(clause) || BROWSER_INTERACTION_IMPERATIVE_PATTERN.test(clause)) return true;
 		for (const match of clause.matchAll(EXECUTION_ACTION_PATTERN)) {
+			// Task lifecycle requests are handled by the restricted workflow tool;
+			// they must not promote a planning turn into the full execution tier.
+			if (WORKFLOW_ACTION_PATTERNS.some(([action, pattern]) => action !== "continue" && pattern.test(clause)) && /创建|新建|建立|开始|启动|完成|结束|归档|\b(?:create|new|start|begin|finish|archive)\b/i.test(match[0])) continue;
 			if (!actionIsNegatedOrDescriptive(clause, match.index, match[0].length)) return true;
 		}
 	}
 	return false;
+}
+
+function classifyWorkflowAction(message: string): WorkflowAction | undefined {
+	for (const [action, pattern] of WORKFLOW_ACTION_PATTERNS) if (pattern.test(message)) return action;
+	return undefined;
 }
 
 function classifyIntent(message: string, explicitIntent?: RequestIntent): RequestIntent {
@@ -100,7 +120,7 @@ function classifyProjectAction(message: string, intent: RequestIntent): ProjectA
 	return intent === "project-work" && PROJECT_CONTINUATION_PATTERN.test(message) ? "continue" : undefined;
 }
 
-function defaultsForIntent(intent: RequestIntent, projectAvailable: boolean): Pick<RequestPlan, "contextClasses" | "capabilityIds" | "approval"> {
+function defaultsForIntent(intent: RequestIntent, projectAvailable: boolean, workflowAction?: WorkflowAction): Pick<RequestPlan, "contextClasses" | "capabilityIds" | "approval"> {
 	switch (intent) {
 		case "chat":
 			return { contextClasses: ["conversation"], capabilityIds: [], approval: "none" };
@@ -114,7 +134,7 @@ function defaultsForIntent(intent: RequestIntent, projectAvailable: boolean): Pi
 			return {
 				contextClasses: projectAvailable ? ["conversation", "project-task", "project-spec"] : ["conversation", "workspace"],
 				capabilityIds: ["workspace.inspect"],
-				approval: "none",
+				approval: workflowAction && workflowAction !== "continue" ? "confirm" : "none",
 			};
 		case "execution":
 			return {
@@ -135,9 +155,15 @@ function freezePlan(plan: RequestPlan): RequestPlan {
 export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 	const message = input.message.trim();
 	const projectAvailable = input.projectAvailable === true;
-	const intent = classifyIntent(message, isRequestIntent(input.explicitIntent) ? input.explicitIntent : undefined);
+	const workflowAction = classifyWorkflowAction(message);
+	const classifiedIntent = classifyIntent(message, isRequestIntent(input.explicitIntent) ? input.explicitIntent : undefined);
+	// Lifecycle mutations have their own restricted authority tier. An explicit
+	// caller hint may not downgrade them to Chat, just as it cannot downgrade a
+	// shell/edit execution request.
+	const intent = classifiedIntent === "execution" ? classifiedIntent : workflowAction && workflowAction !== "continue" ? "project-work" : classifiedIntent;
+	const effectiveWorkflowAction = intent === "execution" ? undefined : workflowAction;
 	const projectAction = classifyProjectAction(message, intent);
-	const defaults = defaultsForIntent(intent, projectAvailable);
+	const defaults = defaultsForIntent(intent, projectAvailable, effectiveWorkflowAction);
 	const outputBudget = input.outputBudget ?? (intent === "chat" ? 1024 : intent === "lookup" ? 2048 : 4096);
 	if (!Number.isInteger(outputBudget) || outputBudget <= 0) throw new RangeError("outputBudget must be a positive integer");
 	if (input.deadlineMs !== undefined && (!Number.isInteger(input.deadlineMs) || input.deadlineMs <= 0)) {
@@ -153,6 +179,7 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 		deadlineMs: input.deadlineMs,
 		outputBudget,
 		projectAvailable,
+		...(effectiveWorkflowAction ? { workflowAction: effectiveWorkflowAction } : {}),
 		...(projectAction ? { projectAction } : {}),
 	});
 }

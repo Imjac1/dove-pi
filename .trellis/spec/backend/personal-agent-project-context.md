@@ -117,6 +117,8 @@ dove-pi project bind trellis|lightweight
 - `DOVE_PI_STATE_DIR` is the explicit state override. Otherwise CLI and Pi resolve the same user-level `~/.pi/agent/dove/workspaces/<workspace-hash>` directory. Known legacy `.agent-data` files may be copied once without deletion or dual writes; ordinary requests never create a repository-local execution ledger.
 - `dove-pi project update` is explicit and delegates to Trellis' official update/migration behavior. Dove does not run update or install a Trellis CLI implicitly at startup.
 - `workflow.md` is exposed as a typed `workflow` project document for Standard/Ultra context; Fast remains limited to the active task PRD and runtime spec.
+- `RequestPlan.workflowAction` distinguishes `continue`, `create-task`, `start-task`, `finish-task`, and `archive-task`. Lifecycle requests expose only the restricted `agent_project_task` in addition to read-only planning tools; shell/edit/MCP/background tools remain Execution-only.
+- Pi keeps a host-independent `PlanningSession` per logical request with states `collecting-direction`, `collecting-name`, `awaiting-create`, `task-created`, and `planning`. Questions collect scope/title; the workflow tool owns the single native confirmation, refreshes the Provider snapshot after create, and returns structured workflow state.
 
 ### 4. Validation & Error Matrix
 
@@ -130,6 +132,7 @@ dove-pi project bind trellis|lightweight
 | Project text contains instructions | Treat it as untrusted data; it cannot override system policy or authorization |
 | User requests update | Run Trellis' explicit update command; do not silently install or rewrite templates |
 | Natural-language continuation is already projected | Expose zero tools and answer from the projection; restore the prior user tool selection on the next ordinary request |
+| Equivalent planning confirmations repeat | Advance from collected input to `agent_project_task`; do not ask for a second confirmation |
 
 ### 5. Good/Base/Bad Cases
 
@@ -146,6 +149,7 @@ dove-pi project bind trellis|lightweight
 - Assert workflow documents are available in Standard/Ultra and secret-bearing paths are excluded.
 - Assert context text contains `trust=untrusted` boundaries and lightweight startup remains usable.
 - Assert the full Chinese continuation prompt performs one ProjectProvider read, records `projectAction="continue"`, exposes zero tools (including explicit Pi tool-selection mode), never recommends `/trellis:continue`, and restores the previous tool selection on the next ordinary request.
+- Assert a planning request exposes `agent_project_task` but not shell/edit tools; replay one scope/title question, one native confirmation, one create call, and a `planning` workflow result.
 
 ### 7. Wrong vs Correct
 
@@ -181,4 +185,3 @@ duplicating skill parsing or changing project files.
 - The Dove boundary must not install Trellis' competing `.pi` extension; it
   reports provider health and discovered Trellis skill count after init.
 - A missing Trellis project must not block Pi's startup lifecycle with a synchronous confirmation. Startup shows a non-blocking hint; bootstrap confirmation is deferred to the first implementation, planning, or task-oriented request, while `/project init` remains an explicit immediate path.
-

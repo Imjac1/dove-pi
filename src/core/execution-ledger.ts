@@ -72,6 +72,7 @@ export class ExecutionLedger {
 			details: {
 				requestId: plan.requestId,
 				intent: plan.intent,
+				workflowAction: plan.workflowAction,
 				projectAction: plan.projectAction,
 				contextClasses: plan.contextClasses,
 				capabilityIds: plan.capabilityIds,

@@ -35,6 +35,9 @@ const PROJECT_WORK_TOOL_NAMES = new Set([
 	"module_report",
 	"read_symbol",
 	"read_enclosing",
+	// Trellis planning is a restricted lifecycle action. It must be available
+	// after the planning question without exposing the Execution tool tier.
+	"agent_project_task",
 ]);
 
 const EXECUTION_TOOL_NAMES = new Set([
@@ -75,7 +78,7 @@ function baseNamesForIntent(intent: RequestIntent): ReadonlySet<string> {
 export function selectDoveToolNames(
 	allToolNames: readonly string[],
 	profile: DoveToolProfile,
-	request: RequestIntent | Pick<RequestPlan, "intent" | "projectAction"> = "lookup",
+	request: RequestIntent | Pick<RequestPlan, "intent" | "projectAction" | "workflowAction"> = "lookup",
 	prompt = "",
 	contextHint = "",
 ): string[] {
@@ -85,7 +88,7 @@ export function selectDoveToolNames(
 	// The Pi request boundary has already resolved and injected the public
 	// ProjectProvider continuation projection. Giving the model generic read or
 	// search tools here would only reopen guessed-path archaeology.
-	if (plan.projectAction === "continue") return [];
+	if (plan.workflowAction === "continue" || plan.projectAction === "continue") return [];
 	if (profile === "full") return [...new Set(allToolNames)].filter((name) => !(hashline && name === "edit"));
 
 	const selected = new Set(profile === "core" ? CORE_TOOL_NAMES : baseNamesForIntent(intent));
