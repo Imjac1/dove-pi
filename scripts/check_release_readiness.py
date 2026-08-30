@@ -64,6 +64,12 @@ def validate_manifest(source_root: Path, manifest_path: Path, tag: str, commit: 
         raise RuntimeError("release.json has an invalid Python/Node runtime contract")
     if commit and manifest.get("commit") != commit:
         raise RuntimeError(f"release.json commit {manifest.get('commit')} does not match {commit}")
+    dove_extension = manifest.get("doveExtension")
+    if dove_extension is not None:
+        if not isinstance(dove_extension, dict) or dove_extension.get("extensionId") != "dove.personal-agent" or dove_extension.get("version") != version:
+            raise RuntimeError("release.json has an invalid Dove extension identity")
+        if not isinstance(dove_extension.get("implementationDigest"), str) or not dove_extension.get("implementationDigest"):
+            raise RuntimeError("release.json is missing Dove extension implementationDigest")
 
     dependencies = package.get("dependencies")
     lock_packages = lock.get("packages")

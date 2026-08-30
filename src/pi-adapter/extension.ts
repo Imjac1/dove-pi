@@ -34,6 +34,49 @@ import { inspectExtensionProfile } from "../extensions/doctor.ts";
 import { projectExtensionCapabilities } from "../extensions/capabilities.ts";
 import { createDoveRuntime } from "../runtime.ts";
 import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.ts";
+import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
+
+type DoveRegistrationClaim = { readonly identity: DoveExtensionIdentity; readonly owner: ExtensionAPI };
+const DOVE_REGISTRATION_SYMBOL = Symbol.for("dove.personal-agent.registration-claim");
+type DoveGlobalState = { claim?: DoveRegistrationClaim };
+const doveGlobalState = (globalThis as typeof globalThis & { [DOVE_REGISTRATION_SYMBOL]?: DoveGlobalState });
+
+/**
+ * Claim Dove's registration slot for one Pi runtime. The process-global claim
+ * is needed because Pi loads each physical path independently (its own path
+ * de-duplication cannot collapse managed and project copies). A stale owner
+ * is replaced after Pi invalidates an extension during reload.
+ */
+export function claimDoveRegistration(pi: ExtensionAPI, identity: DoveExtensionIdentity): boolean {
+	const state = doveGlobalState[DOVE_REGISTRATION_SYMBOL] ?? (doveGlobalState[DOVE_REGISTRATION_SYMBOL] = {});
+	const previous = state.claim;
+	if (!previous) {
+		state.claim = { identity, owner: pi };
+		return true;
+	}
+	try {
+		previous.owner.getAllTools();
+	} catch {
+		state.claim = { identity, owner: pi };
+		return true;
+	}
+	if (previous.identity.implementationDigest === identity.implementationDigest && previous.identity.version === identity.version) {
+		console.error(`[dove] duplicate ${DOVE_EXTENSION_ID} wrapper suppressed; using ${previous.identity.origin} implementation.`);
+		return false;
+	}
+	// Managed is the default authority. If a managed copy arrives after a
+	// project/explicit copy (for example during reload), transfer ownership to
+	// managed; otherwise keep the existing managed claim and suppress the
+	// divergent project copy. Explicit trusted project selection is represented
+	// by origin "explicit" and therefore wins only when it was loaded first.
+	if (identity.origin === "managed" && previous.identity.origin === "project") {
+		state.claim = { identity, owner: pi };
+		console.error(`[dove] ${DOVE_EXTENSION_ID} identity mismatch; managed authority selected over ${previous.identity.origin} copy.`);
+		return true;
+	}
+	console.error(`[dove] ${DOVE_EXTENSION_ID} identity mismatch (${previous.identity.version}/${identity.version}); managed authority remains selected.`);
+	return false;
+}
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
@@ -168,6 +211,18 @@ function stripDoveContextFromPayload<T>(payload: T, doveContextPayloads: Readonl
 
 
 export default function personalAgentExtension(pi: ExtensionAPI): void {
+	const extensionVersion = process.env.DOVE_PI_EXTENSION_VERSION?.trim() || "0.1.0";
+	const extensionIdentity: DoveExtensionIdentity = {
+		extensionId: DOVE_EXTENSION_ID,
+		version: extensionVersion,
+		implementationDigest: doveImplementationDigest(extensionVersion),
+		entryPath: process.env.DOVE_PI_EXTENSION_ENTRY?.trim() || ".pi/extensions/personal-agent.ts",
+		origin: process.env.DOVE_PI_EXTENSION_ORIGIN === "explicit" ? "explicit" : process.env.DOVE_PI_EXTENSION_ORIGIN === "project" ? "project" : "managed",
+		trust: process.env.DOVE_PI_EXTENSION_TRUST === "trusted" ? "trusted" : process.env.DOVE_PI_EXTENSION_ORIGIN === "project" ? "unknown" : "managed",
+	};
+	// The managed launcher enables the process-global guard. Direct embedding
+	// without that marker keeps legacy test/host registration semantics.
+	if (process.env.DOVE_PI_EXTENSION_GUARD === "1" && !claimDoveRegistration(pi, extensionIdentity)) return;
 	const mode = new ModeController();
 	const { capabilities: registry, recipes } = createDoveRuntime();
 	const cwd = process.cwd();
@@ -811,6 +866,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				node: process.version,
 				platform: process.platform,
 				runtime: {
+					extensionIdentity,
 					readOnly: runtimeReadOnly(),
 					readOnlyReason: runtimeReadOnly() ? "DOVE_PI_READ_ONLY=1" : undefined,
 					model: model ? { provider: model.provider, id: model.id, api: model.api, contextWindow: model.contextWindow, maxTokens: model.maxTokens } : undefined,

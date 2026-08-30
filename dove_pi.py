@@ -313,8 +313,36 @@ def launch(arguments: Sequence[str]) -> int:
             launch_env["PI_OFFLINE"] = "1"
         else:
             pi_arguments.append(argument)
+    pi_command = [node, str(PI_ENTRY)]
+    # The managed extension is authoritative and explicitly loaded first;
+    # Pi still discovers ordinary project/user extensions afterwards. A
+    # project Dove override is opt-in and requires an explicit trust marker.
+    project_override = os.environ.get("DOVE_PI_PROJECT_EXTENSION", "").strip()
+    if project_override:
+        if os.environ.get("DOVE_PI_TRUST_PROJECT_EXTENSION", "").strip().lower() not in {"1", "true", "yes", "on"}:
+            raise RuntimeError("DOVE_PI_PROJECT_EXTENSION requires DOVE_PI_TRUST_PROJECT_EXTENSION=1")
+        override_path = Path(project_override).expanduser().resolve()
+        if not override_path.is_file():
+            raise RuntimeError(f"Trusted Dove project extension does not exist: {override_path}")
+        pi_command += ["-e", str(override_path)]
+        launch_env["DOVE_PI_EXTENSION_ORIGIN"] = "explicit"
+        launch_env["DOVE_PI_EXTENSION_TRUST"] = "trusted"
+        launch_env["DOVE_PI_EXTENSION_ENTRY"] = str(override_path)
+    else:
+        pi_command += ["-e", str(EXTENSION)]
+        launch_env["DOVE_PI_EXTENSION_ORIGIN"] = "managed"
+        launch_env["DOVE_PI_EXTENSION_TRUST"] = "managed"
+        launch_env["DOVE_PI_EXTENSION_ENTRY"] = str(EXTENSION)
+    # Keep the adapter's runtime identity aligned with the managed release
+    # metadata. Project-local wrappers inherit this value but are still
+    # suppressed by the process-global authority claim when they diverge.
+    try:
+        launch_env["DOVE_PI_EXTENSION_VERSION"] = package_versions()[0]
+    except RuntimeError:
+        launch_env["DOVE_PI_EXTENSION_VERSION"] = "0.1.0"
+    launch_env["DOVE_PI_EXTENSION_GUARD"] = "1"
     completed = subprocess.run(
-        [node, str(PI_ENTRY), "-e", str(EXTENSION), *pi_arguments],
+        [*pi_command, *pi_arguments],
         cwd=Path.cwd(),
         env=launch_env,
     )

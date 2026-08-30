@@ -118,6 +118,10 @@ def source_release_manifest(source: Path) -> ReleaseManifest:
         runtime=generated.runtime if generated else {},
         components=generated.components if generated else {},
         profiles=generated.profiles if generated else {},
+        # Without the TS manifest generator we cannot reproduce the adapter's
+        # identity digest; leave it unknown instead of inventing a divergent
+        # value that would incorrectly report drift.
+        dove_extension=generated.dove_extension if generated else {},
     )
 
 

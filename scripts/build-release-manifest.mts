@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getProfilePackages, PROFILE_PACKAGE_IDS, type ExtensionProfile } from "../src/extensions/catalog.ts";
+import { DOVE_EXTENSION_ID, DOVE_EXTENSION_CONTRACT_VERSION, doveImplementationDigest } from "../src/core/extension-identity.ts";
 
 interface PackageJson {
 	readonly version: string;
@@ -76,6 +77,13 @@ const manifest = {
 		trellis: exactDependency("@mindfoldhq/trellis"),
 	},
 	profiles,
+	doveExtension: {
+		extensionId: DOVE_EXTENSION_ID,
+		version,
+		implementationDigest: doveImplementationDigest(version),
+		entryPath: ".pi/extensions/personal-agent.ts",
+		contractVersion: String(DOVE_EXTENSION_CONTRACT_VERSION),
+	},
 };
 const destination = resolve(destinationArg);
 writeFileSync(destination, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");

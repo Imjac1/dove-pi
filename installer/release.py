@@ -25,6 +25,7 @@ VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z
 EXPECTED_RUNTIME = {"python": ">=3.10", "node": ">=22.19.0"}
 EXPECTED_COMPONENTS = {"pi", "piTui", "trellis"}
 EXPECTED_PROFILES = {"minimal", "dev", "research", "security", "max"}
+DOVE_EXTENSION_ID = "dove.personal-agent"
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class ReleaseManifest:
     runtime: dict[str, str] = field(default_factory=dict)
     components: dict[str, str] = field(default_factory=dict)
     profiles: dict[str, list[str]] = field(default_factory=dict)
+    dove_extension: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_json(cls, value: object) -> "ReleaseManifest":
@@ -63,7 +65,8 @@ class ReleaseManifest:
                     profiles[name] = list(specs)
         commit = value.get("commit")
         platform = value.get("platform")
-        return cls(version.strip(), release_id, commit.strip() if isinstance(commit, str) else "", platform.strip() if isinstance(platform, str) and platform.strip() else "windows", runtime, components, profiles)
+        dove_extension = _string_map(value.get("doveExtension"))
+        return cls(version.strip(), release_id, commit.strip() if isinstance(commit, str) else "", platform.strip() if isinstance(platform, str) and platform.strip() else "windows", runtime, components, profiles, dove_extension)
 
     @classmethod
     def read(cls, path: Path) -> "ReleaseManifest":
@@ -82,6 +85,7 @@ class ReleaseManifest:
             "runtime": self.runtime,
             "components": self.components,
             "profiles": self.profiles,
+            **({"doveExtension": self.dove_extension} if self.dove_extension else {}),
         }
 
 
@@ -106,6 +110,22 @@ def validate_stable_manifest(manifest: ReleaseManifest) -> None:
         raise RuntimeError("release.json must contain exactly the Pi, Pi TUI, and Trellis components")
     if set(manifest.profiles) != EXPECTED_PROFILES:
         raise RuntimeError("release.json must contain exactly the supported extension profiles")
+    if manifest.dove_extension:
+        if manifest.dove_extension.get("extensionId") != DOVE_EXTENSION_ID:
+            raise RuntimeError("release.json has an invalid Dove extension identity")
+        if manifest.dove_extension.get("version") != manifest.version:
+            raise RuntimeError("release.json Dove extension version does not match release version")
+        if not manifest.dove_extension.get("implementationDigest"):
+            raise RuntimeError("release.json is missing Dove extension implementationDigest")
+        if not manifest.dove_extension.get("entryPath"):
+            raise RuntimeError("release.json is missing Dove extension entryPath")
+    if manifest.dove_extension:
+        if manifest.dove_extension.get("extensionId") != DOVE_EXTENSION_ID:
+            raise RuntimeError("release.json has an invalid Dove extension identity")
+        if manifest.dove_extension.get("version") != manifest.version:
+            raise RuntimeError("release.json Dove extension version does not match release version")
+        if not manifest.dove_extension.get("implementationDigest") or not manifest.dove_extension.get("entryPath"):
+            raise RuntimeError("release.json Dove extension identity is incomplete")
 
 
 @dataclass(frozen=True)
