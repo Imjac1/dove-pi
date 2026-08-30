@@ -107,7 +107,7 @@ the repository, profiles, release assets, or recovery internals.
 
 ## Acceptance Criteria
 
-- [ ] On a clean supported Windows environment, one documented command leaves
+- [x] On a clean supported Windows environment, one documented command leaves
   `dove-pi --version`, `dove-pi doctor`, and Pi smoke working.
 - [x] Default bootstrap installs the complete profile without asking the user
   to choose extensions or understand profiles.

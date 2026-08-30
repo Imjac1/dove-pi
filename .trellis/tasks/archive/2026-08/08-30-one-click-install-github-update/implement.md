@@ -169,3 +169,10 @@ are defined.
   activation. The run was interrupted before winget installed anything. The
   fix captures native output without a pipeline, adds a real Python regression,
   and advances the immutable corrective Release to v0.1.2.
+- Public v0.1.2 acceptance passed from `releases/latest/download`: the script
+  preserved compatible Python 3.11.6 and Node 26.5.0, performed real `npm ci`,
+  typecheck and Pi smoke, activated `0.1.2+e07788c`, and left user PATH
+  byte-for-byte unchanged under `-NoPath/-NoFont/-NoExtensions`. The installed
+  launcher reported Dove 0.1.2 / Pi 0.84.3, doctor was healthy, update-check
+  was current, and confirmed uninstall removed every managed child from the
+  real deep npm tree while preserving an isolated Pi user marker.
