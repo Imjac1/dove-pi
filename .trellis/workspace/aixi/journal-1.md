@@ -350,3 +350,24 @@ Added a host-independent PlanningSession and restricted agent_project_task workf
 ### Status
 
 [OK] **Completed**
+
+
+## Session 12: Fix planning question loop and cache diagnostics
+
+**Date**: 2026-08-31
+**Task**: Fix planning question loop and cache diagnostics
+**Branch**: `master`
+
+### Summary
+
+修复规划输入完成后仍重复调用 ask_user_question 的跨层问题：PlanningSession 进入 awaiting-create 后由 Pi tool_call 边界强制转向 agent_project_task；补充回归测试、运行时规格和跨层复盘。完成 220/220 Node、90/90 installer、typecheck、doctor、Pi smoke、spec budget、task validate，并以全新 Desktop\\code 进程验证 ask_user_question=1、agent_project_task=1；缓存审计显示最新会话热态 95.6%、项目汇总热态 90.1%。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68aed5e` | (see git log) |
+
+### Status
+
+[OK] **Completed**
