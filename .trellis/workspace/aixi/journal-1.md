@@ -263,3 +263,25 @@ Hardened request intent and tool authority, added provider-neutral one-read cont
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: Dove extension identity and spec context budget
+
+**Date**: 2026-08-30
+**Task**: Dove extension identity and spec context budget
+**Branch**: `master`
+
+### Summary
+
+Implemented managed-first Dove extension identity synchronization with trusted explicit project override and reload-safe registration claims; split the 68 KB runtime contract into five routed specs under 24 KB, migrated active task manifests, and added context-budget regression tests. Full Node, installer, typecheck, doctor, Pi smoke, and diff checks passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3f926d5` | (see git log) |
+| `0741298` | (see git log) |
+
+### Status
+
+[OK] **Completed**

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
+- **Total Sessions**: 8
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~265 | Active |
+| `journal-1.md` | ~287 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-08-30 | Dove extension identity and spec context budget | `3f926d5`, `0741298` | `master` |
 | 7 | 2026-08-30 | Harden Dove request and project flow | `65554bd`, `279006e` | `master` |
 | 6 | 2026-08-30 | Dove Pi normal-user E2E evaluation | `bb407cd` | `master` |
 | 5 | 2026-08-30 | Personal Agent OS completion | `6b5df03`, `3856a2e` | `master` |
