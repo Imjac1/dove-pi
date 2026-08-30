@@ -1,2 +1,2 @@
-{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Managed install, update, recovery, launcher, and release contracts"}
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "Managed install, update, recovery, launcher, and release contracts"}
 {"file": ".trellis/tasks/08-30-one-click-install-github-update/research/current-install-audit.md", "reason": "Focused repository and live release-channel evidence"}

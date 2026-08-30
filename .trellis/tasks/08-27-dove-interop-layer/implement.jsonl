@@ -1,4 +1,7 @@
-{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"Core capability, adapter firewall, ledger, provider, and Pi extension contracts."}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"Capability Protocol, adapter, dispatch, ledger, and Pi host-capability contracts."}
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Core adapter-firewall and provider-boundary contracts."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Normalized project-provider, context-authority, and evidence boundaries."}
+{"file":".trellis/spec/backend/personal-agent-managed-install.md","reason":"Stable launcher routing for capability, RPC, and MCP command families."}
 {"file":".trellis/spec/backend/error-handling.md","reason":"Structured cross-host failures and fail-closed mutation behavior."}
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"Boundary tests, forbidden imports, and full validation gate."}
 {"file":".trellis/spec/frontend/component-guidelines.md","reason":"Pi plugin and command/tool ownership boundaries."}

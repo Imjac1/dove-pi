@@ -1,2 +1,2 @@
-{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "Verify executable managed-install contracts"}
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "Verify executable managed-install contracts"}
 {"file": ".trellis/tasks/08-30-one-click-install-github-update/research/current-install-audit.md", "reason": "Verify implementation against observed deployment failures"}
