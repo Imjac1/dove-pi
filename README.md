@@ -1,18 +1,66 @@
 # Dove Pi
 
-Dove Pi 是基于 [Pi](https://github.com/badlogic/pi-mono) 的 Windows 优先个人 Agent 运行层。它保留 Pi 的开放扩展能力，同时补上默认策略、项目上下文、Trellis 项目管理、扩展组合、诊断和可恢复更新。
+[English](./README.en.md)
 
-## 最短使用流程
+Dove Pi 是一个面向 Windows 的个人编程 Agent，基于
+[Pi](https://github.com/badlogic/pi-mono) 构建。它保留 Pi 的模型与扩展开放性，
+同时补上开箱即用的工具策略、项目上下文、Trellis 项目管理、诊断和可恢复更新。
 
-### 1. 安装
+简单说：你在自己的项目目录运行 `dove-pi`，然后像和开发同事说话一样直接描述需求。
 
-需要 Windows 和 PowerShell 5.1+。普通用户不需要 Git 或源码仓库；安装器会保留已兼容的 Python 3.10+、Node.js 22.19+，缺失或版本过旧时通过 winget 安装 `Python.Python.3.12` 与 `OpenJS.NodeJS.LTS`，再刷新当前进程 PATH 并继续。
+## 适合谁
+
+- 希望自由选择模型、Provider 和 Pi 扩展；
+- 在 Windows 上做长期或大型项目，需要任务、规范和上下文连续性；
+- 不想手动组合十几个插件，也不想每次都配置工具权限；
+- 希望更新失败时能修复或回滚，而不是重装全部环境。
+
+## 安装
+
+### 方式一：从源码安装（当前即可使用）
+
+需要：
+
+- Windows 10/11；
+- PowerShell 5.1 或更高版本；
+- Python 3.10 或更高版本；
+- Node.js 22.19 或更高版本；
+- Git。
+
+```powershell
+git clone https://github.com/Imjac1/dove-pi.git
+cd dove-pi
+python .\dove_pi.py install
+```
+
+安装器会执行依赖安装和快速验证，默认安装完整的 `max` 扩展组合，并把托管应用放到：
+
+```text
+$env:LOCALAPPDATA\DovePi
+```
+
+安装完成后重新打开终端，然后检查：
+
+```powershell
+dove-pi --version
+dove-pi doctor
+```
+
+如果不想安装可选扩展：
+
+```powershell
+python .\dove_pi.py install --no-extensions
+```
+
+### 方式二：GitHub Release 一键安装
+
+发布首个 GitHub Release 后，可以直接运行：
 
 ```powershell
 irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
 ```
 
-如果希望先检查脚本：
+想先检查脚本再执行：
 
 ```powershell
 Invoke-WebRequest https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 -OutFile .\install-dove-pi.ps1
@@ -20,29 +68,56 @@ Get-Content .\install-dove-pi.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-dove-pi.ps1
 ```
 
-安装器默认装入完整的 `max` 扩展 profile，并把程序放到 `%LOCALAPPDATA%\DovePi`。它直接读取 stable Release 的 `release.json`，不依赖 GitHub REST API 配额；下载的 release zip 会先校验 SHA-256 和 manifest 身份，完成 `npm ci` 与快速验证后才会激活。若 winget 不可用，安装会在 Dove 激活前停止，并输出精确的运行时安装命令和重试提示。
+如果地址返回 `404`，表示仓库还没有发布首个 Release，请使用上面的源码安装。不要把
+`master` 分支压缩包当作正式安装包。
 
-安装完成后可直接确认 Dove 与底层 Pi 版本及整体健康状态：
+Release 安装器会复用符合版本要求的 Python 和 Node.js；缺失或版本过旧时，会通过 `winget`
+安装运行时（此时需要系统已安装 Microsoft App Installer）。它还会校验下载文件的 SHA-256，
+验证通过后才切换当前版本。
 
-```powershell
-dove-pi --version
-dove-pi doctor
-```
+安装完成后重新打开终端，并运行 `dove-pi --version` 和 `dove-pi doctor`；然后再按下面的三步
+进入自己的项目。
 
-首个 stable Release 发布前，`releases/latest` 地址会返回 404；不要改用 `master` 分支归档。Release 发布后仍使用上面同一条命令。
+## 三步开始使用
 
-### 2. 进入你的项目
+### 1. 进入你的项目
 
 ```powershell
 cd C:\path\to\your-project
 dove-pi
 ```
 
-Dove Pi 始终把你启动命令时的当前目录当作目标项目，不要求把项目放进 Dove Pi 的安装目录。
+Dove 始终把启动命令时的当前目录当作目标项目。你的代码不需要放进 Dove 的安装目录。
 
-### 3. 直接说需求
+第一次使用、还没有配置模型时，在 Dove Pi 中输入：
 
-普通对话、查找、项目工作和执行操作会自动选择合适的上下文与工具。常用模式：
+```text
+/login    选择 Provider 并登录或填写 API Key
+/model    选择要使用的模型
+```
+
+这两个命令由 Pi 提供，凭据保存在 Pi 的用户目录，不会写进当前项目。
+
+### 2. 直接描述需求
+
+```text
+解释一下这个项目的入口和主要模块。
+修复当前测试失败并验证结果。
+继续当前项目任务。
+```
+
+Dove 会按每次请求自动选择工具：
+
+- 普通对话：不加载工具；
+- 查看和分析：只加载读取、搜索等只读工具；
+- 项目规划：加入只读项目上下文；
+- 明确执行：开放 shell 和编辑；仅在需求明确涉及相关能力时，再加入浏览器、MCP 或后台任务。
+
+因此通常不需要先选择工具，也不会把上一次执行权限带到下一次普通对话。
+
+### 3. 按需要选择模式
+
+在 Dove Pi 中输入：
 
 ```text
 /mode fast
@@ -50,194 +125,159 @@ Dove Pi 始终把你启动命令时的当前目录当作目标项目，不要求
 /mode ultra
 ```
 
-`Ultra` 是执行/思考策略；`max` 是安装时的扩展组合，两者没有继承或映射关系。
+- `fast`：简单、明确、优先快速完成；
+- `standard`：日常默认；
+- `ultra`：复杂项目、长链路分析和高强度执行。
 
-## Trellis 如何工作
+`Ultra` 是运行策略；`max` 是安装时的扩展组合，两者不是同一个概念。
 
-Dove Pi 自带并锁定经过测试的 Trellis 版本，不依赖机器上的全局 `trellis`，也不会在普通启动时偷偷升级它。
+## Trellis：可选的项目管理层
 
-在项目内执行：
+普通聊天和代码任务不要求 Trellis。需要长期任务、PRD、开发规范、journal 或跨会话续接时，
+在项目根目录执行：
 
 ```powershell
 dove-pi project init
 dove-pi project doctor
+```
+
+这会在当前项目创建 `.trellis/`。通常不需要另外安装全局 Trellis，也不需要先运行
+`trellis init`。
+
+之后可以直接说：
+
+```text
+继续当前项目任务。
+```
+
+Dove 会通过公开的 Project Provider 状态定位当前任务或唯一可继续候选，不扫描 Trellis 私有运行
+目录，也不会因为一句“继续”自动创建、完成或归档任务。
+
+需要显式使用工作流 skill 时：
+
+- Pi：`/skill:trellis-start`、`/skill:trellis-continue`、`/skill:trellis-check`；
+- Codex：`$trellis-start`、`$trellis-continue`、`$trellis-check`。
+
+更新当前项目中的 Trellis 模板必须显式执行：
+
+```powershell
 dove-pi project update
 ```
 
-- `project init` 在当前目录创建 `.trellis/`，并安装该项目需要的共享 skills。
-- `project update` 仅在你显式执行时更新当前项目的 Trellis 模板。
-- Dove Pi 更新应用本身时，不改写任何项目的 `.trellis/`。
-- 初始化后，在 Pi 中可以用 `/skill:trellis-start`、`/skill:trellis-brainstorm`、`/skill:trellis-continue`、`/skill:trellis-check`；在 Codex 中使用 `$trellis-start` 等对应语法。符合 skill 触发条件时，宿主也可自动选择。
-- 也可以直接说“继续当前项目任务”。Dove 只读取一次 Project Provider 的结构化状态：有 current task 就返回它；只有一个进行中任务就作为唯一候选；多个候选会让你选择；没有候选则明确说明。它不会猜测 Trellis 的私有运行目录。
+更新 Dove 应用不会偷偷改写项目里的 `.trellis/`。
 
-通常不需要先手动运行 `trellis init`，也不需要单独安装全局 Trellis。
+## Pi、Dove 和 Trellis 的关系
 
-## Agent、Pi、Dove 和 Trellis 的关系
-
-| 层 | 负责什么 |
+| 组件 | 负责什么 |
 | --- | --- |
-| Pi | 模型、TUI、会话和原生工具宿主 |
-| Dove | 请求策略、能力、审批、工具加载、证据和执行记录 |
-| Project Provider | 项目发现和统一上下文边界 |
-| Trellis | `.trellis/` 内的任务、spec、workflow、memory 和 journal |
+| Pi | 模型、会话、TUI 和原生工具宿主 |
+| Dove | 请求策略、工具加载、能力、审批、诊断和执行记录 |
+| Project Provider | 把外部项目管理器转换成统一项目上下文 |
+| Trellis | `.trellis/` 中的任务、spec、workflow、memory 和 journal |
 
-Trellis 是项目数据的权威，Dove 不维护第二套任务/spec 数据库，也不从 core 直接改写 `.trellis/`。Dove 的执行记录与 Trellis 任务 ID 关联，但两者不混成一个状态文件。Trellis 后续更新由它自己的 `project update` 负责；Dove 只通过 Project Provider 公共契约适配，不 fork 或 patch Trellis。
+Trellis 管项目数据，Dove 管执行数据。Dove 不复制一套 Trellis 任务数据库，也不把 Trellis
+源码写进自身核心；两边通过公开接口协作，可以分别更新。
 
-常用 Pi 命令：
+## 常用命令
 
-```text
-/status
-/status full
-/project
-/project doctor
-/project init
-/project update
-/memory [query]
-/capabilities
-/mode fast|standard|ultra
-/dove-thinking auto|lock <level>|off|status
-/dove-tools auto|core|full|reset
-```
-
-`/thinking` 仍是 Pi 的原生命令；Dove 的自动/锁定策略使用 `/dove-thinking`，不会覆盖宿主命令。任务创建、完成和归档需要明确意图及确认；普通聊天不会创建 Trellis 任务。
-
-`/dove-tools auto` 由同一个请求计划逐级开放工具：普通 Chat 为零工具，Lookup 只有读取、搜索和只读网页检索工具，Project Work 增加只读代码诊断和规划工具，只有 Execution 才开放 shell、编辑、任务、工作区变更、浏览器自动化、通用 MCP 和后台任务。每个用户请求开始时，Auto 会精确切换到该请求所需的集合，并在本次请求及其工具续调用期间保持不变；下一请求会重新收窄，因此 Execution 工具不会残留到后续 Chat/Lookup。意图层级切换时工具前缀会变化，可能少复用一部分 Provider 缓存，但换来请求级最小权限和更低的 schema Token；连续同层级请求仍保持稳定，第三方扩展临时激活的工具也不会被吸收。
-
-## 互操作接口
-
-Dove Capability Protocol `1.0.0` 把能力版本、参数 schema、平台、副作用、幂等性、生命周期、关联 ID 和证据引用定义为宿主无关合同。Pi、CLI/JSON-RPC 和 MCP 共用同一个 Core 能力注册表、执行服务和 ledger：
-
-```powershell
-dove-pi capability list
-dove-pi capability run workspace.inspect --args='{"path":"package.json"}'
-# 有副作用的能力只接受本地显式授权：
-dove-pi capability run dev.project_test --approve
-```
-
-本地 JSON-RPC 是有界的 JSONL stdio，只提供 `capabilities/list` 和 `capabilities/invoke`：
-
-```powershell
-'{"jsonrpc":"2.0","id":1,"method":"capabilities/list"}' | dove-pi rpc
-'{"jsonrpc":"2.0","id":2,"method":"capabilities/invoke","params":{"protocolVersion":"1.0.0","capability":{"name":"workspace.inspect"},"arguments":{"path":"package.json"},"context":{"cwd":"C:\\path\\to\\project","mode":"standard","taskId":"rpc-session","stepId":"inspect"},"correlation":{"requestId":"rpc-1"},"approval":"not_required"}}' | dove-pi rpc
-```
-
-MCP 客户端可把 stdio server 配置为 `{"command":"dove-pi","args":["mcp"]}`，然后调用 `dove_capabilities`、`dove_context` 和 `dove_invoke`。`dove_context` 以索引优先方式投影 Trellis、`AGENTS.md`、`CLAUDE.md`、Agent Skills 和 MCP resources，冲突权威会分开标记，不静默合并。
-
-授权边界默认关闭：Pi 使用原生确认 UI，CLI 只信任本地 `--approve`，RPC 和 MCP 不接受请求体自行声明授权。Pi 专用的 TUI、浏览器、规划、诊断和后台任务等能力优先复用经审核插件，Dove 只投影它们的可用性，不在 Core 中复制一套执行器。
-
-## 日常维护
-
-```powershell
-dove-pi update
-dove-pi repair
-dove-pi rollback
-dove-pi cache audit --min-requests=2
-dove-pi token audit --since=1h
-```
-
-- `update` 通过 stable GitHub Release 的直接 manifest 查询更新，不依赖 GitHub REST API。版本未变化且当前安装健康时，不下载 zip、不执行 `npm ci`；只修复 launcher 并对齐 Dove 自己管理的扩展。
-- `repair` 检查当前 release 和 launcher；当前版本损坏时优先恢复可运行的 previous，再按需重建 stable release。
-- `rollback` 原子切回 previous 应用版本。Pi 用户扩展位于用户目录，因此不会被伪装成与应用一起原子回滚。
-- `cache audit` 和 `token audit` 是会正常结束的本地诊断命令，不会误启动 Pi 交互会话。
-
-只检查更新而不写入：
-
-```powershell
-dove-pi update --check
-dove-pi update --check --json
-```
-
-`--json` 的 stdout 是单个 JSON 文档，诊断信息写入 stderr。Dove 的维护层只在显式维护命令中检查 GitHub、npm 或 winget。
-
-Dove 自己不会在启动时访问 GitHub、npm 或 winget，但 Pi 可能执行自己的版本/扩展包检查。需要快速启动时可按本次启动显式关闭：
-
-```powershell
-dove-pi --skip-version-check  # 只跳过 Pi 版本检查
-dove-pi --offline             # 跳过 Pi 的全部启动网络和扩展包检查
-```
-
-两项默认都关闭，不会改变正常在线更新提醒；它们也不会禁用后续显式执行的 `dove-pi update`。
-
-## 安装边界与恢复
-
-托管目录：
+### Dove Pi 内部
 
 ```text
-%LOCALAPPDATA%\DovePi\
+/status                 查看简要状态
+/status full            查看完整诊断
+/project                查看项目状态
+/project init           初始化 Trellis
+/project update         更新当前项目的 Trellis 模板
+/memory [query]         搜索项目记忆
+/capabilities           查看 Dove 能力
+/dove-tools auto        恢复按请求自动选择工具
+/dove-tools full        临时启用所有已安装工具
+/dove-thinking status   查看思考策略
+```
+
+`/thinking` 是 Pi 原生命令；Dove 使用 `/dove-thinking`，不会覆盖它。
+
+### 维护安装
+
+```powershell
+dove-pi update --check   # 只检查，不修改
+dove-pi update           # 安装最新 stable Release
+dove-pi repair           # 修复当前版本或恢复 previous
+dove-pi rollback         # 切回 previous 应用版本
+dove-pi uninstall --yes  # 卸载 Dove，保留用户与项目数据
+```
+
+在首个 Release 发布前，从源码安装的用户通过下面的方式更新：
+
+```powershell
+git pull
+python .\dove_pi.py install
+```
+
+### 启动网络控制
+
+```powershell
+dove-pi --skip-version-check  # 只跳过本次 Pi 版本检查
+dove-pi --offline             # 本次启动不做 Pi 网络/扩展包检查
+```
+
+两项默认都关闭，也不会禁用之后显式执行的 `dove-pi update`。
+
+## 扩展组合
+
+默认安装 `max`。其他可选组合：`minimal`、`dev`、`research`、`security`。
+
+```powershell
+python .\dove_pi.py install --profile minimal
+python .\dove_pi.py install --profile dev
+python .\dove_pi.py install --no-extension-updates
+```
+
+Dove 只管理自己声明的扩展及精确版本，不会运行无目标的 `pi update --extensions`，因此不会
+顺便升级用户自己安装的 Pi 扩展。可选扩展失败会显示为 `degraded`，不会伪装成健康状态。
+
+## 数据放在哪里
+
+托管应用：
+
+```text
+$env:LOCALAPPDATA\DovePi\
   bin\
-  app\versions\<release-id>\
+  app\versions\
   cache\releases\
-  staging\
   state\install.json
   logs\
 ```
 
-稳定 launcher 只会运行 `app\versions` 内、通过路径校验的 release。若 current 损坏而 previous 完整，它会回退 previous 并提示运行 `dove-pi repair`。
+安装、更新、回滚和卸载不会删除：
 
-以下内容不属于托管应用目录，安装、更新、回滚和默认卸载都不会删除：
+- `~/.pi/agent` 中的凭据、模型、会话、设置和用户扩展；
+- `~/.pi/agent/dove/workspaces/<hash>` 中按项目隔离的 Dove 运行状态；
+- 项目中的 `.trellis/`；
+- 你的源码、Git 分支和未提交修改。
 
-- `~/.pi/agent` 中的凭据、模型、会话、settings 和用户扩展；
-- `~/.pi/agent/dove/workspaces/<hash>` 中按项目隔离的 Dove 运行状态和 execution ledger；`DOVE_PI_STATE_DIR` 仍可显式覆盖；
-- 任意项目的 `.trellis/`；
-- 你的源码仓库和未提交修改；
-- 用户自行安装的第三方 Pi 扩展或全局 Trellis。
+普通会话不会在源码仓库生成 `.agent-data/execution.jsonl`。
 
-Dove 不再为普通会话在源码仓库生成 `.agent-data/execution.jsonl`。旧 `.agent-data` 中已知的 Dove 状态文件只会安全复制一次到新位置，原文件不会被删除，也不会继续双写。事务型 workspace snapshot 仍是显式能力产物，不属于普通会话状态。
+## 高级接口
 
-卸载托管应用：
-
-```powershell
-dove-pi uninstall --yes
-```
-
-## 扩展管理
-
-默认 profile 是 `max`。可选 profile：`minimal`、`dev`、`research`、`security`、`max`。
+Dove Capability Protocol 让 CLI、JSON-RPC、MCP 和 Pi 共用同一套能力与审批边界：
 
 ```powershell
-python .\dove_pi.py install --profile dev
-python .\dove_pi.py install --no-extensions
-python .\dove_pi.py install --no-extension-updates
+dove-pi capability list
+dove-pi capability run workspace.inspect --args='{"path":"package.json"}'
+dove-pi capability run dev.project_test --approve
+dove-pi rpc
+dove-pi mcp
 ```
 
-Dove 只对 selected profile 中自己管理的 package identity 执行 Pi 官方精确版本安装：
+MCP stdio 配置：
 
-```text
-pi install npm:<package>@<exact-version>
+```json
+{"command":"dove-pi","args":["mcp"]}
 ```
 
-它不会执行无目标的 `pi update --extensions`，因此不会顺便升级或改写用户自行安装的扩展。可选扩展失败会记录为 degraded，剩余组件继续安装；应用核心验证失败则不会激活。
-
-## 从旧版迁移
-
-从源码 checkout 执行一次：
-
-```powershell
-python .\dove_pi.py install
-```
-
-现在这条兼容命令会把源码复制并验证到独立的托管版本目录，而不是把全局 launcher 指向 checkout。若旧 `.dove/manifest.json` 中有有效 profile，会导入该 profile；原 checkout 的文件、分支、提交和未提交修改保持不变。
-
-## 高级选项
-
-```powershell
-dove-pi update --verify quick
-dove-pi update --verify full
-dove-pi update --no-extensions
-dove-pi repair --verify full --json
-```
-
-- `quick`：typecheck + Pi smoke，默认。
-- `full`：在 quick 基础上运行完整测试。
-- `none`：仅用于受控诊断或开发，不建议普通安装使用。
-- V2 不支持 `update --force`；安装损坏请运行 `repair`，不会对源码仓库执行 `git reset --hard`。
-
-如需隔离测试或开发，可设置临时托管根：
-
-```powershell
-$env:DOVE_PI_HOME = Join-Path $env:TEMP 'DovePi-test'
-python .\dove_pi.py install --verify none --no-extensions --no-font --no-path
-```
+有副作用的能力默认拒绝：Pi 使用原生确认，CLI 需要本地 `--approve`，RPC/MCP 请求不能自行
+声明授权。
 
 ## 开发与验证
 
@@ -248,16 +288,39 @@ npm test
 npm run test:installer
 npm run doctor
 npm run pi:smoke
-npm run release:check -- --help
 ```
 
-发布仅由与 `package.json` 版本精确匹配的 `v*` tag 触发。发布动作之前，CI 会验证干净 checkout、manifest、归档结构、SHA-256、Bootstrap 语法，以及恰好四个资产：`dove-pi-windows.zip`、checksum、`install.ps1` 和 `release.json`。普通 push 不会发布，也不会改变用户安装；发布者代码签名尚未加入。
+正式 Release 只由与 `package.json` 版本一致的 `v*` tag 触发。普通 push 不会发布安装包。
 
 ## 常见问题
 
-- `dove-pi` 找不到：打开一个新终端，或直接运行 `%LOCALAPPDATA%\DovePi\bin\dove-pi.cmd`。
-- Python、Node.js 或 npm 缺失/过旧：重新运行顶部公开 Bootstrap；它会保留兼容版本并补齐缺失运行时。
-- current 损坏：运行 `dove-pi repair`；launcher 可在 previous 完整时自动回退。
-- 扩展 degraded：关闭可能锁定 native binary 的 Pi/Node 进程，再运行 `dove-pi repair`。
-- 项目没有 Trellis：在项目根执行 `dove-pi project init`。
-- 需要完整扩展工具：在 Pi 中使用 `/dove-tools full`；普通请求默认按意图延迟加载，减少 prompt token。
+### 找不到 `dove-pi`
+
+重新打开终端，或运行：
+
+```powershell
+& "$env:LOCALAPPDATA\DovePi\bin\dove-pi.cmd"
+```
+
+### 一键安装地址返回 404
+
+仓库还没有发布首个 GitHub Release。先使用源码安装。
+
+### Python、Node.js 或 npm 版本不够
+
+源码安装请先安装 Python 3.10+ 和 Node.js 22.19+。Release 一键安装器会在 winget 可用时自动
+补齐运行时。
+
+### 扩展显示 degraded
+
+关闭可能占用 native binary 的 Pi/Node 进程，然后运行：
+
+```powershell
+dove-pi repair
+```
+
+### 项目没有 Trellis
+
+```powershell
+dove-pi project init
+```
