@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from installer.layout import ManagedLayout, is_path_within
+from installer.layout import ManagedLayout, _deletion_path, is_path_within
 from installer.lock import MaintenanceLock, MaintenanceLockedError
 from installer.manager import ManagedInstaller, source_release_manifest, write_managed_launchers
 from installer.release import ReleaseAsset, ReleaseManifest, safe_extract_zip
@@ -33,6 +33,20 @@ def complete_manifest(version: str, release_id: str, commit: str, *, pi_version:
             "max": ["npm:example-extension@1.0.0"],
         },
     )
+
+
+def write_long_windows_marker(root: Path) -> tuple[Path, str]:
+    nested = root
+    for index in range(7):
+        nested /= f"package-{index}-" + ("x" * 32)
+    marker = nested / "installed-package.js"
+    extended_marker = _deletion_path(marker.resolve(strict=False))
+    os.makedirs(os.path.dirname(extended_marker), exist_ok=True)
+    with open(extended_marker, "w", encoding="utf-8") as stream:
+        stream.write("managed")
+    if len(str(marker.resolve(strict=False))) <= 260:
+        raise AssertionError("Windows long-path fixture must exceed legacy MAX_PATH")
+    return marker, extended_marker
 
 
 def write_installed_components(root: Path, components: dict[str, str]) -> None:
@@ -218,6 +232,24 @@ class ManagedTransactionTests(unittest.TestCase):
             loaded = load_state(layout)
             self.assertEqual(loaded.current.release_id, "existing")
 
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length path regression")
+    def test_prepare_failure_cleans_long_staging_paths(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            source, manifest = make_source(root)
+
+            def failing_runner(command, cwd):
+                if "ci" in command:
+                    write_long_windows_marker(cwd / "node_modules")
+                    raise OSError("injected failure after dependency extraction")
+                successful_runner(command, cwd)
+
+            with self.assertRaises(TransactionError):
+                ManagedTransaction(layout, runner=failing_runner).prepare_source(source, manifest)
+
+            self.assertFalse(any(layout.staging_dir.iterdir()))
+
     def test_prepare_rejects_an_installed_pi_version_that_differs_from_the_manifest(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -253,6 +285,19 @@ class ManagedTransactionTests(unittest.TestCase):
             reused = transaction.prepare_source(source, manifest, verify="full")
             self.assertTrue(reused.reused)
             self.assertEqual(len(calls), first_call_count)
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length path regression")
+    def test_prune_removes_old_release_paths_beyond_legacy_max_path(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            old_release = layout.versions_dir / "old"
+            _marker, extended_marker = write_long_windows_marker(old_release / "node_modules")
+
+            removed = ManagedTransaction(layout).prune(InstallState())
+
+            self.assertEqual(removed, [old_release.resolve(strict=False)])
+            self.assertFalse(os.path.exists(extended_marker))
 
     def test_dependency_and_verification_failures_keep_current_state(self):
         for failing_token in ("ci", "typecheck", "pi:smoke"):
@@ -745,6 +790,19 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             self.assertFalse(layout.bin_dir.exists())
             self.assertTrue(unknown.is_file())
             self.assertTrue(all((path / "marker").is_file() for path in preserved))
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length path regression")
+    def test_uninstall_removes_release_files_beyond_legacy_max_path(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            layout.ensure_base_directories()
+            _marker, extended_marker = write_long_windows_marker(layout.versions_dir / "current" / "node_modules")
+
+            ManagedInstaller(layout).uninstall(confirmed=True)
+
+            self.assertFalse(os.path.exists(extended_marker))
+            self.assertFalse(layout.versions_dir.parent.exists())
 
     def test_checksum_failure_keeps_current_release(self):
         with TemporaryDirectory() as temporary:

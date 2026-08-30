@@ -580,6 +580,8 @@ def parse_managed_maintenance(command: str, arguments: Sequence[str]) -> argpars
     parser = argparse.ArgumentParser(prog=f"dove-pi {command}")
     parser.add_argument("--verify", choices=("quick", "full", "none"), default="quick")
     parser.add_argument("--json", action="store_true")
+    if command == "repair":
+        parser.add_argument("--no-extensions", action="store_true", help="Skip Dove-managed Pi extension reconciliation")
     if command == "uninstall":
         parser.add_argument("--yes", action="store_true", help="Confirm removal of Dove-managed application files")
     return parser.parse_args(arguments)
@@ -592,7 +594,8 @@ def run_managed_maintenance(command: str, arguments: Sequence[str]) -> int:
         validate_managed_prerequisites()
         result = installer.repair(
             verify=options.verify,
-            reconcile_components=lambda state: reconcile_managed_extensions(state),
+            reconcile_components=(lambda state: reconcile_managed_extensions(state))
+            if not options.no_extensions else None,
         )
     elif command == "rollback":
         result = installer.rollback()

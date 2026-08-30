@@ -19,6 +19,16 @@ def is_path_within(path: Path, parent: Path) -> bool:
         return False
 
 
+def _deletion_path(path: Path) -> str:
+    """Return a Windows extended-length path for recursive managed deletion."""
+    value = str(path)
+    if os.name != "nt" or value.startswith("\\\\?\\"):
+        return value
+    if value.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + value[2:]
+    return "\\\\?\\" + value
+
+
 @dataclass(frozen=True)
 class ManagedLayout:
     root: Path

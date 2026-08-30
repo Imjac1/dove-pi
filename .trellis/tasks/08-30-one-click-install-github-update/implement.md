@@ -154,3 +154,13 @@ are defined.
 - Final augmentation gate: Node 201/201, installer 84/84, typecheck, doctor,
   Pi smoke, task manifest validation, Python compile, and `git diff --check`
   passed. No real PATH, user root, Release, tag, or remote was mutated.
+- The first public v0.1.0 isolated install completed, but its real deep npm
+  tree exposed a Windows legacy `MAX_PATH` uninstall failure that shallow
+  fixtures missed. The patch validates the owned path before using Win32
+  extended-length deletion and adds a greater-than-260-character regression.
+- The corrective Release version is `0.1.1`; v0.1.0 remains immutable. Public
+  v0.1.1 install/update/uninstall acceptance is required before task archive.
+- Corrective local gate: Node 201/201, installer 89/89, typecheck, doctor,
+  Pi smoke, PowerShell parser, task manifest validation, Python compilation,
+  and `git diff --check` pass. The full same-release bootstrap fixture proves
+  `-NoPath/-NoFont/-NoExtensions` do not mutate skipped surfaces.

@@ -11,7 +11,7 @@ import sys
 from tempfile import TemporaryDirectory
 from typing import Callable
 
-from .layout import ManagedLayout
+from .layout import ManagedLayout, _deletion_path
 from .lock import MaintenanceLock
 from .release import (
     ReleaseAsset,
@@ -338,10 +338,14 @@ class ManagedInstaller:
             if root == Path(root.anchor) or root == Path.home().resolve(strict=False):
                 raise RuntimeError(f"Refusing to uninstall an unsafe managed root: {root}")
             # Remove only known Dove-owned children; never recurse over an
-            # arbitrary caller-supplied root wholesale.
+            # arbitrary caller-supplied root wholesale. npm dependency trees
+            # routinely exceed the legacy Windows MAX_PATH limit, so validate
+            # the ordinary path first and only then add the Win32 long-path
+            # prefix used by the filesystem deletion call.
             for directory in (self.layout.bin_dir, self.layout.versions_dir.parent, self.layout.cache_dir.parent, self.layout.staging_dir, self.layout.logs_dir):
                 if directory.exists():
-                    shutil.rmtree(self.layout.require_managed_path(directory), ignore_errors=False)
+                    managed = self.layout.require_managed_path(directory)
+                    shutil.rmtree(_deletion_path(managed), ignore_errors=False)
             self.layout.state_path.unlink(missing_ok=True)
         # Keep the now-empty state/root directories. Removing the lock and then
         # recursively deleting its parent would create a race in which another

@@ -54,10 +54,17 @@ python .\dove_pi.py install --no-extensions
 
 ### 方式二：GitHub Release 一键安装
 
-发布首个 GitHub Release 后，可以直接运行：
+直接运行：
 
 ```powershell
 irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
+```
+
+需要避免修改 PATH/字体或跳过可选扩展时，先下载脚本再传入高级开关：
+
+```powershell
+irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 -OutFile .\install.ps1
+.\install.ps1 -NoPath -NoFont -NoExtensions
 ```
 
 想先检查脚本再执行：

@@ -3,7 +3,10 @@ param(
     [ValidateSet('max', 'minimal', 'dev', 'research', 'security')]
     [string]$Profile = 'max',
     [ValidateSet('quick', 'full', 'none')]
-    [string]$Verify = 'quick'
+    [string]$Verify = 'quick',
+    [switch]$NoPath,
+    [switch]$NoFont,
+    [switch]$NoExtensions
 )
 
 $ErrorActionPreference = 'Stop'
@@ -336,14 +339,18 @@ function Invoke-DoveBootstrap {
             if (-not $hostPowerShell) {
                 throw '[Install] PowerShell is unavailable for same-version repair. Open a new terminal and retry the Dove Pi bootstrap.'
             }
-            & $hostPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $reusableLauncher repair --verify $Verify
+            $repairArguments = @('repair', '--verify', $Verify)
+            if ($NoExtensions) { $repairArguments += '--no-extensions' }
+            & $hostPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $reusableLauncher @repairArguments
             if ($LASTEXITCODE -ne 0) {
                 throw "[Install] Same-version repair exited with $LASTEXITCODE. Retry the Dove Pi bootstrap."
             }
             $managedBin = Split-Path -Parent $reusableLauncher
-            Add-DoveUserPath $managedBin
-            & $hostPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $reusableLauncher icons setup
-            if ($LASTEXITCODE -ne 0) { Write-Warning "Icon setup failed; Dove Pi remains usable with ASCII icons." }
+            if (-not $NoPath) { Add-DoveUserPath $managedBin }
+            if (-not $NoFont) {
+                & $hostPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $reusableLauncher icons setup
+                if ($LASTEXITCODE -ne 0) { Write-Warning "Icon setup failed; Dove Pi remains usable with ASCII icons." }
+            }
             Write-Host '[5/5] Ready'
             Write-Host "  Dove Pi $($manifest.version) is ready. Open a new terminal and run: dove-pi doctor"
             return
@@ -368,7 +375,12 @@ function Invoke-DoveBootstrap {
         Assert-DoveManifestIdentity $manifest $embedded $manifestPath $embeddedPath
 
         Write-Host '[4/5] Install'
-        & $python.Path (Join-Path $releaseRoot 'dove_pi.py') install --profile $Profile --verify $Verify --source-archive $archive --source-checksum $checksum --source-tag $releaseTag
+        $installArguments = @('install', '--profile', $Profile, '--verify', $Verify)
+        if ($NoPath) { $installArguments += '--no-path' }
+        if ($NoFont) { $installArguments += '--no-font' }
+        if ($NoExtensions) { $installArguments += '--no-extensions' }
+        $installArguments += @('--source-archive', $archive, '--source-checksum', $checksum, '--source-tag', $releaseTag)
+        & $python.Path (Join-Path $releaseRoot 'dove_pi.py') @installArguments
         if ($LASTEXITCODE -ne 0) { throw "[Install] Dove Pi installer exited with $LASTEXITCODE. Run 'dove-pi repair' if a previous release is installed." }
 
         Write-Host '[5/5] Ready'

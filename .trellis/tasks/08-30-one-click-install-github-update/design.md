@@ -45,6 +45,10 @@ Normal output shows a short fixed sequence such as Prerequisites, Release,
 Verify, Install, Ready. Advanced flags remain accepted but move below the
 normal path in help and documentation.
 
+The downloaded bootstrap exposes `-NoPath`, `-NoFont`, and `-NoExtensions`
+for isolated or controlled installs. These switches pass through both initial
+install and same-release repair; the piped one-line command keeps full defaults.
+
 ## Prerequisite Contract
 
 `install.ps1` checks versions, not only command presence:
@@ -117,6 +121,9 @@ doctor remain offline.
 `dove-pi uninstall --yes` removes only known children below the managed Dove
 root, then removes the exact managed `bin` entry from the persisted user PATH.
 PATH comparison is case-insensitive and tolerates quotes/trailing separators.
+Managed paths are boundary-validated before Windows extended-length path syntax
+is applied for deletion, because a real npm release tree can exceed legacy
+`MAX_PATH` even when the managed root itself is short.
 Unknown files under the managed root and all Pi/user/project state remain
 untouched. Python, Node.js, winget packages, fonts, and third-party extensions
 are never removed. JSON mode still emits one document and reports whether the

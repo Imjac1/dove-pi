@@ -57,10 +57,17 @@ python .\dove_pi.py install --no-extensions
 
 ### Option 2: one-line GitHub Release install
 
-After the first GitHub Release is published, install with:
+Install with:
 
 ```powershell
 irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex
+```
+
+To avoid changing PATH/fonts or to skip optional extensions, download the script and pass advanced switches:
+
+```powershell
+irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 -OutFile .\install.ps1
+.\install.ps1 -NoPath -NoFont -NoExtensions
 ```
 
 To inspect the script first:

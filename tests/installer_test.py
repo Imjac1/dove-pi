@@ -210,6 +210,18 @@ class ManagedUpdateCliTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "do not use --force"):
             parse_managed_update(["--force"])
 
+    def test_repair_can_skip_managed_extension_reconciliation(self):
+        result = MaintenanceResult("repair", False, "0.1.1+current", message="healthy")
+        output = io.StringIO()
+        with patch("dove_pi.validate_managed_prerequisites"), \
+                patch("dove_pi.ManagedLayout.default"), \
+                patch("dove_pi.ManagedInstaller") as installer_type, \
+                contextlib.redirect_stdout(output):
+            installer_type.return_value.repair.return_value = result
+            self.assertEqual(main(["repair", "--verify", "none", "--no-extensions", "--json"]), 0)
+        installer_type.return_value.repair.assert_called_once_with(verify="none", reconcile_components=None)
+        self.assertEqual(json.loads(output.getvalue())["command"], "repair")
+
     def test_uninstall_removes_managed_path_and_keeps_json_stdout_clean(self):
         layout = Mock()
         layout.bin_dir = Path(r"C:\Users\Alice\AppData\Local\DovePi\bin")

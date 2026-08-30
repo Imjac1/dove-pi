@@ -10,7 +10,7 @@ import sys
 from typing import Callable, Sequence
 from uuid import uuid4
 
-from .layout import ManagedLayout
+from .layout import ManagedLayout, _deletion_path
 from .release import ReleaseManifest
 from .state import InstallState, ReleaseRef, write_state
 
@@ -109,7 +109,8 @@ class ManagedTransaction:
             raise TransactionError("prepare", f"Unable to prepare Dove Pi {manifest.release_id}: {error}") from error
         finally:
             if staging.exists():
-                shutil.rmtree(self.layout.require_managed_path(staging, boundary=self.layout.staging_dir), ignore_errors=True)
+                managed = self.layout.require_managed_path(staging, boundary=self.layout.staging_dir)
+                shutil.rmtree(_deletion_path(managed), ignore_errors=True)
 
     @staticmethod
     def _verify_installed_components(staging: Path, manifest: ReleaseManifest) -> None:
@@ -195,7 +196,7 @@ class ManagedTransaction:
                 continue
             self.layout.require_version_path(resolved)
             if candidate.is_dir():
-                shutil.rmtree(resolved)
+                shutil.rmtree(_deletion_path(resolved))
             else:
                 candidate.unlink()
             removed.append(resolved)

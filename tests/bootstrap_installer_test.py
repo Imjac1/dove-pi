@@ -173,6 +173,7 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
                 f"$script:fixtureAssets='{ps_quote(assets)}'; "
                 f"$env:DOVE_PI_HOME='{ps_quote(root / 'managed')}'; "
                 f"$env:DOVE_BOOTSTRAP_RECORD='{ps_quote(record)}'; "
+                "$script:NoPath=$true; $script:NoFont=$true; $script:NoExtensions=$true; "
                 "$script:ReleaseBaseUrl='https://fixture.invalid/'; "
                 "$script:ManifestUrl=$script:ReleaseBaseUrl+'release.json'; "
                 "function Ensure-DovePrerequisite { param($DisplayName); "
@@ -202,6 +203,9 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
             self.assertEqual(arguments[-2:], ["--source-tag", "v0.3.0"])
             self.assertIn("--source-archive", arguments)
             self.assertIn("--source-checksum", arguments)
+            self.assertIn("--no-path", arguments)
+            self.assertIn("--no-font", arguments)
+            self.assertIn("--no-extensions", arguments)
 
     def test_embedded_manifest_must_exactly_match_downloaded_manifest(self):
         result = self.run_harness(
@@ -254,6 +258,71 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
             "Remove-Item -LiteralPath $root -Recurse -Force"
         )
         self.assertEqual(result, {"reused": True, "wrongIdentity": False})
+
+    def test_same_release_bootstrap_respects_advanced_switches(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            managed = root / "managed"
+            install = managed / "app" / "versions" / "current"
+            assets = root / "assets"
+            record = root / "launcher-calls.jsonl"
+            (managed / "state").mkdir(parents=True)
+            (managed / "bin").mkdir()
+            (install / "node_modules").mkdir(parents=True)
+            assets.mkdir()
+            manifest = {
+                "schemaVersion": 1,
+                "version": "0.3.0",
+                "releaseId": "0.3.0+same-release",
+                "platform": "windows",
+            }
+            manifest_text = json.dumps(manifest, separators=(",", ":"))
+            (assets / "release.json").write_text(manifest_text, encoding="utf-8")
+            (install / "release.json").write_text(manifest_text, encoding="utf-8")
+            (install / "dove_pi.py").write_text("# managed marker\n", encoding="utf-8")
+            (managed / "state" / "install.json").write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 2,
+                        "profile": "max",
+                        "current": {
+                            "version": "0.3.0",
+                            "releaseId": "0.3.0+same-release",
+                            "installPath": str(install),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (managed / "bin" / "dove-pi.ps1").write_text(
+                "[IO.File]::AppendAllText($env:DOVE_BOOTSTRAP_RECORD, (($args | ConvertTo-Json -Compress) + [Environment]::NewLine))\n",
+                encoding="utf-8",
+            )
+
+            def ps_quote(value: Path | str) -> str:
+                return str(value).replace("'", "''")
+
+            result = self.run_harness(
+                f"$script:fixtureAssets='{ps_quote(assets)}'; "
+                f"$env:DOVE_PI_HOME='{ps_quote(managed)}'; "
+                f"$env:DOVE_BOOTSTRAP_RECORD='{ps_quote(record)}'; "
+                "$script:NoPath=$true; $script:NoFont=$true; $script:NoExtensions=$true; "
+                "$script:ReleaseBaseUrl='https://fixture.invalid/'; "
+                "$script:ManifestUrl=$script:ReleaseBaseUrl+'release.json'; "
+                "$script:pathWrites=0; "
+                "function Add-DoveUserPath { $script:pathWrites++ }; "
+                "function Ensure-DovePrerequisite { param($DisplayName); "
+                f"if($DisplayName -eq 'Python'){{[pscustomobject]@{{Path='{ps_quote(Path(os.sys.executable))}';Version='3.11.0';Compatible=$true;Reason=''}}}} "
+                "else{[pscustomobject]@{Path='C:\\node.exe';Version='22.19.0';Compatible=$true;Reason=''}} }; "
+                "function Invoke-WebRequest { param([switch]$UseBasicParsing,[string]$Uri,$Headers,[string]$OutFile,[switch]$PassThru); "
+                "$name=[IO.Path]::GetFileName(([Uri]$Uri).AbsolutePath); Copy-Item -LiteralPath (Join-Path $script:fixtureAssets $name) -Destination $OutFile; "
+                "if($PassThru){[pscustomobject]@{BaseResponse=$null}} }; "
+                "Invoke-DoveBootstrap; "
+                "[pscustomobject]@{pathWrites=$script:pathWrites} | ConvertTo-Json -Compress"
+            )
+            calls = [json.loads(line) for line in record.read_text(encoding="utf-8-sig").splitlines() if line]
+            self.assertEqual(result["pathWrites"], 0)
+            self.assertEqual(calls, [["repair", "--verify", "quick", "--no-extensions"]])
 
     def test_same_release_with_changed_manifest_is_not_reused(self):
         result = self.run_harness(
