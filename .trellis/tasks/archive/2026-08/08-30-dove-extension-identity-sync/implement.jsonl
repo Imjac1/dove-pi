@@ -1,0 +1,14 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec routing for core, installer, and launcher changes."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Preserve core, Pi adapter, installer, and test ownership boundaries."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Use structured actionable diagnostics and fail closed at authority boundaries."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Apply strict typing, boundary tests, and full quality gates."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Keep extension resolution evidence structured, bounded, and secret-free."}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "Authoritative Pi extension, plugin, doctor, identity, and authority contracts."}
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "Managed extension synchronization, launcher, install, update, and repair contracts."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Pi terminal adapter spec routing."}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Keep reusable state in core and Pi callbacks as adapter wiring."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Preserve Pi, Dove, and installer state authority boundaries."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Use discriminated typed contracts at host boundaries."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Trace identity and selection data across core, Pi, launcher, manifest, and doctor."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Search existing path, manifest, and hashing helpers before adding utilities."}

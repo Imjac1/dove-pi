@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify strict typing, tests, safe paths, and complete quality gate."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify fail-closed authority errors and actionable diagnostics."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify bounded redacted resolution evidence."}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "Verify extension identity, doctor, authority, and third-party plugin contracts."}
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "Verify installer, launcher, and managed synchronization contracts."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify Pi smoke behavior and plain-text diagnostics."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify typed host boundary normalization."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Review end-to-end identity flow and all consumers."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check for duplicated identity or manifest logic."}
