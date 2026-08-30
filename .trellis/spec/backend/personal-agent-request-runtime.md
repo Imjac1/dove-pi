@@ -58,6 +58,9 @@ interface RecoveryOwnerOptions {
 - The Pi adapter normalizes complete DeepSeek DSML text tool calls (`<｜DSML｜tool_calls>...`) at the `message_end` boundary into standard Pi `toolCall` blocks. This compatibility path is strict (complete wrapper/invocation/parameter tags only), preserves non-DSML content, leaves malformed text unchanged, and still relies on Pi's normal `tool_call` policy and approval path.
 - Execution ledger records use JSONL and include task ID, step ID, mode, capability, status, timestamp, and duration.
 - Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
+- Tool-loop fingerprints are deterministic opaque hashes. `ls` with no path normalizes to `.`; same-batch duplicate idempotent calls are coalesced before execution, while mutation and unknown tools are never result-cached. Successful stagnation compares call and bounded observation fingerprints, warns at the soft threshold, terminates at the hard threshold, and resets on changed arguments, observations, errors, or mutations.
+- Provider cache evidence is per-call and stores bounded digests/sizes for system policy, serialized tools, Dove context, and history. The first call in a session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and provider misses without treating cumulative cache-read counters as regressions.
+- Oversized built-in read/shell/search observations are compacted before re-entry into model context with original/retained/omitted sizes, a digest, and deterministic narrowing metadata. Complete output remains in tool details.
 
 ## 4. Validation & Error Matrix
 
@@ -74,6 +77,9 @@ interface RecoveryOwnerOptions {
 | Provider output must be reduced but no supported output field is writable | Fail closed and abort the Pi operation; do not claim an accounting-only clamp |
 | Pi provider hook rejects a request | Call `ctx.abort()` because a thrown hook exception alone is swallowed by Pi |
 | Incomplete ledger record belongs to a live process | Leave it pending; recover only legacy, unowned, or inactive-owner records |
+| Same idempotent call appears twice in one batch | Coalesce the later call before execution |
+| Same successful read repeats without a changed observation | Warn, then terminate at the configured hard bound |
+| Provider cache scope changes | Start a new cold comparison chain |
 
 ## 5. Good / Base / Bad Cases
 
@@ -83,6 +89,7 @@ interface RecoveryOwnerOptions {
 - Base: preserve an explicit provider output limit that is already smaller than Dove's desired response headroom.
 - Bad: embed a Pi `ExtensionAPI` object in a core capability or regenerate a long PowerShell script for an already-registered capability.
 - Bad: reserve fewer tokens in accounting without updating the provider payload, or impose the plan's 4,096-token target as an Ultra ceiling.
+- Bad: key diagnostics by raw tool arguments, classify every zero cache-read value as a prefix rewrite, or share a mutation result by fingerprint.
 
 ## 6. Tests Required
 
@@ -96,6 +103,7 @@ interface RecoveryOwnerOptions {
 - Assert large-window Ultra may exceed the 4,096 planning target, while a smaller explicit provider limit is preserved.
 - Assert an unknown/unwritable output limit fails closed through `ctx.abort()` and never records a started provider call.
 - Assert live-owner records are not recovered, stop reasons are normalized, and negated/explanatory execution phrases remain read-only.
+- Assert opaque input hashing, same-batch coalescing, unchanged-observation warning/stop, changed-result reset, bounded result metadata, and cold-first/provider-scope cache attribution.
 
 ## 7. Wrong vs Correct
 
