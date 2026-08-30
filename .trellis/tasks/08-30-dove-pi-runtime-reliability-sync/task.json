@@ -1,0 +1,32 @@
+{
+  "id": "dove-pi-runtime-reliability-sync",
+  "name": "dove-pi-runtime-reliability-sync",
+  "title": "Dove Pi runtime reliability and synchronization",
+  "description": "Coordinate extension synchronization, request idempotency, tool-loop control, and audit regressions for Dove Pi runtime reliability.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "aixi",
+  "assignee": "aixi",
+  "createdAt": "2026-08-30",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-30-dove-extension-identity-sync",
+    "08-30-dove-request-lifecycle-idempotency",
+    "08-30-dove-tool-loop-context-control",
+    "08-30-dove-audit-observability-regression",
+    "08-30-spec-context-budget-optimization"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
