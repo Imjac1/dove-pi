@@ -77,9 +77,13 @@ describe("dove-pi cache audit", () => {
 			);
 			// last request was a hit → lastHitRate high, no prefix-change classification (gap < idle)
 			assert.ok((row.lastHitRate ?? 0) > 95);
+			assert.equal(row.warmHitRate, 93.75);
+			assert.equal(row.recentRequestHitRate, 75);
 
 			const text = formatCacheAudit(audit);
 			assert.ok(text.includes("88.2%"));
+			assert.ok(text.includes("热态命中%"));
+			assert.ok(text.includes("热态命中 93.8%"));
 			assert.ok(text.includes("warmup"));
 		} finally {
 			if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;

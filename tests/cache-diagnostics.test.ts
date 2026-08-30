@@ -14,6 +14,9 @@ describe("cache diagnostics", () => {
 		assert.equal(result.lastHitRate, 87.5);
 		assert.equal(result.sessionHitRate, 43.75);
 		assert.equal(result.warmHitRate, 87.5);
+		assert.equal(result.recentRequestHits, 1);
+		assert.equal(result.recentRequestCount, 2);
+		assert.equal(result.recentRequestHitRate, 50);
 		assert.match(formatCacheDiagnostics(result), /Last CH 87\.5%/);
 		assert.match(formatCacheDiagnostics(result), /Session CH 43\.8%/);
 		assert.match(formatCacheDiagnostics(result), /Warm CH 87\.5%/);
@@ -30,6 +33,7 @@ describe("cache diagnostics", () => {
 		assert.ok(result.warmHitRate !== undefined && result.warmHitRate > 74 && result.warmHitRate < 75);
 		assert.equal(result.warmupRequests, 1);
 		assert.equal(result.fullMisses, 0);
+		assert.equal(result.recentRequestHitRate, 80);
 	});
 
 	it("labels a later zero-read request by model change or idle gap", () => {

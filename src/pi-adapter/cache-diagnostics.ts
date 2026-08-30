@@ -25,12 +25,19 @@ export interface CacheDiagnostics {
 	readonly sessionHitRate?: number;
 	/** Session reuse after excluding the expected first cold provider call. */
 	readonly warmHitRate?: number;
+	/** Request-level hit rate over the most recent bounded window. */
+	readonly recentRequestHitRate?: number;
+	readonly recentRequestHits: number;
+	readonly recentRequestCount: number;
 	readonly warmPromptTokens: number;
+	readonly warmCacheReadTokens: number;
 	readonly warmInputTokens: number;
 	readonly warmupRequests: number;
 	readonly fullMisses: number;
 	readonly lastMissReason?: "warmup" | "model-change" | "idle" | "prefix-change";
 }
+
+const RECENT_REQUEST_WINDOW = 5;
 
 interface SessionMessageEntry {
 	readonly type?: unknown;
@@ -128,6 +135,8 @@ export function inspectCacheDiagnostics(entries: readonly unknown[]): CacheDiagn
 	const warmCacheReadTokens = warmSamples.reduce((total, sample) => total + sample.cacheRead, 0);
 	const warmCacheWriteTokens = warmSamples.reduce((total, sample) => total + sample.cacheWrite, 0);
 	const warmPromptTokens = warmInputTokens + warmCacheReadTokens + warmCacheWriteTokens;
+	const recentSamples = samples.slice(-RECENT_REQUEST_WINDOW);
+	const recentRequestHits = recentSamples.filter((sample) => sample.cacheRead > 0).length;
 	const last = samples.at(-1);
 	const lastPromptTokens = last ? last.input + last.cacheRead + last.cacheWrite : 0;
 	return {
@@ -139,7 +148,11 @@ export function inspectCacheDiagnostics(entries: readonly unknown[]): CacheDiagn
 		lastHitRate: lastPromptTokens > 0 ? (last!.cacheRead / lastPromptTokens) * 100 : undefined,
 		sessionHitRate: promptTokens > 0 ? (cacheReadTokens / promptTokens) * 100 : undefined,
 		warmHitRate: warmPromptTokens > 0 ? (warmCacheReadTokens / warmPromptTokens) * 100 : undefined,
+		recentRequestHitRate: recentSamples.length > 0 ? (recentRequestHits / recentSamples.length) * 100 : undefined,
+		recentRequestHits,
+		recentRequestCount: recentSamples.length,
 		warmPromptTokens,
+		warmCacheReadTokens,
 		warmInputTokens,
 		warmupRequests,
 		fullMisses,
@@ -157,5 +170,6 @@ export function formatCacheDiagnostics(diagnostics: CacheDiagnostics): string {
 	const last = diagnostics.lastHitRate === undefined ? "n/a" : `${diagnostics.lastHitRate.toFixed(1)}%`;
 	const session = diagnostics.sessionHitRate === undefined ? "n/a" : `${diagnostics.sessionHitRate.toFixed(1)}%`;
 	const warm = diagnostics.warmHitRate === undefined ? "n/a" : `${diagnostics.warmHitRate.toFixed(1)}%`;
-	return `Last CH ${last} · Warm CH ${warm} · Session CH ${session} · R ${formatTokens(diagnostics.cacheReadTokens)} · W ${formatTokens(diagnostics.cacheWriteTokens)} · ${diagnostics.fullMisses} full miss${diagnostics.fullMisses === 1 ? "" : "es"}`;
+	const recent = diagnostics.recentRequestHitRate === undefined ? "n/a" : `${diagnostics.recentRequestHitRate.toFixed(1)}%`;
+	return `Last CH ${last} · Warm CH ${warm} · Recent5 RH ${recent} · Session CH ${session} · R ${formatTokens(diagnostics.cacheReadTokens)} · W ${formatTokens(diagnostics.cacheWriteTokens)} · ${diagnostics.fullMisses} full miss${diagnostics.fullMisses === 1 ? "" : "es"}`;
 }

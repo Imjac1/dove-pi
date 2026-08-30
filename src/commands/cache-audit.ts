@@ -21,12 +21,18 @@ interface SessionCacheRow {
 	readonly project: string;
 	readonly requests: number;
 	readonly sessionHitRate: number | undefined;
+	readonly warmHitRate: number | undefined;
+	readonly recentRequestHitRate: number | undefined;
+	readonly recentRequestHits: number;
+	readonly recentRequestCount: number;
 	readonly lastHitRate: number | undefined;
 	readonly warmups: number;
 	readonly fullMisses: number;
 	readonly lastMissReason: CacheDiagnostics["lastMissReason"];
 	readonly promptTokens: number;
 	readonly uncachedTokens: number;
+	readonly warmPromptTokens: number;
+	readonly warmCacheReadTokens: number;
 	/** Cache-stability policy the session ran under (how many segments its context epoch had). */
 	readonly cachePolicy: string;
 }
@@ -137,12 +143,18 @@ export async function runCacheAudit(
 				project,
 				requests: diag.requestCount,
 				sessionHitRate: diag.sessionHitRate,
+				warmHitRate: diag.warmHitRate,
+				recentRequestHitRate: diag.recentRequestHitRate,
+				recentRequestHits: diag.recentRequestHits,
+				recentRequestCount: diag.recentRequestCount,
 				lastHitRate: diag.lastHitRate,
 				warmups: diag.warmupRequests,
 				fullMisses: diag.fullMisses,
 				lastMissReason: diag.lastMissReason,
 				promptTokens: diag.promptTokens,
 				uncachedTokens: diag.inputTokens,
+				warmPromptTokens: diag.warmPromptTokens,
+				warmCacheReadTokens: diag.warmCacheReadTokens,
 				cachePolicy: detectCachePolicy(entries),
 			};
 			if (options.onlyBelow !== undefined) {
@@ -166,22 +178,26 @@ export function formatCacheAudit(rows: readonly SessionCacheRow[]): string {
 			prompt: acc.prompt + row.promptTokens,
 			uncached: acc.uncached + row.uncachedTokens,
 			misses: acc.misses + row.fullMisses,
+			warmPrompt: acc.warmPrompt + row.warmPromptTokens,
+			warmRead: acc.warmRead + row.warmCacheReadTokens,
+			recentHits: acc.recentHits + row.recentRequestHits,
+			recentRequests: acc.recentRequests + row.recentRequestCount,
 		}),
-		{ requests: 0, prompt: 0, uncached: 0, misses: 0 },
+		{ requests: 0, prompt: 0, uncached: 0, misses: 0, warmPrompt: 0, warmRead: 0, recentHits: 0, recentRequests: 0 },
 	);
 
 	lines.push(
-		"| 会话 | 项目 | 策略 | 请求 | 会话命中% | 末次命中% | warmup | 全MISS | 末次miss原因 | 未缓存input |",
+		"| 会话 | 项目 | 策略 | 请求 | 累计命中% | 热态命中% | 近5次请求命中% | 末次命中% | warmup | 全MISS | 末次miss原因 | 未缓存input |",
 	);
-	lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+	lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
 	for (const r of rows) {
 		lines.push(
-			`| ${r.session} | ${r.project} | ${r.cachePolicy} | ${r.requests} | ${r.sessionHitRate === undefined ? "n/a" : r.sessionHitRate.toFixed(1)}% | ${r.lastHitRate === undefined ? "n/a" : r.lastHitRate.toFixed(1)}% | ${r.warmups} | ${r.fullMisses} | ${r.lastMissReason ?? "n/a"} | ${r.uncachedTokens.toLocaleString()} |`,
+			`| ${r.session} | ${r.project} | ${r.cachePolicy} | ${r.requests} | ${r.sessionHitRate === undefined ? "n/a" : r.sessionHitRate.toFixed(1)}% | ${r.warmHitRate === undefined ? "n/a" : r.warmHitRate.toFixed(1)}% | ${r.recentRequestHitRate === undefined ? "n/a" : r.recentRequestHitRate.toFixed(1)}% | ${r.lastHitRate === undefined ? "n/a" : r.lastHitRate.toFixed(1)}% | ${r.warmups} | ${r.fullMisses} | ${r.lastMissReason ?? "n/a"} | ${r.uncachedTokens.toLocaleString()} |`,
 		);
 	}
 	lines.push("");
 	lines.push(
-		`**汇总**(${rows.length} 会话): 请求 ${totals.requests.toLocaleString()} · prompt ${totals.prompt.toLocaleString()} · 未缓存 input ${totals.uncached.toLocaleString()} · 全MISS ${totals.misses} 次。`,
+		`**汇总**(${rows.length} 会话): 请求 ${totals.requests.toLocaleString()} · prompt ${totals.prompt.toLocaleString()} · 累计未缓存 input ${totals.uncached.toLocaleString()} · 热态命中 ${totals.warmPrompt > 0 ? `${(totals.warmRead / totals.warmPrompt * 100).toFixed(1)}%` : "n/a"} · 近5次请求命中 ${totals.recentRequests > 0 ? `${(totals.recentHits / totals.recentRequests * 100).toFixed(1)}%` : "n/a"} · 全MISS ${totals.misses} 次。`,
 	);
 	lines.push(
 		"miss 原因: warmup=会话首个请求(预期) · prefix-change=前缀变动(应尽量消除) · idle=空闲超时 · model-change=换模型",
