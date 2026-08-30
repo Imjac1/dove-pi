@@ -285,3 +285,24 @@ Implemented managed-first Dove extension identity synchronization with trusted e
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: Dove request lifecycle idempotency
+
+**Date**: 2026-08-30
+**Task**: Dove request lifecycle idempotency
+**Branch**: `master`
+
+### Summary
+
+Added stable logical request leases across Pi redelivery, retry, compaction, continuation, steering, provider calls, capability/tool correlation, and structured settlement; documented the six-abort audit mapping and verified lifecycle regressions.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `60a5960` | (see git log) |
+
+### Status
+
+[OK] **Completed**
