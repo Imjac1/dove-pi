@@ -164,3 +164,8 @@ are defined.
   Pi smoke, PowerShell parser, task manifest validation, Python compilation,
   and `git diff --check` pass. The full same-release bootstrap fixture proves
   `-NoPath/-NoFont/-NoExtensions` do not mutate skipped surfaces.
+- Public v0.1.1 bootstrap acceptance exposed PowerShell native pipeline exit-
+  code loss: a healthy Python 3.11.6 was classified as missing before any Dove
+  activation. The run was interrupted before winget installed anything. The
+  fix captures native output without a pipeline, adds a real Python regression,
+  and advances the immutable corrective Release to v0.1.2.

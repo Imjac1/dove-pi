@@ -54,6 +54,18 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
         )
         self.assertEqual(result, {"path": "C:\\existing.exe", "wingetLookups": 0})
 
+    def test_real_native_python_runtime_is_detected(self):
+        python = str(Path(os.sys.executable)).replace("'", "''")
+        result = self.run_harness(
+            f"function Get-DoveCommandPath([string]$Name) {{ '{python}' }}; "
+            "$runtime=Get-DoveRuntime python ([version]'3.10.0') "
+            "@('-c','import platform; print(platform.python_version())'); "
+            "[pscustomobject]@{present=[bool]$runtime;compatible=$runtime.Compatible;version=$runtime.Version}|ConvertTo-Json -Compress"
+        )
+        self.assertTrue(result["present"])
+        self.assertTrue(result["compatible"])
+        self.assertRegex(result["version"], r"^\d+\.\d+(?:\.\d+)?$")
+
     def test_missing_runtime_is_installed_then_re_resolved(self):
         result = self.run_harness(
             "$script:resolveCalls=0; $script:installs=0; $script:refreshes=0; "

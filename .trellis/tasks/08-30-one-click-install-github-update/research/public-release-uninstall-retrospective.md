@@ -35,6 +35,12 @@ raise confidence in the long-path cause above 95%.
 | P1 | Specification | Require long-path Release-tree coverage for every recursive managed deletion | Done |
 | P1 | Release process | Run isolated install/version/doctor/update-check/uninstall against public assets | Done for discovery; rerun required on patch Release |
 
+The first v0.1.1 patch acceptance then exposed a second, independent boundary:
+PowerShell native exit status was read after a `Select-Object` pipeline. The
+pipeline yielded the correct version text but `$LASTEXITCODE` was `$null`, so
+`$null -ne 0` misclassified the runtime as missing. Tests must therefore include
+at least one real native prerequisite process, not only scriptblock doubles.
+
 ## 4. Systematic Expansion
 
 - **Similar issues**: failed staging cleanup and old-version pruning used the

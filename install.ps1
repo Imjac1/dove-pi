@@ -42,8 +42,13 @@ function Get-DoveRuntime {
     $path = Get-DoveCommandPath $Name
     if (-not $path) { return $null }
     try {
-        $raw = (& $path @VersionArguments 2>$null | Select-Object -First 1)
-        if ($LASTEXITCODE -ne 0 -or $null -eq $raw) { return $null }
+        # Do not pipe a native process into Select-Object here. In both modern
+        # PowerShell and Windows PowerShell that pipeline can hide/reset the
+        # native LASTEXITCODE, causing a healthy runtime to look missing.
+        $lines = @(& $path @VersionArguments 2>$null)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0 -or $lines.Count -eq 0) { return $null }
+        $raw = $lines[0]
         $match = [regex]::Match(([string]$raw).Trim(), '\d+\.\d+(?:\.\d+)?')
         if (-not $match.Success) { return $null }
         $version = [version]$match.Value
