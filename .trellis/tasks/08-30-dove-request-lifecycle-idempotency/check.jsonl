@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Verify logical request identity, attempt separation, guidance emission, and provider retry contracts."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"Verify Pi hook ordering, startup safety, duplicate wrapper suppression, and settlement integration."}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"Verify correlation continuity and that non-idempotent effects are never replayed automatically."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify terminal reason coverage and bounded retry classification."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply repository test, type-safety, and regression quality gates."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check the complete input-to-settlement data flow rather than isolated unit behavior."}

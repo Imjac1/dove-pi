@@ -67,12 +67,12 @@ export interface CapabilityResult<TResult = unknown> {
 export interface ExecutionRecord {
 	readonly taskId: string;
 	readonly stepId: string;
-	readonly kind: "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.planned" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered";
+	readonly kind: "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered";
 	readonly timestamp: string;
 	readonly mode: AgentMode;
 	readonly details: Record<string, unknown>;
 	/** Correlation identifiers are optional for legacy records but required for new runs. */
-	readonly correlation?: Readonly<{ requestId?: string; sessionId?: string; taskId?: string; providerCallId?: string; executionId?: string; toolCallId?: string }>;
+	readonly correlation?: Readonly<{ requestId?: string; sessionId?: string; taskId?: string; attemptId?: string; providerCallId?: string; executionId?: string; toolCallId?: string }>;
 }
 
 export interface DispatchEstimate {

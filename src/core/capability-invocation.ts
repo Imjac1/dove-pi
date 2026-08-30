@@ -11,6 +11,8 @@ export type RuntimePlatform = "windows" | "linux" | "macos";
 export interface CapabilityInvocationServiceOptions {
 	readonly platform?: RuntimePlatform;
 	readonly ownerPid?: number;
+	/** Pi-internal low-level attempt correlation; not part of the public protocol. */
+	readonly attemptId?: string;
 	readonly authorize?: (request: CapabilityInvocationRequest) => boolean | Promise<boolean>;
 	readonly captureEvidence?: CapabilityExecutionOptions["captureEvidence"];
 }
@@ -51,6 +53,7 @@ export class CapabilityInvocationService {
 			signal,
 			requestId: request.correlation.requestId,
 			sessionId: request.correlation.hostSessionId,
+			attemptId: this.options.attemptId,
 			toolCallId: request.correlation.toolCallId,
 			ownerPid: this.options.ownerPid,
 		}, {

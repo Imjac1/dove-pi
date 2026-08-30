@@ -27,6 +27,7 @@ import { formatProgressSnapshot, ProgressGuard } from "./progress-guard.ts";
 import { formatCacheDiagnostics, inspectCacheDiagnostics } from "./cache-diagnostics.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan, type RequestPlan } from "../core/request-plan.ts";
+import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
 import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens, type BudgetAccounting } from "../core/model-gateway.ts";
 import { stablePromptPolicy } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
@@ -79,6 +80,12 @@ export function claimDoveRegistration(pi: ExtensionAPI, identity: DoveExtensionI
 }
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
+const REVIEWED_IDEMPOTENT_PI_TOOLS = new Set([
+	"read", "grep", "find", "ls",
+	"agent_list_capabilities", "agent_doctor", "agent_project_status", "agent_project_context", "agent_workspace_verify",
+	"lens_diagnostics", "lsp_diagnostics", "symbol_search", "project_report", "module_report", "read_symbol", "read_enclosing",
+	"web_search", "source_check", "fetch_content", "get_search_content",
+]);
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
 	fast: "thinkingLow",
 	standard: "thinkingMedium",
@@ -187,6 +194,64 @@ function payloadMessageText(message: unknown): string {
 	return "";
 }
 
+function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
+	if (typeof message !== "object" || message === null) return classifyProviderFailure({ category: "unknown" });
+	const value = message as { errorMessage?: unknown; error?: unknown };
+	const text = String(value.errorMessage ?? value.error ?? "");
+	const code = text.match(/\b(?:ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_SOCKET)\b/i)?.[0];
+	if (code) return classifyProviderFailure({ code });
+	if (/cancel(?:led|ed)?|abort(?:ed)?/i.test(text)) return classifyProviderFailure({ cancelled: true });
+	if (/authorization denied|permission denied|unauthorized|forbidden|invalid api key/i.test(text)) return classifyProviderFailure({ category: "authorization-denied" });
+	if (/invalid (?:configuration|config|model|provider)|configuration error/i.test(text)) return classifyProviderFailure({ category: "invalid-configuration" });
+	const httpStatus = Number(text.match(/(?:^|\D)(408|425|429|500|502|503|504|524)(?:\D|$)/)?.[1]);
+	if (Number.isSafeInteger(httpStatus)) return classifyProviderFailure({ httpStatus });
+	if (/overloaded|rate.?limit|too many requests|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|connection.?refused|connection.?lost|socket hang up|fetch failed|getaddrinfo|ENOTFOUND|upstream.?connect|reset before headers|timed? out|timeout|websocket.?closed|stream ended before/i.test(text)) {
+		return { kind: "transient", reason: "reviewed-provider-message" };
+	}
+	return classifyProviderFailure({ category: "unknown" });
+}
+
+/**
+ * Fail-closed retry classification for Pi tools. Unknown/third-party tools are
+ * non-idempotent unless Dove has reviewed the exact tool or capability recipe.
+ */
+export function isPiToolInvocationIdempotent(
+	toolName: string,
+	input: Readonly<Record<string, unknown>>,
+	registry: CapabilityRegistry,
+	recipes: RecipeRegistry,
+): boolean {
+	if (REVIEWED_IDEMPOTENT_PI_TOOLS.has(toolName)) return true;
+	if (toolName === "agent_run_capability") {
+		const name = typeof input.name === "string" ? input.name : undefined;
+		return name ? registry.get(name)?.idempotent === true : false;
+	}
+	if (toolName === "agent_run_recipe") {
+		const name = typeof input.name === "string" ? input.name : undefined;
+		if (!name) return false;
+		try {
+			return recipes.require(name).steps.every((step) => registry.get(step.capability)?.idempotent === true);
+		} catch {
+			return false;
+		}
+	}
+	return false;
+}
+
+interface PendingRequestTerminal {
+	readonly reason: RequestTerminalReason;
+	readonly detail?: string;
+	readonly policyAbort: boolean;
+}
+
+function terminalForFailure(failure: ProviderFailureClassification, decisionReason: string): PendingRequestTerminal {
+	if (failure.reason === "cancelled") return { reason: "cancelled", detail: failure.reason, policyAbort: false };
+	if (failure.reason === "startup-conflict") return { reason: "startup-conflict", detail: failure.reason, policyAbort: true };
+	if (failure.reason === "invalid-configuration") return { reason: "invalid-configuration", detail: failure.reason, policyAbort: true };
+	if (failure.reason === "authorization-denied") return { reason: "authorization-denied", detail: failure.reason, policyAbort: true };
+	return { reason: "failed", detail: decisionReason, policyAbort: true };
+}
+
 /** Remove only Dove's derived context messages when a final payload is over budget. */
 function stripDoveContextFromPayload<T>(payload: T, doveContextPayloads: ReadonlyMap<number, string>): T {
 	if (typeof payload !== "object" || payload === null) return payload;
@@ -241,7 +306,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const doveContextPayloads = new Map<number, string>();
 	let currentRequestPlan: ReturnType<typeof createRequestPlan> | undefined;
 	let currentRequestTaskId: string | undefined;
-	let currentProviderCall: { id: string; requestId: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number } | undefined;
+	let currentProviderCall: { id: string; requestId: string; attemptId?: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number } | undefined;
 	let appliedToolSetKey: string | undefined;
 	let activeToolSnapshot: string[] = [];
 	let explicitHostToolSnapshot: string[] | undefined;
@@ -310,6 +375,30 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let toolProfile: DoveToolProfile = parseDoveToolProfile(process.env.DOVE_PI_TOOL_PROFILE) ?? "auto";
 	const hasExplicitToolSelection = process.argv.some((arg) => arg === "--tools" || arg === "-t" || arg === "--no-tools" || arg === "-nt" || arg === "--no-builtin-tools" || arg === "-nbt");
 	const ledger = new ExecutionLedger(join(stateDir, "execution.jsonl"));
+	const requestLifecycle = new RequestLifecycleController({
+		maxAttempts: Number.isSafeInteger(Number(process.env.DOVE_PI_MAX_REQUEST_ATTEMPTS)) && Number(process.env.DOVE_PI_MAX_REQUEST_ATTEMPTS) > 0
+			? Number(process.env.DOVE_PI_MAX_REQUEST_ATTEMPTS)
+			: 3,
+	});
+	const requestMetadata = new Map<string, { taskId: string; sessionId?: string; mode: AgentMode }>();
+	let lastAttemptOutcome: RequestAttemptOutcome | undefined;
+	let lastProviderFailure: ProviderFailureClassification | undefined;
+	let pendingRequestTerminal: PendingRequestTerminal | undefined;
+	let nextAttemptTrigger: RequestAttemptTrigger | undefined;
+	async function appendRequestTerminal(transition: RequestTerminalTransition): Promise<void> {
+		const metadata = requestMetadata.get(transition.logicalRequestId) ?? { taskId: "pi-session", mode: mode.current };
+		await ledger.appendRequestTerminal({
+			taskId: metadata.taskId,
+			stepId: `request:${transition.logicalRequestId}`,
+			mode: metadata.mode,
+			requestId: transition.logicalRequestId,
+			sessionId: metadata.sessionId,
+			reason: transition.reason,
+			detail: transition.detail,
+			policyAbort: transition.policyAbort,
+		});
+		requestMetadata.delete(transition.logicalRequestId);
+	}
 	const progressGuard = new ProgressGuard({
 		consecutiveErrorThreshold: Number(process.env.DOVE_PI_PROGRESS_ERROR_THRESHOLD),
 		repeatedFailureThreshold: Number(process.env.DOVE_PI_PROGRESS_REPEAT_THRESHOLD),
@@ -775,6 +864,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const definition = registry.require(typedParams.name);
 			const service = new CapabilityInvocationService(registry, ledger, {
 				ownerPid: process.pid,
+				attemptId: requestLifecycle.currentAttempt()?.attemptId,
 				authorize: async () => {
 					// Degraded/read-only mode is a hard safety boundary: native Pi
 					// confirmation must not turn a side-effect capability back on.
@@ -790,7 +880,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				context: {
 					cwd,
 					mode: mode.snapshot(),
-					taskId: projectProvider.getCurrentTask()?.stableId ?? "pi-session",
+					taskId: currentRequestTaskId ?? projectProvider.getCurrentTask()?.stableId ?? "pi-session",
 					stepId: `capability-${Date.now()}`,
 				},
 				correlation: {
@@ -838,6 +928,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				signal,
 				requestId: currentRequestPlan?.requestId,
 				sessionId,
+				attemptId: requestLifecycle.currentAttempt()?.attemptId,
 				toolCallId: _toolCallId,
 				ownerPid: process.pid,
 			});
@@ -1035,6 +1126,43 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		},
 	});
 
+	pi.on("input", async (event, ctx) => {
+		const accepted = requestLifecycle.acceptSubmission({
+			text: event.text,
+			source: event.source,
+			streamingBehavior: event.streamingBehavior,
+		});
+		for (const transition of accepted.terminalized) await appendRequestTerminal(transition);
+		const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+		if (accepted.coalesced) {
+			const metadata = requestMetadata.get(accepted.lease.logicalRequestId) ?? { taskId: "pi-session", sessionId, mode: mode.current };
+			await ledger.appendRequestRedeliveryCoalesced({
+				taskId: metadata.taskId,
+				stepId: `request:${accepted.lease.logicalRequestId}`,
+				mode: metadata.mode,
+				requestId: accepted.lease.logicalRequestId,
+				sessionId: metadata.sessionId,
+				reason: accepted.reason ?? "in-flight-redelivery",
+			});
+			// Suppress the duplicate before Pi expands or persists another user
+			// entry. The controller coalesces only an active equivalent delivery (or
+			// an exact host submission id when a future host exposes one).
+			return { action: "handled" };
+		} else {
+			if (accepted.newLogicalRequest) requestMetadata.set(accepted.lease.logicalRequestId, { taskId: "pi-session", sessionId, mode: mode.current });
+			await ledger.appendRequestReceived({
+				taskId: requestMetadata.get(accepted.lease.logicalRequestId)?.taskId ?? "pi-session",
+				stepId: `request:${accepted.lease.logicalRequestId}`,
+				mode: requestMetadata.get(accepted.lease.logicalRequestId)?.mode ?? mode.current,
+				requestId: accepted.lease.logicalRequestId,
+				sessionId,
+				source: event.source,
+				delivery: accepted.delivery,
+			});
+		}
+		return { action: "continue" };
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
 		const entries = ctx.sessionManager.getEntries();
 		const last = [...entries].reverse().find((entry) => entry.type === "custom" && entry.customType === "personal-agent-mode") as { data?: { current?: AgentMode } } | undefined;
@@ -1063,20 +1191,97 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("agent_start", async (_event, ctx) => {
+		const plan = currentRequestPlan;
+		if (plan) {
+			const lease = requestLifecycle.activeLease();
+			const trigger = nextAttemptTrigger ?? ((lease?.attemptCount ?? 0) === 0 ? "initial" : lastAttemptOutcome === "transient-failure" ? "provider-retry" : "continuation");
+			const attempt = requestLifecycle.startAttempt(trigger);
+			nextAttemptTrigger = undefined;
+			const taskId = currentRequestTaskId ?? "pi-session";
+			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+			await ledger.appendRequestAttemptStarted({ taskId, stepId: `request:${plan.requestId}`, mode: plan.mode, requestId: plan.requestId, sessionId, attemptId: attempt.attemptId, number: attempt.number, trigger: attempt.trigger });
+			lastAttemptOutcome = undefined;
+			lastProviderFailure = undefined;
+		}
 		progressGuard.start();
 		operation = "running";
 		updateStatus(ctx);
 	});
 
-	pi.on("agent_end", async (_event, ctx) => {
+	pi.on("agent_end", async (event, ctx) => {
 		progressGuard.end();
 		operation = "idle";
+		const attempt = requestLifecycle.currentAttempt();
+		if (attempt && currentRequestPlan) {
+			const lastAssistant = [...event.messages].reverse().find((message) => message.role === "assistant") as { stopReason?: unknown } | undefined;
+			const stopReason = normalizeStopReason(lastAssistant?.stopReason);
+			// A policy abort intentionally changes Pi's assistant stop reason to
+			// "aborted" before this hook. Preserve the structured policy reason
+			// instead of misreporting it as a user cancellation.
+			const observedFailure = pendingRequestTerminal
+				? lastProviderFailure ?? { kind: "terminal", reason: pendingRequestTerminal.detail ?? pendingRequestTerminal.reason } as const
+				: ctx.signal?.aborted || stopReason === "cancelled"
+					? classifyProviderFailure({ cancelled: true })
+					: lastProviderFailure ?? (stopReason === "error" ? classifyAssistantProviderFailure(lastAssistant) : undefined);
+			const retry = observedFailure ? requestLifecycle.retryDecision(observedFailure) : undefined;
+			if (observedFailure && !retry?.retry && !pendingRequestTerminal) {
+				pendingRequestTerminal = terminalForFailure(observedFailure, retry?.reason ?? observedFailure.reason);
+			}
+			const outcome: RequestAttemptOutcome = pendingRequestTerminal?.reason === "cancelled" || (!pendingRequestTerminal && observedFailure?.reason === "cancelled")
+				? "cancelled"
+				: retry?.retry ? "transient-failure" : observedFailure ? "failed" : "completed";
+			const completed = requestLifecycle.finishAttempt(attempt.attemptId, outcome);
+			const taskId = currentRequestTaskId ?? "pi-session";
+			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+			await ledger.appendRequestAttemptCompleted({ taskId, stepId: `request:${currentRequestPlan.requestId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, sessionId, attemptId: completed.attemptId, number: completed.number, outcome, failureReason: pendingRequestTerminal?.detail ?? (observedFailure && !retry?.retry ? retry?.reason : undefined) });
+			lastAttemptOutcome = outcome;
+			if (pendingRequestTerminal?.policyAbort || (observedFailure && !retry?.retry && observedFailure.reason !== "cancelled")) ctx.abort();
+		}
 		if (currentProviderCall) {
 			const call = currentProviderCall;
-			await ledger.appendProviderRequestRecovered({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, providerCallId: call.id });
+			if (lastProviderFailure) {
+				await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason: "error", usage: call.httpStatus === undefined ? undefined : { httpStatus: call.httpStatus } });
+			} else {
+				await ledger.appendProviderRequestRecovered({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id });
+			}
 			currentProviderCall = undefined;
 		}
 		updateStatus(ctx);
+	});
+
+	pi.on("agent_settled", async (_event, ctx) => {
+		const terminal = pendingRequestTerminal ?? (ctx.signal?.aborted || lastAttemptOutcome === "cancelled"
+			? { reason: "cancelled", policyAbort: false } as const
+			: lastAttemptOutcome === "failed" ? { reason: "failed", policyAbort: false } as const : { reason: "completed", policyAbort: false } as const);
+		for (const transition of requestLifecycle.settle(terminal.reason, { detail: terminal.detail, policyAbort: terminal.policyAbort })) await appendRequestTerminal(transition);
+		currentRequestPlan = undefined;
+		currentRequestTaskId = undefined;
+		lastAttemptOutcome = undefined;
+		lastProviderFailure = undefined;
+		pendingRequestTerminal = undefined;
+		nextAttemptTrigger = undefined;
+	});
+
+	pi.on("session_compact", async (event) => {
+		if (event.willRetry && requestLifecycle.activeLease()) nextAttemptTrigger = "compaction-retry";
+	});
+
+	pi.on("session_shutdown", async (event) => {
+		const reason = event.reason === "reload" || event.reason === "new" || event.reason === "resume" || event.reason === "fork" ? "superseded" : "cancelled";
+		for (const transition of requestLifecycle.terminateAll(reason)) await appendRequestTerminal(transition);
+		currentRequestPlan = undefined;
+		currentRequestTaskId = undefined;
+		currentProviderCall = undefined;
+		lastAttemptOutcome = undefined;
+		lastProviderFailure = undefined;
+		pendingRequestTerminal = undefined;
+		nextAttemptTrigger = undefined;
+	});
+
+	pi.on("tool_call", async (event) => {
+		if (!requestLifecycle.activeLease()) return;
+		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
+		requestLifecycle.markEffectStarted({ effectId: event.toolCallId, idempotent });
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
@@ -1109,15 +1314,26 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.on("message_end", async (event) => {
 		const message = event.message;
 		if (message.role !== "assistant") return;
+		const observed = message as unknown as { stopReason?: unknown; usage?: Readonly<Record<string, number>> };
+		const stopReason = normalizeStopReason(observed.stopReason);
 		if (currentProviderCall) {
 			const call = currentProviderCall;
-			const observed = message as unknown as { stopReason?: unknown; usage?: Readonly<Record<string, number>> };
-			await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, providerCallId: call.id, stopReason: normalizeStopReason(observed.stopReason), usage: observed.usage });
+			await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason, usage: observed.usage });
 			currentProviderCall = undefined;
 		}
+		if (stopReason === "error") {
+			lastProviderFailure ??= classifyAssistantProviderFailure(message);
+			if (requestLifecycle.activeLease()) {
+				const decision = requestLifecycle.retryDecision(lastProviderFailure);
+				if (!decision.retry) pendingRequestTerminal = terminalForFailure(lastProviderFailure, decision.reason);
+			}
+		} else if (stopReason !== "cancelled") {
+			lastProviderFailure = undefined;
+		}
 		const normalized = normalizeDsmlContent(message.content);
-		if (!normalized.converted) return;
-		return { message: { ...message, content: normalized.content as typeof message.content } };
+		const policyStopReason = pendingRequestTerminal?.policyAbort && stopReason === "error" ? "aborted" : message.stopReason;
+		if (!normalized.converted && policyStopReason === message.stopReason) return;
+		return { message: { ...message, stopReason: policyStopReason, content: normalized.converted ? normalized.content as typeof message.content : message.content } };
 	});
 
 	pi.on("thinking_level_select", async (event) => {
@@ -1162,6 +1378,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const taskId = currentRequestTaskId ?? (currentRequestPlan?.intent === "chat" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? "pi-session");
 		const stepId = `provider:${plan.requestId}`;
 		const providerCallId = `provider-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		const attemptId = requestLifecycle.currentAttempt()?.attemptId;
 		const fallbackToolSchemaOverhead = 512 + (typeof pi.getActiveTools === "function" ? pi.getActiveTools().length * 128 : 0);
 		const providerOverhead = 256;
 		const modelMaxTokens = typeof model?.maxTokens === "number" && Number.isFinite(model.maxTokens) ? model.maxTokens : undefined;
@@ -1213,8 +1430,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (!finalBudget) {
 			if (rejection instanceof ModelBudgetError) {
 				await ledger.appendModelBudgetRejected(taskId, stepId, plan.mode, plan.requestId, rejection.diagnostic, sessionId);
-				await ledger.appendProviderRequestRejected({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, providerCallId, diagnostic: rejection.diagnostic });
+				await ledger.appendProviderRequestRejected({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, attemptId, providerCallId, diagnostic: rejection.diagnostic });
 			}
+			lastProviderFailure = classifyProviderFailure({ category: "invalid-configuration" });
+			pendingRequestTerminal = {
+				reason: "invalid-configuration",
+				detail: rejection instanceof ModelBudgetError ? rejection.diagnostic.code : "provider-payload-rejected",
+				policyAbort: true,
+			};
 			// Pi intentionally swallows extension exceptions. Aborting the host's
 			// active operation is the public cancellation boundary that prevents an
 			// already-rejected payload from reaching fetch/transport.
@@ -1226,8 +1449,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		await ledger.appendModelBudgetChecked(taskId, stepId, plan.mode, plan.requestId, finalBudget, sessionId);
 		const toolMetrics = providerToolSchemaMetrics(payload) ?? { toolCount: 0, schemaBytes: 0 };
-		await ledger.appendProviderRequestStarted({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, providerCallId, inputTokens: finalBudget.inputTokens, providerToolCount: toolMetrics.toolCount, providerToolSchemaBytes: toolMetrics.schemaBytes, cachePolicyVersion: 2, ownerPid: process.pid });
-		currentProviderCall = { id: providerCallId, requestId: plan.requestId, taskId, stepId, mode: plan.mode, sessionId };
+		await ledger.appendProviderRequestStarted({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, attemptId, providerCallId, inputTokens: finalBudget.inputTokens, providerToolCount: toolMetrics.toolCount, providerToolSchemaBytes: toolMetrics.schemaBytes, cachePolicyVersion: 2, ownerPid: process.pid });
+		currentProviderCall = { id: providerCallId, requestId: plan.requestId, attemptId, taskId, stepId, mode: plan.mode, sessionId };
 		return payload === event.payload ? undefined : payload;
 	});
 
@@ -1236,17 +1459,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (!call) return;
 		call.httpStatus = event.status;
 		if (event.status >= 400) {
-			await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, providerCallId: call.id, stopReason: "error", usage: { httpStatus: event.status } });
-			currentProviderCall = undefined;
-		}
+			lastProviderFailure = classifyProviderFailure({ httpStatus: event.status });
+		} else lastProviderFailure = undefined;
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
-		const requestPlan = createRequestPlan({
-			message: event.prompt,
-			mode: mode.current,
-			projectAvailable: projectProvider.kind === "trellis",
-		});
+		const requestLease = requestLifecycle.beginRequest({ prompt: event.prompt });
+		const requestPlan = currentRequestPlan?.requestId === requestLease.logicalRequestId
+			? currentRequestPlan
+			: createRequestPlan({
+				message: event.prompt,
+				requestId: requestLease.logicalRequestId,
+				mode: mode.current,
+				projectAvailable: projectProvider.kind === "trellis",
+			});
 		const continuationState = readProjectContinuationForPlan(projectProvider, requestPlan);
 		currentRequestPlan = requestPlan;
 		const continuationTask = continuationState?.projection.kind === "current" || continuationState?.projection.kind === "single_candidate"
@@ -1259,7 +1485,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				: projectProvider.getCurrentTask()?.stableId ?? "pi-session";
 		currentRequestTaskId = requestTaskId;
 		const requestSessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
-		await ledger.appendRequestPlan(requestTaskId, `request:${requestPlan.requestId}`, requestPlan, requestSessionId);
+		requestMetadata.set(requestPlan.requestId, { taskId: requestTaskId, sessionId: requestSessionId, mode: requestPlan.mode });
+		if (requestLease.isNewRequest) await ledger.appendRequestPlan(requestTaskId, `request:${requestPlan.requestId}`, requestPlan, requestSessionId);
 		// Thinking policy: assert the intended level at the turn boundary so the
 		// agent loop (createLoopConfig) picks it up for every request in this turn.
 		// Locked levels pin every turn; auto re-derives from the execution mode;
@@ -1316,7 +1543,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// prompt-cache prefix (observed as frequent full cacheRead=0 misses).
 		const isChat = requestPlan.intent === "chat";
 		const epoch = isChat ? undefined : `${mode.current}:${(continuationState?.context ?? projectProvider.getContext()).revision}`;
-		const shouldRefreshSnapshot = !isChat && requestPlan.projectAction !== "continue" && requestContextEpoch !== epoch;
+		const shouldRefreshSnapshot = requestLease.isNewRequest && !isChat && requestPlan.projectAction !== "continue" && requestContextEpoch !== epoch;
 		let snapshotForTurn: string | undefined;
 		if (shouldRefreshSnapshot) {
 			const contextQuery = event.prompt;
@@ -1334,7 +1561,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				requestContextText = undefined;
 			}
 		}
-		const requestGuidance = [workflowGuidance, continuationGuidance, contextGuard.compactAdvised ? contextGuard.hint : undefined].filter((value): value is string => Boolean(value));
+		const requestGuidance = requestLease.isNewRequest
+			? [workflowGuidance, continuationGuidance, contextGuard.compactAdvised ? contextGuard.hint : undefined].filter((value): value is string => Boolean(value))
+			: [];
 		const guidanceForTurn = requestGuidance.length > 0 ? `[PERSONAL AGENT REQUEST GUIDANCE]\n${requestGuidance.join("\n")}` : undefined;
 		let messageForTurn = [snapshotForTurn, guidanceForTurn].filter((value): value is string => Boolean(value)).join("\n\n") || undefined;
 		const reasoningVoiceInstruction = reasoningVoice ? ` In your internal reasoning, speak in a concise, action-oriented first-person-plural voice ("We need …" / "We should …") instead of generic lead-ins like "Let me think…". This is a style preference; keep the final answer's substance and correctness unchanged.` : "";
@@ -1387,6 +1616,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					details: {
 						schemaVersion: 2,
 						cachePolicyVersion: 2,
+						logicalRequestId: requestPlan.requestId,
 						epoch: snapshotForTurn ? requestContextEpoch : `${epoch ?? "chat"}:request:${requestPlan.requestId}`,
 						revision: snapshotForTurn ? requestContextRevision : undefined,
 						segments: snapshotForTurn ? requestContextSegments : [],

@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Defines request planning, provider budgeting, stable request identity, and request-scoped context contracts."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"Defines Pi hook ownership, extension lifecycle, startup behavior, and adapter integration constraints."}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"Defines capability and tool correlation, authorization, idempotency, and side-effect boundaries."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Defines structured failures, retry classification, cancellation, and fail-closed behavior."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides end-to-end tracing across input, planning, provider, ledger, tool, and settlement layers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Guides reuse of existing request, ledger, and adapter abstractions instead of parallel lifecycle state."}

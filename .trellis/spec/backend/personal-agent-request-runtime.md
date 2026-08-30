@@ -263,3 +263,128 @@ recovery must leave records owned by a live process untouched, while legacy,
 unowned, or inactive-owner records remain recoverable. Core receives the
 liveness callback and never imports host process APIs.
 
+## Request Lifecycle Identity and Retry Contract
+
+### 1. Scope / Trigger
+
+This contract applies when Pi receives, retries, compacts, continues, steers,
+or settles a user submission. It prevents host machinery from turning one
+submission into duplicate request plans, guidance, user entries, or effects.
+
+### 2. Signatures
+
+```typescript
+RequestLifecycleController.acceptSubmission(input): {
+  lease: RequestLease;
+  delivery: "initial" | "steer" | "follow-up";
+  newLogicalRequest: boolean;
+  coalesced: boolean;
+  terminalized: readonly RequestTerminalTransition[];
+};
+RequestLifecycleController.startAttempt(trigger): RequestAttempt;
+RequestLifecycleController.retryDecision(failure): { retry: boolean; reason: string };
+RequestLifecycleController.settle(reason, { detail?, policyAbort? }): readonly RequestTerminalTransition[];
+```
+
+Ledger correlation keeps `requestId`, `attemptId`, `providerCallId`,
+`executionId`, and `toolCallId` as separate optional fields so legacy JSONL
+records remain readable.
+
+### 3. Contracts
+
+Pi's `input` hook owns logical request identity because it runs before skill or
+template expansion and before `before_agent_start`. `RequestPlan.requestId`
+must receive that logical ID rather than generating a second identity. A
+low-level `agent_start` owns a distinct attempt ID, each provider dispatch owns
+a provider-call ID, capability execution owns an execution ID, and Pi retains
+its tool-call ID; ledger correlation keeps these values separate.
+
+One active logical request survives Pi's low-level `agent_end`, automatic
+provider retry, compaction retry, and continuation machinery. It closes only at
+`agent_settled` or an explicit terminal transition. Steering and queued
+follow-up inputs are deliberate user deliveries, never automatic retries;
+Pi consumes them inside the active run without a second `before_agent_start`,
+so their `request.received` records retain the active logical request ID and do
+not create orphan request leases that can never own the provider/tool work they
+trigger. The active request closes once at settlement and cannot leak into the
+next prompt. A queued input that fails model/auth/startup preflight before
+`before_agent_start` is terminalized as `startup-failed` when the next input or
+host shutdown exposes the abandoned lease.
+
+Pi 0.84.3 exposes no host submission ID. Dove may therefore use prompt digest
+only as supporting evidence while an equivalent request is already active; it
+must never deduplicate a merely queued preflight lease or a completed same-text
+submission. A coalesced active redelivery is handled at `input` so Pi does not
+persist a second user entry. `request.planned` and current guidance are emitted
+once per logical request.
+
+Automatic retry is bounded and fail-closed. HTTP 408/425/429/5xx and reviewed
+transport-reset/timeout codes are transient only while the attempt limit has
+not been reached and no non-idempotent effect has started. Cancellation,
+startup conflict, invalid configuration, authorization denial, other terminal
+HTTP statuses, and any failure after a non-idempotent tool/capability effect
+are converted to an `aborted` assistant stop at `message_end` so Pi's real
+post-run retry loop cannot continue; `agent_end` also calls `ctx.abort()` as a
+host boundary. Dove keeps the policy terminal reason separately, so
+`agent_settled` records `authorization-denied`, `invalid-configuration`, or a
+`failed` detail such as `attempt-limit`/`non-idempotent-effect` instead of
+misreporting a policy abort as user cancellation. Retry safety uses a reviewed
+read-only Pi-tool allowlist, Core capability idempotency, and every capability
+step in a recipe; unknown plugin tools fail closed as non-idempotent.
+Ledger events `request.received`, `request.redelivery.coalesced`,
+`request.attempt.started`, `request.attempt.completed`, and `request.terminal`
+are additive; legacy readers may ignore them.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Active same-source redelivery with equivalent digest | Return `handled` at `input`; retain one request/user entry |
+| Same text after `agent_settled` | Create a new logical request ID |
+| Preflight fails before `before_agent_start` | Terminalize the queued lease as `startup-failed` on the next input or shutdown |
+| Steer/follow-up during an active run | Record a deliberate delivery on the active request; do not create an orphan request or retry attempt |
+| 408/425/429/reviewed 5xx or transport reset within limit | Permit the next attempt only if no non-idempotent effect started |
+| Cancellation, authorization/config/startup failure, attempt limit, or non-idempotent effect | Convert the error stop to `aborted`, call `ctx.abort()`, and preserve the structured policy terminal reason |
+| Unknown or third-party tool | Treat as non-idempotent unless its exact read-only contract is reviewed |
+
+### 5. Good / Base / Bad Cases
+
+- Good: five host attempts share one `requestId` while each has a distinct
+  `attemptId` and provider calls retain their own IDs.
+- Base: a completed request is deliberately submitted again and receives a new
+  request ID even when its text is identical.
+- Bad: hash completed prompts for deduplication, count steer as an automatic
+  retry, default unknown plugins to idempotent, or report a policy abort as a
+  user cancellation.
+
+### 6. Tests Required
+
+- Assert `input -> before_agent_start -> agent_start/provider/agent_end ->
+  agent_settled` produces one plan and one terminal record.
+- Assert active redelivery is handled before Pi persistence, while a settled
+  same-text submission receives a new ID.
+- Assert steer/follow-up `request.received` records keep the active request ID.
+- Assert provider, capability, recipe, and tool ledger records carry the same
+  request/attempt chain with distinct execution IDs.
+- Assert transient retry bounds, terminal HTTP status, policy terminal detail,
+  non-idempotent capability/recipe, and unknown-plugin fail-closed behavior.
+- Assert legacy ledger readers ignore additive lifecycle kinds.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+// Digest alone suppresses a later deliberate repeat and unknown tools replay.
+const requestId = sha256(prompt);
+const idempotent = !knownMutatingTools.has(toolName);
+```
+
+#### Correct
+
+```typescript
+const accepted = lifecycle.acceptSubmission({ text, source, streamingBehavior });
+const requestId = accepted.lease.logicalRequestId; // reused only while unsettled
+const idempotent = reviewedReadOnlyTools.has(toolName)
+  || reviewedCapabilityOrRecipeIsIdempotent(toolName, input);
+```

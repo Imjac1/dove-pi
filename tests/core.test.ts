@@ -178,10 +178,12 @@ describe("capability authorization", () => {
 		const blocked = await executeFastPath(registry, ledger, "test.write", {}, { cwd: temporary, mode: "standard", taskId: "task", stepId: "blocked" }, { required: true });
 		assert.equal(blocked.status, "blocked");
 		assert.equal(executions, 0);
-		const approved = await executeFastPath(registry, ledger, "test.write", {}, { cwd: temporary, mode: "standard", taskId: "task", stepId: "approved" }, { required: true, recordPending: true, authorize: () => true });
+		const approved = await executeFastPath(registry, ledger, "test.write", {}, { cwd: temporary, mode: "standard", taskId: "task", stepId: "approved", requestId: "req-correlation", sessionId: "session-correlation", attemptId: "attempt-correlation", toolCallId: "tool-correlation" }, { required: true, recordPending: true, authorize: () => true });
 		assert.equal(approved.status, "success");
 		assert.equal(executions, 1);
-		assert.deepEqual((await ledger.read()).map((record) => record.kind), ["capability.blocked", "capability.approval.pending", "capability.approved", "capability.started", "capability.completed"]);
+		const records = await ledger.read();
+		assert.deepEqual(records.map((record) => record.kind), ["capability.blocked", "capability.approval.pending", "capability.approved", "capability.started", "capability.completed"]);
+		assert.ok(records.slice(1).every((record) => record.correlation?.requestId === "req-correlation" && record.correlation?.attemptId === "attempt-correlation" && record.correlation?.toolCallId === "tool-correlation" && typeof record.correlation.executionId === "string"));
 		await rm(temporary, { recursive: true, force: true });
 	});
 

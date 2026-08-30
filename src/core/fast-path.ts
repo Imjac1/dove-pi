@@ -26,7 +26,7 @@ export async function executeFastPath(
 	ledger: ExecutionLedger,
 	name: string,
 	args: Record<string, unknown>,
-	context: { cwd: string; mode: AgentMode; taskId: string; stepId: string; signal?: AbortSignal; requestId?: string; sessionId?: string; toolCallId?: string; ownerPid?: number },
+	context: { cwd: string; mode: AgentMode; taskId: string; stepId: string; signal?: AbortSignal; requestId?: string; sessionId?: string; attemptId?: string; toolCallId?: string; ownerPid?: number },
 	authorization: CapabilityAuthorization = {},
 	execution: CapabilityExecutionOptions = {},
 ): Promise<CapabilityResult> {
@@ -46,7 +46,7 @@ export async function executeFastPath(
 	if (authorization.required && hasSideEffects) {
 		if (authorization.recordPending && authorization.authorize) {
 			executionState = transitionCapabilityExecution(executionState, "approval_pending");
-			await ledger.appendCapabilityApprovalPending({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
+			await ledger.appendCapabilityApprovalPending({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
 		}
 		const approved = authorization.authorize ? await authorization.authorize({ name, version: capability.version, sideEffects: capability.sideEffects, args }) : false;
 		if (!approved) {
@@ -57,12 +57,12 @@ export async function executeFastPath(
 				kind: "capability.blocked",
 				timestamp: new Date().toISOString(),
 				mode: context.mode,
-				correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
+				correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 				details: { capability: name, version: capability.version, executionId, reason: "approval_required" },
 			});
 			return { status: "blocked", capability: name, version: capability.version, error: "Capability approval was not granted.", durationMs: 0, evidenceRefs: [], executionId, outcome: "approval_denied" };
 		}
-		if (authorization.recordPending && authorization.authorize) await ledger.appendCapabilityApproved({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
+		if (authorization.recordPending && authorization.authorize) await ledger.appendCapabilityApproved({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
 		executionState = transitionCapabilityExecution(executionState, "approved");
 	}
 
@@ -76,7 +76,7 @@ export async function executeFastPath(
 		kind: "capability.started",
 		timestamp: new Date().toISOString(),
 		mode: context.mode,
-		correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
+		correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 		details: { capability: name, version: capability.version, executionId, state: "started", ownerPid: context.ownerPid },
 	});
 
@@ -108,10 +108,10 @@ export async function executeFastPath(
 					if (interrupted) {
 						const terminal = execution.timeoutMs && !context.signal?.aborted ? "timed_out" as const : "cancelled" as const;
 						executionState = transitionCapabilityExecution(executionState, terminal, message);
-						await ledger.appendCapabilityTerminal({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, toolCallId: context.toolCallId, executionId, capability: name, status: terminal, reason: message });
+						await ledger.appendCapabilityTerminal({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, toolCallId: context.toolCallId, executionId, capability: name, status: terminal, reason: message });
 					}
 					if (!interrupted) executionState = transitionCapabilityExecution(executionState, "failed", message);
-					await ledger.append({ taskId: context.taskId, stepId: context.stepId, kind: "capability.completed", timestamp: new Date().toISOString(), mode: context.mode, correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId }, details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message, interrupted, retries: attempts - 1 } });
+					await ledger.append({ taskId: context.taskId, stepId: context.stepId, kind: "capability.completed", timestamp: new Date().toISOString(), mode: context.mode, correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId }, details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message, interrupted, retries: attempts - 1 } });
 					return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], interrupted, retries: attempts - 1, executionId, outcome: interrupted ? (execution.timeoutMs && !context.signal?.aborted ? "timed_out" : "cancelled") : "failed" };
 				}
 			}
@@ -122,7 +122,7 @@ export async function executeFastPath(
 			if (verification !== true && verification !== undefined) {
 				const message = typeof verification === "string" ? verification : "Capability postcondition verification failed.";
 				executionState = transitionCapabilityExecution(executionState, "failed", message);
-				await ledger.append({ taskId: context.taskId, stepId: context.stepId, kind: "capability.completed", timestamp: new Date().toISOString(), mode: context.mode, correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId }, details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message, verified: false } });
+				await ledger.append({ taskId: context.taskId, stepId: context.stepId, kind: "capability.completed", timestamp: new Date().toISOString(), mode: context.mode, correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId }, details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message, verified: false } });
 				return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], retries: Math.max(0, attempts - 1), executionId, outcome: "failed" };
 			}
 		}
@@ -139,7 +139,7 @@ export async function executeFastPath(
 			kind: "capability.completed",
 			timestamp: new Date().toISOString(),
 			mode: context.mode,
-		correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
+		correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 		details: { capability: name, version: capability.version, executionId, status: "success", durationMs, evidenceRefs, ...(evidenceError ? { evidenceError } : {}) },
 		});
 		return { status: "success", capability: name, version: capability.version, result, durationMs, evidenceRefs, retries: Math.max(0, attempts - 1), executionId, outcome: "completed" };
@@ -153,7 +153,7 @@ export async function executeFastPath(
 			kind: "capability.completed",
 			timestamp: new Date().toISOString(),
 			mode: context.mode,
-			correlation: { requestId: context.requestId, sessionId: context.sessionId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
+			correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 			details: { capability: name, version: capability.version, executionId, status: "failed", durationMs, error: message },
 		});
 		return { status: "failed", capability: name, version: capability.version, error: message, durationMs, evidenceRefs: [], executionId, outcome: "failed" };

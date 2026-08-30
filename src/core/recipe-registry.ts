@@ -41,7 +41,7 @@ export async function executeRecipe(
 	ledger: ExecutionLedger,
 	name: string,
 	args: Record<string, unknown>,
-	context: { cwd: string; mode: AgentMode; taskId: string; stepId: string; signal?: AbortSignal; requestId?: string; sessionId?: string; toolCallId?: string; ownerPid?: number },
+	context: { cwd: string; mode: AgentMode; taskId: string; stepId: string; signal?: AbortSignal; requestId?: string; sessionId?: string; attemptId?: string; toolCallId?: string; ownerPid?: number },
 ): Promise<readonly CapabilityResult[]> {
 	const recipe = recipes.require(name);
 	const results: CapabilityResult[] = [];

@@ -23,6 +23,7 @@ const expectedHeadingsBySpec = {
 		"7. Wrong vs Correct",
 		"Design Decision: Adapter Firewall",
 		"V2 Request Planning and Provider Budget Firewall",
+		"Request Lifecycle Identity and Retry Contract",
 	],
 	"personal-agent-capability-runtime.md": [
 		"Scenario: Capability Protocol and External Adapters",
