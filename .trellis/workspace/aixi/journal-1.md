@@ -394,3 +394,25 @@ Added a host-independent PlanningSession and restricted agent_project_task workf
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: Deterministic task inventory runtime
+
+**Date**: 2026-09-01
+**Task**: Deterministic task inventory runtime
+**Branch**: `master`
+
+### Summary
+
+Fixed managed Dove wrapper authority, routed unfinished-task inventory through one zero-tool ProjectProvider projection, excluded archived task context, added read-only budgets and phase timing evidence, and validated the exact Desktop/code prompt in 9.317 seconds with one Provider round and zero tool calls.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6beabf1` | (see git log) |
+| `6b20d04` | (see git log) |
+
+### Status
+
+[OK] **Completed**
