@@ -1,6 +1,6 @@
 import type { RequestIntent, WorkflowAction } from "./request-plan.ts";
 
-export type PlanningSessionState = "collecting-direction" | "collecting-name" | "awaiting-create" | "cancelled" | "identity-unknown" | "task-created" | "planning";
+export type PlanningSessionState = "collecting-direction" | "collecting-name" | "awaiting-create" | "cancelled" | "create-failed" | "identity-unknown" | "task-created" | "planning";
 
 export interface PlanningSessionSnapshot {
 	readonly state: PlanningSessionState;
@@ -29,6 +29,7 @@ export function formatPlanningSessionGuidance(snapshot: PlanningSessionSnapshot)
 	const card = JSON.stringify({ schemaVersion: 1, state: snapshot.state, workflowAction: snapshot.workflowAction, taskId: snapshot.taskId, taskPath: snapshot.taskPath, taskTitle: snapshot.taskTitle, taskScope: snapshot.taskScope, questionCount: snapshot.questionCount });
 	if (snapshot.state === "collecting-direction" || snapshot.state === "collecting-name") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nAsk one structured question for task direction/title and scope. This collects data, not confirmation. Then call agent_project_task with operation=create; it owns the single native confirmation.`;
 	if (snapshot.state === "cancelled") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nThe previous task creation was cancelled. Ask one structured question to collect or correct the title and scope, then call agent_project_task with operation=create. The workflow tool owns the single native confirmation.`;
+	if (snapshot.state === "create-failed") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nThe previous task creation failed before it was confirmed as complete. Ask one structured question to correct the title and scope, then call agent_project_task with operation=create. The workflow tool owns the single native confirmation.`;
 	if (snapshot.state === "identity-unknown") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nThe task mutation completed but its new task identity could not be resolved. Inspect the current project task state before taking another lifecycle action; do not create the task again from this state.`;
 	if (snapshot.state === "awaiting-create") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nCall agent_project_task with the workflowAction now, using the collected title/scope. Do not call ask_user_question again; the workflow tool owns the single native confirmation.`;
 	if (snapshot.state === "task-created") return `[PERSONAL AGENT WORKFLOW STATE]\n${card}\nThe Trellis task was created. Continue into planning and report the task id/path and first planning step; do not create it again.`;
@@ -118,6 +119,11 @@ export class PlanningSession {
 
 	public cancelCreate(): PlanningSessionSnapshot {
 		if (this.current.state === "awaiting-create") this.current = { ...this.current, state: "cancelled" };
+		return this.snapshot();
+	}
+
+	public markCreateFailed(): PlanningSessionSnapshot {
+		if (this.current.state === "awaiting-create") this.current = { ...this.current, state: "create-failed" };
 		return this.snapshot();
 	}
 

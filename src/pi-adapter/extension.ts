@@ -568,14 +568,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		return projectProvider.kind === "lightweight" && readProjectManifest(projectProvider.projectRoot) === undefined;
 	}
 
-	async function runProjectTaskMutation(operation: TrellisTaskOperation, operationArgs: readonly string[], beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<string> {
+	async function runProjectTaskMutation(operation: TrellisTaskOperation, operationArgs: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<string> {
 		if (runtimeReadOnly()) throw new Error("Dove runtime is in read-only mode (DOVE_PI_READ_ONLY=1); project mutations are blocked.");
 		const currentTaskId = operation === "create" ? "pi-session" : targetTaskId ?? projectProvider.getCurrentTask()?.stableId ?? `adhoc:${Date.now()}`;
 		const stepId = `project-${operation}-${randomUUID()}`;
 		const mutationId = `mutation-${randomUUID()}`;
 		const health = projectProvider.getHealth();
 		try {
-			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, "before", operationArgs, beforeTaskIds, targetTaskId, beforeTargetStatus, beforeCurrentTaskId);
+			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, beforeRevision, operationArgs, beforeTaskIds, targetTaskId, beforeTargetStatus, beforeCurrentTaskId);
 			const result = await projectProvider.runTaskOperation(operation, operationArgs);
 			// Provider instances cache short-lived snapshots. Recreate after every
 			// lifecycle mutation so the next planning decision sees the new state.
@@ -583,6 +583,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			await ledger.appendProjectMutationCompleted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, projectProvider.getContext().revision);
 			return result || `Trellis task ${operation} 完成。`;
 		} catch (error) {
+			// A Trellis command can mutate files and still return an error (for
+			// example, archive followed by an auto-commit failure). Invalidate the
+			// short-lived snapshot before exposing the failure or accepting a retry.
+			projectProvider = createProjectProvider(projectProvider.projectRoot);
 			await ledger.appendProjectMutationFailed(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, health.trellisVersion ?? "unknown", error instanceof Error ? error.message : String(error));
 			throw error;
 		}
@@ -872,7 +876,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 						: operationArgs[0] ? projectProvider.resolveTask(operationArgs[0]) : undefined;
 				if (typedOperation === "finish" && !targetTask) throw new Error("finish requires a current Trellis task.");
 				if ((typedOperation === "start" || typedOperation === "archive") && !targetTask) throw new Error(`${typedOperation} target could not be resolved uniquely.`);
-				ctx.ui.notify(await runProjectTaskMutation(typedOperation, operationArgs, beforeTaskIds, targetTask?.stableId, targetTask?.status, beforeContext.currentTask?.stableId), "info");
+				const mutationArgs = typedOperation === "create" || !targetTask ? operationArgs : [targetTask.path];
+				ctx.ui.notify(await runProjectTaskMutation(typedOperation, mutationArgs, beforeContext.revision, beforeTaskIds, targetTask?.stableId, targetTask?.status, beforeContext.currentTask?.stableId), "info");
 			} catch (error) {
 				ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 			}
@@ -918,14 +923,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			if ((typed.operation === "create" || typed.operation === "start" || typed.operation === "archive") && operationArgs.length === 0) {
 				throw new Error(`${typed.operation} requires ${typed.operation === "create" ? "a task title" : "a task directory or name"}.`);
 			}
-			const confirmationDescription = typed.operation === "create" ? `创建任务“${title}”` : typed.operation === "finish" ? "完成当前任务" : `${typed.operation === "start" ? "开始" : "归档"}任务“${operationArgs[0]}”`;
-			if (!await ctx.ui.confirm("确认项目任务变更？", `${confirmationDescription}？这会修改 Trellis 项目状态。`)) {
-				const cancelled = typed.operation === "create" ? planningSession.cancelCreate() : planningSession.snapshot();
-				return { content: [{ type: "text", text: typed.operation === "create" ? "项目任务变更已取消，可重新收集任务名称和范围。" : "项目任务变更已取消。" }], details: { operation: typed.operation, cancelled: true, workflow: { state: cancelled.state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, next: typed.operation === "create" ? "collecting" : undefined } } };
-			}
-			const beforeContext = projectProvider.getContext();
-			const beforeTaskIds = beforeContext.tasks.map((task) => task.stableId);
-			const targetTask = typed.operation === "create"
+			let beforeContext = projectProvider.getContext();
+			let beforeTaskIds = beforeContext.tasks.map((task) => task.stableId);
+			let targetTask = typed.operation === "create"
 				? undefined
 				: typed.operation === "finish"
 					? beforeContext.currentTask
@@ -933,7 +933,32 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const targetTaskId = targetTask?.stableId;
 			if (typed.operation === "finish" && !targetTaskId) throw new Error("finish requires a current Trellis task.");
 			if ((typed.operation === "start" || typed.operation === "archive") && !targetTaskId) throw new Error(`${typed.operation} target could not be resolved uniquely.`);
-			const result = await runProjectTaskMutation(typed.operation, operationArgs, beforeTaskIds, targetTaskId, targetTask?.status, beforeContext.currentTask?.stableId);
+			const confirmationDescription = typed.operation === "create" ? `创建任务“${title}”` : typed.operation === "finish" ? "完成当前任务" : `${typed.operation === "start" ? "开始" : "归档"}任务“${operationArgs[0]}”`;
+			if (!await ctx.ui.confirm("确认项目任务变更？", `${confirmationDescription}？这会修改 Trellis 项目状态。`)) {
+				const cancelled = typed.operation === "create" ? planningSession.cancelCreate() : planningSession.snapshot();
+				return { content: [{ type: "text", text: typed.operation === "create" ? "项目任务变更已取消，可重新收集任务名称和范围。" : "项目任务变更已取消。" }], details: { operation: typed.operation, cancelled: true, workflow: { state: cancelled.state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, next: typed.operation === "create" ? "collecting" : undefined } } };
+			}
+			// Confirmation may take long enough for another process to change the
+			// project. Refresh and reject a changed target before recording or running
+			// the mutation, so the confirmed task remains the executed task.
+			projectProvider = createProjectProvider(projectProvider.projectRoot);
+			beforeContext = projectProvider.getContext();
+			beforeTaskIds = beforeContext.tasks.map((task) => task.stableId);
+			targetTask = typed.operation === "create"
+				? undefined
+				: typed.operation === "finish"
+					? beforeContext.currentTask
+					: typed.task?.trim() ? projectProvider.resolveTask(typed.task.trim()) : undefined;
+			if (typed.operation === "finish" && targetTask?.stableId !== targetTaskId) throw new Error("当前任务在确认期间发生变化，请重新发起操作。");
+			if ((typed.operation === "start" || typed.operation === "archive") && targetTask?.stableId !== targetTaskId) throw new Error("目标任务在确认期间发生变化，请重新发起操作。");
+			const mutationArgs = typed.operation === "create" || !targetTask ? operationArgs : [targetTask.path];
+			let result: string;
+			try {
+				result = await runProjectTaskMutation(typed.operation, mutationArgs, beforeContext.revision, beforeTaskIds, targetTaskId, targetTask?.status, beforeContext.currentTask?.stableId);
+			} catch (error) {
+				if (typed.operation === "create") planningSession.markCreateFailed();
+				throw error;
+			}
 			const createdContext = typed.operation === "create" ? projectProvider.getContext() : undefined;
 			const task = createdContext && typed.operation === "create"
 				? createdContext.tasks.filter((candidate) => candidate.title === title && !beforeTaskIds.includes(candidate.stableId))

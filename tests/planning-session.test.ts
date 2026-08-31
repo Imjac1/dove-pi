@@ -46,6 +46,15 @@ describe("PlanningSession", () => {
 		assert.equal(retry.taskScope, "新的范围");
 	});
 
+	it("makes a failed create explicitly recoverable", () => {
+		const session = new PlanningSession();
+		session.begin({ requestId: "r-failed", intent: "project-work" });
+		session.observeQuestionResult({ answers: [{ answer: "失败后可重试" }] }, undefined);
+		assert.equal(session.markCreateFailed().state, "create-failed");
+		assert.equal(session.questionDecision().allowed, true);
+		assert.match(formatPlanningSessionGuidance(session.snapshot()), /failed/);
+	});
+
 	it("gives explicit create precedence over an existing current task and resets new requests", () => {
 		const session = new PlanningSession();
 		assert.equal(session.begin({ requestId: "r5", intent: "project-work", workflowAction: "create-task", currentTaskId: "trellis:old" }).state, "collecting-name");

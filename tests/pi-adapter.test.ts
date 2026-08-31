@@ -386,6 +386,10 @@ describe("Pi adapter", () => {
 			assert.match(taskResult.details.workflow.path, /08-31-cache-hit/);
 			assert.equal(taskResult.details.workflow.state, "planning");
 			assert.equal(taskResult.details.workflow.next, "planning");
+			const mutationRecords = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { operation?: string; revision?: string } });
+			const createStart = mutationRecords.find((record) => record.kind === "project.mutation.started" && record.details?.operation === "create");
+			assert.ok(createStart);
+			assert.notEqual(createStart?.details?.revision, "before", "mutation recovery must retain the actual pre-state revision");
 		} finally {
 			process.chdir(previousCwd);
 			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;

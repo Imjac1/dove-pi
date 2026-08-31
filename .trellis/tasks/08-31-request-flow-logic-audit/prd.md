@@ -62,6 +62,7 @@
 - [x] 同一请求重试保留规划状态；新请求从新状态开始，不继承旧的提问守卫。
 - [x] 已有当前任务时显式新建仍进入新建握手；标题与目标/范围进入新任务的 description/PRD Goal，并绑定新任务稳定 ID/path。
 - [x] 成功创建仍进入 `planning`，失败不伪造成功，取消不产生任务变更。
+- [x] 创建命令失败进入可观察的 `create-failed` 状态，允许修正后重试且刷新 Provider 快照。
 - [x] revision-only 变化的未完成 mutation 恢复为 `unknown`；目标状态精确匹配时才记录 `observed`，并发 mutation ID 不冲突。
 - [x] `result.totalReasoning` 等于项目明细 reasoning 之和，格式化合计显示正确数值和百分比。
 - [x] `sinceHours` 同时约束 input/cache/output/reasoning/session/message 统计，项目行与总计使用同一过滤口径。

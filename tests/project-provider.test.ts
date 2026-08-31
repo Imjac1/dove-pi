@@ -113,6 +113,40 @@ describe("project provider firewall", () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
+	it("does not infer start success when pre-mutation status evidence is missing", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-start-evidence-"));
+		const taskDir = join(root, ".trellis", "tasks", "demo");
+		await mkdir(taskDir, { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: "in_progress" }), "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		await writeFile(join(root, ".trellis", "workflow.md"), "changed\n", "utf8");
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("start", ["demo"], before.revision, before.tasks.map((task) => task.stableId), "trellis:demo"), "unknown");
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("does not infer finish success from a failed current-task query", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-finish-query-failure-"));
+		const taskDir = join(root, ".trellis", "tasks", "demo");
+		await mkdir(taskDir, { recursive: true });
+		await mkdir(join(root, ".trellis", "scripts"), { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: "in_progress" }), "utf8");
+		await writeFile(join(root, ".trellis", "scripts", "task.py"), [
+			"import json, sys",
+			"print(json.dumps({'current_task': {'dir': '.trellis/tasks/demo'}, 'stale': False}))",
+			"sys.exit(2)",
+		].join("\n"), "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		await writeFile(join(root, ".trellis", "workflow.md"), "changed\n", "utf8");
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("finish", [], before.revision, before.tasks.map((task) => task.stableId), "trellis:demo", "in_progress", "trellis:demo"), "unknown");
+		await rm(root, { recursive: true, force: true });
+	});
+
 	it("does not infer create success from a revision-only change", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-create-"));
 		await mkdir(join(root, ".trellis", "tasks", "demo"), { recursive: true });

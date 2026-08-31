@@ -74,8 +74,8 @@ export class TrellisProvider implements ProjectProvider {
 		if (this.contextCache && this.contextCache.expiresAt > now) return this.contextCache.context;
 		const discovered = readTrellisSnapshot(this.projectRoot);
 		const tasks = discovered.tasks.map((task) => toProjectTask(task));
-		const publicCurrentTaskPath = readPublicTrellisCurrentTaskPath(this.projectRoot);
-		const currentTask = tasks.find((task) => task.path === publicCurrentTaskPath);
+		const publicCurrentTask = readPublicTrellisCurrentTask(this.projectRoot);
+		const currentTask = tasks.find((task) => task.path === publicCurrentTask.path);
 		const snapshot = currentTask ? { ...discovered, activeTaskPath: currentTask.path } : discovered;
 		const documents: ProjectDocument[] = [];
 		for (const task of snapshot.tasks) for (const path of task.files) addDocument(documents, path, "task");
@@ -132,9 +132,10 @@ export class TrellisProvider implements ProjectProvider {
 		const task = context.tasks.find((candidate) => candidate.stableId === targetTaskId);
 		const status = task?.status.toLowerCase();
 		const startedStatuses = ["active", "in_progress", "started"];
-		if (operation === "start" && task && startedStatuses.includes(status ?? "") && (!startedStatuses.includes((beforeTargetStatus ?? "").toLowerCase()) || (context.currentTask?.stableId === targetTaskId && beforeCurrentTaskId !== targetTaskId))) return "observed";
+		if (operation === "start" && task && startedStatuses.includes(status ?? "") && beforeTargetStatus !== undefined && !startedStatuses.includes(beforeTargetStatus.toLowerCase())) return "observed";
 		// task.py finish clears the public current-task pointer; it does not change task.json status.
-		if (operation === "finish" && beforeCurrentTaskId === targetTaskId && !context.currentTask) return "observed";
+		const currentTaskObservation = operation === "finish" ? readPublicTrellisCurrentTask(this.projectRoot) : undefined;
+		if (operation === "finish" && beforeCurrentTaskId === targetTaskId && currentTaskObservation?.known === true && !currentTaskObservation.path) return "observed";
 		// task.py archive marks the task completed and moves it out of the active task tree.
 		if (operation === "archive" && !task) return "observed";
 		return "unknown";
@@ -166,24 +167,36 @@ interface TrellisCurrentTaskOutput {
 	readonly stale?: unknown;
 }
 
+interface TrellisCurrentTaskObservation {
+	readonly known: boolean;
+	readonly path?: string;
+}
+
 /** Parse only the documented `task.py current --json` result shape. */
 export function parseTrellisCurrentTaskPath(projectRoot: string, output: string): string | undefined {
+	const observation = parseTrellisCurrentTask(projectRoot, output);
+	return observation.known ? observation.path : undefined;
+}
+
+function parseTrellisCurrentTask(projectRoot: string, output: string): TrellisCurrentTaskObservation {
 	try {
 		const payload = JSON.parse(output) as TrellisCurrentTaskOutput;
-		if (payload.stale !== false || !payload.current_task || typeof payload.current_task.dir !== "string") return undefined;
+		if (payload.stale !== false) return { known: false };
+		if (payload.current_task === null) return { known: true };
+		if (!payload.current_task || typeof payload.current_task.dir !== "string") return { known: false };
 		const taskRoot = resolve(projectRoot, ".trellis", "tasks");
 		const candidate = resolve(projectRoot, payload.current_task.dir);
 		const relativeTask = relative(taskRoot, candidate);
-		if (!relativeTask || relativeTask.startsWith("..") || isAbsolute(relativeTask)) return undefined;
-		return candidate;
+		if (!relativeTask || relativeTask.startsWith("..") || isAbsolute(relativeTask)) return { known: false };
+		return { known: true, path: candidate };
 	} catch {
-		return undefined;
+		return { known: false };
 	}
 }
 
-function readPublicTrellisCurrentTaskPath(projectRoot: string): string | undefined {
+function readPublicTrellisCurrentTask(projectRoot: string): TrellisCurrentTaskObservation {
 	const script = join(projectRoot, ".trellis", "scripts", "task.py");
-	if (!existsSync(script)) return undefined;
+	if (!existsSync(script)) return { known: false };
 	try {
 		const output = execFileSync("python", [script, "current", "--json"], {
 			cwd: projectRoot,
@@ -192,12 +205,16 @@ function readPublicTrellisCurrentTaskPath(projectRoot: string): string | undefin
 			timeout: 3_000,
 			maxBuffer: 256 * 1024,
 		});
-		return parseTrellisCurrentTaskPath(projectRoot, output);
-	} catch {
+		return parseTrellisCurrentTask(projectRoot, output);
+	} catch (error) {
+		// Trellis returns exit code 1 for a valid "no current task" response.
+		// Preserve that result, while treating other command failures as unknown.
+		const output = (error as { stdout?: unknown }).stdout;
+		if (typeof output === "string") return parseTrellisCurrentTask(projectRoot, output);
 		// Public current-task lookup is optional. If Python or the project-owned
 		// Trellis command is unavailable, continuation safely falls back to the
 		// normalized single/ambiguous/none candidate projection.
-		return undefined;
+		return { known: false };
 	}
 }
 
