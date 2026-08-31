@@ -34,6 +34,7 @@ import { CAPABILITY_PROTOCOL_VERSION } from "./core/capability-protocol.ts";
 import { runDoveMcpStdio } from "./adapters/mcp.ts";
 import { readInteroperableContextProjection } from "./context/interoperable.ts";
 import { resolveDoveStateDir } from "./core/state-dir.ts";
+import { parseNonNegativeHours } from "./commands/cli-options.ts";
 
 const args = process.argv.slice(2);
 
@@ -180,18 +181,7 @@ if (args[0] === "doctor") {
 	const command = args[1] ?? "audit";
 	if (command !== "audit")
 		throw new Error("Usage: dove-pi token audit [--since=Nh] [--filter=substr]");
-	const sinceIndex = args.findIndex(
-		(a) => a === "--since" || a.startsWith("--since="),
-	);
-	const sinceHours =
-		sinceIndex >= 0
-			? Number(
-					(args[sinceIndex].startsWith("--since=")
-						? args[sinceIndex].slice(7)
-						: args[sinceIndex + 1]
-					)?.replace(/h$/i, ""),
-				)
-			: undefined;
+	const sinceHours = parseNonNegativeHours(args);
 	const filterIndex = args.findIndex(
 		(a) => a === "--filter" || a.startsWith("--filter="),
 	);
@@ -202,7 +192,7 @@ if (args[0] === "doctor") {
 				: args[filterIndex + 1]
 			: undefined;
 	const result = await runTokenAudit({
-		sinceHours: Number.isFinite(sinceHours) ? sinceHours : undefined,
+		sinceHours,
 		filter,
 	});
 	console.log(formatTokenAudit(result));
