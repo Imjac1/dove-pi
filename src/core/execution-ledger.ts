@@ -61,6 +61,18 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "request.terminal", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { logicalRequestId: input.requestId, reason: input.reason, ...(input.detail ? { detail: input.detail } : {}), ...(input.policyAbort ? { policyAbort: true } : {}) } });
 	}
 
+	public async appendRuntimePhase(input: { taskId: string; stepId: string; mode: AgentMode; requestId?: string; sessionId?: string; attemptId?: string; toolCallId?: string; providerCallId?: string; phase: "request-prepare" | "tool" | "provider" | "pi-post-hook"; durationMs: number; name?: string; metrics?: Readonly<Record<string, number | boolean>> }): Promise<void> {
+		await this.append({
+			taskId: input.taskId,
+			stepId: input.stepId,
+			kind: "runtime.phase.completed",
+			timestamp: new Date().toISOString(),
+			mode: input.mode,
+			correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, toolCallId: input.toolCallId, providerCallId: input.providerCallId, taskId: input.taskId },
+			details: { phase: input.phase, durationMs: Math.max(0, Math.round(input.durationMs)), ...(input.name ? { name: input.name } : {}), ...(input.metrics ? { metrics: input.metrics } : {}) },
+		});
+	}
+
 	public async appendRequestPlan(taskId: string, stepId: string, plan: RequestPlan, sessionId?: string): Promise<void> {
 		await this.append({
 			taskId,
@@ -94,8 +106,8 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, attemptId: input.attemptId, providerCallId: input.providerCallId, inputTokens: input.inputTokens, providerToolCount: input.providerToolCount, providerToolSchemaBytes: input.providerToolSchemaBytes, cachePolicyVersion: input.cachePolicyVersion, cachePrefix: input.cachePrefix, ownerPid: input.ownerPid } });
 	}
 
-	public async appendProviderRequestCompleted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; attemptId?: string; providerCallId: string; stopReason?: string; usage?: Readonly<Record<string, number>>; cache?: ProviderCacheAttribution }): Promise<void> {
-		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.completed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, attemptId: input.attemptId, providerCallId: input.providerCallId, stopReason: input.stopReason, usage: input.usage, cache: input.cache } });
+	public async appendProviderRequestCompleted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; attemptId?: string; providerCallId: string; stopReason?: string; usage?: Readonly<Record<string, number>>; cache?: ProviderCacheAttribution; durationMs?: number }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.completed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, attemptId: input.attemptId, providerCallId: input.providerCallId, stopReason: input.stopReason, usage: input.usage, cache: input.cache, ...(input.durationMs === undefined ? {} : { durationMs: Math.max(0, Math.round(input.durationMs)) }) } });
 	}
 
 	public async appendProviderRequestRejected(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; attemptId?: string; providerCallId: string; diagnostic: BudgetDiagnostic }): Promise<void> {

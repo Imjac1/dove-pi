@@ -19,11 +19,17 @@ export interface ProgressGuardOptions {
 	longRunMinutes?: number;
 }
 
+export interface ProgressRunOptions {
+	readOnlyToolWarningThreshold?: number;
+	readOnlyToolHardStopThreshold?: number;
+}
+
 export interface ProgressSnapshot {
 	active: boolean;
 	startedAt?: number;
 	lastActivityAt?: number;
 	toolCalls: number;
+	readOnlyToolCalls: number;
 	toolErrors: number;
 	consecutiveToolErrors: number;
 	lastToolName?: string;
@@ -33,11 +39,11 @@ export interface ProgressSnapshot {
 	interactiveQuestionRepeatCount: number;
 	interactivePositiveAnswerCount: number;
 	longRun: boolean;
-	warning?: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop";
+	warning?: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop" | "read-only-budget";
 }
 
 export interface ProgressWarning {
-	kind: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop";
+	kind: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop" | "read-only-budget";
 	message: string;
 	snapshot: ProgressSnapshot;
 }
@@ -181,6 +187,9 @@ export class ProgressGuard {
 	private lastSuccessfulObservation?: { callFingerprint: string; observationFingerprint: string; count: number };
 	private interactiveQuestion?: InteractiveQuestionState;
 	private interactiveWarningIssued = false;
+	private readOnlyToolWarningThreshold?: number;
+	private readOnlyToolHardStopThreshold?: number;
+	private readOnlyBudgetWarningIssued = false;
 
 	constructor(options: ProgressGuardOptions = {}) {
 		this.consecutiveErrorThreshold = positiveInteger(options.consecutiveErrorThreshold, 3);
@@ -196,6 +205,7 @@ export class ProgressGuard {
 		return {
 			active: false,
 			toolCalls: 0,
+			readOnlyToolCalls: 0,
 			toolErrors: 0,
 			consecutiveToolErrors: 0,
 			repeatedFailureCount: 0,
@@ -206,13 +216,19 @@ export class ProgressGuard {
 		};
 	}
 
-	start(now = Date.now()): void {
+	start(now = Date.now(), options: ProgressRunOptions = {}): void {
 		this.state = { ...this.emptySnapshot(), active: true, startedAt: now, lastActivityAt: now };
+		this.readOnlyToolWarningThreshold = optionalPositiveInteger(options.readOnlyToolWarningThreshold);
+		this.readOnlyToolHardStopThreshold = optionalPositiveInteger(options.readOnlyToolHardStopThreshold);
+		if (this.readOnlyToolWarningThreshold !== undefined && this.readOnlyToolHardStopThreshold !== undefined) {
+			this.readOnlyToolHardStopThreshold = Math.max(this.readOnlyToolWarningThreshold, this.readOnlyToolHardStopThreshold);
+		}
 		this.lastFailureFingerprint = undefined;
 		this.batchCalls.clear();
 		this.lastSuccessfulObservation = undefined;
 		this.interactiveQuestion = undefined;
 		this.interactiveWarningIssued = false;
+		this.readOnlyBudgetWarningIssued = false;
 	}
 
 	beginToolBatch(): void {
@@ -249,7 +265,11 @@ export class ProgressGuard {
 		if (previous && previous.callFingerprint === fingerprint && previous.count >= this.repeatedSuccessHardStopThreshold) {
 			return { action: "terminate", fingerprint, reason: `Unchanged read-only observation repeated ${previous.count} times; stop and change strategy` };
 		}
+		if (this.readOnlyToolHardStopThreshold !== undefined && this.state.readOnlyToolCalls >= this.readOnlyToolHardStopThreshold) {
+			return { action: "terminate", fingerprint, reason: `Read-only exploration reached its ${this.readOnlyToolHardStopThreshold}-call limit; answer from the evidence already collected instead of issuing another lookup` };
+		}
 		this.batchCalls.set(fingerprint, toolCallId);
+		this.state = { ...this.state, readOnlyToolCalls: this.state.readOnlyToolCalls + 1 };
 		return { action: "allow", fingerprint };
 	}
 
@@ -332,6 +352,15 @@ export class ProgressGuard {
 			interactiveWarning = { ...interactiveWarning, snapshot: this.snapshot() };
 			return interactiveWarning;
 		}
+		if (!result.isError && result.idempotent && this.readOnlyToolWarningThreshold !== undefined && this.state.readOnlyToolCalls >= this.readOnlyToolWarningThreshold && !this.readOnlyBudgetWarningIssued) {
+			this.readOnlyBudgetWarningIssued = true;
+			this.state.warning = "read-only-budget";
+			return {
+				kind: "read-only-budget",
+				message: `只读探索已调用 ${this.state.readOnlyToolCalls} 次；请用现有证据回答或明确说明缺口，不要继续扩大搜索范围。`,
+				snapshot: this.snapshot(),
+			};
+		}
 		if (!result.isError && result.idempotent && repeatedSuccessCount >= this.repeatedSuccessThreshold && previousWarning !== "repeated-success") {
 			this.state.warning = "repeated-success";
 			return {
@@ -371,6 +400,9 @@ export class ProgressGuard {
 		this.lastSuccessfulObservation = undefined;
 		this.interactiveQuestion = undefined;
 		this.interactiveWarningIssued = false;
+		this.readOnlyToolWarningThreshold = undefined;
+		this.readOnlyToolHardStopThreshold = undefined;
+		this.readOnlyBudgetWarningIssued = false;
 	}
 }
 
@@ -378,5 +410,9 @@ export function formatProgressSnapshot(snapshot: ProgressSnapshot, now = Date.no
 	if (!snapshot.active) return "idle";
 	const duration = snapshot.startedAt === undefined ? 0 : Math.max(0, Math.floor((now - snapshot.startedAt) / 60_000));
 	const warning = snapshot.warning ? `, warning=${snapshot.warning}` : "";
-	return `running ${duration}m, tools=${snapshot.toolCalls}, errors=${snapshot.toolErrors}, consecutiveErrors=${snapshot.consecutiveToolErrors}, repeatedSuccess=${snapshot.repeatedSuccessCount}, interactiveRepeat=${snapshot.interactiveQuestionRepeatCount}${snapshot.longRun ? ", longRun=true" : ""}${warning}`;
+	return `running ${duration}m, tools=${snapshot.toolCalls}, reads=${snapshot.readOnlyToolCalls}, errors=${snapshot.toolErrors}, consecutiveErrors=${snapshot.consecutiveToolErrors}, repeatedSuccess=${snapshot.repeatedSuccessCount}, interactiveRepeat=${snapshot.interactiveQuestionRepeatCount}${snapshot.longRun ? ", longRun=true" : ""}${warning}`;
+}
+
+function optionalPositiveInteger(value: number | undefined): number | undefined {
+	return value !== undefined && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
 }

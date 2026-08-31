@@ -51,6 +51,23 @@ export function canonicalizeDoveEntryPath(path: string): string {
 	return `${prefix}${absolute ? "/" : ""}${joined}`.toLowerCase() || (absolute ? "/" : ".");
 }
 
+/** Compare the physical extension entry selected by the launcher with the
+ * wrapper currently being evaluated. The comparison is lexical because both
+ * values have already crossed Pi's path-resolution boundary. */
+export function isSameDoveEntryPath(left: string, right: string): boolean {
+	return canonicalizeDoveEntryPath(left) === canonicalizeDoveEntryPath(right);
+}
+
+export function shouldSuppressDoveWrapper(input: {
+	readonly guardEnabled: boolean;
+	readonly currentEntry: string;
+	readonly configuredEntry?: string;
+}): boolean {
+	const configuredEntry = input.configuredEntry?.trim();
+	if (!input.guardEnabled || !configuredEntry) return false;
+	return !isSameDoveEntryPath(input.currentEntry, configuredEntry);
+}
+
 function parseVersion(value: string): number[] {
 	return value.trim().replace(/^v/i, "").split(/[+-]/, 1)[0].split(".").slice(0, 3).map((part) => Number.parseInt(part, 10) || 0);
 }

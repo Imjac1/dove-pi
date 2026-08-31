@@ -1,4 +1,4 @@
-import type { RequestIntent, RequestPlan } from "../core/request-plan.ts";
+import { isTaskInventoryRequest, type RequestIntent, type RequestPlan } from "../core/request-plan.ts";
 
 export type DoveToolProfile = "auto" | "core" | "full";
 
@@ -92,6 +92,16 @@ export function selectDoveToolNames(
 	if (profile === "full") return [...new Set(allToolNames)].filter((name) => !(hashline && name === "edit"));
 
 	const selected = new Set(profile === "core" ? CORE_TOOL_NAMES : baseNamesForIntent(intent));
+	if (profile === "auto" && isTaskInventoryRequest(prompt)) {
+		// The adapter already owns one normalized ProjectProvider projection for
+		// this request. Inject that bounded inventory directly and avoid a second
+		// provider/tool round entirely.
+		selected.clear();
+	}
+	if (profile === "auto" && intent !== "chat" && hasExplicitPathTarget(prompt) && !hasBroadDiscoveryIntent(prompt)) {
+		selected.delete("find");
+		selected.delete("ls");
+	}
 	if (profile === "auto" && intent !== "chat") {
 		const domainText = `${prompt}\n${contextHint}`;
 		if (WEB_PATTERN.test(domainText)) {
@@ -113,6 +123,14 @@ export function selectDoveToolNames(
 		for (const name of HASHLINE_EDIT_TOOL_NAMES) selected.add(name);
 	}
 	return [...new Set(allToolNames.filter((name) => selected.has(name)))];
+}
+
+function hasExplicitPathTarget(prompt: string): boolean {
+	return /(?:^|[\s"'`])(?:\.\.?[\\/])?(?:[\w@.-]+[\\/])*[\w@.-]+\.[a-z0-9]{1,8}(?=$|[\s"'`,;:!?。！？；：])/i.test(prompt);
+}
+
+function hasBroadDiscoveryIntent(prompt: string): boolean {
+	return /\b(?:all|every|list|find|search|discover)\b|(?:全部|所有|列出|查找|搜索|发现)/i.test(prompt);
 }
 
 export function parseDoveToolProfile(value: string | undefined): DoveToolProfile | undefined {

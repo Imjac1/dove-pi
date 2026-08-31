@@ -187,3 +187,13 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 export function isRequestIntent(value: unknown): value is RequestIntent {
 	return value === "chat" || value === "lookup" || value === "project-work" || value === "execution";
 }
+
+/** True when the user asks for the current unfinished-task inventory rather
+ * than a broad filesystem or source-code investigation. */
+export function isTaskInventoryRequest(message: string): boolean {
+	const value = message.trim();
+	const mentionsInventory = /(?:未完成|没完成|待办|遗留|剩余|进行中|还存在).{0,20}(?:任务|工作)|(?:任务|工作).{0,20}(?:未完成|没完成|待办|遗留|剩余|进行中)|\b(?:unfinished|incomplete|pending|remaining|open)\b.{0,40}\b(?:tasks?|work)\b|\b(?:tasks?|work)\b.{0,40}\b(?:unfinished|incomplete|pending|remaining|open)\b/i.test(value);
+	if (!mentionsInventory) return false;
+	const withoutStatus = value.replace(/未完成|没完成|待办|遗留|剩余|进行中|unfinished|incomplete|pending|remaining|open/gi, " ");
+	return !/(?:继续|恢复|修复|实现|执行|修改|编写|开发|处理|完成|删除|归档|提交|推送|开始|优化|解决|逐个|逐项|代码|源码|测试|文件|日志|历史)|\b(?:continue|resume|fix|implement|execute|modify|write|develop|handle|complete|finish|delete|archive|commit|push|start|optimi[sz]e|resolve|code|source|tests?|files?|logs?|history)\b/i.test(withoutStatus);
+}

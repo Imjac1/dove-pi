@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canonicalizeDoveEntryPath, compareDoveExtensionIdentity, doveImplementationDigest, selectDoveExtension, type DoveExtensionIdentity } from "../src/core/extension-identity.ts";
+import { canonicalizeDoveEntryPath, compareDoveExtensionIdentity, doveImplementationDigest, isSameDoveEntryPath, selectDoveExtension, shouldSuppressDoveWrapper, type DoveExtensionIdentity } from "../src/core/extension-identity.ts";
 import { claimDoveRegistration } from "../src/pi-adapter/extension.ts";
 
 const identity = (overrides: Partial<DoveExtensionIdentity> = {}): DoveExtensionIdentity => ({
@@ -13,6 +13,11 @@ describe("Dove extension identity", () => {
 		assert.equal(canonicalizeDoveEntryPath("c:/managed/personal-agent.ts"), "c:/managed/personal-agent.ts");
 		assert.equal(doveImplementationDigest("1.2.3"), doveImplementationDigest("1.2.3"));
 		assert.notEqual(doveImplementationDigest("1.2.4"), doveImplementationDigest("1.2.3"));
+		assert.equal(isSameDoveEntryPath("C:\\Release\\.pi\\extensions\\personal-agent.ts", "c:/release/.pi/extensions/personal-agent.ts"), true);
+		assert.equal(isSameDoveEntryPath("C:/project/.pi/extensions/personal-agent.ts", "C:/release/.pi/extensions/personal-agent.ts"), false);
+		assert.equal(shouldSuppressDoveWrapper({ guardEnabled: true, currentEntry: "C:/release/.pi/extensions/personal-agent.ts", configuredEntry: "C:/release/.pi/extensions/personal-agent.ts" }), false);
+		assert.equal(shouldSuppressDoveWrapper({ guardEnabled: true, currentEntry: "C:/project/.pi/extensions/personal-agent.ts", configuredEntry: "C:/release/.pi/extensions/personal-agent.ts" }), true);
+		assert.equal(shouldSuppressDoveWrapper({ guardEnabled: false, currentEntry: "C:/project/.pi/extensions/personal-agent.ts", configuredEntry: "C:/release/.pi/extensions/personal-agent.ts" }), false);
 	});
 	it("classifies in-sync, version drift, and same-version divergence", () => {
 		assert.equal(compareDoveExtensionIdentity(identity(), identity({ origin: "project", trust: "trusted" })), "in_sync");

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readProjectContinuationForPlan, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
@@ -67,6 +67,10 @@ describe("Pi adapter", () => {
 		assert.ok(projectContextText.length < 20_000, "project context without a query must remain an index, not a raw project dump");
 		assert.match(projectContextText, /intentionally an index/);
 		assert.match(projectContextText, /"taskCount"/);
+		const projectStatusTool = tools.get("agent_project_status") as { execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }> }> };
+		const projectStatusText = (await projectStatusTool.execute("status-call", {})).content[0]?.text ?? "";
+		assert.match(projectStatusText, /"tasks"/);
+		assert.match(projectStatusText, /"tasksOmitted"/);
 		assert.ok(events.has("before_agent_start"));
 		assert.ok(events.has("message_end"));
 		assert.ok(events.has("tool_result"));
@@ -441,6 +445,38 @@ describe("Pi adapter", () => {
 		changingGuard.recordToolResult({ toolName: "ls", input: { path: "other" }, observation: ["same"], idempotent: true, isError: false });
 		changingGuard.beginToolBatch();
 		assert.equal(changingGuard.beforeToolCall("changing-5", "ls", { path: "." }, true).action, "allow", "changed arguments reset the contiguous stagnation window");
+	});
+
+	it("warns and stops varied read-only exploration at the request budget", () => {
+		const guard = new ProgressGuard();
+		guard.start(1_000, { readOnlyToolWarningThreshold: 2, readOnlyToolHardStopThreshold: 3 });
+		for (let index = 0; index < 2; index++) {
+			assert.equal(guard.beforeToolCall(`read-${index}`, "read", { path: `${index}.ts` }, true).action, "allow");
+			const warning = guard.recordToolResult({ toolName: "read", input: { path: `${index}.ts` }, observation: [index], idempotent: true, isError: false });
+			assert.equal(warning?.kind, index === 1 ? "read-only-budget" : undefined);
+		}
+		assert.equal(guard.beforeToolCall("read-2", "read", { path: "2.ts" }, true).action, "allow");
+		guard.recordToolResult({ toolName: "read", input: { path: "2.ts" }, observation: [2], idempotent: true, isError: false });
+		const stopped = guard.beforeToolCall("read-3", "read", { path: "3.ts" }, true);
+		assert.equal(stopped.action, "terminate");
+		assert.match(stopped.reason ?? "", /3-call limit/);
+		assert.equal(guard.snapshot().readOnlyToolCalls, 3);
+		assert.deepEqual(readOnlyToolBudget({ intent: "lookup", mode: "standard" }), { readOnlyToolWarningThreshold: 6, readOnlyToolHardStopThreshold: 12 });
+		assert.deepEqual(readOnlyToolBudget({ intent: "project-work", mode: "standard" }, true), { readOnlyToolWarningThreshold: 1, readOnlyToolHardStopThreshold: 2 });
+		assert.deepEqual(readOnlyToolBudget({ intent: "execution", mode: "ultra" }), { readOnlyToolWarningThreshold: 32, readOnlyToolHardStopThreshold: 64 });
+	});
+
+	it("formats task inventory as a bounded no-tool projection", () => {
+		const guidance = formatTaskInventoryGuidance({
+			provider: "trellis",
+			projectRoot: "C:/project",
+			revision: "rev-1",
+			tasks: [{ stableId: "trellis:a", provider: "trellis", providerTaskId: "a", path: ".trellis/tasks/a", title: "A", status: "in_progress", files: [] }],
+			documents: [],
+		});
+		assert.match(guidance, /already resolved locally/);
+		assert.match(guidance, /\"taskCount\":1/);
+		assert.match(guidance, /Do not call tools/);
 	});
 
 	it("bounds repeated confirmation questions after affirmative answers", () => {

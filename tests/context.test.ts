@@ -101,6 +101,29 @@ describe("Trellis context", () => {
 		await rm(temporary, { recursive: true, force: true });
 	});
 
+	it("excludes archived task history from the active context projection", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-archived-tasks-"));
+		try {
+			const activeTask = join(temporary, ".trellis", "tasks", "active-task");
+			const archiveRoot = join(temporary, ".trellis", "tasks", "archive", "2026-08");
+			await mkdir(activeTask, { recursive: true });
+			await mkdir(archiveRoot, { recursive: true });
+			await writeFile(join(activeTask, "prd.md"), "# Active", "utf8");
+			for (let index = 0; index < 40; index++) {
+				const archivedTask = join(archiveRoot, `old-${index}`);
+				await mkdir(archivedTask, { recursive: true });
+				await writeFile(join(archivedTask, "prd.md"), `# Archived ${index}`, "utf8");
+			}
+
+			const snapshot = readTrellisSnapshot(temporary);
+			assert.deepEqual(snapshot.tasks.map((task) => task.id), ["active-task"]);
+			assert.equal(snapshot.taskFiles.some((path) => path.includes("\\archive\\")), false);
+			assert.equal(snapshot.taskFiles.some((path) => path.endsWith("active-task\\prd.md")), true);
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
 	it("loads the public current task and runtime spec in fast mode", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-public-current-"));
 		const taskDir = join(temporary, ".trellis", "tasks", "demo-task");

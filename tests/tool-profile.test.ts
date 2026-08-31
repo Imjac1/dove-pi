@@ -15,9 +15,41 @@ describe("Dove intent-owned tool tiers", () => {
 
 	it("keeps Lookup bounded and read-only", () => {
 		const selected = selectDoveToolNames(representativeTools, "auto", "lookup", "读取 package.json");
-		assert.deepEqual(selected, ["read", "grep", "find", "ls", "agent_list_capabilities", "agent_doctor", "agent_project_status", "agent_project_context", "agent_workspace_verify"]);
+		assert.deepEqual(selected, ["read", "grep", "agent_list_capabilities", "agent_doctor", "agent_project_status", "agent_project_context", "agent_workspace_verify"]);
 		assert.equal(selected.some((name) => mutationTools.has(name)), false);
 		assert.equal(selected.some((name) => name.startsWith("fusion_") || name.startsWith("bg_") || name === "mcp"), false);
+	});
+
+	it("skips directory discovery when a lookup names exact files", () => {
+		const selected = selectDoveToolNames(representativeTools, "auto", "lookup", "检查 src/invoice.js 和 tests/invoice.test.ts");
+		assert.ok(selected.includes("read"));
+		assert.equal(selected.includes("find"), false);
+		assert.equal(selected.includes("ls"), false);
+	});
+
+	it("keeps discovery tools for broad searches", () => {
+		const selected = selectDoveToolNames(representativeTools, "auto", "lookup", "列出并搜索所有 TypeScript 文件");
+		assert.ok(selected.includes("find"));
+		assert.ok(selected.includes("ls"));
+	});
+
+	it("uses the adapter-owned projection without provider tools for unfinished-task inventory", () => {
+		assert.deepEqual(
+			selectDoveToolNames(representativeTools, "auto", "lookup", "应该还存在没完成的任务你检查一下"),
+			[],
+		);
+		assert.deepEqual(
+			selectDoveToolNames(representativeTools, "auto", "project-work", "list remaining project tasks"),
+			[],
+		);
+		assert.notDeepEqual(
+			selectDoveToolNames(representativeTools, "auto", "execution", "继续未完成任务并修复测试问题"),
+			[],
+		);
+		assert.notDeepEqual(
+			selectDoveToolNames(representativeTools, "auto", "execution", "continue the unfinished task and fix its tests"),
+			[],
+		);
 	});
 
 	it("keeps real Chinese read-only prompts free of provider-visible mutation tools", () => {
