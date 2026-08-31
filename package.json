@@ -1,6 +1,6 @@
 {
   "name": "dove-pi",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Windows-first personal Agent runtime with a Pi adapter",

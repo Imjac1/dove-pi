@@ -23,7 +23,7 @@
 
 ### R2. 完成可重现发布
 
-- 更新版本号为下一个补丁版本 `0.1.3`，保持 Pi、Trellis 和扩展锁定版本不变。
+- 失败的 `v0.1.3` 标签保持不变；修复后更新版本号为下一个补丁版本 `0.1.4`，保持 Pi、Trellis 和扩展锁定版本不变。
 - 生成并验证 `release.json`、Windows archive、checksum、bootstrap 和资产清单。
 - 发布资产中的 commit 必须等于待发布的 `HEAD`，安装包内源码和 manifest 必须一致。
 - 不修改其他活动任务目录，不把临时测试文件或本地 session 写入仓库。
@@ -48,7 +48,7 @@
 
 - [ ] `--since=24h` 与 `--since 24h` 的 CLI 结果完全一致；非法参数非零退出并说明原因。
 - [ ] `npm run typecheck`、`npm test`、`npm run test:installer`、`npm run doctor`、`npm run pi:smoke` 和 `git diff --check` 全部通过。
-- [ ] `v0.1.3` release manifest、archive、checksum、bootstrap 和资产清单通过 release readiness 检查。
+- [ ] `v0.1.4` release manifest、archive、checksum、bootstrap 和资产清单通过 release readiness 检查。
 - [ ] GitHub Release 的 commit、manifest commit、archive 内 commit 三者一致，并包含最新源码修复。
 - [ ] 更新后的全局 `dove-pi` 运行新 release；doctor healthy，且版本不再指向 `0.1.2+source.850feed99747`。
 - [ ] 全局入口 token audit 的明细与合计一致，reasoning 不再出现明细非零但合计为零。
@@ -64,7 +64,7 @@
 
 ## Key Decisions
 
-- 采用补丁版本 `0.1.3`，因为本次变更是兼容性修复和发布同步，不引入新的公开协议。
+- 最初采用补丁版本 `0.1.3`；该标签的 CI 已失败且保持不可变。测试隔离修复改由 `v0.1.4` 发布，不改写远端历史。
 - 发布使用现有 GitHub Actions 标签工作流和 managed installer；不手工复制文件到托管目录。
 - 真实回归使用隔离 session/project，允许消耗真实模型 token，但不触碰真实项目任务和主仓库工作区。
 
@@ -72,7 +72,7 @@
 
 - 当前 provider 凭据由本机 Pi 配置提供；若凭据失效，真实模型回归只能记录为环境阻塞，不能用 fake host 冒充通过。
 - `atomicMutations=false` 仍是 Trellis 能力限制，本任务只验证现有 unknown/recovery 行为，不承诺原子事务。
-- `--offline --version` 仍可能由 Pi 接管；本任务记录该兼容行为，但不把它作为 `0.1.3` 的发布阻断项，除非发布回归证明会影响普通启动。
+- `--offline --version` 仍可能由 Pi 接管；本任务记录该兼容行为，但不把它作为 `0.1.4` 的发布阻断项，除非发布回归证明会影响普通启动。
 
 ## Open Questions
 

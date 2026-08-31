@@ -34,10 +34,27 @@ describe("CLI option parsing", () => {
 		}
 	});
 
+	it("returns a non-zero CLI result for an invalid --since value", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-cli-options-"));
+		try {
+			const env = { ...process.env, PI_CODING_AGENT_DIR: root };
+			await assert.rejects(
+				execFileAsync(process.execPath, ["--import", "tsx", "src/cli.ts", "token", "audit", "--since=abc"], { cwd: process.cwd(), env }),
+			(error: unknown) => {
+				assert.ok(error instanceof Error);
+				const result = error as Error & { readonly code?: number | string; readonly stderr?: string };
+				assert.notEqual(result.code, 0);
+				assert.match(result.stderr ?? result.message, /--since/);
+				return true;
+			},
+			);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("produces identical audit output for both documented CLI forms", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-cli-options-"));
-		const previous = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = root;
 		try {
 			const projectDir = join(root, "sessions", "--C--Users--rebot--Desktop--code--");
 			await mkdir(projectDir, { recursive: true });
@@ -52,8 +69,6 @@ describe("CLI option parsing", () => {
 			assert.equal(equals, separated);
 			assert.match(equals, /\| 1 \| 1 \| 100 \|/);
 		} finally {
-			if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
-			else process.env.PI_CODING_AGENT_DIR = previous;
 			await rm(root, { recursive: true, force: true });
 		}
 	});

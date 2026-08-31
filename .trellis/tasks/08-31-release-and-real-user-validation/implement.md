@@ -2,15 +2,16 @@
 
 ## Ordered Checklist
 
-- [ ] Read the relevant backend CLI, installer, error-handling, and cross-layer specs before editing.
-- [ ] Add a shared, strict parser for `--since` that supports both documented argv forms.
-- [ ] Add CLI integration coverage for equivalent forms and invalid/missing values.
-- [ ] Run focused tests and inspect the diff for unrelated changes.
-- [ ] Bump the patch version to `0.1.3` only after the source fix is green.
-- [ ] Run typecheck, full Node tests, installer tests, doctor, Pi smoke, and diff checks.
-- [ ] Build release manifest and Windows archive in a disposable release staging directory.
-- [ ] Run `scripts/check_release_readiness.py` with all required assets and verify the commit identity.
-- [ ] Create and push the `v0.1.3` tag only after the release readiness gate passes.
+- [x] Read the relevant backend CLI, installer, error-handling, and cross-layer specs before editing.
+- [x] Add a shared, strict parser for `--since` that supports both documented argv forms.
+- [x] Add CLI integration coverage for equivalent forms and invalid/missing values.
+- [x] Isolate the CLI integration fixture to the spawned process after the `v0.1.3` CI test failure.
+- [x] Run focused tests and inspect the diff for unrelated changes.
+- [x] Bump the patch version to `0.1.4`; retain failed `v0.1.3` as immutable history.
+- [x] Run typecheck, full Node tests, installer tests, doctor, Pi smoke, and diff checks.
+- [x] Build release manifest and Windows archive in a disposable release staging directory.
+- [x] Run `scripts/check_release_readiness.py` with all required assets and verify the pre-commit package structure; repeat strict clean-check after commit.
+- [ ] Create and push the `v0.1.4` tag only after the release readiness gate passes.
 - [ ] Wait for the GitHub release workflow, then verify release assets and manifest remotely.
 - [ ] Run managed `dove-pi update` and confirm doctor/current release identity.
 - [ ] Verify global `token audit --since=24h` against `--since 24h` and check aggregate reasoning.
@@ -29,7 +30,7 @@ npm run doctor
 npm run pi:smoke
 git diff --check
 npm run release:manifest -- <staging>\release.json
-npm run release:check -- --tag v0.1.3 --manifest <manifest> --archive <archive> --checksum <checksum> --bootstrap install.ps1 --asset <asset>
+npm run release:check -- --tag v0.1.4 --commit <HEAD> --manifest <manifest> --archive <archive> --checksum <checksum> --bootstrap install.ps1 --asset <archive> --asset <checksum> --asset install.ps1 --asset <manifest>
 dove-pi doctor
 dove-pi token audit --since=24h --filter=Desktop
 dove-pi token audit --since 24h --filter Desktop

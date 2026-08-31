@@ -32,6 +32,7 @@ npm run pi:smoke
 ```
 
 Prefer deterministic fixtures and one representative integration smoke over duplicating full end-to-end tests for every capability.
+CLI integration fixtures that spawn child processes must pass temporary environment overrides through the child `env` option; do not mutate the test runner's `process.env` when parallel files may observe it.
 
 ## Code Review Checklist
 
