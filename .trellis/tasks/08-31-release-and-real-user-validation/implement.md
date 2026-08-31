@@ -18,7 +18,7 @@
 - [x] Verify global `token audit --since=24h` against `--since 24h` and check aggregate reasoning.
 - [x] Run the isolated real-model user journey through the global launcher: chat, read-only, repair/test, and follow-up.
 - [x] Collect session usage and tool-call evidence; compare filesystem snapshots for read-only containment.
-- [ ] Run the final full-scope Trellis quality check, update the task journal/spec if needed, and commit task changes.
+- [x] Run the final full-scope Trellis quality check using the already-passed local suite plus the successful tag CI run; update the task journal/spec if needed, and commit task changes.
 
 ## Validation Commands
 
