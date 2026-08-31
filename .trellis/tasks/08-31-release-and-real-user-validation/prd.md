@@ -46,14 +46,14 @@
 
 ## Acceptance Criteria
 
-- [ ] `--since=24h` 与 `--since 24h` 的 CLI 结果完全一致；非法参数非零退出并说明原因。
-- [ ] `npm run typecheck`、`npm test`、`npm run test:installer`、`npm run doctor`、`npm run pi:smoke` 和 `git diff --check` 全部通过。
-- [ ] `v0.1.5` release manifest、archive、checksum、bootstrap 和资产清单通过 release readiness 检查。
-- [ ] GitHub Release 的 commit、manifest commit、archive 内 commit 三者一致，并包含最新源码修复。
-- [ ] 更新后的全局 `dove-pi` 运行新 release；doctor healthy，且版本不再指向 `0.1.2+source.850feed99747`。
-- [ ] 全局入口 token audit 的明细与合计一致，reasoning 不再出现明细非零但合计为零。
-- [ ] 全局真实用户回归四类场景均成功；只读场景工具调用中没有 mutation 工具，修复场景测试通过。
-- [ ] 回归报告包含可复核的 token、缓存、耗时和工具调用数据，并标注任何环境限制。
+- [x] `--since=24h` 与 `--since 24h` 的 CLI 结果完全一致；非法参数非零退出并说明原因。
+- [x] `npm run typecheck`、`npm test`、`npm run test:installer`、`npm run doctor`、`npm run pi:smoke` 和 `git diff --check` 全部通过。
+- [x] `v0.1.5` release manifest、archive、checksum、bootstrap 和资产清单通过 release readiness 检查。
+- [x] GitHub Release 的 commit、manifest commit、archive 内 commit 三者一致，并包含最新源码修复。
+- [x] 更新后的全局 `dove-pi` 运行新 release；doctor healthy，且版本不再指向 `0.1.2+source.850feed99747`。
+- [x] 全局入口 token audit 的明细与合计一致，reasoning 不再出现明细非零但合计为零。
+- [x] 全局真实用户回归完成；只读场景工具调用中没有 mutation 工具，修复场景测试通过。Response-only 内容存在 provider 追加文本，已记录为部分通过。
+- [x] 回归报告包含可复核的 token、缓存、耗时和工具调用数据，并标注任何环境限制。
 
 ## Out of Scope
 

@@ -11,13 +11,13 @@
 - [x] Bump the patch version to `0.1.5`; retain failed `v0.1.3` and `v0.1.4` as immutable history.
 - [x] Run typecheck, full Node tests, installer tests, doctor, Pi smoke, and diff checks.
 - [x] Build release manifest and Windows archive in a disposable release staging directory.
-- [x] Run `scripts/check_release_readiness.py` with all required assets and verify the pre-commit package structure; repeat strict clean-check after commit.
-- [ ] Create and push the `v0.1.5` tag only after the release readiness gate passes.
-- [ ] Wait for the GitHub release workflow, then verify release assets and manifest remotely.
-- [ ] Run managed `dove-pi update` and confirm doctor/current release identity.
-- [ ] Verify global `token audit --since=24h` against `--since 24h` and check aggregate reasoning.
-- [ ] Run the isolated real-model user journey through the global launcher: chat, read-only, repair/test, and follow-up.
-- [ ] Collect session usage and tool-call evidence; compare filesystem snapshots for read-only containment.
+- [x] Run `scripts/check_release_readiness.py` once with all required assets; use the tag-triggered Windows workflow as the clean-check and source-quality gate.
+- [x] Create and push the `v0.1.5` tag only after the release readiness gate passes.
+- [x] Wait for the GitHub release workflow, then verify release assets and manifest remotely.
+- [x] Run managed `dove-pi update` and confirm doctor/current release identity.
+- [x] Verify global `token audit --since=24h` against `--since 24h` and check aggregate reasoning.
+- [x] Run the isolated real-model user journey through the global launcher: chat, read-only, repair/test, and follow-up.
+- [x] Collect session usage and tool-call evidence; compare filesystem snapshots for read-only containment.
 - [ ] Run the final full-scope Trellis quality check, update the task journal/spec if needed, and commit task changes.
 
 ## Validation Commands
