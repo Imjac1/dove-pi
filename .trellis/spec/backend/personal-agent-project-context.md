@@ -40,6 +40,10 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - Fast and Standard apply bounded total context-character budgets for broad retrieval. Ultra has no artificial application token cap and relies on relevance scoring, content deduplication, per-document compaction, and Pi/provider model-context limits.
 - When Pi exposes current context usage and model window, the adapter derives a remaining-character budget with response headroom and passes it to the compiler. On a first request, before usage is available, it falls back to the model's declared window, reserves space for system/tool/output tokens, and limits project context to a conservative window share. This is a dynamic model limit guard, not a fixed Ultra budget.
 - Model-facing project indexes use bounded previews for large collections (for example, the first 50 task records plus an omission count); complete raw collections remain provider-local details.
+- `.trellis/tasks/archive/` is historical storage, not active context. Snapshot task/document discovery and revision calculation skip that subtree; archive growth must not increase active request context or invalidate the provider cache prefix.
+- An unfinished-task inventory request reuses the single request-bound `ProjectContextSnapshot`, serializes at most 50 active tasks plus `taskCount`/`tasksOmitted`, and exposes zero provider tools. The model may report unknown metadata as unknown, but it must not inspect task files or archived output to manufacture stronger completion evidence.
+- `readOnlyToolBudget()` bounds widening lookup/project/execution loops by mode; Standard warns/stops at 6/12, 10/20, and 20/40 calls respectively, while deterministic task inventory keeps a 1/2 fallback despite normally exposing no tools.
+- The execution ledger adds non-blocking `runtime.phase.completed` records for request preparation, tools, provider waits, and Pi post-hooks. Preparation metrics are `intentMs`, `projectContextMs`, `contextCompileMs`, and `contextRefreshed`; prompts and tool arguments are never timing evidence.
 
 ### 4. Validation & Error Matrix
 
@@ -50,12 +54,16 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 | Malformed `task.json` | Ignore metadata parse failure without losing file discovery |
 | Public current-task command unavailable or fails | Leave `activeTaskPath` unset and continue with normalized task candidates |
 | Stale, malformed, or out-of-root current-task result | Ignore the result; never inspect a private runtime fallback |
+| Archived task tree is large | Exclude it from active Markdown discovery, task projection, and revision calculation |
+| User requests unfinished-task inventory | Return the bounded active projection directly with zero tools; do not compile broad document excerpts |
+| Read-only search widens or timing append fails | Enforce the plan budget before another read; observability failure never changes the runtime result |
 
 ### 5. Good/Base/Bad Cases
 
 - Good: load the active task's PRD and runtime spec in Fast mode, then rank relevant memory only when requested.
 - Base: a Trellis project with task files but no active session still provides non-required task context in Standard/Ultra.
 - Bad: have the context layer parse `task.json` or duplicate session-path logic independently.
+- Bad: scan `tasks/archive` to answer an active inventory request or treat archived reports as proof that an active legacy directory is complete.
 
 ### 6. Tests Required
 
@@ -64,6 +72,9 @@ buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode): 
 - Assert malformed or missing metadata does not prevent snapshot creation.
 - Assert Fast mode keeps active PRD/runtime spec behavior and Trellis-disabled mode remains loadable.
 - Assert request-scoped Dove context is not persisted, legacy context messages are filtered, empty/budget-omitted snapshots can retry their epoch, exact Dove-only budget recovery preserves marker-bearing user text, and broad Standard retrieval stays within its character budget.
+- Assert archived Markdown files do not enter `taskFiles` or the revision, and a large archive does not change the active projection.
+- Assert task inventory performs one provider projection read, emits no document snapshot, and supplies a bounded task count/omission payload with zero tools.
+- Assert read-only budget thresholds and correlated numeric-only phase timing records, including fail-open ledger writes.
 
 ### 7. Wrong vs Correct
 

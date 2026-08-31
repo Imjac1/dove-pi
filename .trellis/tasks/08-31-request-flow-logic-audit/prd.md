@@ -14,6 +14,8 @@
 - `PlanningSession.begin()` 以 `currentTaskId` 优先于显式 `create-task`；项目已有当前任务时，“新建任务”会错误进入 `planning`，空标题创建随后失败，或模型继续旧任务。
 - 创建工具只把一个标题传给 `task.py create`；规划问题虽然声称收集“标题/范围”，但状态快照没有 scope/description，原始目标不会进入新任务的 `description` 或 PRD Goal，跨会话继续时需求丢失。
 - `runTokenAudit()` 的 `sinceHours` 只作用于 cache/input/reasoning 样本，`outputTokensOf(entries)` 却统计整个会话；窗口内的 output、reasoning 百分比和项目会话计数因此可能互相矛盾。
+- 后续真实会话提示“应该还存在没完成的任务你检查一下”耗时约 1,665 秒，31 个 Provider 轮次、65 次工具调用；本地工具通常只需 0.0–0.7 秒，主要等待来自 Provider 多轮往返。
+- `.trellis/tasks/archive` 已积累 1,447 个文件并被错误纳入活动上下文；更严重的是，项目包装器的 managed guard 同时静默了 `-e` 加载的权威源码扩展，导致工具选择、进度门禁和时序账本在真实进程中全部未运行。
 
 ## Requirements
 
@@ -56,6 +58,14 @@
 - Token audit 测试验证时间窗口同时过滤 output/session，并验证 raw/formatted aggregate。
 - 使用全新 Pi 进程和临时/隔离项目复测取消后重试、已有当前任务时新建、范围传递、成功创建路径及 token audit 输出；不得污染其他 Trellis 任务或真实项目任务。
 
+### R7. 真实任务盘点延迟与权威扩展
+
+- managed/explicit `-e` 指向的物理包装器必须保持激活；只静默路径不同的自动发现副本。
+- 纯未完成任务盘点必须复用一次 ProjectProvider 投影、排除 archive、跳过文档编译并以零工具直接回答。
+- 通用只读流程必须有按 mode/intent 区分的警告/硬停止预算；盘点路由保留 1/2 次兜底预算。
+- 账本必须记录 request preparation、tool、provider 和 Pi post-hook 耗时，且不记录提示词或工具参数。
+- 使用原始中文提示在 `Desktop/code`、Auto tools、隔离状态目录中真实回放；目标为单 Provider 轮次、零工具调用、无项目文件副作用。
+
 ## Acceptance Criteria
 
 - [x] 创建确认取消返回结构化 `cancelled` 结果，规划状态不再是 `awaiting-create`，后续允许重新收集标题/范围。
@@ -68,10 +78,14 @@
 - [x] `sinceHours` 同时约束 input/cache/output/reasoning/session/message 统计，项目行与总计使用同一过滤口径。
 - [x] 既有测试、类型检查、doctor、Pi smoke 和 installer 测试全部通过。
 - [x] 全新 Pi 进程的临时项目回归覆盖取消、重新回答、成功创建、工具调用次数和 token audit 结果。
+- [x] 权威 `-e` 包装器在 managed guard 下保持激活，项目发现副本按物理路径静默。
+- [x] 未完成任务盘点使用零工具直接投影，archive 不参与活动上下文或 revision。
+- [x] 隔离真实回放由约 1,665 秒、31 Provider 轮次、65 工具调用降为 9.317 秒、1 Provider 轮次、0 工具调用；项目 Git 状态不变。
+- [x] 回放账本记录 request prepare 232ms（project context 223ms、context compile 0ms）、provider 3,879ms、post-hook 2ms，以及 input 2,614 / cacheRead 0 / output 293。
 
 ## Out of Scope
 
-- 不重做 RequestPlan 的意图分类、工具分层、provider cache 策略或 Trellis 存储协议。
+- 不重做通用 RequestPlan 分类、provider cache 策略或 Trellis 存储协议；仅新增任务盘点的确定性子路由和通用只读预算。
 - 不改变缓存命中率定义；只修正审计字段在同一过滤窗口内的一致性。
 - 不修改 `08-27-dove-interop-layer`、`08-28-dove-pi-web`、`08-30-dove-pi-runtime-reliability-sync` 及其子任务。
 - 不发布新 GitHub Release，不迁移其他机器的 managed install，不修改无关的缓存命中率算法。

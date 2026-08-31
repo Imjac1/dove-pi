@@ -14,7 +14,12 @@
 - [x] Run focused tests, then typecheck, full Node/installer suites, doctor, Pi smoke, and `git diff --check`.
 - [x] Run an isolated fresh-Pi replay for cancel -> re-answer -> confirm/create, existing-current-task create, requirement handoff, and run token audit against a temporary fixture plus the real read-only audit path.
 - [x] Update the relevant backend spec with the verified cancellation transition and accounting invariant.
-- [x] Perform final Trellis quality check and commit only this task's files and product changes.
+- [x] Perform the final Trellis quality check.
+- [x] Commit only this task's files and product changes after the Phase 3.4 review gate.
+- [x] Reproduce the real unfinished-task inventory prompt from `Desktop/code` and attribute wall time to Provider rounds rather than local tool duration.
+- [x] Fix managed wrapper selection so the configured physical `-e` entry remains active while discovered duplicates are inert.
+- [x] Add deterministic zero-tool task-inventory guidance, archive exclusion, read-only fallback budgets, and phase timing evidence.
+- [x] Replay the exact prompt with Auto tools and isolated state; verify 9.317s wall time, one Provider round, zero tools, and no project Git changes.
 
 ## Validation Commands
 

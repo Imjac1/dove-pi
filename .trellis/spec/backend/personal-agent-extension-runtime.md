@@ -88,20 +88,24 @@ dove-pi extensions install max
 - Launcher always passes the managed extension with `-e` and sets `DOVE_PI_EXTENSION_GUARD=1`; ordinary Pi discovery remains enabled for unrelated extensions.
 - `DOVE_PI_PROJECT_EXTENSION` is accepted only with `DOVE_PI_TRUST_PROJECT_EXTENSION=1`; startup selection is read-only and never writes a checkout.
 - Precedence is trusted explicit project override > managed explicit > project auto-discovery. Duplicate same-identity wrappers are suppressed; divergent identities emit diagnostics and managed remains authoritative by default.
+- `DOVE_PI_EXTENSION_ENTRY` identifies the one physical wrapper selected by `-e`. Under `DOVE_PI_EXTENSION_GUARD=1`, a wrapper is inert only when its canonical physical path differs from that selected entry. The selected managed or trusted-explicit wrapper must remain active; process-global registration remains the secondary duplicate guard after module loading.
 
 ### 4. Validation & Error Matrix
 - Missing/untrusted explicit project path -> launch error; managed checkout is not suppressed.
 - Invalid release Dove identity (wrong id/version, missing digest/entry path) -> release validation error.
 - Legacy manifest without `doveExtension` -> runnable with `unknown` identity state.
 - Stale Pi owner after reload -> replace the process-global claim; live duplicate -> suppress only the duplicate Dove wrapper.
+- Selected `-e` wrapper sees the managed guard -> compare canonical paths and stay active; never suppress solely because origin is `managed`.
 
 ### 5. Good/Base/Bad Cases
 - Good: managed `-e` loads first, a project wrapper is recognized as a duplicate, and third-party project plugins still load.
 - Base: no project Dove entry; managed identity is selected and status reports `managed_only`.
 - Bad: filename existence alone disables managed loading, or an untrusted project copy silently wins.
+- Bad: make every wrapper inert whenever `DOVE_PI_EXTENSION_ORIGIN=managed`; that disables the authoritative release copy as well as the discovered duplicate.
 
 ### 6. Tests Required
 - Unit-test path canonicalization, version/digest drift, selection precedence, and stale-claim replacement.
+- Unit-test canonical selected-entry equality across Windows slash/case aliases and inequality for a project-discovered wrapper.
 - Installer/launcher tests assert managed `-e` is unconditional, explicit override fails closed, and unrelated plugins remain untouched.
 - Release/readiness/status tests assert additive identity decoding, strict validation, and legacy `unknown` behavior.
 
@@ -117,5 +121,11 @@ pi_command += ["-e", str(EXTENSION)]
 launch_env["DOVE_PI_EXTENSION_GUARD"] = "1"
 ```
 
-The loader still discovers normal Pi extensions; the adapter claim resolves only the Dove authority conflict.
+```typescript
+const duplicate = guardEnabled
+  && configuredEntry !== undefined
+  && !isSameDoveEntryPath(currentModulePath, configuredEntry);
+export default duplicate ? () => {} : extension;
+```
 
+The loader still discovers normal Pi extensions; the adapter claim resolves only the Dove authority conflict.

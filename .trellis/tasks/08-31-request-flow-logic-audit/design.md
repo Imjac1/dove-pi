@@ -44,3 +44,11 @@ session JSONL
 - Existing successful creation and explicit `/task` command behavior remain unchanged.
 - Historical token audit files are read-only; only the computed aggregate changes.
 - Rollback is local: revert the state transition and adapter mapping independently from the one-line accounting fix if either regression appears.
+
+## Follow-up Runtime Latency Design
+
+真实问题不在本地文件读取速度，而在每次不确定性都交回 Provider 再发起一次工具调用。任务盘点属于 ProjectProvider 已经拥有完整答案的确定性读路径：请求边界读取一次标准投影，直接注入最多 50 个活动任务与 omission count，Auto 工具集设为空，并跳过文档上下文编译。通用只读预算仍保留为偏航兜底，但不是该路径的正常控制方式。
+
+扩展权威必须在模块加载阶段按物理入口决定。launcher 的 `DOVE_PI_EXTENSION_ENTRY` 指向唯一 `-e` 副本；只有当前模块路径与其不同的自动发现包装器静默。之前按 `origin=managed` 整体静默会同时禁用权威副本，使后续的注册 claim、工具集和门禁完全失效。
+
+时序证据写入 Dove 用户级 execution ledger：每个阶段只记录相关 ID、名称、duration 和数值指标，不包含提示词、工具参数或输出。账本失败始终 fail-open，不改变用户请求结果。
