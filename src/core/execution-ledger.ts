@@ -119,8 +119,8 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind, timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, executionId: input.executionId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { executionId: input.executionId, capability: input.capability, reason: input.reason } });
 	}
 
-	public async appendProjectMutationStarted(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string, args: readonly string[] = [], beforeTaskIds: readonly string[] = []): Promise<void> {
-		await this.append({ taskId, stepId, kind: "project.mutation.started", timestamp: new Date().toISOString(), mode, details: { mutationId, operation, provider, revision, args: args.map((arg) => arg.slice(0, 512)), beforeTaskIds: beforeTaskIds.slice(0, 512) } });
+	public async appendProjectMutationStarted(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string, args: readonly string[] = [], beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<void> {
+		await this.append({ taskId, stepId, kind: "project.mutation.started", timestamp: new Date().toISOString(), mode, details: { mutationId, operation, provider, revision, args: args.map((arg) => arg.slice(0, 512)), beforeTaskIds: beforeTaskIds.slice(0, 512), ...(targetTaskId ? { targetTaskId } : {}), ...(beforeTargetStatus ? { beforeTargetStatus: beforeTargetStatus.slice(0, 128) } : {}), ...(beforeCurrentTaskId ? { beforeCurrentTaskId } : {}) } });
 	}
 
 	public async appendProjectMutationCompleted(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string): Promise<void> {
@@ -157,10 +157,10 @@ export class ExecutionLedger {
 		const intents = new Map<string, ProjectMutationIntent>();
 		for (const record of await this.read()) {
 			if (!record.kind.startsWith("project.mutation.")) continue;
-			const details = record.details as { mutationId?: unknown; operation?: unknown; provider?: unknown; revision?: unknown; args?: unknown; beforeTaskIds?: unknown };
+			const details = record.details as { mutationId?: unknown; operation?: unknown; provider?: unknown; revision?: unknown; args?: unknown; beforeTaskIds?: unknown; targetTaskId?: unknown; beforeTargetStatus?: unknown; beforeCurrentTaskId?: unknown };
 			if (typeof details.mutationId !== "string") continue;
 			if (record.kind === "project.mutation.started") {
-				intents.set(details.mutationId, { mutationId: details.mutationId, taskId: record.taskId, stepId: record.stepId, mode: record.mode, operation: String(details.operation ?? "unknown"), provider: String(details.provider ?? "unknown"), revision: String(details.revision ?? "unknown"), args: Array.isArray(details.args) ? details.args.filter((arg): arg is string => typeof arg === "string") : [], beforeTaskIds: Array.isArray(details.beforeTaskIds) ? details.beforeTaskIds.filter((id): id is string => typeof id === "string") : [] });
+				intents.set(details.mutationId, { mutationId: details.mutationId, taskId: record.taskId, stepId: record.stepId, mode: record.mode, operation: String(details.operation ?? "unknown"), provider: String(details.provider ?? "unknown"), revision: String(details.revision ?? "unknown"), args: Array.isArray(details.args) ? details.args.filter((arg): arg is string => typeof arg === "string") : [], beforeTaskIds: Array.isArray(details.beforeTaskIds) ? details.beforeTaskIds.filter((id): id is string => typeof id === "string") : [], ...(typeof details.targetTaskId === "string" ? { targetTaskId: details.targetTaskId } : {}), ...(typeof details.beforeTargetStatus === "string" ? { beforeTargetStatus: details.beforeTargetStatus } : {}), ...(typeof details.beforeCurrentTaskId === "string" ? { beforeCurrentTaskId: details.beforeCurrentTaskId } : {}) });
 			} else {
 				intents.delete(details.mutationId);
 			}
@@ -207,6 +207,9 @@ export interface ProjectMutationIntent {
 	readonly revision: string;
 	readonly args: readonly string[];
 	readonly beforeTaskIds: readonly string[];
+	readonly targetTaskId?: string;
+	readonly beforeTargetStatus?: string;
+	readonly beforeCurrentTaskId?: string;
 }
 
 export interface CapabilityExecutionIntent {

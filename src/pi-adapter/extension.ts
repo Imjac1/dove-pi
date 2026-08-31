@@ -529,7 +529,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		for (const intent of pending) {
 			let outcome: "unknown" | "observed" = "unknown";
 			if (projectProvider.reconcileTaskOperation) {
-				try { outcome = await projectProvider.reconcileTaskOperation(intent.operation as TrellisTaskOperation, intent.args, intent.revision, intent.beforeTaskIds); } catch { /* preserve unknown and require explicit verification */ }
+				try { outcome = await projectProvider.reconcileTaskOperation(intent.operation as TrellisTaskOperation, intent.args, intent.revision, intent.beforeTaskIds, intent.targetTaskId, intent.beforeTargetStatus, intent.beforeCurrentTaskId); } catch { /* preserve unknown and require explicit verification */ }
 			}
 			await ledger.appendProjectMutationReconciled(intent.taskId, intent.stepId, intent.mode, intent.mutationId, intent.operation, intent.provider, currentRevision, outcome);
 		}
@@ -568,14 +568,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		return projectProvider.kind === "lightweight" && readProjectManifest(projectProvider.projectRoot) === undefined;
 	}
 
-	async function runProjectTaskMutation(operation: TrellisTaskOperation, operationArgs: readonly string[], beforeTaskIds: readonly string[] = []): Promise<string> {
+	async function runProjectTaskMutation(operation: TrellisTaskOperation, operationArgs: readonly string[], beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<string> {
 		if (runtimeReadOnly()) throw new Error("Dove runtime is in read-only mode (DOVE_PI_READ_ONLY=1); project mutations are blocked.");
-		const currentTaskId = operation === "create" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? `adhoc:${Date.now()}`;
+		const currentTaskId = operation === "create" ? "pi-session" : targetTaskId ?? projectProvider.getCurrentTask()?.stableId ?? `adhoc:${Date.now()}`;
 		const stepId = `project-${operation}-${randomUUID()}`;
 		const mutationId = `mutation-${randomUUID()}`;
 		const health = projectProvider.getHealth();
 		try {
-			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, "before", operationArgs, beforeTaskIds);
+			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, "before", operationArgs, beforeTaskIds, targetTaskId, beforeTargetStatus, beforeCurrentTaskId);
 			const result = await projectProvider.runTaskOperation(operation, operationArgs);
 			// Provider instances cache short-lived snapshots. Recreate after every
 			// lifecycle mutation so the next planning decision sees the new state.
@@ -862,7 +862,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			try {
-				ctx.ui.notify(await runProjectTaskMutation(operation as TrellisTaskOperation, operationArgs), "info");
+				const typedOperation = operation as TrellisTaskOperation;
+				const beforeContext = projectProvider.getContext();
+				const beforeTaskIds = beforeContext.tasks.map((task) => task.stableId);
+				const targetTask = typedOperation === "create"
+					? undefined
+					: typedOperation === "finish"
+						? beforeContext.currentTask
+						: operationArgs[0] ? projectProvider.resolveTask(operationArgs[0]) : undefined;
+				if (typedOperation === "finish" && !targetTask) throw new Error("finish requires a current Trellis task.");
+				if ((typedOperation === "start" || typedOperation === "archive") && !targetTask) throw new Error(`${typedOperation} target could not be resolved uniquely.`);
+				ctx.ui.notify(await runProjectTaskMutation(typedOperation, operationArgs, beforeTaskIds, targetTask?.stableId, targetTask?.status, beforeContext.currentTask?.stableId), "info");
 			} catch (error) {
 				ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 			}
@@ -913,17 +923,32 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				const cancelled = typed.operation === "create" ? planningSession.cancelCreate() : planningSession.snapshot();
 				return { content: [{ type: "text", text: typed.operation === "create" ? "项目任务变更已取消，可重新收集任务名称和范围。" : "项目任务变更已取消。" }], details: { operation: typed.operation, cancelled: true, workflow: { state: cancelled.state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, next: typed.operation === "create" ? "collecting" : undefined } } };
 			}
-			const beforeContext = typed.operation === "create" ? projectProvider.getContext() : undefined;
-			const beforeTaskIds = beforeContext?.tasks.map((task) => task.stableId) ?? [];
-			const result = await runProjectTaskMutation(typed.operation, operationArgs, beforeTaskIds);
+			const beforeContext = projectProvider.getContext();
+			const beforeTaskIds = beforeContext.tasks.map((task) => task.stableId);
+			const targetTask = typed.operation === "create"
+				? undefined
+				: typed.operation === "finish"
+					? beforeContext.currentTask
+					: typed.task?.trim() ? projectProvider.resolveTask(typed.task.trim()) : undefined;
+			const targetTaskId = targetTask?.stableId;
+			if (typed.operation === "finish" && !targetTaskId) throw new Error("finish requires a current Trellis task.");
+			if ((typed.operation === "start" || typed.operation === "archive") && !targetTaskId) throw new Error(`${typed.operation} target could not be resolved uniquely.`);
+			const result = await runProjectTaskMutation(typed.operation, operationArgs, beforeTaskIds, targetTaskId, targetTask?.status, beforeContext.currentTask?.stableId);
 			const createdContext = typed.operation === "create" ? projectProvider.getContext() : undefined;
 			const task = createdContext && typed.operation === "create"
-				? createdContext.tasks.find((candidate) => candidate.title === title && !beforeTaskIds.includes(candidate.stableId))
+				? createdContext.tasks.filter((candidate) => candidate.title === title && !beforeTaskIds.includes(candidate.stableId))
 				: undefined;
 			if (typed.operation === "create") {
-				if (!task) throw new Error("Trellis task was created but its new stable identity could not be resolved; inspect the project before continuing.");
-				currentRequestTaskId = task.stableId;
-				planningSession.markTaskCreated({ taskId: task?.stableId, taskPath: task?.path, taskTitle: operationArgs[0] });
+				if (task?.length !== 1) {
+					const unknown = planningSession.markTaskIdentityUnknown();
+					return {
+						content: [{ type: "text", text: "Trellis 创建操作已完成，但新任务身份无法唯一确认。请先检查项目任务列表，暂不重复创建。" }],
+						details: { operation: typed.operation, result, identityUnknown: true, workflow: { state: unknown.state, action: "create-task", next: "inspect" } },
+					};
+				}
+				const createdTask = task[0];
+				currentRequestTaskId = createdTask.stableId;
+				planningSession.markTaskCreated({ taskId: createdTask.stableId, taskPath: createdTask.path, taskTitle: title });
 				planningSession.enterPlanning();
 			}
 			return {
@@ -931,7 +956,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				details: {
 					operation: typed.operation,
 					result,
-					workflow: { state: planningSession.snapshot().state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, taskId: task?.stableId, path: task?.path, next: typed.operation === "create" ? "planning" : undefined },
+					workflow: { state: planningSession.snapshot().state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, taskId: typed.operation === "create" ? task?.[0]?.stableId : targetTaskId, path: typed.operation === "create" ? task?.[0]?.path : undefined, next: typed.operation === "create" ? "planning" : undefined },
 				},
 			};
 		},

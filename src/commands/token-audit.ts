@@ -63,10 +63,12 @@ async function readSessionEntries(filePath: string): Promise<unknown[]> {
 
 function isFresh(
 	sinceHours: number | undefined,
-	timestamp: number | undefined,
+	timestamp: number | string | undefined,
 ): boolean {
-	if (sinceHours === undefined || timestamp === undefined) return true;
-	return timestamp >= Date.now() - sinceHours * 3_600_000;
+	if (sinceHours === undefined) return true;
+	if (timestamp === undefined) return false;
+	const milliseconds = typeof timestamp === "number" ? timestamp : Date.parse(timestamp);
+	return Number.isFinite(milliseconds) && milliseconds >= Date.now() - sinceHours * 3_600_000;
 }
 
 function outputTokensOf(entries: readonly unknown[], sinceHours?: number): number {
@@ -75,8 +77,8 @@ function outputTokensOf(entries: readonly unknown[], sinceHours?: number): numbe
 		const message = (
 			entry as {
 				type?: string;
-				timestamp?: number;
-				message?: { role?: string; timestamp?: number; usage?: { output?: number } };
+				timestamp?: number | string;
+				message?: { role?: string; timestamp?: number | string; usage?: { output?: number } };
 			}
 		)?.message;
 		if (
@@ -85,7 +87,7 @@ function outputTokensOf(entries: readonly unknown[], sinceHours?: number): numbe
 		)
 			continue;
 		const entryTimestamp = (entry as { timestamp?: unknown })?.timestamp;
-		const timestamp = typeof entryTimestamp === "number" ? entryTimestamp : typeof message.timestamp === "number" ? message.timestamp : undefined;
+		const timestamp = typeof entryTimestamp === "number" || typeof entryTimestamp === "string" ? entryTimestamp : typeof message.timestamp === "number" || typeof message.timestamp === "string" ? message.timestamp : undefined;
 		if (!isFresh(sinceHours, timestamp)) continue;
 		total += message.usage?.output ?? 0;
 	}

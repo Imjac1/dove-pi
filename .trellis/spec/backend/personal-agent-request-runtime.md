@@ -1,6 +1,6 @@
 # Personal Agent Request Runtime
 
-> **Scope:** Core Agent contracts, the Pi adapter firewall, request planning, tool selection, and provider budget enforcement.
+> **Scope:** Core contracts, Pi adapter firewall, request planning, tool selection, and provider budgets.
 >
 > **Canonical router:** [Personal Agent Runtime Contract](./personal-agent-runtime.md)
 > **Related specifications:** [personal-agent-capability-runtime](./personal-agent-capability-runtime.md), [personal-agent-project-context](./personal-agent-project-context.md)
@@ -48,22 +48,22 @@ interface RecoveryOwnerOptions {
 
 ## 3. Contracts
 
-- `src/core/**` must not import Pi packages; Pi-specific behavior belongs in `src/pi-adapter/**`.
+- `src/core/**` must not import Pi packages; Pi behavior belongs in `src/pi-adapter/**`.
 - Capability names are stable dotted identifiers such as `windows.host_info` and `workspace.inspect`.
 - Every capability declares version, platform, side effects, idempotency, status, and execution function.
 - Mode changes are persisted as `personal-agent-mode` entries and apply only at the next not-yet-started step.
-- PowerShell output is structured; raw output stays in an artifact and summaries reference evidence instead of copying large logs into model context.
+- PowerShell output is structured; raw output stays in an artifact and summaries reference evidence instead of copying logs into model context.
 - Pi tool results must apply a model-facing output bound to large execution strings (stdout/stderr and nested recipe results); complete output remains in tool details and execution artifacts.
-- The Pi adapter bounds oversized built-in read/shell/search results before re-entry into model context, preserving full output in tool details and adding a request-narrowing marker.
-- The Pi adapter normalizes complete DeepSeek DSML text tool calls (`<｜DSML｜tool_calls>...`) at the `message_end` boundary into standard Pi `toolCall` blocks. This compatibility path is strict (complete wrapper/invocation/parameter tags only), preserves non-DSML content, leaves malformed text unchanged, and still relies on Pi's normal `tool_call` policy and approval path.
+- The Pi adapter bounds oversized built-in read/shell/search results before model re-entry, preserving full output in tool details and adding a narrowing marker.
+- The Pi adapter normalizes complete DeepSeek DSML text tool calls at `message_end` into standard Pi `toolCall` blocks. It accepts only complete wrapper/invocation/parameter tags, preserves non-DSML content, leaves malformed text unchanged, and uses Pi's normal policy/approval path.
 - Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
-- Dispatches write a `dispatch.decided` record before execution and a correlated `dispatch.completed` record after execution. Completion details include a unique `dispatchId`, selected route, wall-clock duration, success/failure status, and optional startup/context/input/output token metrics plus retry and human-intervention counts. Failed dispatches must still write the completion record before propagating the original error.
-- Tool-loop fingerprints are deterministic opaque hashes. `ls` with no path normalizes to `.`; same-batch duplicate idempotent calls are coalesced before execution, while mutation and unknown tools are never result-cached. Successful stagnation compares call and bounded observation fingerprints, warns at the soft threshold, terminates at the hard threshold, and resets on changed arguments, observations, errors, or mutations.
-- Structured `ask_user_question` confirmations are bounded separately from read caching. Equivalent affirmative questions without an intervening tool result warn at threshold 2, then block at hard threshold 3 and direct execution or a result. Option shape plus normalized action/target text defines equivalence; changed wording cannot evade the bound, while distinct targets remain allowed. Negative answers, errors, tool results, new `agent_start`, and resets open a fresh window. Thresholds use `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_THRESHOLD` and `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_HARD_STOP_THRESHOLD`.
-- During the Trellis planning handshake, any non-cancelled answer to the first scope/title question transitions `PlanningSession` to `awaiting-create`. The Pi `tool_call` boundary must block and terminate any subsequent `ask_user_question` in that state, regardless of whether the question options use explicit confirmation vocabulary, and direct the model to the restricted `agent_project_task` tool. This state-machine guard is separate from the generic repeated-confirmation heuristic.
+- Dispatches write correlated `dispatch.decided` and `dispatch.completed` records. Completion includes unique ID, route, duration, status, and optional token/retry/intervention metrics. Failed dispatches record completion before propagating the error.
+- Tool-loop fingerprints are deterministic opaque hashes. `ls` defaults to `.`; same-batch duplicate idempotent calls coalesce, while mutation/unknown tools are never cached. Successful stagnation compares call and bounded observation fingerprints, warns then terminates at configured bounds, and resets on changed arguments, observations, errors, or mutations.
+- Structured `ask_user_question` confirmations are bounded separately from read caching. Equivalent affirmative questions without an intervening result warn at 2, then block at 3 and direct execution/result. Normalized option/action/target text defines equivalence; changed wording cannot evade it, while distinct targets remain allowed. Negative answers, errors, results, new `agent_start`, and resets open a fresh window. Thresholds use the two `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_*` settings.
+- During the Trellis planning handshake, any non-cancelled answer to the first scope/title question transitions `PlanningSession` to `awaiting-create`. The Pi `tool_call` boundary blocks/terminates later `ask_user_question` calls in that state and directs the model to restricted `agent_project_task`, regardless of option vocabulary. This guard is separate from repeated-confirmation heuristics.
 - Provider cache evidence is per-call with bounded digests/sizes for system policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and misses without treating cumulative reads as regressions.
-- Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call and is token-weighted (`cacheRead / (input + cacheRead + cacheWrite)`); the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
-- Oversized built-in read/shell/search observations are compacted before re-entry into model context with original/retained/omitted sizes, a digest, and deterministic narrowing metadata. Complete output remains in tool details.
+- Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call; the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
+- Oversized built-in read/shell/search observations are compacted before model re-entry with sizes, digest, and narrowing metadata; complete output remains in tool details.
 - Token audit aggregates project rows using one `sinceHours` inclusion predicate for input, cache, output, reasoning, session count, and message count. `totalReasoning` is the sum of included project `reasoningTokens`; output-only entries outside the window do not affect aggregate output or reasoning percentages.
 
 ## 4. Validation & Error Matrix
@@ -163,22 +163,19 @@ return limitProviderOutputTokens(payload, reservedOutput);
 
 ## Design Decision: Adapter Firewall
 
-**Context**: Dove is primarily used through Pi, and forcing every Pi callback
-through a generic host abstraction would add indirection without improving the
-user experience.
+**Context**: Dove is primarily used through Pi, so a generic host abstraction
+would add indirection without improving this boundary.
 
 **Options considered**:
 
 1. Make `src/pi-adapter/**` a minimal event translation layer.
 2. Keep all logic in the Pi extension.
-3. Keep Pi-specific lifecycle/UX specialization, while isolating only
-   safety-critical runtime decisions.
+3. Keep Pi UX specialization while isolating safety-critical decisions.
 
 **Decision**: Use option 3. Pi and Trellis are replaceable boundaries, not
-dependencies of the host-independent Kernel. Pi may own rich lifecycle,
-shortcut, tool-profile, streaming, and TUI behavior. Budget validation,
-approval policy, capability execution, provider mutation, and recovery state
-must remain in shared runtime modules.
+Kernel dependencies. Pi owns lifecycle, shortcuts, tool profiles, streaming,
+and TUI behavior; budget, approval, execution, mutation, and recovery remain
+in shared runtime modules.
 
 **Example**:
 
@@ -190,8 +187,8 @@ pi.on("before_agent_start", async (event, ctx) => {
 });
 ```
 
-**Extensibility**: A future CLI or MCP host can reuse the Kernel contracts, but
-must not require moving Pi-only behavior into generic abstractions first.
+Future CLI or MCP hosts can reuse Kernel contracts without moving Pi-only
+behavior into generic abstractions.
 
 ## V2 Request Planning and Provider Budget Firewall
 

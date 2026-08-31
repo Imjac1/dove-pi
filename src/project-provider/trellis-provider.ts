@@ -13,6 +13,7 @@ import {
 	type ProviderCapabilities,
 	type ProviderHealth,
 	toProjectTask,
+	resolveProjectTask,
 	type TrellisTaskOperation,
 } from "./contracts.ts";
 
@@ -91,6 +92,10 @@ export class TrellisProvider implements ProjectProvider {
 		return this.getContext().currentTask;
 	}
 
+	public resolveTask(selector: string): ProjectTask | undefined {
+		return resolveProjectTask(this.getContext(), selector);
+	}
+
 	public readMemory(query?: string): readonly ProjectDocument[] {
 		const docs = this.getContext().documents.filter((document) => document.kind === "memory" || document.kind === "journal");
 		if (!query?.trim()) return docs;
@@ -114,22 +119,24 @@ export class TrellisProvider implements ProjectProvider {
 		});
 	}
 
-	public async reconcileTaskOperation(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[] = []): Promise<"observed" | "unknown"> {
+	public async reconcileTaskOperation(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown"> {
 		const context = this.getContext();
+		if (context.revision === beforeRevision) return "unknown";
 		if (operation === "create") {
-			if (context.revision === beforeRevision) return "unknown";
 			const title = args[0]?.trim();
-			if (!title || beforeTaskIds.length === 0) return "unknown";
-			const created = context.tasks.find((task) => task.title === title && !beforeTaskIds.includes(task.stableId));
-			return created ? "observed" : "unknown";
+			if (!title) return "unknown";
+			const created = context.tasks.filter((task) => task.title === title && !beforeTaskIds.includes(task.stableId));
+			return created.length === 1 ? "observed" : "unknown";
 		}
-		const selector = args[0]?.trim();
-		const task = context.tasks.find((candidate) => candidate.path === selector || candidate.providerTaskId === selector || candidate.title === selector || candidate.path.endsWith(selector ?? "\u0000"));
-		if (!task) return "unknown";
-		const status = task.status.toLowerCase();
-		if (operation === "start" && (context.currentTask?.stableId === task.stableId || ["active", "in_progress", "started"].includes(status))) return "observed";
-		if (operation === "finish" && ["done", "completed", "complete", "finished"].includes(status)) return "observed";
-		if (operation === "archive" && ["archived", "closed"].includes(status)) return "observed";
+		if (!targetTaskId || !beforeTaskIds.includes(targetTaskId)) return "unknown";
+		const task = context.tasks.find((candidate) => candidate.stableId === targetTaskId);
+		const status = task?.status.toLowerCase();
+		const startedStatuses = ["active", "in_progress", "started"];
+		if (operation === "start" && task && startedStatuses.includes(status ?? "") && (!startedStatuses.includes((beforeTargetStatus ?? "").toLowerCase()) || (context.currentTask?.stableId === targetTaskId && beforeCurrentTaskId !== targetTaskId))) return "observed";
+		// task.py finish clears the public current-task pointer; it does not change task.json status.
+		if (operation === "finish" && beforeCurrentTaskId === targetTaskId && !context.currentTask) return "observed";
+		// task.py archive marks the task completed and moves it out of the active task tree.
+		if (operation === "archive" && !task) return "observed";
 		return "unknown";
 	}
 }

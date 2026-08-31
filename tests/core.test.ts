@@ -97,7 +97,13 @@ describe("project mutation recovery", () => {
 		let pending = await ledger.findIncompleteProjectMutations();
 		assert.equal(pending.length, 1);
 		assert.equal(pending[0]?.mutationId, "mutation-1");
+		await ledger.appendProjectMutationStarted("pi-session", "step-2", "standard", "mutation-2", "finish", "trellis", "before", [], [], "trellis:demo", "in_progress", "trellis:demo");
+		const targeted = await ledger.findIncompleteProjectMutations();
+		assert.equal(targeted.find((intent) => intent.mutationId === "mutation-2")?.targetTaskId, "trellis:demo");
+		assert.equal(targeted.find((intent) => intent.mutationId === "mutation-2")?.beforeTargetStatus, "in_progress");
+		assert.equal(targeted.find((intent) => intent.mutationId === "mutation-2")?.beforeCurrentTaskId, "trellis:demo");
 		await ledger.appendProjectMutationReconciled("trellis:demo", "step-1", "standard", "mutation-1", "start", "trellis", "after", "observed");
+		await ledger.appendProjectMutationReconciled("pi-session", "step-2", "standard", "mutation-2", "finish", "trellis", "after", "unknown");
 		pending = await ledger.findIncompleteProjectMutations();
 		assert.equal(pending.length, 0);
 		await rm(temporary, { recursive: true, force: true });

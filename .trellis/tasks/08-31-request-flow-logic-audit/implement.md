@@ -8,12 +8,13 @@
 - [x] Wire native confirmation cancellation in `src/pi-adapter/extension.ts` to the new transition and structured workflow result.
 - [x] Extend the project-task operation boundary to pass the collected goal/description and bind create success to the newly created stable task identity, never a stale current task.
 - [x] Make project mutation recovery operation-specific and collision-resistant; add tests for revision-only changes, exact create identity, and unknown outcomes.
+- [x] Verify finish via current-pointer clearing, archive via removal from active tasks, and persist target pre-state evidence for startup recovery.
 - [x] Fix aggregate reasoning accumulation and apply `sinceHours` consistently to output/session counts in `src/commands/token-audit.ts`; assert raw plus formatted totals.
 - [x] Add adapter regression coverage for cancellation followed by a new question, existing-current-task create, requirement handoff, and successful single-confirmation creation.
 - [x] Run focused tests, then typecheck, full Node/installer suites, doctor, Pi smoke, and `git diff --check`.
 - [x] Run an isolated fresh-Pi replay for cancel -> re-answer -> confirm/create, existing-current-task create, requirement handoff, and run token audit against a temporary fixture plus the real read-only audit path.
 - [x] Update the relevant backend spec with the verified cancellation transition and accounting invariant.
-- [ ] Perform final Trellis quality check and commit only this task's files and product changes.
+- [x] Perform final Trellis quality check and commit only this task's files and product changes.
 
 ## Validation Commands
 

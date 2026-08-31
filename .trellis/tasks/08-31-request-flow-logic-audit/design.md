@@ -16,7 +16,7 @@ Add explicit cancellation and re-collection transitions to `PlanningSession` rat
 
 The adapter calls the cancellation transition immediately after a negative native confirmation and returns `cancelled: true` plus the resulting workflow state. The create path resolves the newly created task from operation output and/or a before/after identity comparison, never by blindly preferring the old `currentTask`. It passes the bounded goal/description to the provider through a typed operation payload. Mutation errors do not call the success transitions.
 
-Mutation recovery must use operation-specific evidence. Revision change is only a signal to refresh; it is not a success proof. A create intent is observed only when the requested new task identity is found and was absent from the recorded pre-state. Start/finish/archive are observed only when the selected task is found and has the operation's terminal status. Ambiguous or externally changed state remains unknown. Mutation IDs use collision-resistant IDs so concurrent calls cannot collapse into one ledger intent.
+Mutation recovery must use operation-specific evidence. Revision change is only a signal to refresh; it is not a success proof. A create intent is observed only when the requested new task identity is found and was absent from the recorded pre-state. The ledger records the target's pre-status and pre-current identity: start requires a newly active target, finish requires the recorded current pointer to be cleared, and archive requires the target to leave the active snapshot. Ambiguous or externally changed state remains unknown. Mutation IDs use collision-resistant IDs so concurrent calls cannot collapse into one ledger intent.
 
 ## Accounting Contract
 

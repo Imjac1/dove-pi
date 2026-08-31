@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createProjectProvider, discoverProject, parseTrellisCurrentTaskPath, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, writeProjectManifest, TrellisProvider, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
@@ -37,8 +37,6 @@ describe("project provider firewall", () => {
 	it("reconciles Trellis task mutations from observed state without replay", async () => {
 		const cases = [
 			{ operation: "start" as const, status: "in_progress", expected: "observed" as const },
-			{ operation: "finish" as const, status: "completed", expected: "observed" as const },
-			{ operation: "archive" as const, status: "archived", expected: "observed" as const },
 		];
 		for (const testCase of cases) {
 			const root = await mkdtemp(join(tmpdir(), `dove-reconcile-${testCase.operation}-`));
@@ -50,9 +48,56 @@ describe("project provider firewall", () => {
 			const beforeRevision = beforeProvider.getContext().revision;
 			await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: testCase.status }), "utf8");
 			const afterProvider = new TrellisProvider(root);
-			assert.equal(await afterProvider.reconcileTaskOperation(testCase.operation, ["demo"], beforeRevision), testCase.expected);
+			assert.equal(await afterProvider.reconcileTaskOperation(testCase.operation, ["demo"], beforeRevision, ["trellis:demo"], "trellis:demo", "pending"), testCase.expected);
 			await rm(root, { recursive: true, force: true });
 		}
+	});
+
+	it("reconciles finish when the recorded current pointer is cleared", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-finish-pointer-"));
+		const taskDir = join(root, ".trellis", "tasks", "demo");
+		await mkdir(taskDir, { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: "in_progress" }), "utf8");
+		const previousContextId = process.env.TRELLIS_CONTEXT_ID;
+		process.env.TRELLIS_CONTEXT_ID = "dove-reconcile-finish";
+		try {
+			const script = join(root, ".trellis", "scripts", "task.py");
+			await mkdir(join(root, ".trellis", "scripts"), { recursive: true });
+			await mkdir(join(root, ".trellis", "runtime", "sessions"), { recursive: true });
+			await writeFile(script, [
+				"import json",
+				"from pathlib import Path",
+				"active = (Path(__file__).parent.parent / 'runtime' / 'sessions' / 'dove-reconcile-finish.json').exists()",
+				"print(json.dumps({'current_task': {'dir': '.trellis/tasks/demo'} if active else None, 'stale': False}))",
+			].join("\n"), "utf8");
+			await writeFile(join(root, ".trellis", "runtime", "sessions", "dove-reconcile-finish.json"), JSON.stringify({ current_task: ".trellis/tasks/demo" }), "utf8");
+			const beforeProvider = new TrellisProvider(root);
+			const before = beforeProvider.getContext();
+			assert.equal(before.currentTask?.stableId, "trellis:demo");
+			await rm(join(root, ".trellis", "runtime", "sessions", "dove-reconcile-finish.json"));
+			const afterProvider = new TrellisProvider(root);
+			assert.equal(await afterProvider.reconcileTaskOperation("finish", [], before.revision, before.tasks.map((task) => task.stableId), "trellis:demo", "in_progress", "trellis:demo"), "observed");
+		} finally {
+			if (previousContextId === undefined) delete process.env.TRELLIS_CONTEXT_ID;
+			else process.env.TRELLIS_CONTEXT_ID = previousContextId;
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("reconciles archive when the recorded target leaves active tasks", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-archive-"));
+		const taskDir = join(root, ".trellis", "tasks", "demo");
+		await mkdir(taskDir, { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: "in_progress" }), "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		await mkdir(join(root, ".trellis", "tasks", "archive", "2026-08"), { recursive: true });
+		await rename(taskDir, join(root, ".trellis", "tasks", "archive", "2026-08", "demo"));
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("archive", ["demo"], before.revision, before.tasks.map((task) => task.stableId), "trellis:demo", "in_progress"), "observed");
+		await rm(root, { recursive: true, force: true });
 	});
 
 	it("returns unknown when a Trellis mutation cannot be confirmed", async () => {
@@ -93,6 +138,37 @@ describe("project provider firewall", () => {
 		await writeFile(join(root, ".trellis", "tasks", "new-task", "task.json"), JSON.stringify({ id: "new-task", title: "New task", status: "planning" }), "utf8");
 		const afterProvider = new TrellisProvider(root);
 		assert.equal(await afterProvider.reconcileTaskOperation("create", ["New task", "--description", "scope"], before.revision, before.tasks.map((task) => task.stableId)), "observed");
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("reconciles create when the pre-state has no tasks", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-create-empty-"));
+		await mkdir(join(root, ".trellis", "tasks"), { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		assert.deepEqual(before.tasks, []);
+		await mkdir(join(root, ".trellis", "tasks", "new-task"), { recursive: true });
+		await writeFile(join(root, ".trellis", "tasks", "new-task", "task.json"), JSON.stringify({ id: "new-task", title: "New task", status: "planning" }), "utf8");
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("create", ["New task"], before.revision, []), "observed");
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("keeps ambiguous same-title creates unknown", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-create-ambiguous-"));
+		await mkdir(join(root, ".trellis", "tasks", "old"), { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(root, ".trellis", "tasks", "old", "task.json"), JSON.stringify({ id: "old", title: "Old", status: "pending" }), "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		for (const id of ["new-a", "new-b"]) {
+			await mkdir(join(root, ".trellis", "tasks", id), { recursive: true });
+			await writeFile(join(root, ".trellis", "tasks", id, "task.json"), JSON.stringify({ id, title: "Same", status: "planning" }), "utf8");
+		}
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("create", ["Same"], before.revision, before.tasks.map((task) => task.stableId)), "unknown");
 		await rm(root, { recursive: true, force: true });
 	});
 

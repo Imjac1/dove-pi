@@ -72,10 +72,25 @@ export interface ProjectProvider {
 	getHealth(): ProviderHealth;
 	getContext(): ProjectContextSnapshot;
 	getCurrentTask(): ProjectTask | undefined;
+	resolveTask(selector: string): ProjectTask | undefined;
 	readMemory(query?: string): readonly ProjectDocument[];
 	runTaskOperation(operation: TrellisTaskOperation, args: readonly string[]): Promise<string>;
 	/** Read-only reconciliation of an interrupted mutation intent. */
-	reconcileTaskOperation?(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[]): Promise<"observed" | "unknown">;
+	reconcileTaskOperation?(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;
+}
+
+/** Resolve a selector only when it identifies one task. */
+export function resolveProjectTask(context: ProjectContextSnapshot, selector: string | undefined): ProjectTask | undefined {
+	const normalized = selector?.trim();
+	if (!normalized) return undefined;
+	const matches = context.tasks.filter((candidate) =>
+		candidate.stableId === normalized ||
+		candidate.path === normalized ||
+		candidate.providerTaskId === normalized ||
+		candidate.title === normalized ||
+		candidate.path.endsWith(normalized),
+	);
+	return matches.length === 1 ? matches[0] : undefined;
 }
 
 export function toProjectTask(record: TrellisTaskRecord, provider: ProjectProviderKind = "trellis"): ProjectTask {

@@ -114,12 +114,22 @@ describe("dove-pi token audit", () => {
 			const mixed = makeSession([
 				{ type: "message", message: { role: "assistant", usage: { input: 100, output: 100, reasoning: 50 }, timestamp: stale } },
 				{ type: "message", message: { role: "assistant", usage: { input: 7, output: 7, reasoning: 3 }, timestamp: Date.now() } },
+				{ type: "message", message: { role: "assistant", usage: { output: 500 } } },
 			]);
 			await writeFile(join(projectDir, "mixed.jsonl"), mixed);
 			const mixedResult = await runTokenAudit({ sinceHours: 2 });
 			assert.equal(mixedResult.totalOutput, 7);
 			assert.equal(mixedResult.totalReasoning, 3);
 			assert.match(formatTokenAudit(mixedResult), /reasoning 3 \(42\.9% of output\)/);
+
+			const isoProjectDir = join(root, "sessions", "--ISO--");
+			await mkdir(isoProjectDir, { recursive: true });
+			await writeFile(join(isoProjectDir, "iso.jsonl"), makeSession([
+				{ type: "message", message: { role: "assistant", usage: { input: 10, output: 100 }, timestamp: new Date(stale).toISOString() } },
+				{ type: "message", message: { role: "assistant", usage: { input: 7, output: 7 }, timestamp: new Date().toISOString() } },
+			]));
+			const isoResult = await runTokenAudit({ sinceHours: 2 });
+			assert.equal(isoResult.projects.find((project) => project.project.includes("ISO"))?.outputTokens, 7, "ISO timestamps use the same output window");
 		} finally {
 			if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
 			else process.env.PI_CODING_AGENT_DIR = previous;
