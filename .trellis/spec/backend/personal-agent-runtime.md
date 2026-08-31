@@ -25,5 +25,6 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 
 - This router must remain at or below 8 KiB.
 - Each routed specification must remain at or below 24 KiB, leaving headroom below Trellis' default 32 KiB per-file injection limit.
+- Measure budgets from UTF-8 text normalized to LF so Git checkout line endings do not change the context contract.
 - Executable scenario bodies belong in the routed specifications, not in this router.
 - The regression test in `tests/spec-context-budget.test.ts` enforces route existence, budgets, router shape, and migrated-heading coverage.

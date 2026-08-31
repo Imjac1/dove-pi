@@ -44,15 +44,21 @@ const expectedHeadingsBySpec = {
 } as const satisfies Record<(typeof routedSpecNames)[number], readonly string[]>;
 
 const readSpec = (name: string): string => readFileSync(join(backendSpecDir, name), "utf8");
+const normalizedUtf8Bytes = (content: string): number =>
+	Buffer.byteLength(content.replace(/\r\n/g, "\n"), "utf8");
 const secondLevelHeadings = (content: string): string[] =>
 	[...content.matchAll(/^## ([^\r\n]+)$/gm)].map((match) => match[1] ?? "");
 
 describe("personal Agent runtime specification routing", () => {
 	it("keeps the router and every routed specification within the project budgets", () => {
-		assert.ok(statSync(join(backendSpecDir, routerName)).size <= 8_192, "runtime spec router exceeds 8 KiB");
+		assert.ok(normalizedUtf8Bytes(readSpec(routerName)) <= 8_192, "runtime spec router exceeds 8 KiB");
 		for (const name of routedSpecNames) {
-			assert.ok(statSync(join(backendSpecDir, name)).size <= 24_576, `${name} exceeds 24 KiB`);
+			assert.ok(normalizedUtf8Bytes(readSpec(name)) <= 24_576, `${name} exceeds 24 KiB`);
 		}
+	});
+
+	it("measures context budgets independently of checkout line endings", () => {
+		assert.equal(normalizedUtf8Bytes("alpha\nbeta\n"), normalizedUtf8Bytes("alpha\r\nbeta\r\n"));
 	});
 
 	it("declares exactly the existing routed runtime specifications", () => {

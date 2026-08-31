@@ -1,3 +1,4 @@
 {"file":".trellis/spec/backend/personal-agent-managed-install.md","reason":"Release immutability, readiness, managed update, and isolated test contracts."}
 {"file":".trellis/spec/backend/error-handling.md","reason":"CLI boundary errors must be actionable and fail closed."}
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"Required TypeScript, Node, installer, doctor, and Pi smoke gates."}
+{"file":".trellis/tasks/08-31-release-and-real-user-validation/research/release-ci-root-cause.md","reason":"Confirmed Windows checkout budget failure and prevention mechanisms."}

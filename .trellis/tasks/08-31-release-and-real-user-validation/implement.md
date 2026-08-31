@@ -6,12 +6,13 @@
 - [x] Add a shared, strict parser for `--since` that supports both documented argv forms.
 - [x] Add CLI integration coverage for equivalent forms and invalid/missing values.
 - [x] Isolate the CLI integration fixture to the spawned process after the `v0.1.3` CI test failure.
+- [x] Retrieve the authenticated `v0.1.4` job log, fix normalized text-budget accounting, and add LF/CRLF equivalence coverage.
 - [x] Run focused tests and inspect the diff for unrelated changes.
-- [x] Bump the patch version to `0.1.4`; retain failed `v0.1.3` as immutable history.
+- [x] Bump the patch version to `0.1.5`; retain failed `v0.1.3` and `v0.1.4` as immutable history.
 - [x] Run typecheck, full Node tests, installer tests, doctor, Pi smoke, and diff checks.
 - [x] Build release manifest and Windows archive in a disposable release staging directory.
 - [x] Run `scripts/check_release_readiness.py` with all required assets and verify the pre-commit package structure; repeat strict clean-check after commit.
-- [ ] Create and push the `v0.1.4` tag only after the release readiness gate passes.
+- [ ] Create and push the `v0.1.5` tag only after the release readiness gate passes.
 - [ ] Wait for the GitHub release workflow, then verify release assets and manifest remotely.
 - [ ] Run managed `dove-pi update` and confirm doctor/current release identity.
 - [ ] Verify global `token audit --since=24h` against `--since 24h` and check aggregate reasoning.
@@ -30,7 +31,7 @@ npm run doctor
 npm run pi:smoke
 git diff --check
 npm run release:manifest -- <staging>\release.json
-npm run release:check -- --tag v0.1.4 --commit <HEAD> --manifest <manifest> --archive <archive> --checksum <checksum> --bootstrap install.ps1 --asset <archive> --asset <checksum> --asset install.ps1 --asset <manifest>
+npm run release:check -- --tag v0.1.5 --commit <HEAD> --manifest <manifest> --archive <archive> --checksum <checksum> --bootstrap install.ps1 --asset <archive> --asset <checksum> --asset install.ps1 --asset <manifest>
 dove-pi doctor
 dove-pi token audit --since=24h --filter=Desktop
 dove-pi token audit --since 24h --filter Desktop
