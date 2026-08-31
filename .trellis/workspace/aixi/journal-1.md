@@ -371,3 +371,26 @@ Added a host-independent PlanningSession and restricted agent_project_task workf
 ### Status
 
 [OK] **Completed**
+
+
+## Session 13: 发布并验证 Dove Pi 0.1.5
+
+**Date**: 2026-09-01
+**Task**: 发布并验证 Dove Pi 0.1.5
+**Branch**: `master`
+
+### Summary
+
+修复 LF/CRLF 规格预算差异并发布 v0.1.5；GitHub Actions、四件 Release 资产、托管 update、doctor、token audit 两种 --since 形式均通过。隔离真实回归完成聊天、只读、修复测试和连续追问，记录 token/cache/tool 证据；只回复场景存在 provider 追加文本，已作为后续内容一致性问题记录。发布流程明确本地 readiness 一次、标签 CI 一次，移除重复人工全量门禁。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dea33bf` | (see git log) |
+| `28cc55e` | (see git log) |
+| `af4776d` | (see git log) |
+
+### Status
+
+[OK] **Completed**

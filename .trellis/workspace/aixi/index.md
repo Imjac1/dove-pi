@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
-- **Last Active**: 2026-08-31
+- **Total Sessions**: 13
+- **Last Active**: 2026-09-01
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~373 | Active |
+| `journal-1.md` | ~396 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 13 | 2026-09-01 | 发布并验证 Dove Pi 0.1.5 | `dea33bf`, `28cc55e`, `af4776d` | `master` |
 | 12 | 2026-08-31 | Fix planning question loop and cache diagnostics | `68aed5e` | `master` |
 | 11 | 2026-08-31 | Complete Dove planning workflow handshake | `2206668` | `master` |
 | 10 | 2026-08-30 | Publish and verify Dove Pi v0.1.2 | `cac5021`, `558d6dc`, `e07788c` | `master` |
