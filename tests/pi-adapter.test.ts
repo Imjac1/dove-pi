@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -310,13 +310,21 @@ describe("Pi adapter", () => {
 		const stateDir = join(root, "state");
 		mkdirSync(join(root, ".trellis", "scripts"), { recursive: true });
 		mkdirSync(join(root, ".trellis", "tasks"), { recursive: true });
+		mkdirSync(join(root, ".trellis", "tasks", "08-30-old-task"), { recursive: true });
+		writeFileSync(join(root, ".trellis", "tasks", "08-30-old-task", "task.json"), JSON.stringify({ id: "old-task", title: "旧任务", status: "in_progress" }), "utf8");
 		writeFileSync(join(root, ".trellis", ".version"), "0.6.16", "utf8");
 		writeFileSync(join(root, ".trellis", "scripts", "task.py"), [
 			"from pathlib import Path",
 			"import json, sys",
 			"root = Path(__file__).resolve().parents[2]",
-			"if len(sys.argv) > 1 and sys.argv[1] == 'current': print(json.dumps({'stale': False, 'current_task': None}))",
-			"else: (root / 'create-called').write_text('yes', encoding='utf8'); print('created')",
+			"if len(sys.argv) > 1 and sys.argv[1] == 'current': print(json.dumps({'stale': False, 'current_task': {'dir': '.trellis/tasks/08-30-old-task'}}))",
+			"else:",
+			"    task = root / '.trellis' / 'tasks' / '08-31-cache-hit'",
+			"    task.mkdir(parents=True, exist_ok=True)",
+			"    (task / 'task.json').write_text(json.dumps({'id': 'cache-hit', 'title': sys.argv[2], 'status': 'planning'}), encoding='utf8')",
+			"    (root / 'create-args.json').write_text(json.dumps(sys.argv[2:]), encoding='utf8')",
+			"    (root / 'create-called').write_text('yes', encoding='utf8')",
+			"    print('created')",
 		].join("\n"), "utf8");
 		const previousCwd = process.cwd();
 		const previousStateDir = process.env.DOVE_PI_STATE_DIR;
@@ -327,6 +335,7 @@ describe("Pi adapter", () => {
 			const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
 			let activeTools: string[] = [];
 			let confirmations = 0;
+			let confirmResult = false;
 			const api = {
 				registerCommand() {}, registerShortcut() {}, registerFlag() {}, appendEntry() {},
 				registerTool(definition: { name: string; execute: (...args: any[]) => Promise<any> }) { tools.set(definition.name, definition); },
@@ -339,14 +348,14 @@ describe("Pi adapter", () => {
 			extension(api);
 			const context: FakeContext = {
 				hasUI: true,
-				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {}, confirm: async () => { confirmations += 1; return true; } },
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {}, confirm: async () => { confirmations += 1; return confirmResult; } },
 				sessionManager: { getEntries: () => [], getSessionId: () => "planning-replay" },
 			};
-			await events.get("input")?.({ type: "input", text: "设计缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
-			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "设计缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };
+			await events.get("input")?.({ type: "input", text: "创建一个项目任务：缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
+			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建一个项目任务：缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };
 			assert.equal(activeTools.includes("agent_project_task"), true);
 			assert.equal(activeTools.includes("bash"), false);
-			assert.match(start.message?.content ?? "", /collecting-direction/);
+			assert.match(start.message?.content ?? "", /collecting-name/);
 
 			const question = { questions: [{ question: "请输入任务名称和范围", header: "任务信息", options: [{ label: "缓存命中率优化" }] }] };
 			await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-1", toolName: "ask_user_question", input: question }, context);
@@ -357,11 +366,24 @@ describe("Pi adapter", () => {
 			assert.equal(repeatedQuestion.terminate, true);
 			assert.match(repeatedQuestion.reason ?? "", /agent_project_task/);
 
-		const taskTool = tools.get("agent_project_task");
+			const taskTool = tools.get("agent_project_task");
 			assert.ok(taskTool);
-			const taskResult = await taskTool.execute("task-call", { operation: "create" }, undefined, undefined, context);
+			const cancelled = await taskTool.execute("task-call", { operation: "create" }, undefined, undefined, context);
+			assert.equal(cancelled.details.cancelled, true);
+			assert.equal(cancelled.details.workflow.state, "cancelled");
 			assert.equal(confirmations, 1);
+			assert.equal(existsSync(join(root, "create-called")), false);
+			const retryQuestion = { questions: [{ question: "请输入修正后的任务标题", header: "任务", options: [{ label: "缓存命中率优化" }] }] };
+			assert.equal((await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-3", toolName: "ask_user_question", input: retryQuestion }, context)), undefined);
+			await events.get("tool_result")?.({ type: "tool_result", toolCallId: "question-3", toolName: "ask_user_question", input: retryQuestion, content: [{ type: "text", text: "User answered: 缓存命中率优化" }], details: { answers: [{ answer: "缓存命中率优化" }] }, isError: false }, context);
+			confirmResult = true;
+			const taskResult = await taskTool.execute("task-call-2", { operation: "create" }, undefined, undefined, context);
+			assert.equal(confirmations, 2);
 			assert.equal(readFileSync(join(root, "create-called"), "utf8"), "yes");
+			assert.match(readFileSync(join(root, "create-args.json"), "utf8"), /--description/);
+			assert.equal(JSON.parse(readFileSync(join(root, "create-args.json"), "utf8"))[2], "创建一个项目任务：缓存命中率优化");
+			assert.equal(taskResult.details.workflow.taskId, "trellis:cache-hit");
+			assert.match(taskResult.details.workflow.path, /08-31-cache-hit/);
 			assert.equal(taskResult.details.workflow.state, "planning");
 			assert.equal(taskResult.details.workflow.next, "planning");
 		} finally {
@@ -545,8 +567,8 @@ describe("Pi adapter", () => {
 			ui: { theme: { fg: (_color, value) => value }, setStatus: () => {}, notify: (message) => notifications.push(message) },
 			sessionManager: { getEntries: () => [], getSessionId: () => "interactive-loop-session" },
 		};
-		await events.get("input")?.({ type: "input", text: "创建任务", source: "interactive", streamingBehavior: "immediate" }, context);
-		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建任务", systemPrompt: "" }, context);
+		await events.get("input")?.({ type: "input", text: "确认问题重复处理", source: "interactive", streamingBehavior: "immediate" }, context);
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "确认问题重复处理", systemPrompt: "" }, context);
 		await events.get("agent_start")?.({ type: "agent_start" }, context);
 		await events.get("turn_start")?.({ type: "turn_start" }, context);
 		const question = (text: string) => ({

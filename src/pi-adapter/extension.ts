@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext, type ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -527,9 +527,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		let currentRevision = "unknown";
 		try { currentRevision = projectProvider.getContext().revision; } catch { /* keep unknown and surface the incomplete intent */ }
 		for (const intent of pending) {
-			let outcome: "unknown" | "observed" = currentRevision !== "unknown" && currentRevision !== intent.revision ? "observed" : "unknown";
-			if (outcome === "unknown" && projectProvider.reconcileTaskOperation) {
-				try { outcome = await projectProvider.reconcileTaskOperation(intent.operation as TrellisTaskOperation, intent.args, intent.revision); } catch { /* preserve unknown and require explicit verification */ }
+			let outcome: "unknown" | "observed" = "unknown";
+			if (projectProvider.reconcileTaskOperation) {
+				try { outcome = await projectProvider.reconcileTaskOperation(intent.operation as TrellisTaskOperation, intent.args, intent.revision, intent.beforeTaskIds); } catch { /* preserve unknown and require explicit verification */ }
 			}
 			await ledger.appendProjectMutationReconciled(intent.taskId, intent.stepId, intent.mode, intent.mutationId, intent.operation, intent.provider, currentRevision, outcome);
 		}
@@ -568,14 +568,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		return projectProvider.kind === "lightweight" && readProjectManifest(projectProvider.projectRoot) === undefined;
 	}
 
-	async function runProjectTaskMutation(operation: TrellisTaskOperation, operationArgs: readonly string[]): Promise<string> {
+	async function runProjectTaskMutation(operation: TrellisTaskOperation, operationArgs: readonly string[], beforeTaskIds: readonly string[] = []): Promise<string> {
 		if (runtimeReadOnly()) throw new Error("Dove runtime is in read-only mode (DOVE_PI_READ_ONLY=1); project mutations are blocked.");
-		const currentTaskId = projectProvider.getCurrentTask()?.stableId ?? `adhoc:${Date.now()}`;
-		const stepId = `project-${operation}-${Date.now()}`;
-		const mutationId = `mutation-${Date.now()}`;
+		const currentTaskId = operation === "create" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? `adhoc:${Date.now()}`;
+		const stepId = `project-${operation}-${randomUUID()}`;
+		const mutationId = `mutation-${randomUUID()}`;
 		const health = projectProvider.getHealth();
 		try {
-			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, "before", operationArgs);
+			await ledger.appendProjectMutationStarted(currentTaskId, stepId, mode.current, mutationId, operation, health.provider, "before", operationArgs, beforeTaskIds);
 			const result = await projectProvider.runTaskOperation(operation, operationArgs);
 			// Provider instances cache short-lived snapshots. Recreate after every
 			// lifecycle mutation so the next planning decision sees the new state.
@@ -891,24 +891,38 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		parameters: Type.Object({
 			operation: Type.Union([Type.Literal("create"), Type.Literal("start"), Type.Literal("finish"), Type.Literal("archive")]),
 			title: Type.Optional(Type.String()),
+			description: Type.Optional(Type.String()),
 			task: Type.Optional(Type.String()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const typed = params as { operation: TrellisTaskOperation; title?: string; task?: string };
+			const typed = params as { operation: TrellisTaskOperation; title?: string; description?: string; task?: string };
 			if (!ctx.hasUI) throw new Error("Project task changes require an interactive confirmation; use /task in Pi TUI.");
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "项目任务变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
-			const planningTitle = planningSession.snapshot().taskTitle;
-			const operationArgs = typed.operation === "create" ? (typed.title?.trim() ? [typed.title.trim()] : planningTitle ? [planningTitle] : []) : typed.operation === "finish" ? [] : (typed.task?.trim() ? [typed.task.trim()] : []);
+			const planning = planningSession.snapshot();
+			const planningTitle = planning.taskTitle;
+			const title = typed.title?.trim() || planningTitle;
+			const description = (typed.description?.trim() || planning.taskScope)?.slice(0, 2_000);
+			const operationArgs = typed.operation === "create"
+				? title ? [title, ...(description ? ["--description", description] : [])] : []
+				: typed.operation === "finish" ? [] : (typed.task?.trim() ? [typed.task.trim()] : []);
 			if ((typed.operation === "create" || typed.operation === "start" || typed.operation === "archive") && operationArgs.length === 0) {
 				throw new Error(`${typed.operation} requires ${typed.operation === "create" ? "a task title" : "a task directory or name"}.`);
 			}
-			const description = typed.operation === "create" ? `创建任务“${operationArgs[0]}”` : typed.operation === "finish" ? "完成当前任务" : `${typed.operation === "start" ? "开始" : "归档"}任务“${operationArgs[0]}”`;
-			if (!await ctx.ui.confirm("确认项目任务变更？", `${description}？这会修改 Trellis 项目状态。`)) return { content: [{ type: "text", text: "项目任务变更已取消。" }], details: { operation: typed.operation, cancelled: true } };
-			const result = await runProjectTaskMutation(typed.operation, operationArgs);
+			const confirmationDescription = typed.operation === "create" ? `创建任务“${title}”` : typed.operation === "finish" ? "完成当前任务" : `${typed.operation === "start" ? "开始" : "归档"}任务“${operationArgs[0]}”`;
+			if (!await ctx.ui.confirm("确认项目任务变更？", `${confirmationDescription}？这会修改 Trellis 项目状态。`)) {
+				const cancelled = typed.operation === "create" ? planningSession.cancelCreate() : planningSession.snapshot();
+				return { content: [{ type: "text", text: typed.operation === "create" ? "项目任务变更已取消，可重新收集任务名称和范围。" : "项目任务变更已取消。" }], details: { operation: typed.operation, cancelled: true, workflow: { state: cancelled.state, action: typed.operation === "create" ? "create-task" : `${typed.operation}-task`, next: typed.operation === "create" ? "collecting" : undefined } } };
+			}
+			const beforeContext = typed.operation === "create" ? projectProvider.getContext() : undefined;
+			const beforeTaskIds = beforeContext?.tasks.map((task) => task.stableId) ?? [];
+			const result = await runProjectTaskMutation(typed.operation, operationArgs, beforeTaskIds);
 			const createdContext = typed.operation === "create" ? projectProvider.getContext() : undefined;
-			const task = createdContext ? createdContext.currentTask ?? createdContext.tasks.find((candidate) => candidate.title === operationArgs[0]) : undefined;
+			const task = createdContext && typed.operation === "create"
+				? createdContext.tasks.find((candidate) => candidate.title === title && !beforeTaskIds.includes(candidate.stableId))
+				: undefined;
 			if (typed.operation === "create") {
-				currentRequestTaskId = task?.stableId ?? currentRequestTaskId;
+				if (!task) throw new Error("Trellis task was created but its new stable identity could not be resolved; inspect the project before continuing.");
+				currentRequestTaskId = task.stableId;
 				planningSession.markTaskCreated({ taskId: task?.stableId, taskPath: task?.path, taskTitle: operationArgs[0] });
 				planningSession.enterPlanning();
 			}
@@ -1612,15 +1626,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const continuationTask = continuationState?.projection.kind === "current" || continuationState?.projection.kind === "single_candidate"
 			? continuationState.projection.task
 			: undefined;
-		const requestTaskId = requestPlan.intent === "chat"
+		const requestTaskId = requestPlan.intent === "chat" || requestPlan.workflowAction === "create-task"
 			? "pi-session"
 			: continuationState
 				? continuationTask?.stableId ?? "pi-session"
 				: projectProvider.getCurrentTask()?.stableId ?? "pi-session";
 		currentRequestTaskId = requestTaskId;
-		const planningTask = continuationTask ?? projectProvider.getCurrentTask();
+		const planningTask = requestPlan.workflowAction === "create-task" ? undefined : continuationTask ?? projectProvider.getCurrentTask();
 		const planningState = requestLease.isNewRequest
-			? planningSession.begin({ requestId: requestPlan.requestId, intent: requestPlan.intent, workflowAction: requestPlan.workflowAction, currentTaskId: planningTask?.stableId, currentTaskPath: planningTask?.path })
+			? planningSession.begin({ requestId: requestPlan.requestId, intent: requestPlan.intent, workflowAction: requestPlan.workflowAction, currentTaskId: planningTask?.stableId, currentTaskPath: planningTask?.path, taskScope: requestPlan.workflowAction === "create-task" ? event.prompt : undefined })
 			: planningSession.snapshot();
 		const requestSessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
 		requestMetadata.set(requestPlan.requestId, { taskId: requestTaskId, sessionId: requestSessionId, mode: requestPlan.mode });

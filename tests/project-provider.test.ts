@@ -68,6 +68,34 @@ describe("project provider firewall", () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
+	it("does not infer create success from a revision-only change", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-create-"));
+		await mkdir(join(root, ".trellis", "tasks", "demo"), { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(root, ".trellis", "tasks", "demo", "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: "pending" }), "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		await writeFile(join(root, ".trellis", "workflow.md"), "changed\n", "utf8");
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("create", ["New task"], before.revision, before.tasks.map((task) => task.stableId)), "unknown");
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("reconciles create only when a new exact-title task identity appears", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-reconcile-create-exact-"));
+		await mkdir(join(root, ".trellis", "tasks", "demo"), { recursive: true });
+		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", "utf8");
+		await writeFile(join(root, ".trellis", "tasks", "demo", "task.json"), JSON.stringify({ id: "demo", title: "Demo", status: "pending" }), "utf8");
+		const beforeProvider = new TrellisProvider(root);
+		const before = beforeProvider.getContext();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		await mkdir(join(root, ".trellis", "tasks", "new-task"), { recursive: true });
+		await writeFile(join(root, ".trellis", "tasks", "new-task", "task.json"), JSON.stringify({ id: "new-task", title: "New task", status: "planning" }), "utf8");
+		const afterProvider = new TrellisProvider(root);
+		assert.equal(await afterProvider.reconcileTaskOperation("create", ["New task", "--description", "scope"], before.revision, before.tasks.map((task) => task.stableId)), "observed");
+		await rm(root, { recursive: true, force: true });
+	});
+
 	it("discovers the nearest Trellis root and maps stable task identities", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-provider-"));
 		await writeFile(join(root, ".trellis", ".version"), "0.6.15\n", { encoding: "utf8" }).catch(async () => {

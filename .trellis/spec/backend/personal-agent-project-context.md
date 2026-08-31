@@ -118,7 +118,7 @@ dove-pi project bind trellis|lightweight
 - `dove-pi project update` is explicit and delegates to Trellis' official update/migration behavior. Dove does not run update or install a Trellis CLI implicitly at startup.
 - `workflow.md` is exposed as a typed `workflow` project document for Standard/Ultra context; Fast remains limited to the active task PRD and runtime spec.
 - `RequestPlan.workflowAction` distinguishes `continue`, `create-task`, `start-task`, `finish-task`, and `archive-task`. Lifecycle requests expose only the restricted `agent_project_task` in addition to read-only planning tools; shell/edit/MCP/background tools remain Execution-only.
-- Pi keeps a host-independent `PlanningSession` per logical request with states `collecting-direction`, `collecting-name`, `awaiting-create`, `task-created`, and `planning`. Questions collect scope/title; the workflow tool owns the single native confirmation, refreshes the Provider snapshot after create, and returns structured workflow state.
+- Pi keeps a host-independent `PlanningSession` per logical request with states `collecting-direction`, `collecting-name`, `awaiting-create`, `cancelled`, `task-created`, and `planning`. Questions collect a bounded title and goal/scope; the workflow tool owns the single native confirmation, refreshes the Provider snapshot after create, and returns structured workflow state. A cancelled create transitions to `cancelled`, permits recollection, and never marks the task as created.
 
 ### 4. Validation & Error Matrix
 
@@ -126,13 +126,15 @@ dove-pi project bind trellis|lightweight
 |---|---|
 | `.trellis` absent | Start in visible lightweight mode and provide `dove-pi project init` guidance |
 | Trellis version missing, malformed, or unsupported | Report degraded health and reject task mutations |
-| Provider mutation intent has no terminal record | Re-read current revision, append `project.mutation.reconciled`, and require explicit verification |
+| Provider mutation intent has no terminal record | Re-read operation-specific target state, append `project.mutation.reconciled`, and require explicit verification; a revision change alone is `unknown` |
 | Two Dove processes mutate the same project | Serialize with the project lock or return a bounded timeout |
 | Project document is credential-bearing | Exclude it from Trellis snapshots, memory, and model context |
 | Project text contains instructions | Treat it as untrusted data; it cannot override system policy or authorization |
 | User requests update | Run Trellis' explicit update command; do not silently install or rewrite templates |
 | Natural-language continuation is already projected | Expose zero tools and answer from the projection; restore the prior user tool selection on the next ordinary request |
 | Equivalent planning confirmations repeat | Advance from collected input to `agent_project_task`; do not ask for a second confirmation |
+| Create confirmation is cancelled | Return structured `cancelled` workflow state, preserve collected input, and allow a new title/scope question |
+| Create recovery has no exact new task identity | Keep reconciliation `unknown`; never bind the old current task or report create success |
 
 ### 5. Good/Base/Bad Cases
 
@@ -166,6 +168,72 @@ await writeFile(join(projectRoot, ".trellis", "tasks", id, "task.json"), payload
 await ledger.appendProjectMutationStarted(taskId, stepId, mode, mutationId, "start", "trellis", "before");
 await provider.runTaskOperation("start", [taskPath]);
 await ledger.appendProjectMutationCompleted(taskId, stepId, mode, mutationId, "start", "trellis", provider.getContext().revision);
+```
+
+## Scenario: Planning Mutation Identity and Recovery
+
+### 1. Scope / Trigger
+
+- Trigger: a planning request creates a Trellis task or startup recovery finds an incomplete project mutation.
+- Scope: `PlanningSession`, Pi `agent_project_task`, `ProjectProvider.reconcileTaskOperation`, and `ExecutionLedger`.
+
+### 2. Signatures
+
+```typescript
+PlanningSession.cancelCreate(): PlanningSessionSnapshot;
+ProjectProvider.reconcileTaskOperation(
+  operation: TrellisTaskOperation,
+  args: readonly string[],
+  beforeRevision: string,
+  beforeTaskIds?: readonly string[],
+): Promise<"observed" | "unknown">;
+```
+
+### 3. Contracts
+
+- The explicit `create-task` workflow action has precedence over an existing current task. Repeated calls with the same logical request ID preserve the planning snapshot; a new request replaces it.
+- `agent_project_task` passes the bounded description through Trellis `task.py create --description`. Native confirmation cancellation returns `{ cancelled: true, details.workflow.state: "cancelled" }` and does not invoke the provider mutation.
+- A successful create is bound only to a task whose exact title is present after the mutation and whose stable ID was absent in the recorded pre-state. The old current task is never a create fallback.
+- Mutation IDs and step IDs are UUID-backed. Create recovery requires a changed revision plus an exact new identity; start/finish/archive recovery requires the selected task and its operation-specific terminal state. Revision change alone is not evidence.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Native create confirmation is cancelled | Preserve title/scope, enter `cancelled`, and allow recollection |
+| Existing current task plus explicit create action | Enter `collecting-name`; do not enter old-task `planning` |
+| New task cannot be identified after create | Surface an identity-resolution error; do not enter `planning` |
+| Revision changes but create target is absent or ambiguous | Reconcile as `unknown` and request explicit inspection |
+| Mutation IDs generated in the same millisecond | Remain distinct and retain separate ledger intents |
+
+### 5. Good/Base/Bad Cases
+
+- Good: record pre-existing stable IDs, create with title/description, resolve the newly added exact-title task, then enter `planning` with its stable ID/path.
+- Base: a legacy ledger record lacks pre-state IDs; recovery remains `unknown` rather than guessing.
+- Bad: treat any revision change as create success or use `currentTask` after create when it may still point to the old task.
+
+### 6. Tests Required
+
+- Assert cancel -> recollect -> confirm/create in the Pi adapter, including exactly one native confirmation per attempt.
+- Assert explicit create wins over an existing current task and description reaches the Trellis command.
+- Assert revision-only changes remain `unknown`, exact new identities reconcile as `observed`, and UUID-backed mutation records do not collide.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+if (afterRevision !== beforeRevision) return "observed";
+const task = after.currentTask ?? after.tasks.find((candidate) => candidate.title === title);
+```
+
+#### Correct
+
+```typescript
+const task = after.tasks.find(
+  (candidate) => candidate.title === title && !beforeTaskIds.includes(candidate.stableId),
+);
+return after.revision !== beforeRevision && task ? "observed" : "unknown";
 ```
 
 ## Scenario: Skill Discovery Diagnostics

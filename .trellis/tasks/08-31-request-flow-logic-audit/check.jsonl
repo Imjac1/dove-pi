@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Check logical request isolation, planning state transitions, cache/audit invariants, and cancellation behavior."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Check provider authority, exact task identity binding, operation-specific reconciliation, and Trellis handoff behavior."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check unknown, failed, cancelled, and recovered outcomes are distinct and user-visible without false success."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run the required cross-layer quality gate and regression coverage review."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review data flow across core planning, Pi adapter, provider mutation, ledger, and token audit layers."}

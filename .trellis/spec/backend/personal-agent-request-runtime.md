@@ -64,6 +64,7 @@ interface RecoveryOwnerOptions {
 - Provider cache evidence is per-call with bounded digests/sizes for system policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and misses without treating cumulative reads as regressions.
 - Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call and is token-weighted (`cacheRead / (input + cacheRead + cacheWrite)`); the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
 - Oversized built-in read/shell/search observations are compacted before re-entry into model context with original/retained/omitted sizes, a digest, and deterministic narrowing metadata. Complete output remains in tool details.
+- Token audit aggregates project rows using one `sinceHours` inclusion predicate for input, cache, output, reasoning, session count, and message count. `totalReasoning` is the sum of included project `reasoningTokens`; output-only entries outside the window do not affect aggregate output or reasoning percentages.
 
 ## 4. Validation & Error Matrix
 
@@ -86,6 +87,7 @@ interface RecoveryOwnerOptions {
 | Confirmation target/text changes, answer is negative, or another tool returns | Reset the interactive question window and allow the next question |
 | Planning input has been collected and the model asks another question | Block and terminate the question call; invoke `agent_project_task` instead |
 | Provider cache scope changes | Start a new cold comparison chain |
+| Token audit has a time window | Apply it to every usage field and count; do not count a session unless it has an included usage sample |
 
 ## 5. Good / Base / Bad Cases
 
@@ -97,6 +99,7 @@ interface RecoveryOwnerOptions {
 - Bad: reserve fewer tokens in accounting without updating the provider payload, or impose the plan's 4,096-token target as an Ultra ceiling.
 - Bad: key diagnostics by raw tool arguments, classify every zero cache-read value as a prefix rewrite, or share a mutation result by fingerprint.
 - Bad: treat `ask_user_question` as an unlimited non-idempotent escape hatch after the user has already confirmed the same action.
+- Bad: sum reasoning per project but omit it from the aggregate, or filter input/cache while counting all session output.
 
 ## 6. Tests Required
 
@@ -113,6 +116,7 @@ interface RecoveryOwnerOptions {
 - Assert opaque input hashing, same-batch coalescing, unchanged-observation warning/stop, changed-result reset, bounded result metadata, and cold-first/provider-scope cache attribution.
 - Assert rewritten equivalent confirmations with affirmative answers warn and terminate at configured bounds, while distinct targets and post-progress retries remain allowed.
 - Assert planning questions with ordinary scope/title option labels transition to `awaiting-create`, and a second question is blocked before the third-party question tool runs.
+- Assert cancelled planning creates return a resumable `cancelled` state, exact create identity/description survive the provider handoff, and token audit aggregate rows remain mathematically consistent under `sinceHours`.
 
 ## 7. Wrong vs Correct
 

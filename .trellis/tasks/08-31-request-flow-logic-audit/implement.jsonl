@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Request identity, planning-session boundaries, provider budget, cache evidence, and cancellation contracts."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"ProjectProvider authority, Trellis task lifecycle, mutation recovery, task identity, and context handoff contracts."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Failure and recovery reporting rules; prevents mutation or audit paths from claiming success after uncertainty."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend verification, test, and implementation quality requirements for the cross-layer fix."}

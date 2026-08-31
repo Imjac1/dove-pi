@@ -33,4 +33,24 @@ describe("PlanningSession", () => {
 		assert.match(formatPlanningSessionGuidance(session.snapshot()), /collecting-name/);
 		assert.equal(session.observeQuestionResult({ answers: [{ answer: "缓存诊断" }] }, undefined).state, "awaiting-create");
 	});
+
+	it("makes cancellation observable and allows recollection in the same request", () => {
+		const session = new PlanningSession();
+		session.begin({ requestId: "r4", intent: "project-work", taskScope: "优化真实使用流程" });
+		session.observeQuestionResult({ answers: [{ answer: "缓存诊断" }, { answer: "范围：审计和创建流程" }] }, undefined);
+		assert.equal(session.cancelCreate().state, "cancelled");
+		assert.equal(session.questionDecision().allowed, true);
+		const retry = session.observeQuestionResult({ answers: [{ answer: "新的任务标题" }, { answer: "新的范围" }] }, undefined);
+		assert.equal(retry.state, "awaiting-create");
+		assert.equal(retry.taskTitle, "新的任务标题");
+		assert.equal(retry.taskScope, "新的范围");
+	});
+
+	it("gives explicit create precedence over an existing current task and resets new requests", () => {
+		const session = new PlanningSession();
+		assert.equal(session.begin({ requestId: "r5", intent: "project-work", workflowAction: "create-task", currentTaskId: "trellis:old" }).state, "collecting-name");
+		session.observeQuestionResult({ answers: [{ answer: "新任务" }] }, undefined);
+		assert.equal(session.begin({ requestId: "r5", intent: "project-work", currentTaskId: "trellis:old" }).state, "awaiting-create");
+		assert.equal(session.begin({ requestId: "r6", intent: "project-work", currentTaskId: "trellis:old" }).state, "planning");
+	});
 });

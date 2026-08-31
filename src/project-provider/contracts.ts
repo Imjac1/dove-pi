@@ -75,7 +75,7 @@ export interface ProjectProvider {
 	readMemory(query?: string): readonly ProjectDocument[];
 	runTaskOperation(operation: TrellisTaskOperation, args: readonly string[]): Promise<string>;
 	/** Read-only reconciliation of an interrupted mutation intent. */
-	reconcileTaskOperation?(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string): Promise<"observed" | "unknown">;
+	reconcileTaskOperation?(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[]): Promise<"observed" | "unknown">;
 }
 
 export function toProjectTask(record: TrellisTaskRecord, provider: ProjectProviderKind = "trellis"): ProjectTask {

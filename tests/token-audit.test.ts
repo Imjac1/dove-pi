@@ -66,6 +66,7 @@ describe("dove-pi token audit", () => {
 			assert.equal(project.inputTokens, 1500);
 			assert.equal(project.cacheReadTokens, 4500);
 			assert.equal(project.outputTokens, 80);
+			assert.equal(result.totalReasoning, 0);
 			assert.equal(project.messageCount, 2);
 			assert.equal(result.totalInput, 1500);
 			assert.equal(result.totalPrompt, 6000);
@@ -107,6 +108,18 @@ describe("dove-pi token audit", () => {
 			assert.equal(windowed.totalInput, 999, "within 24h window included");
 			const tight = await runTokenAudit({ sinceHours: 2 });
 			assert.equal(tight.totalInput, 0, "older than 2h excluded");
+			assert.equal(tight.totalOutput, 0, "older output is excluded by the same window");
+			assert.equal(tight.projects[0]?.sessionCount, 0, "sessions with no included usage are not counted");
+
+			const mixed = makeSession([
+				{ type: "message", message: { role: "assistant", usage: { input: 100, output: 100, reasoning: 50 }, timestamp: stale } },
+				{ type: "message", message: { role: "assistant", usage: { input: 7, output: 7, reasoning: 3 }, timestamp: Date.now() } },
+			]);
+			await writeFile(join(projectDir, "mixed.jsonl"), mixed);
+			const mixedResult = await runTokenAudit({ sinceHours: 2 });
+			assert.equal(mixedResult.totalOutput, 7);
+			assert.equal(mixedResult.totalReasoning, 3);
+			assert.match(formatTokenAudit(mixedResult), /reasoning 3 \(42\.9% of output\)/);
 		} finally {
 			if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
 			else process.env.PI_CODING_AGENT_DIR = previous;

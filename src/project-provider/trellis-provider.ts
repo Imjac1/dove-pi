@@ -114,10 +114,15 @@ export class TrellisProvider implements ProjectProvider {
 		});
 	}
 
-	public async reconcileTaskOperation(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string): Promise<"observed" | "unknown"> {
+	public async reconcileTaskOperation(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[] = []): Promise<"observed" | "unknown"> {
 		const context = this.getContext();
-		if (context.revision !== beforeRevision && operation === "create") return "observed";
-		if (operation === "create") return context.revision !== beforeRevision ? "observed" : "unknown";
+		if (operation === "create") {
+			if (context.revision === beforeRevision) return "unknown";
+			const title = args[0]?.trim();
+			if (!title || beforeTaskIds.length === 0) return "unknown";
+			const created = context.tasks.find((task) => task.title === title && !beforeTaskIds.includes(task.stableId));
+			return created ? "observed" : "unknown";
+		}
 		const selector = args[0]?.trim();
 		const task = context.tasks.find((candidate) => candidate.path === selector || candidate.providerTaskId === selector || candidate.title === selector || candidate.path.endsWith(selector ?? "\u0000"));
 		if (!task) return "unknown";

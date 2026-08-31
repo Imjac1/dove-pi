@@ -69,13 +69,14 @@ function isFresh(
 	return timestamp >= Date.now() - sinceHours * 3_600_000;
 }
 
-function outputTokensOf(entries: readonly unknown[]): number {
+function outputTokensOf(entries: readonly unknown[], sinceHours?: number): number {
 	let total = 0;
 	for (const entry of entries) {
 		const message = (
 			entry as {
 				type?: string;
-				message?: { role?: string; usage?: { output?: number } };
+				timestamp?: number;
+				message?: { role?: string; timestamp?: number; usage?: { output?: number } };
 			}
 		)?.message;
 		if (
@@ -83,6 +84,9 @@ function outputTokensOf(entries: readonly unknown[]): number {
 			message?.role !== "assistant"
 		)
 			continue;
+		const entryTimestamp = (entry as { timestamp?: unknown })?.timestamp;
+		const timestamp = typeof entryTimestamp === "number" ? entryTimestamp : typeof message.timestamp === "number" ? message.timestamp : undefined;
+		if (!isFresh(sinceHours, timestamp)) continue;
 		total += message.usage?.output ?? 0;
 	}
 	return total;
@@ -143,17 +147,17 @@ export async function runTokenAudit(
 		for (const sessionFile of sessionFiles) {
 			const entries = await readSessionEntries(sessionFile);
 			const samples = collectCacheUsageSamples(entries);
-			if (samples.length === 0) continue;
+			const freshSamples = samples.filter((sample) => isFresh(options.sinceHours, sample.timestamp));
+			if (freshSamples.length === 0) continue;
 			sessionCount++;
-			for (const sample of samples) {
-				if (!isFresh(options.sinceHours, sample.timestamp)) continue;
+			for (const sample of freshSamples) {
 				input += sample.input;
 				cacheRead += sample.cacheRead;
 				cacheWrite += sample.cacheWrite;
 				reasoning += sample.reasoning ?? 0;
 				messageCount++;
 			}
-			output += outputTokensOf(entries);
+			output += outputTokensOf(entries, options.sinceHours);
 		}
 
 		const label = decodeProjectName(dir);
@@ -177,6 +181,7 @@ export async function runTokenAudit(
 		totals.cacheRead += cacheRead;
 		totals.cacheWrite += cacheWrite;
 		totals.output += output;
+		totals.reasoning += reasoning;
 		totals.messages += messageCount;
 	}
 
