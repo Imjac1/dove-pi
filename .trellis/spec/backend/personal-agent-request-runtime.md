@@ -1,13 +1,13 @@
 # Personal Agent Request Runtime
 
-> **Scope:** Core contracts, Pi adapter firewall, request planning, tool selection, and provider budgets.
+> **Scope:** Core contracts, Pi adapter request planning, schema stability, progress bounds, and provider budgets.
 >
 > **Canonical router:** [Personal Agent Runtime Contract](./personal-agent-runtime.md)
 > **Related specifications:** [personal-agent-capability-runtime](./personal-agent-capability-runtime.md), [personal-agent-project-context](./personal-agent-project-context.md)
 
 ## 1. Scope / Trigger
 
-This contract applies to the cross-layer Personal Agent runtime: Agent Core, Windows runtime, Pi adapter, Trellis adapter, and capability packages.
+This contract applies to the cross-layer Personal Agent runtime: Agent Core, Windows runtime, Pi adapter, native project provider, legacy context reader, and capability packages.
 
 ## 2. Signatures
 
@@ -59,10 +59,11 @@ interface RecoveryOwnerOptions {
 - Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
 - Dispatches write correlated `dispatch.decided` and `dispatch.completed` records. Completion includes unique ID, route, duration, status, and optional token/retry/intervention metrics. Failed dispatches record completion before propagating the error.
 - Tool-loop fingerprints are deterministic opaque hashes. `ls` defaults to `.`; same-batch duplicate idempotent calls coalesce, while mutation/unknown tools are never cached. Successful stagnation compares call and bounded observation fingerprints, warns then terminates at configured bounds, and resets on changed arguments, observations, errors, or mutations.
-- Structured `ask_user_question` confirmations are bounded separately from read caching. Equivalent affirmative questions without an intervening result warn at 2, then block at 3 and direct execution/result. Normalized option/action/target text defines equivalence; changed wording cannot evade it, while distinct targets remain allowed. Negative answers, errors, results, new `agent_start`, and resets open a fresh window. Thresholds use the two `DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_*` settings.
-- During the Trellis planning handshake, any non-cancelled answer to the first scope/title question transitions `PlanningSession` to `awaiting-create`. The Pi `tool_call` boundary blocks/terminates later `ask_user_question` calls in that state and directs the model to restricted `agent_project_task`, regardless of option vocabulary. This guard is separate from repeated-confirmation heuristics.
+- Structured `ask_user_question` calls are bounded separately from read caching. A logical user goal may execute one structured question; a second call is blocked and terminates regardless of wording, option shape, or intervening tool results. A new logical goal receives a fresh budget. Semantic fingerprints remain diagnostic evidence, not the enforcement boundary.
+- Project tracking is automatic and optional. No `PlanningSession`, task-creation handshake, or workflow-specific question guard exists; the general one-question-per-goal progress bound remains.
 - Provider cache evidence is per-call with bounded digests/sizes for system policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and misses without treating cumulative reads as regressions.
 - Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call; the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
+- Usage-only diagnostics may attribute a miss to model change or an explicit idle gap. Without prefix evidence they report `provider-miss-or-expiry`, never infer a Dove prefix change. A session with no Dove context message is labelled `no-context`, meaning the minimal prefix path rather than unknown policy.
 - Oversized built-in read/shell/search observations are compacted before model re-entry with sizes, digest, and narrowing metadata; complete output remains in tool details.
 - Token audit aggregates project rows using one `sinceHours` inclusion predicate for input, cache, output, reasoning, session count, and message count. `totalReasoning` is the sum of included project `reasoningTokens`; output-only entries outside the window do not affect aggregate output or reasoning percentages.
 
@@ -76,16 +77,16 @@ interface RecoveryOwnerOptions {
 | PowerShell non-zero exit | Return `failed` with stderr and duration |
 | User abort / timeout | Return `interrupted: true`; never report success |
 | Pi API incompatibility | Adapter doctor reports the version issue; core remains loadable |
-| Trellis absent | Use lightweight state behavior; do not fail startup |
+| Native project state absent | Treat it as a healthy empty project; do not fail or ask to initialize |
 | Provider output limit exceeds the remaining model window through a known field | Clamp that same field and validate accounting against the transmitted value |
 | Provider output must be reduced but no supported output field is writable | Fail closed and abort the Pi operation; do not claim an accounting-only clamp |
 | Pi provider hook rejects a request | Call `ctx.abort()` because a thrown hook exception alone is swallowed by Pi |
 | Incomplete ledger record belongs to a live process | Leave it pending; recover only legacy, unowned, or inactive-owner records |
 | Same idempotent call appears twice in one batch | Coalesce the later call before execution |
 | Same successful read repeats without a changed observation | Warn, then terminate at the configured hard bound |
-| Equivalent confirmation repeats after affirmative answers | Warn at the interactive threshold, then block and terminate at the hard bound |
-| Confirmation target/text changes, answer is negative, or another tool returns | Reset the interactive question window and allow the next question |
-| Planning input has been collected and the model asks another question | Block and terminate the question call; invoke `agent_project_task` instead |
+| A second structured question is attempted in one logical goal | Block and terminate before the third-party question tool runs |
+| Question wording changes or another tool returns | Preserve the one-question goal budget; wording and tool churn do not bypass it |
+| Ordinary execution has no native state | Execute normally and best-effort create a compact current goal without asking |
 | Provider cache scope changes | Start a new cold comparison chain |
 | Token audit has a time window | Apply it to every usage field and count; do not count a session unless it has an included usage sample |
 
@@ -108,15 +109,15 @@ interface RecoveryOwnerOptions {
 - Assert exact capability resolution and required-argument validation.
 - Assert PowerShell exit code, stderr, timeout, cancellation, and fallback behavior.
 - Assert Pi adapter registers tools/commands/shortcuts without changing core contracts.
-- Assert Trellis absence does not prevent runtime initialization.
+- Assert native state absence does not prevent runtime initialization or tool execution.
 - Assert a 12.8K model with a 16,384 requested output limit clamps a known provider field and still dispatches when the final request fits.
 - Assert large-window Ultra may exceed the 4,096 planning target, while a smaller explicit provider limit is preserved.
 - Assert an unknown/unwritable output limit fails closed through `ctx.abort()` and never records a started provider call.
 - Assert live-owner records are not recovered, stop reasons are normalized, and negated/explanatory execution phrases remain read-only.
 - Assert opaque input hashing, same-batch coalescing, unchanged-observation warning/stop, changed-result reset, bounded result metadata, and cold-first/provider-scope cache attribution.
-- Assert rewritten equivalent confirmations with affirmative answers warn and terminate at configured bounds, while distinct targets and post-progress retries remain allowed.
-- Assert planning questions with ordinary scope/title option labels transition to `awaiting-create`, and a second question is blocked before the third-party question tool runs.
-- Assert cancelled planning creates return a resumable `cancelled` state, exact create identity/description survive the provider handoff, and token audit aggregate rows remain mathematically consistent under `sinceHours`.
+- Assert all recorded September 1 question variants are blocked before question two, including after other tool results.
+- Assert ordinary project execution injects no task-creation or workflow-skill prompt and does not require `agent_project_task`.
+- Assert explicit native goal creation preserves title/description without a second confirmation, and token audit aggregate rows remain mathematically consistent under `sinceHours`.
 
 ## 7. Wrong vs Correct
 
@@ -161,7 +162,7 @@ const reservedOutput = boundedOutputReservation({
 return limitProviderOutputTokens(payload, reservedOutput);
 ```
 
-## Design Decision: Adapter Firewall
+## Design Decision: Adapter Coordination Boundary
 
 **Context**: Dove is primarily used through Pi, so a generic host abstraction
 would add indirection without improving this boundary.
@@ -172,10 +173,11 @@ would add indirection without improving this boundary.
 2. Keep all logic in the Pi extension.
 3. Keep Pi UX specialization while isolating safety-critical decisions.
 
-**Decision**: Use option 3. Pi and Trellis are replaceable boundaries, not
-Kernel dependencies. Pi owns lifecycle, shortcuts, tool profiles, streaming,
-and TUI behavior; budget, approval, execution, mutation, and recovery remain
-in shared runtime modules.
+**Decision**: Use option 3. Pi and the native project provider are replaceable boundaries, not
+Kernel dependencies. Pi owns lifecycle, shortcuts, active tools, streaming,
+and TUI behavior. Dove's shared runtime owns context budgeting, execution
+records, mutation recovery, and standalone transport validation, but never a
+second Pi tool-permission policy.
 
 **Example**:
 
@@ -190,29 +192,29 @@ pi.on("before_agent_start", async (event, ctx) => {
 Future CLI or MCP hosts can reuse Kernel contracts without moving Pi-only
 behavior into generic abstractions.
 
-## V2 Request Planning and Provider Budget Firewall
+## V2 Request Planning and Provider Budgets
 
 The clean-slate runtime derives an immutable `RequestPlan` before compiling
 prompt/context. Intent classes are `chat`, `lookup`, `project-work`, and
-`execution`; ordinary conversation has no project-task context or capability
-requirements. Mutation/execution language always wins over a caller-provided
-`explicitIntent`, so an untrusted hint cannot downgrade approval requirements.
-Negated or explanatory mentions of an execution verb remain read-only. The
+`execution`; ordinary conversation has no project-task context. Mutation or
+execution language always wins over a caller-provided `explicitIntent` for
+context and goal accounting, never for tool permission. Negated or explanatory
+mentions of an execution verb remain read-only. The
 planner evaluates clause-local actions and polarity so Chinese/English read-only
 constraints do not accidentally grant execution, while a later independent
 imperative is classified separately and still requires the execution boundary.
 Summaries of the immediately preceding conversation remain Chat, and natural
 language project continuation is read-only Project Work.
 
-`RequestPlan.workflowAction` owns Trellis lifecycle intent; lifecycle authority
-is restricted to Project Work and cannot be downgraded by explicit hints.
+`RequestPlan.workflowAction` is compatibility metadata for explicit goal
+commands; it never injects a phase workflow or restricts Pi tools.
 
-The request plan alone owns capability tiers: Auto Chat has zero tools, Lookup
-has bounded read/search tools, Project Work adds read-only diagnostics/planning,
-and Execution adds mutation tools. Auto activates the exact selected set for
-the request and its continuations, reasserting it after host drift without
-absorbing foreign names. The next request replaces the set; MCP, browser
-automation, and background helpers remain Execution-only.
+Auto records Pi's provider-visible schema at session start and never calls
+`setActiveTools` because of Chat, Lookup, Project Work, or Execution intent.
+`RequestPlan` contains context, guidance, budget, and goal-accounting metadata;
+it contains no capability allow-list or approval tier. Pi extensions own
+optional/deferred tools. Explicit user `core`/`full` compatibility profiles may
+replace the schema and are reported as cache-prefix changes.
 
 Chat turns do not retrieve a project projection for tool heuristics or task
 correlation; provider history remains append-only and v2 Dove context is not
@@ -245,10 +247,11 @@ executeFastPath(registry, ledger, name, args, context, {
 ```
 
 When `required` is enabled, any capability with a non-`read_only` side effect
-must receive an explicit approval callback. Missing or denied approval returns
+must receive a host callback. Missing or denied authorization returns
 `status: "blocked"`, writes `capability.blocked`, and never invokes the
-capability executor. The Pi layer may supply the callback through its native
-confirmation UI; it does not bypass the shared runtime check.
+capability executor. In the Pi adapter, the accepted Pi tool call supplies that
+host decision without a second Dove confirmation. Standalone CLI/RPC/MCP hosts
+retain their transport-specific authorization boundary.
 
 Provider calls are runtime decisions rather than incidental transport details.
 The Pi `before_provider_request` hook converts the final opaque payload into
@@ -263,13 +266,13 @@ so a rejected `before_provider_request` must call the host `ctx.abort()` boundar
 throwing alone is only the fallback for hosts that do not expose that boundary.
 
 Capability executions receive a unique `executionId` and optional request,
-session, and tool-call correlation. Host integrations may persist an explicit
-`capability.approval.pending` transition. Cancellation and timeout are
+session, and tool-call correlation. Standalone host integrations may persist an
+explicit `capability.approval.pending` transition. Cancellation and timeout are
 terminally distinguished, and startup scans incomplete `capability.started`
 records and marks them `capability.recovered` without replaying a potentially
-non-idempotent side effect. A user must explicitly retry through the normal
-approval boundary after reconciliation. Approved decisions are recorded
-separately from blocked decisions. Optional evidence capture is best-effort:
+non-idempotent side effect. A user must explicitly retry through a new host tool
+call after reconciliation. Host decisions are recorded separately from blocked
+decisions. Optional evidence capture is best-effort:
 an unavailable artifact is reported in ledger details without converting an
 already completed side effect into a false execution failure. Started
 capability and provider records carry an optional host-owned process ID;

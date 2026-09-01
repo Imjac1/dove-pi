@@ -4,7 +4,7 @@
 
 Dove Pi 是一个面向 Windows 的个人编程 Agent，基于
 [Pi](https://github.com/badlogic/pi-mono) 构建。它保留 Pi 的模型与扩展开放性，
-同时补上开箱即用的工具策略、项目上下文、Trellis 项目管理、诊断和可恢复更新。
+同时补上目标连续性、轻量项目记忆、循环控制、诊断和可恢复更新。
 
 简单说：你在自己的项目目录运行 `dove-pi`，然后像和开发同事说话一样直接描述需求。
 
@@ -12,7 +12,7 @@ Dove Pi 是一个面向 Windows 的个人编程 Agent，基于
 
 - 希望自由选择模型、Provider 和 Pi 扩展；
 - 在 Windows 上做长期或大型项目，需要任务、规范和上下文连续性；
-- 不想手动组合十几个插件，也不想每次都配置工具权限；
+- 希望 Pi 和扩展的工具能力保持完整，同时减少重复提问和无效循环；
 - 希望更新失败时能修复或回滚，而不是重装全部环境。
 
 ## 安装
@@ -113,14 +113,9 @@ Dove 始终把启动命令时的当前目录当作目标项目。你的代码不
 继续当前项目任务。
 ```
 
-Dove 会按每次请求自动选择工具：
-
-- 普通对话：不加载工具；
-- 查看和分析：只加载读取、搜索等只读工具；
-- 项目规划：加入只读项目上下文；
-- 明确执行：开放 shell 和编辑；仅在需求明确涉及相关能力时，再加入浏览器、MCP 或后台任务。
-
-因此通常不需要先选择工具，也不会把上一次执行权限带到下一次普通对话。
+Dove 的 Auto 模式不会按请求裁剪工具。Pi 以及你安装的 Pi 扩展决定模型可以使用哪些工具；
+Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影响上下文、目标续接和预算，
+不决定工具权限。
 
 ### 3. 按需要选择模式
 
@@ -138,18 +133,21 @@ Dove 会按每次请求自动选择工具：
 
 `Ultra` 是运行策略；`max` 是安装时的扩展组合，两者不是同一个概念。
 
-## Trellis：可选的项目管理层
+## Dove Native Workflow
 
-普通聊天和代码任务不要求 Trellis。需要长期任务、PRD、开发规范、journal 或跨会话续接时，
-在项目根目录执行：
+普通聊天和代码任务直接执行，不需要初始化项目、创建任务或通过阶段门禁。首次执行型请求会在后台
+建立一个紧凑的当前目标；状态存放在 `.dove/state.json`，只包含目标、状态、关键决定、下一步和
+验证摘要。
+
+你也可以显式初始化或查看状态：
 
 ```powershell
 dove-pi project init
 dove-pi project doctor
 ```
 
-这会在当前项目创建 `.trellis/`。通常不需要另外安装全局 Trellis，也不需要先运行
-`trellis init`。
+初始化只创建 Dove 的轻量状态，不安装依赖，也不生成 PRD、design、implement、workflow 或
+脚本。显式任务命令是可选记录功能，不是开始编码的前置条件。
 
 之后可以直接说：
 
@@ -157,33 +155,20 @@ dove-pi project doctor
 继续当前项目任务。
 ```
 
-Dove 会通过公开的 Project Provider 状态定位当前任务或唯一可继续候选，不扫描 Trellis 私有运行
-目录，也不会因为一句“继续”自动创建、完成或归档任务。
+Dove 会直接读取当前原生目标。已有 `.trellis` 的项目仍可读取未完成任务、spec 和 journal 作为
+兼容数据，但 Dove 不执行 `.trellis/scripts/task.py`、不需要 Trellis npm 包，也不会修改或删除
+原有 `.trellis`。选择旧任务继续时，只把必要的目标信息导入 `.dove/state.json`。
 
-需要显式使用工作流 skill 时：
-
-- Pi：`/skill:trellis-start`、`/skill:trellis-continue`、`/skill:trellis-check`；
-- Codex：`$trellis-start`、`$trellis-continue`、`$trellis-check`。
-
-更新当前项目中的 Trellis 模板必须显式执行：
-
-```powershell
-dove-pi project update
-```
-
-更新 Dove 应用不会偷偷改写项目里的 `.trellis/`。
-
-## Pi、Dove 和 Trellis 的关系
+## Pi 和 Dove 的关系
 
 | 组件 | 负责什么 |
 | --- | --- |
 | Pi | 模型、会话、TUI 和原生工具宿主 |
-| Dove | 请求策略、工具加载、能力、审批、诊断和执行记录 |
-| Project Provider | 把外部项目管理器转换成统一项目上下文 |
-| Trellis | `.trellis/` 中的任务、spec、workflow、memory 和 journal |
+| Dove | 请求上下文、目标续接、循环控制、诊断和执行记录；不取代 Pi 的工具权限 |
+| Dove Native Workflow | `.dove/state.json` 中的紧凑目标、决定和验证状态 |
+| Legacy reader | 只读投影已有 `.trellis` 任务、spec 和 journal |
 
-Trellis 管项目数据，Dove 管执行数据。Dove 不复制一套 Trellis 任务数据库，也不把 Trellis
-源码写进自身核心；两边通过公开接口协作，可以分别更新。
+Pi 是唯一工具和执行权威。Dove 不增加权限层，只管理上下文、目标连续性、无进展循环和效率诊断。
 
 ## 常用命令
 
@@ -193,12 +178,13 @@ Trellis 管项目数据，Dove 管执行数据。Dove 不复制一套 Trellis �
 /status                 查看简要状态
 /status full            查看完整诊断
 /project                查看项目状态
-/project init           初始化 Trellis
-/project update         更新当前项目的 Trellis 模板
+/project init           显式创建 Dove 原生项目状态（通常无需执行）
+/task ...               可选地记录、完成或归档 Dove 目标
 /memory [query]         搜索项目记忆
 /capabilities           查看 Dove 能力
-/dove-tools auto        恢复按请求自动选择工具
-/dove-tools full        临时启用所有已安装工具
+/dove-tools auto        将工具管理权恢复给 Pi
+/dove-tools core        显式使用兼容的精简只读集合
+/dove-tools full        显式启用所有已安装工具
 /dove-thinking status   查看思考策略
 ```
 
@@ -266,7 +252,7 @@ $env:LOCALAPPDATA\DovePi\
 
 - `~/.pi/agent` 中的凭据、模型、会话、设置和用户扩展；
 - `~/.pi/agent/dove/workspaces/<hash>` 中按项目隔离的 Dove 运行状态；
-- 项目中的 `.trellis/`；
+- 项目中的 `.dove/` 和旧 `.trellis/`；
 - 你的源码、Git 分支和未提交修改。
 - Python、Node.js、字体和用户自己安装的 Pi 扩展。
 
@@ -274,7 +260,7 @@ $env:LOCALAPPDATA\DovePi\
 
 ## 高级接口
 
-Dove Capability Protocol 让 CLI、JSON-RPC、MCP 和 Pi 共用同一套能力与审批边界：
+Dove Capability Protocol 让 CLI、JSON-RPC、MCP 和 Pi 共用同一套能力格式与执行记录：
 
 ```powershell
 dove-pi capability list
@@ -290,8 +276,8 @@ MCP stdio 配置：
 {"command":"dove-pi","args":["mcp"]}
 ```
 
-有副作用的能力默认拒绝：Pi 使用原生确认，CLI 需要本地 `--approve`，RPC/MCP 请求不能自行
-声明授权。
+在 Pi 会话内，Pi 工具调用本身就是宿主执行决定，Dove 不再追加确认。独立 CLI 仍需本地
+`--approve`；RPC/MCP 传输不能在请求内容中自行声明授权。
 
 ## 开发与验证
 
@@ -333,8 +319,7 @@ npm run pi:smoke
 dove-pi repair
 ```
 
-### 项目没有 Trellis
+### 项目没有 Dove 状态
 
-```powershell
-dove-pi project init
-```
+无需处理，普通请求会直接执行并在需要时静默创建状态。需要提前创建空状态时才运行
+`dove-pi project init`。

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatCacheDiagnostics, inspectCacheDiagnostics } from "../src/pi-adapter/cache-diagnostics.ts";
+import { formatCacheDiagnostics, formatGoalEfficiency, inspectCacheDiagnostics, inspectGoalEfficiency } from "../src/pi-adapter/cache-diagnostics.ts";
+import type { ExecutionRecord } from "../src/core/contracts.ts";
 
 describe("cache diagnostics", () => {
 	it("distinguishes latest-request hit rate from session hit rate", () => {
@@ -57,6 +58,15 @@ describe("cache diagnostics", () => {
 		assert.equal(isoIdle.lastMissReason, "idle");
 	});
 
+	it("does not infer a Dove prefix change from usage-only evidence", () => {
+		const result = inspectCacheDiagnostics([
+			{ type: "message", message: { role: "assistant", provider: "p", model: "m", timestamp: 1, usage: { input: 100, cacheRead: 900, cacheWrite: 0 } } },
+			{ type: "message", message: { role: "assistant", provider: "p", model: "m", timestamp: 2, usage: { input: 1_000, cacheRead: 0, cacheWrite: 0 } } },
+		]);
+		assert.equal(result.fullMisses, 1);
+		assert.equal(result.lastMissReason, "provider-miss-or-expiry");
+	});
+
 	it("ignores non-assistant and zero-usage entries", () => {
 		const result = inspectCacheDiagnostics([
 			{ type: "message", message: { role: "user", usage: { input: 1, cacheRead: 99, cacheWrite: 0 } } },
@@ -66,5 +76,38 @@ describe("cache diagnostics", () => {
 		assert.equal(result.lastHitRate, undefined);
 		assert.equal(result.sessionHitRate, undefined);
 		assert.equal(result.warmHitRate, undefined);
+	});
+
+	it("reports uncached cost and first-call reuse per completed goal", () => {
+		const record = (kind: ExecutionRecord["kind"], requestId: string, details: Record<string, unknown>): ExecutionRecord => ({
+			taskId: "task", stepId: "step", kind, timestamp: "2026-09-01T00:00:00.000Z", mode: "standard",
+			correlation: { requestId, sessionId: "session" }, details,
+		});
+		const result = inspectGoalEfficiency([
+			record("request.planned", "one", {}),
+			record("provider.request.completed", "one", { usage: { input: 8_000, cacheRead: 0 } }),
+			record("runtime.phase.completed", "one", { phase: "tool", name: "ask_user_question" }),
+			record("request.terminal", "one", { reason: "completed" }),
+			record("request.planned", "two", { continuedFromRequestId: "one" }),
+			record("provider.request.completed", "two", { usage: { input: 500, cacheRead: 9_000 } }),
+			record("provider.request.completed", "two", { usage: { input: 300, cacheRead: 9_500 } }),
+			record("runtime.phase.completed", "two", { phase: "tool", name: "write" }),
+			record("request.terminal", "two", { reason: "completed" }),
+			record("request.planned", "three", {}),
+			record("provider.request.completed", "three", { usage: { input: 2_000, cacheRead: 0 } }),
+			record("request.terminal", "three", { reason: "cancelled" }),
+		], "session");
+		assert.equal(result.goalCount, 2);
+		assert.equal(result.completedGoalCount, 1);
+		assert.equal(result.cancelledGoalCount, 1);
+		assert.equal(result.providerRounds, 4);
+		assert.equal(result.toolCalls, 2);
+		assert.equal(result.questionCalls, 1);
+		assert.equal(result.uncachedInputTokens, 10_800);
+		assert.equal(result.uncachedInputPerCompletedGoal, 10_800);
+		assert.equal(result.warmFirstCallHitRate, 50);
+		assert.equal(result.coldFirstCallCount, 2);
+		assert.match(formatGoalEfficiency(result), /Uncached\/completed 11k/);
+		assert.match(formatGoalEfficiency(result), /Warm first-call 50\.0% \(1\/2\)/);
 	});
 });

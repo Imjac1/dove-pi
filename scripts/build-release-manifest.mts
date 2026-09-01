@@ -74,7 +74,6 @@ const manifest = {
 	components: {
 		pi: exactDependency("@earendil-works/pi-coding-agent"),
 		piTui: exactDependency("@earendil-works/pi-tui"),
-		trellis: exactDependency("@mindfoldhq/trellis"),
 	},
 	profiles,
 	doveExtension: {

@@ -3,8 +3,6 @@ import { normalizeAgentMode, type AgentMode } from "./contracts.ts";
 /** The four intentionally distinct interaction classes understood by Dove Kernel. */
 export type RequestIntent = "chat" | "lookup" | "project-work" | "execution";
 
-export type RequestApproval = "none" | "confirm" | "elevated";
-
 /** Provider-neutral workflow action that requires request-specific handling. */
 export type WorkflowAction = "continue" | "create-task" | "start-task" | "finish-task" | "archive-task";
 
@@ -17,6 +15,9 @@ export interface RequestPlanInput {
 	readonly mode?: AgentMode;
 	readonly projectAvailable?: boolean;
 	readonly explicitIntent?: RequestIntent;
+	/** A one-shot pending plan that stopped for user confirmation. It is consulted
+	 * only for a short affirmative follow-up. Completed work must not be passed. */
+	readonly pendingPlan?: Pick<RequestPlan, "requestId" | "intent">;
 	readonly deadlineMs?: number;
 	readonly outputBudget?: number;
 }
@@ -30,11 +31,10 @@ export interface RequestPlan {
 	readonly intent: RequestIntent;
 	readonly mode: AgentMode;
 	readonly contextClasses: readonly string[];
-	readonly capabilityIds: readonly string[];
-	readonly approval: RequestApproval;
 	readonly deadlineMs?: number;
 	readonly outputBudget: number;
 	readonly projectAvailable: boolean;
+	readonly continuedFromRequestId?: string;
 	readonly workflowAction?: WorkflowAction;
 	/** @deprecated Use workflowAction. */
 	readonly projectAction?: ProjectAction;
@@ -44,7 +44,7 @@ const EXECUTION_ACTION_PATTERN = /\b(run|execute|launch|start|stop|deploy|instal
 const PROJECT_PATTERN = /\b(project|task|prd|design|implementation|code|repository|repo|workspace|file|bug|feature|develop|development|build|test|fix|repair)\b|项目|任务|需求|设计|代码|仓库|工作区|文件|缺陷|功能|开发|构建|测试|修复|修理|解决/i;
 const LOOKUP_PATTERN = /\b(show|read|find|search|list|status|inspect|lookup|look\s+up|what|where|which|how|explain|describe|summarize|summary|read-only)\b|查看|读取|查找|搜索|列出|状态|检查|查询|什么|哪里|哪个|如何|怎么|怎样|解释|描述|说明|总结|分析|只读|打开网页|网页|截图|浏览器|浏览/i;
 const RESPONSE_ONLY_PATTERN = /\b(?:only|just)\s+(?:reply|respond|answer)\b|只(?:需|要)?回复|仅回复/i;
-const CONVERSATION_SUMMARY_PATTERN = /(?:一句话|简短|简单)?总结(?:一下)?(?:我们)?(?:刚才|刚刚|方才|这次|本次)(?:完成|做|讨论|处理|修改)|\b(?:briefly\s+|in\s+one\s+sentence\s+)?summari[sz]e\s+(?:what\s+)?we\s+(?:just\s+)?(?:did|completed|discussed|changed)\b/i;
+const CONVERSATION_SUMMARY_PATTERN = /(?:一句话|简短|简单)?总结(?:一下)?(?:我们)?(?:刚才|刚刚|方才|这次|本次)(?:完成|做|讨论|处理|修改)|(?:总结|概括)(?:一下)?(?:我们|本次|当前)?的?(?:对话|会话|聊天)|\b(?:briefly\s+|in\s+one\s+sentence\s+)?summari[sz]e\s+(?:what\s+)?we\s+(?:just\s+)?(?:did|completed|discussed|changed)\b|\b(?:generate|create|provide|give)\s+(?:me\s+)?(?:a\s+)?summary\s+of\s+(?:our|the|this)\s+(?:conversation|session|chat)\b|\bsummari[sz]e\s+(?:our|the|this)\s+(?:conversation|session|chat)\b/i;
 const PROJECT_CONTINUATION_PATTERN = /^\s*(?:(?:请(?:帮我)?|帮我)\s*)?(?:(?:继续|恢复)(?:一下)?(?:当前|这个|该|本)?(?:项目)?(?:任务|工作)|(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:continue|resume)(?:\s+(?:the|this|that))?\s+(?:(?:current|existing)\s+)?(?:project\s+)?(?:task|work))(?=\s|[，。！？；,;.!?]|$)/i;
 const TEST_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?test\s+(?:(?:the|this|that|current)\s+)*(?:project|code|build|suite|application|app|feature|login|fix)\b|(?:^|[.!?;,，。！？；\n])\s*(?:(?:请(?:帮我)?|帮我)\s*)?测试(?:一下|下)?\s*(?:当前|这个|该|本)?\s*(?:项目|代码|构建|功能|应用|登录|修复|测试套件)/i;
 const BROWSER_INTERACTION_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:click|tap|submit|log\s+in|sign\s+in)\b|(?:^|[.!?;,，。！？；\n])\s*(?:请(?:帮我)?|帮我)?(?:点击|点一下|轻触|提交|登录)(?:这个|该|当前)?/i;
@@ -96,11 +96,21 @@ function classifyWorkflowAction(message: string): WorkflowAction | undefined {
 	return undefined;
 }
 
+export function isShortAffirmativeReply(message: string): boolean {
+	const value = message.trim().replace(/[。！？.!?]+$/g, "").trim();
+	if (!value || value.length > 24) return false;
+	return /^(?:可以|行|好|好的|开始|继续|执行|确认|同意|没问题|就这样|按这个来|yes|yep|yeah|ok|okay|go ahead|proceed|do it)$/i.test(value);
+}
+
+function hasRequestedFileArtifact(message: string): boolean {
+	return /(?:需要|要|给我|帮我|请).{0,24}(?:对话|会话|上下文|审计|记录|日志).{0,12}(?:文件|存档)|(?:保存|存档|导出|落盘).{0,24}(?:上下文|对话|会话|记录|日志|文件)|生成.{0,24}(?:文件|日志|存档)|\b(?:save|export|record|archive)\b.{0,40}\b(?:context|conversation|session|audit|log|file|artifact)\b|\b(?:generate|create)\b.{0,40}\b(?:file|artifact|archive|log)\b/i.test(message);
+}
+
 function classifyIntent(message: string, explicitIntent?: RequestIntent): RequestIntent {
 	// Mutating/executing language wins over project/lookup words ("show how to
 	// run and then run it" retains the second imperative after meta-language is
 	// removed). Negated or explanatory mentions do not request execution.
-	if (hasActionableExecution(message)) return "execution";
+	if (hasActionableExecution(message) || hasRequestedFileArtifact(message)) return "execution";
 	if (explicitIntent) return explicitIntent;
 	if (RESPONSE_ONLY_PATTERN.test(message)) return "chat";
 	if (CONVERSATION_SUMMARY_PATTERN.test(message)) return "chat";
@@ -120,34 +130,21 @@ function classifyProjectAction(message: string, intent: RequestIntent): ProjectA
 	return intent === "project-work" && PROJECT_CONTINUATION_PATTERN.test(message) ? "continue" : undefined;
 }
 
-function defaultsForIntent(intent: RequestIntent, projectAvailable: boolean, workflowAction?: WorkflowAction): Pick<RequestPlan, "contextClasses" | "capabilityIds" | "approval"> {
+function contextClassesForIntent(intent: RequestIntent, projectAvailable: boolean): readonly string[] {
 	switch (intent) {
 		case "chat":
-			return { contextClasses: ["conversation"], capabilityIds: [], approval: "none" };
+			return ["conversation"];
 		case "lookup":
-			return {
-				contextClasses: projectAvailable ? ["conversation", "project-index"] : ["conversation"],
-				capabilityIds: [],
-				approval: "none",
-			};
+			return projectAvailable ? ["conversation", "project-index"] : ["conversation"];
 		case "project-work":
-			return {
-				contextClasses: projectAvailable ? ["conversation", "project-task", "project-spec"] : ["conversation", "workspace"],
-				capabilityIds: ["workspace.inspect"],
-				approval: workflowAction && workflowAction !== "continue" ? "confirm" : "none",
-			};
+			return projectAvailable ? ["conversation", "project-task", "project-spec"] : ["conversation", "workspace"];
 		case "execution":
-			return {
-				contextClasses: projectAvailable ? ["conversation", "project-task", "project-spec"] : ["conversation", "workspace"],
-				capabilityIds: ["workspace.inspect"],
-				approval: "elevated",
-			};
+			return projectAvailable ? ["conversation", "project-task", "project-spec"] : ["conversation", "workspace"];
 	}
 }
 
 function freezePlan(plan: RequestPlan): RequestPlan {
 	Object.freeze(plan.contextClasses);
-	Object.freeze(plan.capabilityIds);
 	return Object.freeze(plan);
 }
 
@@ -156,14 +153,17 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 	const message = input.message.trim();
 	const projectAvailable = input.projectAvailable === true;
 	const workflowAction = classifyWorkflowAction(message);
-	const classifiedIntent = classifyIntent(message, isRequestIntent(input.explicitIntent) ? input.explicitIntent : undefined);
-	// Lifecycle mutations have their own restricted authority tier. An explicit
-	// caller hint may not downgrade them to Chat, just as it cannot downgrade a
-	// shell/edit execution request.
+	const inheritedIntent = isShortAffirmativeReply(message) && input.pendingPlan
+		? input.pendingPlan.intent
+		: undefined;
+	const explicitIntent = isRequestIntent(input.explicitIntent) ? input.explicitIntent : inheritedIntent;
+	const classifiedIntent = classifyIntent(message, explicitIntent);
+	// Lifecycle wording still selects project context and workflow guidance. It
+	// never grants or removes tools; Pi remains the execution authority.
 	const intent = classifiedIntent === "execution" ? classifiedIntent : workflowAction && workflowAction !== "continue" ? "project-work" : classifiedIntent;
 	const effectiveWorkflowAction = intent === "execution" ? undefined : workflowAction;
 	const projectAction = classifyProjectAction(message, intent);
-	const defaults = defaultsForIntent(intent, projectAvailable, effectiveWorkflowAction);
+	const contextClasses = contextClassesForIntent(intent, projectAvailable);
 	const outputBudget = input.outputBudget ?? (intent === "chat" ? 1024 : intent === "lookup" ? 2048 : 4096);
 	if (!Number.isInteger(outputBudget) || outputBudget <= 0) throw new RangeError("outputBudget must be a positive integer");
 	if (input.deadlineMs !== undefined && (!Number.isInteger(input.deadlineMs) || input.deadlineMs <= 0)) {
@@ -173,12 +173,11 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 		requestId: input.requestId ?? `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
 		intent,
 		mode: normalizeAgentMode(input.mode) ?? "standard",
-		contextClasses: defaults.contextClasses,
-		capabilityIds: defaults.capabilityIds,
-		approval: defaults.approval,
+		contextClasses,
 		deadlineMs: input.deadlineMs,
 		outputBudget,
 		projectAvailable,
+		...(inheritedIntent && input.pendingPlan ? { continuedFromRequestId: input.pendingPlan.requestId } : {}),
 		...(effectiveWorkflowAction ? { workflowAction: effectiveWorkflowAction } : {}),
 		...(projectAction ? { projectAction } : {}),
 	});
@@ -194,6 +193,9 @@ export function isTaskInventoryRequest(message: string): boolean {
 	const value = message.trim();
 	const mentionsInventory = /(?:未完成|没完成|待办|遗留|剩余|进行中|还存在).{0,20}(?:任务|工作)|(?:任务|工作).{0,20}(?:未完成|没完成|待办|遗留|剩余|进行中)|\b(?:unfinished|incomplete|pending|remaining|open)\b.{0,40}\b(?:tasks?|work)\b|\b(?:tasks?|work)\b.{0,40}\b(?:unfinished|incomplete|pending|remaining|open)\b/i.test(value);
 	if (!mentionsInventory) return false;
-	const withoutStatus = value.replace(/未完成|没完成|待办|遗留|剩余|进行中|unfinished|incomplete|pending|remaining|open/gi, " ");
+	const withoutStatus = value
+		.replace(/(?:不要|别|无需|不需要|只读)[^，。！？；,;.!?\n]{0,24}(?:修改|编辑|写入|变更)[^，。！？；,;.!?\n]{0,12}(?:文件|代码)?/gi, " ")
+		.replace(/\b(?:without|do\s+not|don't|never)\s+(?:modifying|editing|writing|changing)\s+(?:any\s+)?(?:files?|code)\b/gi, " ")
+		.replace(/未完成|没完成|待办|遗留|剩余|进行中|unfinished|incomplete|pending|remaining|open/gi, " ");
 	return !/(?:继续|恢复|修复|实现|执行|修改|编写|开发|处理|完成|删除|归档|提交|推送|开始|优化|解决|逐个|逐项|代码|源码|测试|文件|日志|历史)|\b(?:continue|resume|fix|implement|execute|modify|write|develop|handle|complete|finish|delete|archive|commit|push|start|optimi[sz]e|resolve|code|source|tests?|files?|logs?|history)\b/i.test(withoutStatus);
 }

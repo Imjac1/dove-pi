@@ -24,7 +24,7 @@ bin/                    # user-facing launcher
 
 - Put stable cross-layer types in `src/core/contracts.ts` or the owning boundary's `contracts.ts`.
 - Keep host-specific code in `src/pi-adapter`; core modules must not import `@earendil-works/pi-coding-agent`.
-- Route Trellis reads and mutations through `src/project-provider`; never write `.trellis` files from core code.
+- Route native goal reads and mutations through `src/project-provider`; legacy `.trellis` access is read-only.
 - Keep deterministic PowerShell/workspace behavior in `src/windows-runtime`.
 - Add a test beside the boundary it verifies in `tests/` rather than creating end-to-end tests for every capability.
 
@@ -32,10 +32,10 @@ bin/                    # user-facing launcher
 
 - Files and directories use kebab-case (`dispatch-policy.ts`, `project-provider/`).
 - Public factories use `createX`; predicates use `isX`/`hasX`; command handlers use imperative verbs.
-- Use explicit provider-qualified IDs such as `trellis:<taskId>` and keep Pi session, Trellis task, and Dove execution IDs distinct.
+- Use explicit provider-qualified IDs such as `native:<goalId>` and keep Pi session, legacy task, native goal, and Dove execution IDs distinct.
 
 ## Examples
 
 - [src/core/dispatch-policy.ts](../../../src/core/dispatch-policy.ts)
-- [src/project-provider/trellis-provider.ts](../../../src/project-provider/trellis-provider.ts)
+- [src/project-provider/native-provider.ts](../../../src/project-provider/native-provider.ts)
 - [src/pi-adapter/extension.ts](../../../src/pi-adapter/extension.ts)

@@ -79,8 +79,11 @@ def validate_manifest(source_root: Path, manifest_path: Path, tag: str, commit: 
     expected_components = {
         "pi": "@earendil-works/pi-coding-agent",
         "piTui": "@earendil-works/pi-tui",
-        "trellis": "@mindfoldhq/trellis",
     }
+    if set(components) != set(expected_components):
+        raise RuntimeError("release.json must contain exactly the Pi and Pi TUI components")
+    if "@mindfoldhq/trellis" in dependencies or "node_modules/@mindfoldhq/trellis" in lock_packages:
+        raise RuntimeError("Trellis must not be a packaged runtime dependency")
     for component, dependency in expected_components.items():
         declared = dependencies.get(dependency)
         locked_entry = lock_packages.get(f"node_modules/{dependency}")

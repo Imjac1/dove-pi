@@ -57,7 +57,7 @@ new CapabilityInvocationService(registry, ledger, {
 | Entry point | Trusted authorization source | Required behavior |
 |---|---|---|
 | Direct Core | An injected host-owned `authorize` callback | A payload value of `approval: "granted"` is insufficient by itself |
-| Pi | Native interactive `ctx.ui.confirm` after read-only policy checks | Headless or read-only execution cannot approve side effects |
+| Pi | The accepted Pi tool call, after the explicit Dove read-only switch is checked | Dove adds no second confirmation; headless Pi calls work, while read-only mode blocks side effects |
 | Local CLI | The local process parses the explicit `--approve` flag and injects the callback | Omitting the flag denies side effects |
 | JSON-RPC stdio | None in protocol `1.0.0` | Request payloads cannot self-authorize; side effects fail closed |
 | MCP stdio | None in protocol `1.0.0` | `dove_invoke` exposes no approval argument; side effects fail closed |
@@ -74,12 +74,13 @@ Reviewed Pi plugins remain host-owned providers for Pi-specific TUI, web and
 browser access, MCP clients, diagnostics, structured questions, planning, and
 background work. The extension catalog projects package/tool availability as
 `available`, `configured`, or `degraded` for doctor and discovery. A projected
-plugin capability never becomes a Core executor and cannot bypass Dove's
-request plan, approval service, ledger, or evidence policy.
+plugin capability never becomes a Core executor. Pi remains its tool authority;
+Dove's request plan cannot grant or remove it, while shared validation, ledger,
+and evidence contracts still apply to Dove-owned executors.
 
 #### Interoperable project context and evidence
 
-- Trellis/the selected `ProjectProvider`, `AGENTS.md`, `CLAUDE.md`, Agent
+- Dove's native `ProjectProvider`, legacy project documents, `AGENTS.md`, `CLAUDE.md`, Agent
   Skills, and MCP resources are separately labeled authorities in one
   projection. Duplicate instruction or resource authorities are reported in
   `conflicts`; no last-write-wins or semantic merge is allowed.
@@ -121,7 +122,8 @@ through Direct Core, CLI/JSON-RPC, official MCP transport, and Pi's registered
 `agent_run_capability` tool. Every row must return the Capability Protocol
 version, the same capability name/version and success status, a caller request
 ID, and a non-empty execution ID. The Pi row must also demonstrate that the
-registered tool is backed by the shared invocation service. Separate contract
+registered tool is backed by the shared invocation service and adds no Dove UI
+confirmation. Separate contract
 tests cover terminal outcomes, ledger correlation, bounded RPC methods,
 fail-closed RPC/MCP authorization, normalized context conflicts, and evidence
 secret filtering. No interoperability claim requires a live provider account.
@@ -344,4 +346,3 @@ return runPowerShell(script);
 const devNodeVersion = "node --version"; // reviewed, versioned capability
 return runPowerShell(devNodeVersion, { cwd, signal, timeoutMs: 15_000 });
 ```
-

@@ -26,16 +26,19 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 	for (const document of context.documents) {
 		const task = document.kind === "task" ? taskByFile.get(normalizePath(document.path)) : undefined;
 		const isActiveTask = task !== undefined && activeTask !== undefined && task.stableId === activeTask.stableId;
+		const isLegacyDocument = document.sourceRef.startsWith("legacy-trellis:");
+		if (isLegacyDocument && activeTask?.provider === "native" && document.kind !== "spec" && !intent.legacy) continue;
 
 		if (document.kind === "task") {
 			const isPrd = document.path.toLowerCase().endsWith("prd.md");
-			if (mode === "fast" && (!isActiveTask || !isPrd)) continue;
+			const isNativeState = isActiveTask && task?.provider === "native";
+			if (mode === "fast" && (!isActiveTask || (!isPrd && !isNativeState))) continue;
 			// Standard/Ultra only load task documents for an explicit task/PRD
 			// request. An active task is not a reason to inject its PRD into
 			// ordinary conversation (for example, a simple "hi").
 			if (mode !== "fast" && !intent.task) continue;
 			const priority = isActiveTask ? 100 : task?.priority === "P1" ? 40 : 20;
-			addDocument(compiler, context, document, priority, mode === "fast" && isActiveTask && isPrd);
+			addDocument(compiler, context, document, priority, isNativeState || (mode === "fast" && isActiveTask && isPrd));
 			continue;
 		}
 
@@ -75,6 +78,7 @@ interface ContextIntent {
 	readonly workflow: boolean;
 	readonly memory: boolean;
 	readonly task: boolean;
+	readonly legacy: boolean;
 }
 
 function classifyContextIntent(query: string): ContextIntent {
@@ -84,6 +88,7 @@ function classifyContextIntent(query: string): ContextIntent {
 		workflow: /workflow|phase|trellis|task lifecycle|工作流|阶段|任务生命周期/.test(query),
 		memory: /memory|journal|history|previous|last time|decision|记忆|日志|历史|上次|之前|决定|讨论/.test(query),
 		task: /prd|design|implement(?:ation)? plan|acceptance criteria|任务需求|任务设计|验收标准/.test(query),
+		legacy: /legacy|trellis|旧任务|旧规范|兼容数据/.test(query),
 	};
 }
 

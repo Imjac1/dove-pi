@@ -24,7 +24,6 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.3",
     "@earendil-works/pi-tui": "0.84.3",
-    "@mindfoldhq/trellis": "0.6.16",
     "@modelcontextprotocol/sdk": "1.30.0",
     "typebox": "^1.1.38",
     "zod": "4.5.3"

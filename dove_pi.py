@@ -688,9 +688,9 @@ After installation:
   dove-pi project init
   dove-pi
   dove-pi --offline             skip all Pi startup network/package checks for this launch
-  Ordinary sessions use automatic intent-based tool loading to keep prompt
-  tokens low. Use /dove-tools full inside Pi, or set
-  DOVE_PI_TOOL_PROFILE=full, when you need every installed extension tool.
+  Auto mode leaves Pi's active tool schema unchanged. Request intent affects
+  context, goal continuity, and budgets, never tool permission. Legacy core/full
+  profiles remain explicit compatibility controls.
 
 Cache compatibility:
   Custom OpenRouter providers receive Pi session affinity automatically.

@@ -48,13 +48,13 @@ dove-pi extensions install max
 - `pi-open-tui` is the preferred single TUI/status authority. Profiles load `extension-settings` before `pi-open-tui`; `pi-powerbar`, `pi-powerline-footer`, and `pi-tps-status` are mutually exclusive fallback renderers and must not share a profile with `pi-open-tui`.
 - `installExtensionProfile` reconciles Dove-owned identities one at a time through Pi's exact-spec `install` command. Pi 0.84.3 exposes only a single-source persistent install operation; its multi-source resolver does not persist settings, and concurrent npm mutations against the shared Pi root are unsafe. The installer therefore remains serial, reports bounded start, `[current/total]`, and completion progress on stderr, and keeps stdout for one machine-readable JSON result. `updateStatus` is `updated` when an existing Dove package was reconciled, `unchanged` when configured entries were already exact, `skipped-empty` on first install, `skipped-disabled` for `--no-extension-updates`, and `failed` when any optional entry fails; failure details remain structured and fail-open.
 - Context, cumulative tokens, cache, model/provider, TPS, TTFT, duration, stalls, cost, Git, and extension-status rendering belong to the selected TUI extension. Dove publishes only compact mode/operation text (`Dove · Fast|◆ Standard|✦ Ultra · Ready|Running`) plus the current Pi thinking level through `ctx.ui.setStatus`; it must not implement a duplicate telemetry collector or footer renderer. Dove accepts only `fast`, `standard`, and `ultra`; Pi's native thinking level `max` and the extension installation profile `max` remain separate concepts. Changing Dove mode does not silently change Pi thinking; `/status` and `agent_doctor` show both values.
-- Cache diagnostics are a read-only projection of Pi session entries, not a second accounting system. `/status full` and `agent_doctor` may show both the latest-request cache hit rate and the cumulative session rate, plus cache read/write totals and a best-effort miss reason (`warmup`, `model-change`, `idle`, or `prefix-change`). For custom OpenRouter provider IDs, the adapter may add `x-session-affinity` from the current Pi session unless `DOVE_PI_DISABLE_SESSION_AFFINITY=1` is set; existing provider headers take precedence.
+- Cache diagnostics are read-only projections of Pi session entries and Dove's append-only execution ledger, not a second accounting system. `/status full` and `agent_doctor` show request-level cache evidence plus completed logical goals, provider/tool/question counts, cold user turns, and uncached input per completed goal. Continuations linked by `continuedFromRequestId` aggregate into one goal while each user turn still contributes its own first-provider-call cache evidence. Failed and cancelled work remains in total uncached cost so wasted loops cannot improve the primary efficiency metric. For custom OpenRouter provider IDs, the adapter may add `x-session-affinity` from the current Pi session unless `DOVE_PI_DISABLE_SESSION_AFFINITY=1` is set; existing provider headers take precedence.
 - The last effective Pi thinking level is persisted through Pi's official `defaultThinkingLevel` setting when `thinking_level_select` fires, so a new session restores the user's previous level without a parallel configuration format.
 - The preferred renderer refreshes telemetry at approximately 1 Hz; critical Dove state transitions may update immediately. Keyboard interaction remains available through Dove's single execution-policy cycle shortcut (`Ctrl+Alt+M`), Pi's native model picker (`Ctrl+P`), native exit controls (`Ctrl+D`/`/quit`), and Dove's `/status` command.
 - Missing packages are warnings; Pi/Node incompatibility, invalid load order, and conflicting authority packages are errors.
 - Doctor checks local settings and executables without requiring npm/network access. It must not rewrite `~/.pi/agent/settings.json` or silently install software.
 - Third-party sub-agent, background-task, plan, workspace, or security packages must remain optional when they overlap a Dove Pi authority contract.
-- The Dove `auto` tool profile may use the active normalized Trellis task (status and bounded file-path preview) as an intent hint in addition to the current prompt. It must not use task titles alone as a broad trigger, and Ultra must not force all tools or unsafe parallel dispatch.
+- The Dove `auto` tool profile records Pi's active schema at session start and never calls `setActiveTools` because of request intent. Pi and Pi extensions remain the sole tool authorities. Intent hints select context, guidance, and budgets only. `agent_doctor` compares the observed baseline with active tools and reports final Provider payload count, schema bytes, and prefix evidence without reverting drift. Legacy `core`/`full` profiles are explicit user compatibility controls. Ultra must not force tools or unsafe parallel dispatch.
 
 ### 4. Validation & Error Matrix
 
@@ -66,12 +66,14 @@ dove-pi extensions install max
 | Required load order is wrong | Report a `load-order` error |
 | Profile contains conflicting authorities | Report a `profile-conflict` error |
 | Optional executable is missing | Report a warning; never install it implicitly |
+| Another extension changes the final Provider tool schema | Report expected/active/final payload evidence; do not claim cache stability |
 
 ### 5. Tests Required
 
 - Assert profile order places extension-settings before pi-open-tui and no default profile contains another footer/TUI authority.
 - Assert missing package configuration produces warnings without network calls.
 - Assert invalid load order and conflicting max authorities are detected.
+- Assert goal continuations aggregate once, first-call cache evidence remains per user turn, Auto makes zero `setActiveTools` calls, and doctor reports schema drift without reverting it.
 
 ## Scenario: Dove Extension Identity and Authority Synchronization
 

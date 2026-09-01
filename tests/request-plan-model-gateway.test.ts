@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createRequestPlan } from "../src/core/request-plan.ts";
+import { createRequestPlan, isTaskInventoryRequest } from "../src/core/request-plan.ts";
 import { ModelBudgetError, ModelGateway, normalizeStopReason, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens } from "../src/core/model-gateway.ts";
 import { requestPolicy } from "../src/core/prompt-policy.ts";
 
@@ -15,8 +15,8 @@ describe("request planning", () => {
 		const plan = createRequestPlan({ message: "hi", projectAvailable: true, requestId: "r1" });
 		assert.equal(plan.intent, "chat");
 		assert.deepEqual(plan.contextClasses, ["conversation"]);
-		assert.deepEqual(plan.capabilityIds, []);
-		assert.equal(plan.approval, "none");
+		assert.equal("capabilityIds" in plan, false);
+		assert.equal("approval" in plan, false);
 		assert.equal(Object.isFrozen(plan), true);
 	});
 
@@ -24,6 +24,35 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "show project status", projectAvailable: true }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "implement the login feature", projectAvailable: true }).intent, "execution");
 		assert.equal(createRequestPlan({ message: "work on the project plan", projectAvailable: true }).intent, "project-work");
+	});
+
+	it("recognizes task inventory despite an explicit no-edit constraint", () => {
+		assert.equal(isTaskInventoryRequest("Inspect and list unfinished Trellis tasks without modifying files."), true);
+		assert.equal(isTaskInventoryRequest("检查并列出未完成任务，不要修改文件。"), true);
+		assert.equal(isTaskInventoryRequest("继续未完成任务并修复测试"), false);
+	});
+
+	it("classifies save-context and dialogue-log file requests as execution", () => {
+		assert.equal(createRequestPlan({ message: "先保存一下现在的上下文我记录一下用来审计优化agent流程" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "我需要对话日志文件" }).intent, "execution");
+		assert.equal(createRequestPlan({ message: "generate a summary of our conversation" }).intent, "chat");
+		assert.equal(createRequestPlan({ message: "总结一下我们的对话" }).intent, "chat");
+	});
+
+	it("inherits execution intent for a short affirmative reply", () => {
+		const pendingPlan = createRequestPlan({ message: "导出当前会话日志", requestId: "request-export" });
+		const plan = createRequestPlan({ message: "可以", requestId: "request-confirm", pendingPlan });
+
+		assert.equal(plan.intent, "execution");
+		assert.equal(plan.continuedFromRequestId, "request-export");
+	});
+
+	it("does not inherit intent for an unrelated explicit prompt", () => {
+		const pendingPlan = createRequestPlan({ message: "导出当前会话日志", requestId: "request-export" });
+		const plan = createRequestPlan({ message: "解释当前缓存命中率", requestId: "request-cache", pendingPlan });
+
+		assert.equal(plan.intent, "lookup");
+		assert.equal(plan.continuedFromRequestId, undefined);
 	});
 
 	it("does not let explicit chat intent bypass mutation safety", () => {
@@ -50,7 +79,6 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "Briefly summarize what we just changed." }).intent, "chat");
 		const continuation = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true });
 		assert.equal(continuation.intent, "project-work");
-		assert.equal(continuation.approval, "none");
 		assert.equal(continuation.projectAction, "continue");
 		assert.equal(continuation.workflowAction, "continue");
 		assert.equal(createRequestPlan({ message: "Resume the current project task", projectAvailable: true }).projectAction, "continue");
@@ -58,9 +86,8 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "Continue current work", projectAvailable: true }).projectAction, "continue");
 		assert.equal(createRequestPlan({ message: "create a task", projectAvailable: true }).workflowAction, "create-task");
 		assert.equal(createRequestPlan({ message: "create a task", projectAvailable: true }).intent, "project-work");
-		assert.equal(createRequestPlan({ message: "创建任务", projectAvailable: true }).approval, "confirm");
 		assert.equal(createRequestPlan({ message: "创建任务", projectAvailable: true, explicitIntent: "chat" }).intent, "project-work");
-		assert.equal(createRequestPlan({ message: "创建任务", projectAvailable: true, explicitIntent: "chat" }).approval, "confirm");
+		assert.equal("approval" in createRequestPlan({ message: "创建任务", projectAvailable: true }), false);
 		assert.equal(createRequestPlan({ message: "start a task", projectAvailable: true }).workflowAction, "start-task");
 		assert.equal(createRequestPlan({ message: "finish the current task", projectAvailable: true }).workflowAction, "finish-task");
 		assert.equal(createRequestPlan({ message: "archive a task", projectAvailable: true }).workflowAction, "archive-task");

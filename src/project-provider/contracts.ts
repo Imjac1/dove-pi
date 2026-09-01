@@ -3,8 +3,10 @@ import type { TrellisSnapshot, TrellisTaskRecord } from "../trellis-adapter/inde
 /** Contract version consumed by the Dove agent core. */
 export const PROJECT_PROVIDER_CONTRACT = "1.0" as const;
 
-export type ProjectProviderKind = "trellis" | "lightweight";
-export type TrellisTaskOperation = "create" | "start" | "finish" | "archive";
+export type ProjectProviderKind = "native" | "trellis" | "lightweight";
+export type ProjectTaskOperation = "create" | "start" | "finish" | "archive";
+/** @deprecated Use ProjectTaskOperation. */
+export type TrellisTaskOperation = ProjectTaskOperation;
 export type ProviderHealthStatus = "healthy" | "lightweight" | "degraded";
 
 export interface ProviderCapabilities {
@@ -74,9 +76,11 @@ export interface ProjectProvider {
 	getCurrentTask(): ProjectTask | undefined;
 	resolveTask(selector: string): ProjectTask | undefined;
 	readMemory(query?: string): readonly ProjectDocument[];
-	runTaskOperation(operation: TrellisTaskOperation, args: readonly string[]): Promise<string>;
+	/** Silently establish a compact current goal for ordinary execution. */
+	ensureCurrentGoal?(title: string, description?: string): Promise<ProjectTask>;
+	runTaskOperation(operation: ProjectTaskOperation, args: readonly string[]): Promise<string>;
 	/** Read-only reconciliation of an interrupted mutation intent. */
-	reconcileTaskOperation?(operation: TrellisTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;
+	reconcileTaskOperation?(operation: ProjectTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;
 }
 
 /** Resolve a selector only when it identifies one task. */

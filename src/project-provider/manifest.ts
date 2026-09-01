@@ -13,7 +13,7 @@ export function readProjectManifest(projectRoot: string): ProjectManifest | unde
 	if (!existsSync(path)) return undefined;
 	try {
 		const value = JSON.parse(readFileSync(path, "utf8")) as Partial<ProjectManifest>;
-		if ((value.provider !== "trellis" && value.provider !== "lightweight") || typeof value.projectRoot !== "string" || value.projectRoot.trim() === "") return undefined;
+		if ((value.provider !== "native" && value.provider !== "trellis" && value.provider !== "lightweight") || typeof value.projectRoot !== "string" || value.projectRoot.trim() === "") return undefined;
 		const canonicalRoot = resolve(value.projectRoot);
 		// A manifest is scoped to the directory that contains it. Refusing
 		// redirects prevents a nested workspace from silently selecting an
@@ -60,7 +60,7 @@ export async function readProjectManifestAsync(projectRoot: string): Promise<Pro
 	try {
 		const raw = await readFile(path, "utf8");
 		const value = JSON.parse(raw) as Partial<ProjectManifest>;
-		if ((value.provider !== "trellis" && value.provider !== "lightweight") || typeof value.projectRoot !== "string" || value.projectRoot.trim() === "") return undefined;
+		if ((value.provider !== "native" && value.provider !== "trellis" && value.provider !== "lightweight") || typeof value.projectRoot !== "string" || value.projectRoot.trim() === "") return undefined;
 		const canonicalRoot = resolve(value.projectRoot);
 		if (canonicalRoot !== resolve(projectRoot) || !isDirectory(canonicalRoot)) return undefined;
 		return {

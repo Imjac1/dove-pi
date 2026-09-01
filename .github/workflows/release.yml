@@ -34,6 +34,10 @@ jobs:
           New-Item -ItemType Directory -Path $stage | Out-Null
           $include = @('bin', 'installer', 'scripts', 'src', 'tests', '.pi', 'dove_pi.py', 'package.json', 'package-lock.json', 'tsconfig.json', 'README.md', 'README.en.md')
           foreach ($entry in $include) { Copy-Item -LiteralPath $entry -Destination $stage -Recurse }
+          $trellisStage = Join-Path $stage '.trellis'
+          New-Item -ItemType Directory -Path $trellisStage | Out-Null
+          Copy-Item -LiteralPath '.trellis/spec' -Destination (Join-Path $trellisStage 'spec') -Recurse
+          Copy-Item -LiteralPath '.trellis/workflow.md' -Destination (Join-Path $trellisStage 'workflow.md')
           Copy-Item -LiteralPath "$env:RUNNER_TEMP\release.json" -Destination (Join-Path $stage 'release.json')
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath 'dove-pi-windows.zip'
           $hash = (Get-FileHash -LiteralPath 'dove-pi-windows.zip' -Algorithm SHA256).Hash.ToLowerInvariant()

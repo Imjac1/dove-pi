@@ -66,7 +66,7 @@ describe("extension profiles", () => {
 		assert.equal(report.issues.some((issue) => issue.code === "profile-conflict"), false);
 	});
 
-	it("reports hashline overlap with Dove built-in editing authority", async () => {
+	it("reports overlapping Pi edit tools without selecting an authority", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "dove-pi-extension-hashline-"));
 		const settingsPath = join(temporary, "settings.json");
 		await writeFile(settingsPath, JSON.stringify({ packages: ["npm:pi-hashline-edit-pro"] }), "utf8");
@@ -78,7 +78,7 @@ describe("extension profiles", () => {
 			platform: "win32",
 			checkExecutables: false,
 		});
-		assert.ok(report.issues.some((issue) => issue.code === "dove-authority-overlap"));
+		assert.ok(report.issues.some((issue) => issue.code === "edit-tool-overlap"));
 		await rm(temporary, { recursive: true, force: true });
 	});
 

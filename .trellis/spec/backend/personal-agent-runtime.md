@@ -6,9 +6,9 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 
 | Specification | Use for |
 |---|---|
-| [Request runtime](./personal-agent-request-runtime.md) | Core Agent contracts, Pi adapter firewall, request planning, tool selection, provider request budgeting, and stop-reason normalization |
+| [Request runtime](./personal-agent-request-runtime.md) | Core Agent contracts, Pi adapter coordination, request planning, stable provider schemas, provider request budgeting, and stop-reason normalization |
 | [Capability runtime](./personal-agent-capability-runtime.md) | Capability Protocol, external adapters, dispatch calibration, transactional workspace operations, and reusable development capabilities |
-| [Project context](./personal-agent-project-context.md) | Structured Trellis context, project-provider firewall, project state, and skill discovery diagnostics |
+| [Project context](./personal-agent-project-context.md) | Dove Native Workflow state, bounded context, and read-only legacy compatibility |
 | [Extension runtime](./personal-agent-extension-runtime.md) | Optional Pi extension profiles, doctor behavior, Dove extension identity, trust, authority, and registration |
 | [Managed installation](./personal-agent-managed-install.md) | Managed installation, release manifests, launcher behavior, updates, repair, rollback, and installation diagnostics |
 
@@ -17,7 +17,7 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 - Read this router first when the owning runtime area is not yet known.
 - Inject only the routed specification or specifications required by the task boundary.
 - Use request runtime for provider calls and Pi lifecycle behavior; use capability runtime for reusable execution and adapter protocols.
-- Use project context for Trellis/project state and discovery; use extension runtime for Pi plugins and Dove extension authority.
+- Use project context for native goal state and legacy data discovery; use extension runtime for Pi plugins and Dove extension authority.
 - Use managed installation for installer, release, launcher, update, and repair work.
 - When a change crosses ownership boundaries, include each affected routed specification explicitly in the task manifest.
 

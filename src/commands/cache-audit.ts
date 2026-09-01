@@ -84,7 +84,7 @@ function detectCachePolicy(entries: readonly unknown[]): string {
 			...(typeof e.details?.cachePolicyVersion === "number" ? { cachePolicyVersion: e.details.cachePolicyVersion } : {}),
 		};
 	}
-	if (!latest) return "n/a";
+	if (!latest) return "no-context";
 	if (latest.cachePolicyVersion !== undefined) return `v${latest.cachePolicyVersion}`;
 	// Existing v2 sessions already carry the versioned append-only message
 	// schema. Epoch is opaque and may contain provider revisions/request IDs
@@ -200,10 +200,10 @@ export function formatCacheAudit(rows: readonly SessionCacheRow[]): string {
 		`**汇总**(${rows.length} 会话): 请求 ${totals.requests.toLocaleString()} · prompt ${totals.prompt.toLocaleString()} · 累计未缓存 input ${totals.uncached.toLocaleString()} · 热态命中 ${totals.warmPrompt > 0 ? `${(totals.warmRead / totals.warmPrompt * 100).toFixed(1)}%` : "n/a"} · 近5次请求命中 ${totals.recentRequests > 0 ? `${(totals.recentHits / totals.recentRequests * 100).toFixed(1)}%` : "n/a"} · 全MISS ${totals.misses} 次。`,
 	);
 	lines.push(
-		"miss 原因: warmup=会话首个请求(预期) · prefix-change=前缀变动(应尽量消除) · idle=空闲超时 · model-change=换模型",
+		"miss 原因: warmup=会话首个请求(预期) · provider-miss-or-expiry=提供商未命中或缓存过期(仅凭 usage 无法进一步归因) · idle=空闲超时 · model-change=换模型",
 	);
 	lines.push(
-		"策略: v2=新缓存稳定 epoch(mode+revision,意图/工具变化不再重建前缀) · v1=旧版 6 段 epoch(每次意图翻转都重建,命中受损)",
+		"策略: no-context=未额外注入 Dove 快照(最小前缀路径) · v2=稳定 epoch · v1=旧版易变 epoch",
 	);
 	return lines.join("\n");
 }

@@ -90,6 +90,11 @@ def _source_fingerprint(source: Path) -> str:
     for directory, names, filenames in os.walk(source):
         names[:] = sorted(name for name in names if name not in excluded_directories)
         files.extend(Path(directory) / name for name in sorted(filenames) if name not in excluded_files and not name.endswith(".pyc"))
+    verification_assets = [source / ".trellis" / "workflow.md"]
+    verification_spec = source / ".trellis" / "spec"
+    if verification_spec.is_dir():
+        verification_assets.extend(path for path in verification_spec.rglob("*") if path.is_file())
+    files.extend(path for path in verification_assets if path.is_file())
     for path in sorted(files, key=lambda item: item.relative_to(source).as_posix().lower()):
         relative = path.relative_to(source)
         digest.update(relative.as_posix().encode("utf-8"))

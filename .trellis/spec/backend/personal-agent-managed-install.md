@@ -9,8 +9,8 @@
 
 ### 1. Scope / Trigger
 
-- Trigger: changing `dove_pi.py`, `installer/**`, release packaging, the stable launcher, managed extension reconciliation, or the bundled Trellis dependency.
-- Scope: Windows V2 installs under `%LOCALAPPDATA%\DovePi`; Pi user state, project `.trellis/`, global Trellis, and development checkouts remain external.
+- Trigger: changing `dove_pi.py`, `installer/**`, release packaging, the stable launcher, or managed extension reconciliation.
+- Scope: Windows V2 installs under `%LOCALAPPDATA%\DovePi`; Pi user state, project `.dove/`, legacy `.trellis/`, and development checkouts remain external.
 
 ### 2. Signatures
 
@@ -51,7 +51,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
 - The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; unknown/interactive arguments alone may fall through to Pi. Adding a CLI command without updating and testing this router is an incomplete cross-layer change.
 - Exact `version` and `--version` requests are handled before Pi launch and read both release-locked identities from the packaged `package.json`, producing `Dove Pi <dove-version> (Pi <pi-version>)`.
-- Pi is an exact Release component, not an independently mutable global runtime. Managed launches suppress Pi's direct version/self-update path; `dove-pi update` installs the manifest/lockfile Pi version in staging, reads the actual installed Pi/TUI/Trellis package versions back from `node_modules`, and activates only when all three match. Check/update results project current, previous, and latest Pi versions and report whether Pi changes.
+- Pi is an exact Release component, not an independently mutable global runtime. Managed launches suppress Pi's direct version/self-update path; `dove-pi update` installs the manifest/lockfile Pi version in staging, reads the actual installed Pi/TUI package versions back from `node_modules`, and activates only when both match. Check/update results project current, previous, and latest Pi versions and report whether Pi changes.
 - Install into a staging sibling, run locked dependency installation and verification, move to an immutable version, then activate with atomic state replacement. Retain current and previous.
 - Install, update, and repair hold the same cross-process maintenance lock through application activation, managed-component reconciliation, final state persistence, launcher rewrite, and pruning. The component reconciler is an injected callback so the Python installer does not duplicate the TypeScript extension catalog; never release the maintenance lock and reacquire a separate component lock between these steps.
 - A healthy current release with the same stable version is an application no-op: no archive download and no `npm ci`. Launcher repair and Dove-managed extension reconciliation may still run.
@@ -59,9 +59,9 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Runtime discovery captures native output without a PowerShell pipeline before reading `$LASTEXITCODE`; piping a native version command through `Select-Object` is forbidden because it can reset/hide the native exit code and misclassify a healthy runtime as missing.
 - The piped bootstrap keeps the complete default behavior. A downloaded `install.ps1` additionally accepts `-NoPath`, `-NoFont`, and `-NoExtensions` and passes them through both first install and same-release repair without changing unrelated user state.
 - `repair --verify none` checks the local manifest and required runtime files. `quick` additionally runs typecheck and Pi smoke against each candidate; `full` also runs the complete test suite. A candidate that fails the requested level is not healthy and repair proceeds to previous, verified cache, or stable release.
-- A source checkout without complete `release.json` component/profile metadata is hydrated only after `npm ci` by the existing TypeScript `release:manifest` generator. The generated manifest preserves the source release ID/commit and becomes the installed manifest. A formal release manifest must instead match the lockfile and TypeScript extension catalog exactly; mismatch aborts before activation.
+- A source checkout without complete `release.json` component/profile metadata is hydrated only after `npm ci` by the existing TypeScript `release:manifest` generator. The generated manifest preserves the source release ID/commit and becomes the installed manifest. Source and formal release packages carry only repository-owned `.trellis/workflow.md` and `.trellis/spec/` as portable full-verification fixtures; they never carry tasks, workspace, runtime pointers, or other project metadata. These fixtures participate in the source release fingerprint. A formal release manifest must match the lockfile and TypeScript extension catalog exactly; mismatch aborts before activation.
 - GitHub stable releases, not a checkout branch, are the update authority. Bootstrap and managed update read `releases/latest/download/release.json` first and derive the fixed archive/checksum URLs from that response; the normal path never requires GitHub's unauthenticated REST API. A resolved tag, manifest version/release ID, archive manifest, and checksum must identify the same immutable release. Managed update never fetches, merges, or resets a checkout and never updates global Trellis.
-- `@mindfoldhq/trellis` is an exact application dependency. Project init/update invokes its absolute bundled entry; application updates never rewrite existing project `.trellis/`.
+- Dove has no Trellis package or CLI dependency. Project initialization writes only compact native `.dove` state; application updates never rewrite existing `.dove` or legacy `.trellis` project data.
 - Reconcile only selected-profile extension identities through `pi install npm:<name>@<exact-version>`. Untargeted `pi update --extensions` is forbidden.
 - Optional component failures do not roll back an already verified application release; the reconciler records each failure as `degraded`, final state is written under the same maintenance lock, and offline doctor exposes the degraded ledger.
 - `--json` reserves stdout for exactly one JSON document on both success and failure. During managed extension reconciliation, TypeScript redirects both Pi/npm child streams to stderr; Python captures only the TypeScript result stdout and inherits stderr live. Human diagnostics and subprocess progress must not corrupt stdout, and captured failure excerpts must be bounded. Mutating maintenance writes a bounded local success/failure log; `update --check` may read remote metadata but must not acquire the mutation lock, write state, or create a maintenance log.
@@ -88,7 +88,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 | winget is absent or the installed runtime remains unavailable | Stop before activation and print one exact install-and-retry action |
 | Optional managed extension fails | Activate app and record `degraded` |
 | Latest Dove manifest declares a different Pi version | Report it during check; install/verify it in staging and switch it atomically with Dove |
-| Installed Pi/TUI/Trellis package version differs from the manifest | Reject staging before activation and preserve the current release |
+| Installed Pi/TUI package version differs from the manifest | Reject staging before activation and preserve the current release |
 | Pi reports a newer upstream version outside the Dove channel | Do not self-update; wait for a Dove Release that locks and verifies that Pi version |
 | Confirmed uninstall | Remove Dove-managed files, including dependency paths beyond legacy Windows `MAX_PATH`, and the exact launcher PATH entry; preserve all Pi/user/project/runtime data |
 | A documented Dove command reaches the launcher | Route it to the bundled local CLI; never pass it through as a Pi prompt/argument |
@@ -112,6 +112,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Assert another maintenance process cannot interleave between activation, component reconciliation, and final state persistence.
 - Assert `repair` applies `none`, `quick`, and `full` verification to existing current/previous candidates and falls through on failure.
 - Assert a source checkout with no generated metadata is hydrated after `npm ci`, while a mismatched formal release manifest is rejected.
+- Assert source staging copies the workflow/spec verification fixtures but excludes Trellis tasks, workspace, and runtime state.
 - Assert malformed lock metadata fails closed and JSON success/failure paths each produce exactly one parseable stdout document.
 - Assert bootstrap assets populate a verified cache usable by offline repair, and tag/archive version mismatch is rejected.
 - Assert direct manifest-first discovery succeeds without any REST API request and rejects malformed manifest, redirect-tag/version, and release-ID mismatches.
@@ -125,7 +126,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Assert valid V1 profile migration and corrupt-manifest fallback leave the checkout unchanged.
 - Assert uninstall removes only known managed children and the exact persisted launcher PATH entry while preserving Pi data, project `.trellis/`, checkouts, third-party extensions, runtimes, unrelated PATH entries, and unknown caller-owned files.
 - On Windows, create dependency files beyond legacy `MAX_PATH` and assert failed staging cleanup, old-release pruning, and confirmed uninstall all remove their boundary-validated trees completely.
-- Validate release metadata against exact `package.json` and `package-lock.json` Pi, TUI, and Trellis versions.
+- Validate release metadata against exact `package.json` and `package-lock.json` Pi and TUI versions and assert that no Trellis package is present.
 
 ### 7. Wrong vs Correct
 
@@ -133,7 +134,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 
 ```python
 subprocess.run(["git", "reset", "--hard", "origin/master"], cwd=checkout)
-subprocess.run(["npm", "update", "-g", "@mindfoldhq/trellis"])
+subprocess.run(["npm", "update", "-g", "some-project-workflow"])
 ```
 
 #### Correct

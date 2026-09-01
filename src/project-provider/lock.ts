@@ -2,9 +2,8 @@ import { mkdir, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 /**
- * Small cross-process lock for provider mutations. Trellis remains the data
- * authority; this only prevents two Dove processes from issuing mutations at
- * the same time. The lock is recoverable after a stale process exits.
+ * Small cross-process lock for atomic Dove native project-state mutations.
+ * The lock is recoverable after a stale process exits.
  */
 export async function withProjectMutationLock<TResult>(projectRoot: string, action: () => Promise<TResult>, options: { timeoutMs?: number; retryMs?: number; staleMs?: number } = {}): Promise<TResult> {
 	const lockPath = join(projectRoot, ".dove", "project-mutation.lock");

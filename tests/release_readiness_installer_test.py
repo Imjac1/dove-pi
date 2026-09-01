@@ -26,7 +26,6 @@ def write_fixture(root: Path):
     dependencies = {
         "@earendil-works/pi-coding-agent": "0.84.3",
         "@earendil-works/pi-tui": "0.84.3",
-        "@mindfoldhq/trellis": "0.6.16",
     }
     (root / "package.json").write_text(
         json.dumps({"version": "0.3.0", "dependencies": dependencies}),
@@ -50,7 +49,7 @@ def write_fixture(root: Path):
         "commit": "abcdef012345",
         "platform": "windows",
         "runtime": {"python": ">=3.10", "node": ">=22.19.0"},
-        "components": {"pi": "0.84.3", "piTui": "0.84.3", "trellis": "0.6.16"},
+        "components": {"pi": "0.84.3", "piTui": "0.84.3"},
         "profiles": {name: [] for name in ("minimal", "dev", "research", "security", "max")},
     }
     manifest_path = root / "release.json"

@@ -4,7 +4,7 @@
 
 Dove Pi is a Windows-focused personal coding agent built on
 [Pi](https://github.com/badlogic/pi-mono). It keeps Pi's open model and extension ecosystem
-while adding practical defaults, request-scoped tools, project context, Trellis integration,
+while adding goal continuity, compact project memory,
 diagnostics, and recoverable updates.
 
 In short: run `dove-pi` from your own project directory, then describe the work as you would to
@@ -118,16 +118,10 @@ Fix the failing tests and verify the result.
 Continue the current project task.
 ```
 
-Dove selects tools for each request:
-
-- Conversation: no tools.
-- Inspection and analysis: read/search tools only.
-- Project planning: read-only project context.
-- Explicit execution: shell and editing tools, plus browser, MCP, or background tools when the
-  request specifically calls for them.
-
-You normally do not choose tools first, and execution authority does not leak into the next
-ordinary conversation.
+Dove does not prune tools per request in Auto mode. Pi and installed Pi extensions decide which
+tools the model can use; Dove only observes the final schema for cache and conflict diagnostics.
+Request classification affects context, goal continuation, and budgets, not
+tool permission.
 
 ### 3. Choose a mode when needed
 
@@ -145,18 +139,23 @@ Inside Dove Pi:
 
 `Ultra` is a runtime policy. `max` is an installed extension profile; they are unrelated names.
 
-## Trellis: optional project management
+## Dove Native Workflow
 
-Ordinary chat and coding do not require Trellis. For long-running tasks, PRDs, project specs,
-journals, or cross-session continuation, run this at the project root:
+Ordinary chat and coding execute directly. There is no project initialization, task creation, or
+phase approval prerequisite. On the first execution request, Dove silently establishes a compact
+current goal in `.dove/state.json` containing only goal status, decisions, next step, and
+verification summary.
+
+You may explicitly initialize or inspect that state:
 
 ```powershell
 dove-pi project init
 dove-pi project doctor
 ```
 
-This creates `.trellis/` in the current project. You normally do not install Trellis globally or
-run `trellis init` first.
+Initialization creates only Dove's compact state. It installs no dependency and generates no PRD,
+design, implementation, workflow, or script files. Explicit task commands are optional tracking,
+not a gate before coding.
 
 You can then say:
 
@@ -164,35 +163,22 @@ You can then say:
 Continue the current project task.
 ```
 
-Dove resolves the current task or the only continuable candidate through the public Project
-Provider state. It does not scan Trellis private runtime directories, and a continuation request
-does not silently create, complete, or archive a task.
+Dove reads the native current goal directly. Existing `.trellis` projects remain available as
+read-only compatibility data for unfinished tasks, specs, and journals. Dove never executes
+`.trellis/scripts/task.py`, requires no Trellis npm package, and never modifies or deletes the
+legacy directory. Continuing a legacy task imports only the useful goal metadata into `.dove`.
 
-To invoke a workflow skill explicitly:
-
-- Pi: `/skill:trellis-start`, `/skill:trellis-continue`, `/skill:trellis-check`.
-- Codex: `$trellis-start`, `$trellis-continue`, `$trellis-check`.
-
-Updating Trellis templates in the current project is always explicit:
-
-```powershell
-dove-pi project update
-```
-
-Updating Dove itself never silently rewrites a project's `.trellis/` directory.
-
-## Pi, Dove, and Trellis
+## Pi and Dove
 
 | Component | Responsibility |
 | --- | --- |
 | Pi | Models, sessions, TUI, and native tool hosting |
-| Dove | Request policy, tool loading, capabilities, approvals, diagnostics, and execution records |
-| Project Provider | Normalizes external project managers into one context boundary |
-| Trellis | Tasks, specs, workflow, memory, and journals under `.trellis/` |
+| Dove | Request context, goal continuation, loop control, diagnostics, and execution records |
+| Dove Native Workflow | Compact goals, decisions, and verification state under `.dove/state.json` |
+| Legacy reader | Read-only projection of existing `.trellis` tasks, specs, and journals |
 
-Trellis owns project data; Dove owns execution data. Dove does not copy Trellis into a second task
-database or embed Trellis source in its core. They integrate through public interfaces and can be
-updated independently.
+Pi is the only tool and execution authority. Dove adds no permission layer; it manages context,
+goal continuity, no-progress loops, and efficiency diagnostics.
 
 ## Command reference
 
@@ -202,12 +188,13 @@ updated independently.
 /status                 show compact status
 /status full            show full diagnostics
 /project                show project status
-/project init           initialize Trellis
-/project update         update Trellis templates for this project
+/project init           explicitly create native project state (normally unnecessary)
+/task ...               optionally record, finish, or archive a Dove goal
 /memory [query]         search project memory
 /capabilities           list Dove capabilities
-/dove-tools auto        restore per-request automatic tools
-/dove-tools full        temporarily enable every installed tool
+/dove-tools auto        return tool management to Pi
+/dove-tools core        explicitly use the compact read-only compatibility set
+/dove-tools full        explicitly enable every installed tool
 /dove-thinking status   inspect thinking policy
 ```
 
@@ -277,7 +264,7 @@ Install, update, rollback, and uninstall preserve:
 
 - credentials, models, sessions, settings, and user extensions under `~/.pi/agent`;
 - workspace-scoped Dove state under `~/.pi/agent/dove/workspaces/<hash>`;
-- project `.trellis/` directories;
+- project `.dove/` and legacy `.trellis/` directories;
 - source code, Git branches, and uncommitted changes.
 - Python, Node.js, fonts, and Pi extensions installed by the user.
 
@@ -285,8 +272,8 @@ Ordinary sessions do not create `.agent-data/execution.jsonl` inside source repo
 
 ## Advanced interfaces
 
-Dove Capability Protocol lets CLI, JSON-RPC, MCP, and Pi share one capability and approval
-boundary:
+Dove Capability Protocol lets CLI, JSON-RPC, MCP, and Pi share one capability format and
+execution ledger:
 
 ```powershell
 dove-pi capability list
@@ -302,8 +289,9 @@ MCP stdio configuration:
 {"command":"dove-pi","args":["mcp"]}
 ```
 
-Side effects fail closed: Pi uses native confirmation, CLI requires local `--approve`, and RPC/MCP
-requests cannot grant themselves permission.
+Inside a Pi session, the Pi tool call is the host execution decision and Dove adds no second
+confirmation. Local CLI calls still require `--approve`, and RPC/MCP requests cannot grant
+themselves permission.
 
 ## Development and verification
 
@@ -346,8 +334,7 @@ Close Pi/Node processes that may lock a native binary, then run:
 dove-pi repair
 ```
 
-### The project has no Trellis state
+### The project has no Dove state
 
-```powershell
-dove-pi project init
-```
+Nothing is required. Ordinary work executes directly and creates compact state silently when
+needed. Run `dove-pi project init` only to create an empty state in advance.

@@ -104,7 +104,7 @@ export async function inspectExtensionProfile(profile: ExtensionProfile, options
 	issues.push(...checkProfileConflicts(profilePackages));
 	const configuredEntries = EXTENSION_CATALOG.filter((entry) => settings.packages.some((value) => matchesConfiguredPackage(value, entry)));
 	issues.push(...checkConfiguredConflicts(configuredEntries));
-	issues.push(...checkDoveAuthorityOverlap(configuredEntries));
+	issues.push(...checkEditToolOverlap(configuredEntries));
 	issues.push(...checkLoadOrder(profilePackages, settings.packages));
 	return {
 		profile,
@@ -177,13 +177,13 @@ function checkConfiguredConflicts(packages: readonly ExtensionPackageDefinition[
 	}));
 }
 
-function checkDoveAuthorityOverlap(packages: readonly ExtensionPackageDefinition[]): ExtensionDoctorIssue[] {
+function checkEditToolOverlap(packages: readonly ExtensionPackageDefinition[]): ExtensionDoctorIssue[] {
 	if (!packages.some((entry) => entry.id === "hashline-edit")) return [];
 	return [{
 		level: "warning",
-		code: "dove-authority-overlap",
+		code: "edit-tool-overlap",
 		packageId: "hashline-edit",
-		message: "hashline-edit replaces Pi built-in read/edit/grep; Dove will suppress built-in edit at runtime. Verify only hashline replace/insert are used for mutations.",
+		message: "hashline-edit adds replace/insert alongside Pi's built-in edit tools. Dove leaves Pi's active set unchanged; verify the final provider schema if duplicate editing guidance causes ambiguity.",
 	}];
 }
 

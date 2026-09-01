@@ -23,7 +23,7 @@ def complete_manifest(version: str, release_id: str, commit: str, *, pi_version:
         version,
         release_id,
         commit,
-        components={"pi": pi_version, "piTui": pi_version, "trellis": "0.6.16"},
+        components={"pi": pi_version, "piTui": pi_version},
         runtime={"python": ">=3.10", "node": ">=22.19.0"},
         profiles={
             "minimal": [],
@@ -53,7 +53,6 @@ def write_installed_components(root: Path, components: dict[str, str]) -> None:
     package_names = {
         "pi": "@earendil-works/pi-coding-agent",
         "piTui": "@earendil-works/pi-tui",
-        "trellis": "@mindfoldhq/trellis",
     }
     for component, package_name in package_names.items():
         package_path = root / "node_modules" / Path(*package_name.split("/"))
@@ -83,7 +82,6 @@ def successful_runner(command, cwd: Path) -> None:
         write_installed_components(cwd, {
             "pi": pi_version,
             "piTui": dependencies.get("@earendil-works/pi-tui", pi_version) if isinstance(dependencies, dict) else pi_version,
-            "trellis": dependencies.get("@mindfoldhq/trellis", "0.6.16") if isinstance(dependencies, dict) else "0.6.16",
         })
     if "release:manifest" in command:
         destination = Path(command[command.index("--") + 1])
@@ -196,6 +194,29 @@ class MaintenanceLockTests(unittest.TestCase):
 
 
 class ManagedTransactionTests(unittest.TestCase):
+    def test_prepare_copies_only_portable_trellis_verification_assets(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            source, manifest = make_source(root)
+            (source / ".trellis" / "spec" / "backend").mkdir(parents=True)
+            (source / ".trellis" / "workflow.md").write_text("workflow\n", encoding="utf-8")
+            (source / ".trellis" / "spec" / "backend" / "runtime.md").write_text("spec\n", encoding="utf-8")
+            (source / ".trellis" / "tasks" / "private").mkdir(parents=True)
+            (source / ".trellis" / "tasks" / "private" / "prd.md").write_text("private\n", encoding="utf-8")
+            (source / ".trellis" / "workspace").mkdir(parents=True)
+            (source / ".trellis" / "workspace" / "journal.md").write_text("private\n", encoding="utf-8")
+            (source / ".agents" / "skills" / "trellis-start").mkdir(parents=True)
+            (source / ".agents" / "skills" / "trellis-start" / "SKILL.md").write_text("development only\n", encoding="utf-8")
+
+            prepared = ManagedTransaction(layout, runner=successful_runner).prepare_source(source, manifest, verify="none")
+
+            self.assertTrue((prepared.install_path / ".trellis" / "workflow.md").is_file())
+            self.assertTrue((prepared.install_path / ".trellis" / "spec" / "backend" / "runtime.md").is_file())
+            self.assertFalse((prepared.install_path / ".trellis" / "tasks").exists())
+            self.assertFalse((prepared.install_path / ".trellis" / "workspace").exists())
+            self.assertFalse((prepared.install_path / ".agents").exists())
+
     def test_prepare_activate_and_rollback(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

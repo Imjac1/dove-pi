@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Verify goal continuity, hard question bounds, native Pi tool usability, and goal-level cache metrics."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"Verify real extension hook ordering, doctor conflict detection, and managed-release behavior."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Verify deterministic inventory and no project-context regressions."}
+{"file":".trellis/tasks/09-01-dove-real-flow-recovery/research/sept1-session-audit.md","reason":"Replay all observed prompts and question variants against the acceptance criteria."}
+{"file":".trellis/tasks/09-01-dove-real-flow-recovery/research/real-provider-ab.md","reason":"Verify release-real metrics against the recorded A/B matrix."}

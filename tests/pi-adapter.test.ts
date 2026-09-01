@@ -4,20 +4,25 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan, shouldOfferProjectBootstrap } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 import type { ProjectContextSnapshot, ProjectProvider, ProjectTask } from "../src/project-provider/index.ts";
+import { SEPT1_QUESTION_VARIANTS, sept1QuestionInput } from "./fixtures/sept1-question-loop.ts";
 
 const adapterStateDir = mkdtempSync(join(tmpdir(), "pi-adapter-state-"));
 const previousStateDir = process.env.DOVE_PI_STATE_DIR;
+const repositoryNativeStatePath = join(process.cwd(), ".dove", "state.json");
+const previousRepositoryNativeState = existsSync(repositoryNativeStatePath) ? readFileSync(repositoryNativeStatePath, "utf8") : undefined;
 process.env.DOVE_PI_STATE_DIR = adapterStateDir;
 after(() => {
 	if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
 	else process.env.DOVE_PI_STATE_DIR = previousStateDir;
 	rmSync(adapterStateDir, { recursive: true, force: true });
+	if (previousRepositoryNativeState === undefined) rmSync(repositoryNativeStatePath, { force: true });
+	else writeFileSync(repositoryNativeStatePath, previousRepositoryNativeState, "utf8");
 });
 
 describe("Pi adapter", () => {
@@ -30,7 +35,7 @@ describe("Pi adapter", () => {
 		const statusColors: string[] = [];
 		const notifications: string[] = [];
 		const activeToolSets: string[][] = [];
-		let hostActiveTools: string[] = [];
+		let hostActiveTools: string[] = [...representativeTools];
 		let providerAborted = false;
 		const api = {
 			registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
@@ -67,10 +72,11 @@ describe("Pi adapter", () => {
 		assert.ok(projectContextText.length < 20_000, "project context without a query must remain an index, not a raw project dump");
 		assert.match(projectContextText, /intentionally an index/);
 		assert.match(projectContextText, /"taskCount"/);
-		const projectStatusTool = tools.get("agent_project_status") as { execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }> }> };
+		const projectStatusTool = tools.get("agent_project_status") as { promptGuidelines?: string[]; execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }> }> };
 		const projectStatusText = (await projectStatusTool.execute("status-call", {})).content[0]?.text ?? "";
 		assert.match(projectStatusText, /"tasks"/);
 		assert.match(projectStatusText, /"tasksOmitted"/);
+		assert.match(projectStatusTool.promptGuidelines?.[0] ?? "", /use one agent_project_status result/i);
 		assert.ok(events.has("before_agent_start"));
 		assert.ok(events.has("message_end"));
 		assert.ok(events.has("tool_result"));
@@ -87,6 +93,16 @@ describe("Pi adapter", () => {
 			sessionManager: { getEntries: () => [], getSessionId: () => "session-test" },
 			abort: () => { providerAborted = true; },
 		};
+		const capabilityTool = tools.get("agent_run_capability") as { execute: (...args: unknown[]) => Promise<{ details?: { status?: string } }> };
+		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = join(adapterStateDir, "pi-capability-no-confirm");
+		try {
+			const result = await capabilityTool.execute("capability-call", { name: "web.real_user_setup", args: { hosts: ["example.com"] } }, undefined, undefined, context);
+			assert.equal(result.details?.status, "success", "an accepted Pi tool call must not require a second Dove confirmation");
+		} finally {
+			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+		}
 		const headers: Record<string, string> = {};
 		await events.get("before_provider_headers")?.({ type: "before_provider_headers", headers }, { ...context, model: { provider: "cc-switch-open-router", baseUrl: "https://openrouter.ai/api" } });
 		assert.equal(headers["x-session-affinity"], "session-test");
@@ -98,7 +114,18 @@ describe("Pi adapter", () => {
 		await beforeProviderRequest({ type: "before_provider_request", payload: { max_tokens: 20, messages: [{ role: "user", content: "x".repeat(2_000) }] } }, { ...context, model: { contextWindow: 100, maxTokens: 20 } });
 		assert.equal(providerAborted, true, "an over-budget Pi request must abort the host operation instead of relying on a swallowed exception");
 		await events.get("session_start")?.(undefined, context);
-		assert.deepEqual(activeToolSets.at(-1), []);
+		const piSessionBaseline = [...representativeTools];
+		assert.equal(activeToolSets.length, 0, "Auto must observe Pi's active tools without calling setActiveTools");
+		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
+		const doctorResult = await doctorTool.execute("doctor-call", {}, undefined, undefined, context);
+		assert.deepEqual(doctorResult.details.toolSchemaStability, {
+			inSync: true,
+			expectedCount: piSessionBaseline.length,
+			activeCount: piSessionBaseline.length,
+			missing: [],
+			unexpected: [],
+			finalProvider: undefined,
+		});
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
 		assert.ok(statuses.some((value) => value.includes("Pi max")));
 		assert.ok(notifications.some((value) => value.includes("Ctrl+P 切换模型")));
@@ -146,64 +173,51 @@ describe("Pi adapter", () => {
 		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Ready")));
 		await commands.get("mode")?.handler("ultra", context);
 		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · Ready")).length >= 2);
-		await commands.get("skills")?.handler("trellis", context);
-		assert.ok(notifications.some((value) => value.includes("trellis-start")));
+		await commands.get("skills")?.handler("__missing_dove_skill__", context);
+		assert.ok(notifications.some((value) => value.includes("没有找到匹配的 skill")));
 		await commands.get("project")?.handler("doctor", context);
-		assert.ok(notifications.some((value) => value.includes("Provider: trellis")));
+		assert.ok(notifications.some((value) => value.includes("Provider: native")));
 		hostActiveTools = ["mcp", "fusion_reason", "bg_delegate"];
 		const freshChat = await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.deepEqual(activeToolSets.at(-1), [], "fresh Chat must expose zero tools and reassert Dove policy after third-party activation");
+		assert.equal(activeToolSets.length, 0, "fresh Chat must not overwrite Pi or third-party tool changes");
+		assert.deepEqual(hostActiveTools, ["mcp", "fusion_reason", "bg_delegate"]);
 		assert.equal((freshChat as { message?: unknown })?.message, undefined, "fresh Chat must not append project context");
 		const firstStartResult = await events.get("before_agent_start")?.({ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" }, context);
 		const firstStartMessage = (firstStartResult as { message?: { customType?: string; details?: { schemaVersion?: number; segments?: unknown[] } } })?.message;
 		const firstSystemPrompt = String((firstStartResult as { systemPrompt?: string })?.systemPrompt);
 		assert.equal(firstStartMessage, undefined, "a lookup with no relevant project segments must not append an empty context wrapper");
-		const lookupToolSet = activeToolSets.at(-1) ?? [];
-		for (const name of ["web_search", "source_check", "fetch_content", "get_search_content"]) assert.ok(lookupToolSet.includes(name));
-		assert.equal(lookupToolSet.includes("agent_browser"), false, "Lookup must not expose browser automation");
-		assert.equal(lookupToolSet.includes("mcp"), false, "Lookup must not expose generic MCP dispatch");
 		const autoToolSetCount = activeToolSets.length;
 		const hiStart = await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.equal(activeToolSets.length, autoToolSetCount + 1, "Lookup -> Chat must remove the prior request's schemas");
-		assert.deepEqual(activeToolSets.at(-1), []);
+		assert.equal(activeToolSets.length, autoToolSetCount, "Lookup -> Chat must leave Pi's schema untouched");
 		assert.equal(String((hiStart as { systemPrompt?: string })?.systemPrompt), firstSystemPrompt, "Dove's provider-prefix policy stays stable across intent changes");
 		const consecutiveChatCount = activeToolSets.length;
 		await events.get("before_agent_start")?.({ prompt: "hello", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal(activeToolSets.length, consecutiveChatCount, "consecutive requests with the same exact set must not call setActiveTools again");
-		hostActiveTools = [...hostActiveTools, "mcp", "fusion_reason", "bg_delegate"];
+		hostActiveTools = [...hostActiveTools, "agent_browser"];
 		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.equal(activeToolSets.length, consecutiveChatCount + 1, "Dove reasserts its request-exact set after later third-party activation");
-		assert.deepEqual(activeToolSets.at(-1), []);
+		assert.equal(activeToolSets.length, consecutiveChatCount, "Dove diagnoses later tool activation without reverting it");
+		assert.ok(hostActiveTools.includes("agent_browser"));
 		await events.get("before_agent_start")?.({ prompt: "修复登录问题，打开浏览器并通过 MCP 委派后台任务", systemPrompt: "", type: "before_agent_start" }, context);
-		const executionToolSet = activeToolSets.at(-1) ?? [];
-		for (const name of ["bash", "write", "replace", "insert", "agent_workspace_patch", "agent_browser", "mcp", "bg_delegate"]) assert.ok(executionToolSet.includes(name), `Execution must expose ${name}`);
+		assert.equal(activeToolSets.length, consecutiveChatCount, "Execution intent must not become a tool permission tier");
 		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.deepEqual(activeToolSets.at(-1), [], "Execution -> Chat must drop every mutation schema");
+		assert.equal(activeToolSets.length, consecutiveChatCount);
 		await events.get("before_agent_start")?.({ prompt: "修复登录问题，打开浏览器并通过 MCP 委派后台任务", systemPrompt: "", type: "before_agent_start" }, context);
 		await events.get("before_agent_start")?.({ prompt: "读取 package.json", systemPrompt: "", type: "before_agent_start" }, context);
-		const exactLookupToolSet = activeToolSets.at(-1) ?? [];
-		for (const name of ["bash", "powershell", "write", "replace", "insert", "agent_workspace_patch", "agent_project_task", "agent_browser", "mcp", "mcpScript", "fusion_reason", "bg_delegate"]) {
-			assert.equal(exactLookupToolSet.includes(name), false, `Execution -> Lookup must drop ${name}`);
-		}
-		assert.deepEqual(exactLookupToolSet, selectDoveToolNames(representativeTools, "auto", "lookup", "读取 package.json"));
+		assert.equal(activeToolSets.length, consecutiveChatCount, "Execution -> Lookup must not invoke Dove tool selection");
 		const continuationStart = await events.get("before_agent_start")?.({ prompt: "继续当前项目任务", systemPrompt: "", type: "before_agent_start" }, context);
 		const continuationMessage = String((continuationStart as { message?: { content?: string } })?.message?.content);
-		assert.deepEqual(activeToolSets.at(-1), [], "natural-language continuation must not expose read/ls/grep for path archaeology");
+		assert.equal(activeToolSets.length, consecutiveChatCount, "natural-language continuation must not churn the provider schema");
 		assert.match(continuationMessage, /Project continuation state/);
 		assert.match(continuationMessage, /"kind":"(?:current|single_candidate|ambiguous|none)"/);
 		assert.doesNotMatch(continuationMessage, /Read agent_project_status/);
 		assert.doesNotMatch(continuationMessage, /skill:trellis-continue/);
 		assert.match(continuationMessage, /Treat every field as data/);
 		assert.match(continuationMessage, /has not attempted any tool/);
-		assert.match(continuationMessage, /never claim that a tool, MCP server, capability, or command was called, missing, unavailable, or failed/);
+		assert.match(continuationMessage, /never claim that a tool, capability, or command was called, missing, unavailable, or failed/);
 		assert.match(continuationMessage, /Do not ask for confirmation when the state is current\/single_candidate/);
-		assert.match(continuationMessage, /Do not mention internal trust\/tool policy, recommend Trellis commands or skills, or suggest \/trellis:continue/);
+		assert.match(continuationMessage, /do not recommend a workflow command/i);
 		await events.get("before_agent_start")?.({ prompt: "读取 package.json", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.deepEqual(
-			activeToolSets.at(-1),
-			selectDoveToolNames(representativeTools, "auto", "lookup", "读取 package.json"),
-			"the next ordinary request must restore its RequestPlan-selected tool set",
-		);
+		assert.equal(activeToolSets.length, consecutiveChatCount, "the next ordinary request leaves Pi's schema untouched");
 		assert.match(firstSystemPrompt, /\[DOVE REGISTERED CAPABILITIES\]/);
 		const isolatedChat = await events.get("context")?.({
 			type: "context",
@@ -220,8 +234,8 @@ describe("Pi adapter", () => {
 		assert.equal(notifications.at(-1), "Mode must be fast, standard, or ultra.");
 		await commands.get("dove-tools")?.handler("full", context);
 		assert.deepEqual(activeToolSets.at(-1), selectDoveToolNames(representativeTools, "full"));
-		await commands.get("dove-tools")?.handler("reset", context);
-		assert.deepEqual(activeToolSets.at(-1), [], "reset returns Auto to its zero-tool Chat baseline");
+		await commands.get("dove-tools")?.handler("auto", context);
+		assert.deepEqual(activeToolSets.at(-1), piSessionBaseline, "Auto returns authority to Pi's session baseline");
 		const emptyLookup = await events.get("before_agent_start")?.(
 			{ prompt: "打开网页并截图", systemPrompt: "", type: "before_agent_start" },
 			{ ...context, model: { contextWindow: 100_000 } },
@@ -236,12 +250,11 @@ describe("Pi adapter", () => {
 			{ prompt: "修复 Provider Prompt-Cache Boundary", systemPrompt: "", type: "before_agent_start" },
 			{ ...context, model: { contextWindow: 100_000 } },
 		);
-		// Prompt-specific guidance is delivered for the current request, while the
-		// project snapshot itself stays tied to the stable mode/revision epoch.
+		// Relevant project context is delivered without a workflow skill gate.
 		const beforeStartMessage = (beforeStart as { message?: { content?: string; details?: { guidance?: boolean; segments?: unknown[] } } })?.message;
-		assert.match(beforeStartMessage?.content ?? "", /trellis-before-dev/);
+		assert.doesNotMatch(beforeStartMessage?.content ?? "", /trellis-before-dev|Workflow suggestion/);
 		assert.match(beforeStartMessage?.content ?? "", /\[PERSONAL AGENT REQUEST CONTEXT\]/);
-		assert.equal(beforeStartMessage?.details?.guidance, true);
+		assert.equal(beforeStartMessage?.details?.guidance, false, "project context is not a workflow instruction");
 		assert.ok((beforeStartMessage?.details?.segments?.length ?? 0) > 0, "an empty lookup must not consume the epoch needed by a later relevant project request");
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
@@ -256,7 +269,7 @@ describe("Pi adapter", () => {
 		const withVoiceStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.match(String((withVoiceStart as { systemPrompt?: string })?.systemPrompt), /first-person-plural/);
 		const repeatedStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.match(String((repeatedStart as { message?: { content?: string } })?.message?.content), /trellis-before-dev/, "current-turn guidance must not be stranded in an older snapshot");
+		assert.equal((repeatedStart as { message?: unknown })?.message, undefined, "ordinary execution must not inject a workflow prompt on every turn");
 		const contextResult = await events.get("context")?.({
 			type: "context",
 			messages: [
@@ -309,7 +322,7 @@ describe("Pi adapter", () => {
 
 	});
 
-	it("replays planning into one restricted task confirmation", async () => {
+	it("records an optional native goal directly without planning questions or legacy script execution", async () => {
 		const root = mkdtempSync(join(tmpdir(), "pi-planning-replay-"));
 		const stateDir = join(root, "state");
 		mkdirSync(join(root, ".trellis", "scripts"), { recursive: true });
@@ -337,9 +350,8 @@ describe("Pi adapter", () => {
 		try {
 			const events = new Map<string, (event: any, ctx: any) => Promise<any>>();
 			const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
-			let activeTools: string[] = [];
+			let activeTools: string[] = [...representativeTools];
 			let confirmations = 0;
-			let confirmResult = false;
 			const api = {
 				registerCommand() {}, registerShortcut() {}, registerFlag() {}, appendEntry() {},
 				registerTool(definition: { name: string; execute: (...args: any[]) => Promise<any> }) { tools.set(definition.name, definition); },
@@ -352,44 +364,23 @@ describe("Pi adapter", () => {
 			extension(api);
 			const context: FakeContext = {
 				hasUI: true,
-				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {}, confirm: async () => { confirmations += 1; return confirmResult; } },
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {}, confirm: async () => { confirmations += 1; return true; } },
 				sessionManager: { getEntries: () => [], getSessionId: () => "planning-replay" },
 			};
 			await events.get("input")?.({ type: "input", text: "创建一个项目任务：缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
 			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建一个项目任务：缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };
 			assert.equal(activeTools.includes("agent_project_task"), true);
-			assert.equal(activeTools.includes("bash"), false);
-			assert.match(start.message?.content ?? "", /collecting-name/);
-
-			const question = { questions: [{ question: "请输入任务名称和范围", header: "任务信息", options: [{ label: "缓存命中率优化" }] }] };
-			await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-1", toolName: "ask_user_question", input: question }, context);
-			const questionResult = await events.get("tool_result")?.({ type: "tool_result", toolCallId: "question-1", toolName: "ask_user_question", input: question, content: [{ type: "text", text: "User answered: 缓存命中率优化" }], details: { answers: [{ answer: "缓存命中率优化" }] }, isError: false }, context) as { content?: Array<{ text?: string }> };
-			assert.match(questionResult.content?.map((part) => part.text ?? "").join("\n") ?? "", /agent_project_task/);
-			const repeatedQuestion = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-2", toolName: "ask_user_question", input: { questions: [{ question: "是否还要再次确认？", header: "范围", options: [{ label: "继续" }, { label: "先讨论" }] }] } }, context) as { block?: boolean; terminate?: boolean; reason?: string };
-			assert.equal(repeatedQuestion.block, true);
-			assert.equal(repeatedQuestion.terminate, true);
-			assert.match(repeatedQuestion.reason ?? "", /agent_project_task/);
+			assert.equal(activeTools.includes("bash"), true, "Dove must preserve Pi's active execution tools");
+			assert.doesNotMatch(start.message?.content ?? "", /collecting-name|ask one structured question/i);
 
 			const taskTool = tools.get("agent_project_task");
 			assert.ok(taskTool);
-			const cancelled = await taskTool.execute("task-call", { operation: "create" }, undefined, undefined, context);
-			assert.equal(cancelled.details.cancelled, true);
-			assert.equal(cancelled.details.workflow.state, "cancelled");
-			assert.equal(confirmations, 1);
-			assert.equal(existsSync(join(root, "create-called")), false);
-			const retryQuestion = { questions: [{ question: "请输入修正后的任务标题", header: "任务", options: [{ label: "缓存命中率优化" }] }] };
-			assert.equal((await events.get("tool_call")?.({ type: "tool_call", toolCallId: "question-3", toolName: "ask_user_question", input: retryQuestion }, context)), undefined);
-			await events.get("tool_result")?.({ type: "tool_result", toolCallId: "question-3", toolName: "ask_user_question", input: retryQuestion, content: [{ type: "text", text: "User answered: 缓存命中率优化" }], details: { answers: [{ answer: "缓存命中率优化" }] }, isError: false }, context);
-			confirmResult = true;
-			const taskResult = await taskTool.execute("task-call-2", { operation: "create" }, undefined, undefined, context);
-			assert.equal(confirmations, 2);
-			assert.equal(readFileSync(join(root, "create-called"), "utf8"), "yes");
-			assert.match(readFileSync(join(root, "create-args.json"), "utf8"), /--description/);
-			assert.equal(JSON.parse(readFileSync(join(root, "create-args.json"), "utf8"))[2], "创建一个项目任务：缓存命中率优化");
-			assert.equal(taskResult.details.workflow.taskId, "trellis:cache-hit");
-			assert.match(taskResult.details.workflow.path, /08-31-cache-hit/);
-			assert.equal(taskResult.details.workflow.state, "planning");
-			assert.equal(taskResult.details.workflow.next, "planning");
+			const taskResult = await taskTool.execute("task-call", { operation: "create", title: "缓存命中率优化", description: "减少未缓存输入" }, undefined, undefined, context);
+			assert.equal(confirmations, 0, "Pi-hosted task execution must not ask for a second Dove approval");
+			assert.equal(existsSync(join(root, "create-called")), false, "legacy task.py must never execute");
+			assert.match(readFileSync(join(root, ".dove", "state.json"), "utf8"), /缓存命中率优化/);
+			assert.match(taskResult.details.goal.taskId, /^native:goal-/);
+			assert.match(taskResult.details.goal.path, /[\\\/]\.dove[\\\/]state\.json$/);
 			const mutationRecords = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { operation?: string; revision?: string } });
 			const createStart = mutationRecords.find((record) => record.kind === "project.mutation.started" && record.details?.operation === "create");
 			assert.ok(createStart);
@@ -498,18 +489,28 @@ describe("Pi adapter", () => {
 		};
 		assert.equal(guard.beforeToolCall("question-1", "ask_user_question", firstQuestion, false).action, "allow");
 		guard.recordToolResult({ toolName: "ask_user_question", input: firstQuestion, details: { answers: [{ answer: "确认创建" }] }, isError: false });
-		assert.equal(guard.beforeToolCall("question-2", "ask_user_question", rewrittenQuestion, false).action, "allow");
-		const warning = guard.recordToolResult({ toolName: "ask_user_question", input: rewrittenQuestion, details: { answers: [{ answer: "确认，执行创建" }] }, isError: false });
-		assert.equal(warning?.kind, "interactive-confirmation-loop");
+		assert.equal(guard.beforeToolCall("question-2", "ask_user_question", rewrittenQuestion, false).action, "terminate");
 		assert.equal(guard.beforeToolCall("question-3", "ask_user_question", firstQuestion, false).action, "terminate");
-		assert.match(guard.beforeToolCall("question-4", "ask_user_question", firstQuestion, false).reason ?? "", /立即执行已确认的动作/);
+		assert.match(guard.beforeToolCall("question-4", "ask_user_question", firstQuestion, false).reason ?? "", /不要再次提问/);
 
 		guard.recordToolResult({ toolName: "write", input: { path: "task.md" }, isError: false });
-		assert.equal(guard.beforeToolCall("question-5", "ask_user_question", firstQuestion, false).action, "allow", "a real tool result opens a fresh question window");
+		assert.equal(guard.beforeToolCall("question-5", "ask_user_question", firstQuestion, false).action, "terminate", "progress does not reset the per-goal question budget");
 		const distinctQuestion = {
 			questions: [{ question: "确认删除 README？", header: "确认删除", options: [{ label: "确认删除" }, { label: "取消" }] }],
 		};
-		assert.equal(guard.beforeToolCall("question-6", "ask_user_question", distinctQuestion, false).action, "allow", "a different confirmation target remains allowed");
+		assert.equal(guard.beforeToolCall("question-6", "ask_user_question", distinctQuestion, false).action, "terminate", "different wording cannot bypass the per-goal limit");
+		guard.start(2_000);
+		assert.equal(guard.beforeToolCall("question-new-goal", "ask_user_question", distinctQuestion, false).action, "allow", "a new goal gets a fresh question budget");
+	});
+
+	it("stops all September 1 wording variants before question two", () => {
+		const guard = new ProgressGuard();
+		guard.start(1_000);
+		for (let index = 0; index < SEPT1_QUESTION_VARIANTS.length; index += 1) {
+			const decision = guard.beforeToolCall(`sept1-question-${index + 1}`, "ask_user_question", sept1QuestionInput(index), false);
+			assert.equal(decision.action, index === 0 ? "allow" : "terminate", `question ${index + 1} must not bypass the per-goal limit`);
+		}
+		assert.equal(guard.snapshot().interactiveQuestionCalls, 1);
 	});
 
 	it("normalizes opaque tool fingerprints without retaining sensitive input", () => {
@@ -621,26 +622,65 @@ describe("Pi adapter", () => {
 		const second = question("S7 创建前最后确认，之后进入规划并执行？");
 		assert.equal(await events.get("tool_call")?.({ ...first, toolCallId: "question-1" }, context), undefined);
 		await events.get("tool_result")?.({ ...answer(first.input), toolCallId: "question-1" }, context);
-		assert.equal(await events.get("tool_call")?.({ ...second, toolCallId: "question-2" }, context), undefined);
-		await events.get("tool_result")?.({ ...answer(second.input), toolCallId: "question-2" }, context);
-		const blocked = await events.get("tool_call")?.({ ...first, toolCallId: "question-3" }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
+		const blocked = await events.get("tool_call")?.({ ...second, toolCallId: "question-2" }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
 		assert.equal(blocked?.block, true);
 		assert.equal(blocked?.terminate, true);
-		assert.match(blocked?.reason ?? "", /执行已确认的动作/);
-		assert.ok(notifications.some((message) => message.includes("确认问题在收到肯定答复后重复 2 次")));
+		assert.match(blocked?.reason ?? "", /不要再次提问/);
 	});
 
-	it("keeps only the compact core tool set by default", () => {
+	it("continues a pending execution once without restricting Pi tools", async () => {
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		let activeTools: string[] = [];
+		const api = {
+			registerCommand() {}, registerShortcut() {}, registerTool() {}, registerFlag() {}, appendEntry() {},
+			getAllTools() { return [{ name: "ask_user_question" }, { name: "write" }]; },
+			setActiveTools(names: string[]) { activeTools = [...names]; },
+			getActiveTools() { return activeTools; },
+			getThinkingLevel() { return "high"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+			sessionManager: { getEntries: () => [], getSessionId: () => "pending-continuation-session" },
+		};
+		const firstPrompt = "先保存一下现在的上下文我记录一下用来审计优化agent流程";
+		await events.get("input")?.({ type: "input", text: firstPrompt, source: "interactive", streamingBehavior: "immediate" }, context);
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: firstPrompt, systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		const questionInput = { questions: [{ question: "确认保存？", header: "保存", options: [{ label: "可以" }, { label: "取消" }] }] };
+		assert.equal(await events.get("tool_call")?.({ type: "tool_call", toolCallId: "pending-question", toolName: "ask_user_question", input: questionInput }, context), undefined);
+		await events.get("tool_result")?.({ type: "tool_result", toolCallId: "pending-question", toolName: "ask_user_question", input: questionInput, content: [{ type: "text", text: "可以" }], details: { answers: [{ answer: "可以" }] }, isError: false }, context);
+		await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
+		await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+
+		const beforeRecords = readFileSync(join(adapterStateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { requestId?: string; continuedFromRequestId?: string } });
+		const sourceRequestId = beforeRecords.filter((record) => record.kind === "request.planned").at(-1)?.details?.requestId;
+		assert.ok(sourceRequestId);
+
+		await events.get("input")?.({ type: "input", text: "可以", source: "interactive", streamingBehavior: "immediate" }, context);
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "可以", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		const repeatedQuestion = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "repeated-question", toolName: "ask_user_question", input: questionInput }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
+		assert.equal(repeatedQuestion?.block, true);
+		assert.equal(repeatedQuestion?.terminate, true);
+		assert.match(repeatedQuestion?.reason ?? "", /already confirmed/);
+		assert.equal(await events.get("tool_call")?.({ type: "tool_call", toolCallId: "write-log", toolName: "write", input: { path: "audit.log", content: "ok" } }, context), undefined, "Dove must leave Pi's valid tools usable");
+		assert.equal(await events.get("tool_call")?.({ type: "tool_call", toolCallId: "host-tool", toolName: "third_party_write", input: {} }, context), undefined, "Dove must not add an intent-derived tool firewall on top of Pi");
+
+		const afterRecords = readFileSync(join(adapterStateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { continuedFromRequestId?: string } });
+		assert.equal(afterRecords.filter((record) => record.kind === "request.planned").at(-1)?.details?.continuedFromRequestId, sourceRequestId);
+	});
+
+	it("keeps Auto unrestricted while retaining explicit compatibility profiles", () => {
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "core"), ["read", "agent_doctor"]);
-		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "auto", "lookup", "打开网页并截图"), ["read", "agent_doctor", "web_search"]);
-		assert.deepEqual(selectDoveToolNames(["read", "plan_mode_question"], "auto", "lookup", "explain this error"), ["read"]);
-		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "project-work", "继续当前任务", "08-25-execute-assembly-impl e2e protocol"), ["read", "lsp_diagnostics", "symbol_search"]);
-		assert.deepEqual(selectDoveToolNames(["read", "lsp_diagnostics", "symbol_search"], "auto", "project-work", "继续", "Personal Agent OS"), ["read", "lsp_diagnostics", "symbol_search"]);
+		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser", "web_search"], "auto", "lookup", "打开网页并截图"), ["read", "agent_doctor", "agent_browser", "web_search"]);
+		assert.deepEqual(selectDoveToolNames(["read", "plan_mode_question"], "auto", "chat", "hi"), ["read", "plan_mode_question"]);
 		assert.deepEqual(selectDoveToolNames(["read", "agent_doctor", "agent_browser"], "full"), ["read", "agent_doctor", "agent_browser"]);
 		assert.equal(hasHashlineEditTools(["read", "replace", "insert", "grep"]), true);
 		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "core"), ["read", "grep"]);
-		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "auto", "execution"), ["read", "grep", "replace", "insert"]);
-		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "full"), ["read", "grep", "replace", "insert"]);
+		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "auto", "execution"), ["read", "edit", "grep", "replace", "insert"]);
+		assert.deepEqual(selectDoveToolNames(["read", "edit", "grep", "replace", "insert"], "full"), ["read", "edit", "grep", "replace", "insert"]);
 	});
 
 	it("keeps large execution logs out of model-facing tool results", () => {
@@ -650,16 +690,7 @@ describe("Pi adapter", () => {
 		assert.ok(payload.nested[0].stderr.length < 8_500);
 	});
 
-	it("does not block a new directory on bootstrap for ordinary greetings", () => {
-		assert.equal(shouldOfferProjectBootstrap(createRequestPlan({ message: "hi" })), false);
-		assert.equal(shouldOfferProjectBootstrap(createRequestPlan({ message: "你好" })), false);
-		assert.equal(shouldOfferProjectBootstrap(createRequestPlan({ message: "看看 package.json，这个项目是做什么的？只做查看和说明，不要修改文件。" })), false);
-		assert.equal(shouldOfferProjectBootstrap(createRequestPlan({ message: "修复登录问题" })), true);
-		assert.equal(shouldOfferProjectBootstrap(createRequestPlan({ message: "继续当前任务" })), false);
-		assert.equal(shouldOfferProjectBootstrap(createRequestPlan({ message: "继续当前项目任务" })), false);
-	});
-
-	it("temporarily narrows an explicit Pi tool selection for continuation", async () => {
+	it("preserves an explicit Pi tool selection for continuation", async () => {
 		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
 		const selected = ["read", "ls", "bash"];
 		let hostActiveTools = [...selected];
@@ -680,7 +711,7 @@ describe("Pi adapter", () => {
 		await events.get("session_start")?.({ type: "session_start" }, context);
 		assert.deepEqual(hostActiveTools, selected);
 		await events.get("before_agent_start")?.({ prompt: "继续当前项目任务", systemPrompt: "", type: "before_agent_start" }, context);
-		assert.deepEqual(hostActiveTools, []);
+		assert.deepEqual(hostActiveTools, selected);
 		await events.get("before_agent_start")?.({ prompt: "hi", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.deepEqual(hostActiveTools, selected);
 	});

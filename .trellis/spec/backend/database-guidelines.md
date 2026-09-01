@@ -2,7 +2,7 @@
 
 ## Overview
 
-The first release has no database or ORM. Project-management data belongs to Trellis files, while Dove execution records are append-only local JSONL/artifacts. Do not introduce a second task/spec database as a fallback.
+The first release has no database or ORM. Compact project goals belong to `.dove/state.json`, while execution records are append-only user-level JSONL/artifacts. Legacy Trellis files are read-only compatibility input.
 
 ## Query Patterns
 
@@ -12,7 +12,7 @@ The first release has no database or ORM. Project-management data belongs to Tre
 
 ## Migrations
 
-Trellis template migrations are delegated to the official Trellis `update` behavior. Dove must snapshot first, surface conflicts and `.new` sidecars, and never silently overwrite user-modified files.
+Native state uses a versioned decoder and atomic temp-file rename. Unknown or malformed versions are preserved and reported; legacy project files are never migrated in place.
 
 ## Naming Conventions
 
@@ -20,6 +20,6 @@ Use `taskId`, `stepId`, `executionId`, `dispatchId`, `providerRevision`, and `ar
 
 ## Common Mistakes
 
-- Adding an in-memory or SQLite mirror of Trellis tasks.
+- Adding an in-memory or SQLite mirror of native or legacy goals.
 - Treating a provider revision as a Pi session ID.
-- Writing `.trellis` files directly from an adapter consumer.
+- Writing `.trellis` files from any Dove runtime path.

@@ -1,12 +1,9 @@
 import {
 	createProjectProvider,
+	initializeNativeProject,
 	summarizeProjectContinuation,
 	updateProjectManifest,
 } from "./project-provider/index.ts";
-import {
-	initializeTrellis,
-	updateTrellis,
-} from "./project-provider/trellis-cli.ts";
 import { inspectWindowsEnvironment } from "./windows-runtime/doctor.ts";
 import {
 	EXTENSION_CATALOG,
@@ -77,9 +74,8 @@ if (args[0] === "doctor") {
 	const provider = createProjectProvider(process.cwd());
 	if (args[1] === "bind") {
 		const requestedProvider = args[2];
-		if (requestedProvider !== "trellis" && requestedProvider !== "lightweight")
-			throw new Error("Usage: dove-pi project bind trellis|lightweight");
-		await updateProjectManifest(provider.projectRoot, requestedProvider);
+		if (requestedProvider !== "native") throw new Error("Usage: dove-pi project bind native");
+		await updateProjectManifest(provider.projectRoot, "native");
 		const rebound = createProjectProvider(provider.projectRoot);
 		console.log(
 			JSON.stringify(
@@ -94,14 +90,9 @@ if (args[0] === "doctor") {
 			),
 		);
 	} else if (args[1] === "init") {
-		await initializeTrellis(provider.projectRoot);
-		let refreshed = createProjectProvider(provider.projectRoot);
-		await updateProjectManifest(
-			provider.projectRoot,
-			"trellis",
-			refreshed.getHealth().trellisVersion,
-		);
-		refreshed = createProjectProvider(provider.projectRoot);
+		await initializeNativeProject(provider.projectRoot);
+		await updateProjectManifest(provider.projectRoot, "native");
+		const refreshed = createProjectProvider(provider.projectRoot);
 		console.log(
 			JSON.stringify(
 				{ initialized: true, project: inspectProjectStatus(refreshed, true) },
@@ -110,17 +101,9 @@ if (args[0] === "doctor") {
 			),
 		);
 	} else if (args[1] === "update") {
-		await updateTrellis(provider.projectRoot);
-		let refreshed = createProjectProvider(provider.projectRoot);
-		await updateProjectManifest(
-			provider.projectRoot,
-			"trellis",
-			refreshed.getHealth().trellisVersion,
-		);
-		refreshed = createProjectProvider(provider.projectRoot);
 		console.log(
 			JSON.stringify(
-				{ updated: true, project: inspectProjectStatus(refreshed, true) },
+				{ updated: false, reason: "Dove Native Workflow has no project template update step.", project: inspectProjectStatus(provider) },
 				null,
 				2,
 			),
@@ -242,7 +225,7 @@ if (args[0] === "doctor") {
 	console.log(formatCacheAudit(audit));
 } else {
 	console.error(
-		"Usage: dove-pi doctor | dove-pi capability list | dove-pi capability run <name> [--args=<json>] [--approve] | dove-pi rpc | dove-pi mcp | dove-pi project [init|update|doctor|bind] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>",
+		"Usage: dove-pi doctor | dove-pi capability list | dove-pi capability run <name> [--args=<json>] [--approve] | dove-pi rpc | dove-pi mcp | dove-pi project [init|doctor|bind native] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>",
 	);
 	process.exitCode = 1;
 }

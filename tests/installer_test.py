@@ -65,6 +65,15 @@ class InstallerCliTests(unittest.TestCase):
         self.assertEqual(output.getvalue().strip(), "Dove Pi 1.2.3 (Pi 4.5.6)")
         launch.assert_not_called()
 
+    def test_help_describes_stable_schema_and_pi_tool_authority(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main(["--help"]), 0)
+        help_text = output.getvalue()
+        self.assertIn("leaves Pi's active tool schema unchanged", help_text)
+        self.assertIn("never tool permission", help_text)
+        self.assertNotIn("intent-based tool loading", help_text)
+
     def test_no_arguments_launches_pi(self):
         with patch("dove_pi.launch", return_value=0) as launch:
             self.assertEqual(main([]), 0)

@@ -16,6 +16,7 @@ export interface ProgressGuardOptions {
 	repeatedSuccessHardStopThreshold?: number;
 	interactiveQuestionThreshold?: number;
 	interactiveQuestionHardStopThreshold?: number;
+	interactiveQuestionLimit?: number;
 	longRunMinutes?: number;
 }
 
@@ -38,6 +39,7 @@ export interface ProgressSnapshot {
 	repeatedSuccessCount: number;
 	interactiveQuestionRepeatCount: number;
 	interactivePositiveAnswerCount: number;
+	interactiveQuestionCalls: number;
 	longRun: boolean;
 	warning?: "consecutive-errors" | "repeated-failure" | "repeated-success" | "interactive-confirmation-loop" | "read-only-budget";
 }
@@ -112,7 +114,7 @@ function interactiveOptionIntent(value: unknown): InteractiveOptionIntent {
 	if (typeof value !== "string") return "other";
 	const text = value.toLocaleLowerCase();
 	if (/\b(no|cancel|decline|reject|abort|defer|adjust|skip|not)\b|取消|否|拒绝|暂缓|调整|先改|不创建|不要/.test(text)) return "negative";
-	if (/\b(yes|ok|okay|confirm|approve|create|execute|proceed|continue|start|accept)\b|确认|创建|执行|继续|开始|同意|确定|好/.test(text)) return "affirmative";
+	if (/\b(yes|ok|okay|confirm|approve|create|execute|proceed|continue|start|accept)\b|确认|创建|执行|继续|开始|同意|确定|可以|没问题|好|行/.test(text)) return "affirmative";
 	return "other";
 }
 
@@ -180,6 +182,7 @@ export class ProgressGuard {
 	private readonly repeatedSuccessHardStopThreshold: number;
 	private readonly interactiveQuestionThreshold: number;
 	private readonly interactiveQuestionHardStopThreshold: number;
+	private readonly interactiveQuestionLimit: number;
 	private readonly longRunMs: number;
 	private state: ProgressSnapshot = this.emptySnapshot();
 	private lastFailureFingerprint?: string;
@@ -198,6 +201,7 @@ export class ProgressGuard {
 		this.repeatedSuccessHardStopThreshold = Math.max(this.repeatedSuccessThreshold, positiveInteger(options.repeatedSuccessHardStopThreshold, 3));
 		this.interactiveQuestionThreshold = positiveInteger(options.interactiveQuestionThreshold, 2);
 		this.interactiveQuestionHardStopThreshold = Math.max(this.interactiveQuestionThreshold, positiveInteger(options.interactiveQuestionHardStopThreshold, 3));
+		this.interactiveQuestionLimit = positiveInteger(options.interactiveQuestionLimit, 1);
 		this.longRunMs = positiveInteger(options.longRunMinutes, 20) * 60_000;
 	}
 
@@ -212,6 +216,7 @@ export class ProgressGuard {
 			repeatedSuccessCount: 0,
 			interactiveQuestionRepeatCount: 0,
 			interactivePositiveAnswerCount: 0,
+			interactiveQuestionCalls: 0,
 			longRun: false,
 		};
 	}
@@ -238,6 +243,14 @@ export class ProgressGuard {
 	beforeToolCall(toolCallId: string, toolName: string, input: unknown, idempotent: boolean): ProgressToolCallDecision {
 		const fingerprint = progressFingerprint(toolName, input);
 		if (toolName === "ask_user_question") {
+			if (this.state.interactiveQuestionCalls >= this.interactiveQuestionLimit) {
+				return {
+					action: "terminate",
+					fingerprint,
+					reason: `本次用户目标已经提出 ${this.state.interactiveQuestionCalls} 次结构化问题；请使用已有回答执行或直接给出结果，不要再次提问`,
+				};
+			}
+			this.state = { ...this.state, interactiveQuestionCalls: this.state.interactiveQuestionCalls + 1 };
 			const profile = interactiveQuestionProfile(input);
 			if (profile) {
 				const previous = this.interactiveQuestion;
@@ -410,7 +423,7 @@ export function formatProgressSnapshot(snapshot: ProgressSnapshot, now = Date.no
 	if (!snapshot.active) return "idle";
 	const duration = snapshot.startedAt === undefined ? 0 : Math.max(0, Math.floor((now - snapshot.startedAt) / 60_000));
 	const warning = snapshot.warning ? `, warning=${snapshot.warning}` : "";
-	return `running ${duration}m, tools=${snapshot.toolCalls}, reads=${snapshot.readOnlyToolCalls}, errors=${snapshot.toolErrors}, consecutiveErrors=${snapshot.consecutiveToolErrors}, repeatedSuccess=${snapshot.repeatedSuccessCount}, interactiveRepeat=${snapshot.interactiveQuestionRepeatCount}${snapshot.longRun ? ", longRun=true" : ""}${warning}`;
+	return `running ${duration}m, tools=${snapshot.toolCalls}, reads=${snapshot.readOnlyToolCalls}, errors=${snapshot.toolErrors}, consecutiveErrors=${snapshot.consecutiveToolErrors}, repeatedSuccess=${snapshot.repeatedSuccessCount}, questions=${snapshot.interactiveQuestionCalls}, interactiveRepeat=${snapshot.interactiveQuestionRepeatCount}${snapshot.longRun ? ", longRun=true" : ""}${warning}`;
 }
 
 function optionalPositiveInteger(value: number | undefined): number | undefined {

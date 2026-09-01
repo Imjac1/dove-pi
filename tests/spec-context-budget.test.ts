@@ -21,8 +21,8 @@ const expectedHeadingsBySpec = {
 		"5. Good / Base / Bad Cases",
 		"6. Tests Required",
 		"7. Wrong vs Correct",
-		"Design Decision: Adapter Firewall",
-		"V2 Request Planning and Provider Budget Firewall",
+		"Design Decision: Adapter Coordination Boundary",
+		"V2 Request Planning and Provider Budgets",
 		"Request Lifecycle Identity and Retry Contract",
 	],
 	"personal-agent-capability-runtime.md": [
@@ -32,9 +32,14 @@ const expectedHeadingsBySpec = {
 		"Scenario: Reusable Development Capabilities",
 	],
 	"personal-agent-project-context.md": [
-		"Scenario: Structured Trellis Context",
-		"Scenario: Trellis-First Project Provider Firewall",
-		"Scenario: Skill Discovery Diagnostics",
+		"1. Ownership",
+		"2. Native State Contract",
+		"3. Native Provider",
+		"4. Legacy Trellis Compatibility",
+		"5. Context And Cache",
+		"6. Diagnostics",
+		"7. Error Matrix",
+		"8. Tests Required",
 	],
 	"personal-agent-extension-runtime.md": [
 		"Scenario: Extension Profiles and Doctor",

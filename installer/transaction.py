@@ -18,7 +18,6 @@ from .state import InstallState, ReleaseRef, write_state
 COMPONENT_PACKAGES = {
     "pi": "@earendil-works/pi-coding-agent",
     "piTui": "@earendil-works/pi-tui",
-    "trellis": "@mindfoldhq/trellis",
 }
 
 
@@ -39,8 +38,21 @@ def default_command_runner(command: Sequence[str], cwd: Path) -> None:
 
 
 def _copy_ignore(_directory: str, names: list[str]) -> set[str]:
-    ignored_names = {".git", ".trellis", ".dove", ".agent-data", "node_modules", "dist", "__pycache__"}
+    ignored_names = {".git", ".trellis", ".agents", ".dove", ".agent-data", "node_modules", "dist", "__pycache__"}
     return {name for name in names if name in ignored_names or name.endswith(".pyc")}
+
+
+def _copy_verification_specs(source: Path, staging: Path) -> None:
+    """Copy only repository-owned Trellis assets required by packaged tests."""
+    trellis_source = source / ".trellis"
+    workflow = trellis_source / "workflow.md"
+    spec = trellis_source / "spec"
+    if not workflow.is_file() or not spec.is_dir():
+        return
+    trellis_staging = staging / ".trellis"
+    trellis_staging.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(workflow, trellis_staging / "workflow.md")
+    shutil.copytree(spec, trellis_staging / "spec")
 
 
 @dataclass(frozen=True)
@@ -69,6 +81,7 @@ class ManagedTransaction:
         self.layout.require_managed_path(staging, boundary=self.layout.staging_dir)
         try:
             shutil.copytree(source, staging, ignore=_copy_ignore)
+            _copy_verification_specs(source, staging)
             (staging / "release.json").write_text(json.dumps(manifest.to_json(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             npm = shutil.which("npm")
             if not npm:

@@ -39,7 +39,7 @@ describe("Pi request lifecycle integration", () => {
 
 			await events.get("input")?.({ type: "input", text: "fix login", source: "interactive" }, context);
 			const firstStart = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "fix login", systemPrompt: "" }, context);
-			assert.ok((firstStart as { message?: unknown })?.message, "the first project request must emit real guidance/context so the once-only assertion is not vacuous");
+			assert.equal((firstStart as { message?: unknown })?.message, undefined, "a clean execution request must not pay for workflow guidance");
 			const redelivery = await events.get("input")?.({ type: "input", text: "fix login", source: "interactive" }, context);
 			assert.deepEqual(redelivery, { action: "handled" }, "an active host redelivery must be suppressed before Pi persists another user entry");
 			const repeatedAutomaticStart = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "fix login", systemPrompt: "" }, context);

@@ -27,7 +27,7 @@ def release_manifest(*, version="0.3.0", release_id="0.3.0+abcdef0", platform="w
         "commit": "abcdef0",
         "platform": platform,
         "runtime": {"python": ">=3.10", "node": ">=22.19.0"},
-        "components": {"pi": "0.84.3", "piTui": "0.84.3", "trellis": "0.6.16"},
+        "components": {"pi": "0.84.3", "piTui": "0.84.3"},
         "profiles": {name: [] for name in ("minimal", "dev", "research", "security", "max")},
     }
 

@@ -33,6 +33,34 @@ describe("provider cache-prefix evidence", () => {
 		assert.equal(attributeProviderCache(second, { input: 756, cacheRead: 8_960, cacheWrite: 0 }).classification, "new-history");
 	});
 
+	it("ignores session metadata added while rehydrating existing history", () => {
+		const first = inspectProviderCachePrefix({
+			system,
+			tools,
+			messages: [{ role: "user", content: [{ type: "text", text: "inspect", cache_control: { type: "ephemeral" } }] }],
+		}, "metadata-1");
+		const second = inspectProviderCachePrefix({
+			system,
+			tools,
+			messages: [
+				{
+					role: "user",
+					content: [{ type: "text", text: "inspect" }],
+					id: "session-message-1",
+					parentId: "root",
+					timestamp: "2026-09-01T00:00:00.000Z",
+					provider: "provider",
+					model: "model",
+				},
+				{ role: "assistant", content: "done" },
+			],
+		}, "metadata-1", first);
+
+		assert.equal(second.evidence.classification, "stable-prefix");
+		assert.equal(second.evidence.historyChange, "appended");
+		assert.equal(second.evidence.stablePrefix, true);
+	});
+
 	it("attributes component mutation and history rewrite without persisting raw text", () => {
 		const first = inspectProviderCachePrefix({ system, tools, messages: [{ role: "user", content: "secret prompt" }, dove] }, "req-2");
 		const changed = inspectProviderCachePrefix({ system, tools: [...tools, { name: "grep" }], messages: [{ role: "user", content: "rewritten" }, dove] }, "req-2", first);

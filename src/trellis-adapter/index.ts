@@ -25,7 +25,6 @@ export interface TrellisSnapshot {
 	readonly workflowFiles: readonly string[];
 	readonly tasks: readonly TrellisTaskRecord[];
 	readonly memories: readonly TrellisMemoryRecord[];
-	readonly activeTaskPath?: string;
 }
 
 export function readTrellisSnapshot(cwd: string): TrellisSnapshot {
@@ -44,9 +43,6 @@ export function readTrellisSnapshot(cwd: string): TrellisSnapshot {
 	const memories = isDirectory(memoryRoot) ? collectMemories(memoryRoot) : [];
 	const workflowPath = join(root, "workflow.md");
 	const workflowFiles = existsSync(workflowPath) && !isSensitiveProjectPath(workflowPath) ? [workflowPath] : [];
-	// Active-task identity is intentionally not inferred from Trellis private
-	// runtime files. The ProjectProvider obtains it through Trellis' public
-	// `task.py current --json` command and may add it to its normalized snapshot.
 	return { enabled: true, root, specFiles, taskFiles, memoryFiles, workflowFiles, tasks, memories };
 }
 

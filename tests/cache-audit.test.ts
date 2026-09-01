@@ -135,7 +135,7 @@ describe("dove-pi cache audit", () => {
 		}
 	});
 
-	it("tags sessions with their cache-stability policy (v1/v2/n/a)", async () => {
+	it("tags sessions with their cache-stability policy (v1/v2/no-context)", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-cache-audit-"));
 		const previous = process.env.PI_CODING_AGENT_DIR;
 		process.env.PI_CODING_AGENT_DIR = root;
@@ -161,15 +161,24 @@ describe("dove-pi cache audit", () => {
 					usage(300, 5000, now - 1000),
 				]),
 			);
+			await writeFile(
+				join(projectDir, "plain.jsonl"),
+				makeSession([
+					usage(1000, 0, now - 2000),
+					usage(300, 5000, now - 1000),
+				]),
+			);
 
 			const audit = await runCacheAudit({});
-			const byName = Object.fromEntries(audit.map((r) => [r.session.slice(0, 2), r]));
+			const byName = Object.fromEntries(audit.map((r) => [r.session, r]));
 			assert.equal(byName["v2"]?.cachePolicy, "v2");
 			assert.equal(byName["v1"]?.cachePolicy, "v1");
+			assert.equal(byName["plain"]?.cachePolicy, "no-context");
 
 			const text = formatCacheAudit(audit);
 			assert.ok(text.includes("| v2 |"));
 			assert.ok(text.includes("| v1 |"));
+			assert.ok(text.includes("| no-context |"));
 			assert.ok(text.includes("策略:"));
 		} finally {
 			if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;

@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ContextCompiler } from "../src/core/context-compiler.ts";
 import { buildProjectContext, buildTrellisContext } from "../src/trellis-adapter/context.ts";
-import { createProjectProvider } from "../src/project-provider/index.ts";
-import { LightweightProvider } from "../src/project-provider/lightweight-provider.ts";
+import { createProjectProvider, NativeProvider } from "../src/project-provider/index.ts";
 import { isSensitiveProjectPath, readTrellisSnapshot } from "../src/trellis-adapter/index.ts";
 
 describe("context compiler", () => {
@@ -79,7 +78,6 @@ describe("Trellis context", () => {
 			assert.equal(task?.status, "in_progress");
 			assert.equal(task?.title, "Demo Task");
 			assert.equal(task?.priority, "P1");
-			assert.equal(snapshot.activeTaskPath, undefined);
 			assert.ok(task?.files.some((path) => path.endsWith("prd.md")));
 			assert.ok(snapshot.memories.some((memory) => memory.kind === "journal" && memory.developer === "dev"));
 			assert.ok(snapshot.memories.some((memory) => memory.path.endsWith("workspace\\index.md") && memory.kind === "index" && memory.developer === undefined));
@@ -169,9 +167,30 @@ describe("Trellis context", () => {
 		assert.ok(context.items.some((item) => item.kind === "workflow" && item.id.endsWith("workflow.md")));
 	});
 
-	it("honors an explicitly bound lightweight provider without reading Trellis files", () => {
-		const context = buildProjectContext(new LightweightProvider(process.cwd()), "PowerShell runtime", "ultra");
-		assert.equal(context.items.length, 0);
+	it("keeps a clean native provider context empty", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-native-empty-"));
+		try {
+			const context = buildProjectContext(new NativeProvider(temporary), "PowerShell runtime", "ultra");
+			assert.equal(context.items.length, 0);
+		} finally { await rm(temporary, { recursive: true, force: true }); }
+	});
+
+	it("keeps native goal context compact while retaining explicit legacy retrieval", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-native-compact-"));
+		const taskDir = join(temporary, ".trellis", "tasks", "legacy");
+		try {
+			await mkdir(taskDir, { recursive: true });
+			await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "legacy", title: "Legacy", status: "in_progress" }), "utf8");
+			await writeFile(join(taskDir, "prd.md"), `# Acceptance criteria\n${"acceptance ".repeat(2_000)}`, "utf8");
+			const provider = new NativeProvider(temporary);
+			const legacy = buildProjectContext(provider, "acceptance criteria", "standard");
+			await provider.ensureCurrentGoal("Continue legacy");
+			const native = buildProjectContext(provider, "acceptance criteria", "standard");
+			const explicitLegacy = buildProjectContext(provider, "legacy trellis acceptance criteria", "standard");
+			assert.ok(native.charCount < legacy.charCount / 4);
+			assert.ok(native.items.some((item) => item.id.endsWith(".dove\\state.json") || item.id.endsWith(".dove/state.json")));
+			assert.ok(explicitLegacy.items.some((item) => item.sourceRef?.startsWith("legacy-trellis:")));
+		} finally { await rm(temporary, { recursive: true, force: true }); }
 	});
 
 	it("excludes common secret-bearing paths from Trellis context", async () => {
@@ -192,7 +211,9 @@ describe("Trellis context", () => {
 		const sessions = join(temporary, ".trellis", ".runtime", "sessions");
 		await mkdir(sessions, { recursive: true });
 		await writeFile(join(sessions, "other.json"), JSON.stringify({ current_task: ".trellis/tasks/other" }), "utf8");
-		assert.equal(readTrellisSnapshot(temporary).activeTaskPath, undefined);
+		const snapshot = readTrellisSnapshot(temporary);
+		assert.equal(snapshot.tasks.length, 0);
+		assert.equal(snapshot.taskFiles.length, 0);
 		await rm(temporary, { recursive: true, force: true });
 	});
 });

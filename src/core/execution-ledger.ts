@@ -83,12 +83,11 @@ export class ExecutionLedger {
 			correlation: { requestId: plan.requestId, sessionId, taskId },
 			details: {
 				requestId: plan.requestId,
+				continuedFromRequestId: plan.continuedFromRequestId,
 				intent: plan.intent,
 				workflowAction: plan.workflowAction,
 				projectAction: plan.projectAction,
 				contextClasses: plan.contextClasses,
-				capabilityIds: plan.capabilityIds,
-				approval: plan.approval,
 				projectAvailable: plan.projectAvailable,
 			},
 		});

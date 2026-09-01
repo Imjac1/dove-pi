@@ -23,7 +23,7 @@ GITHUB_LATEST_RELEASE = GITHUB_LATEST_MANIFEST
 RELEASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$")
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 EXPECTED_RUNTIME = {"python": ">=3.10", "node": ">=22.19.0"}
-EXPECTED_COMPONENTS = {"pi", "piTui", "trellis"}
+EXPECTED_COMPONENTS = {"pi", "piTui"}
 EXPECTED_PROFILES = {"minimal", "dev", "research", "security", "max"}
 DOVE_EXTENSION_ID = "dove.personal-agent"
 
@@ -107,7 +107,7 @@ def validate_stable_manifest(manifest: ReleaseManifest) -> None:
     if manifest.runtime != EXPECTED_RUNTIME:
         raise RuntimeError("release.json has an invalid Python/Node runtime contract")
     if set(manifest.components) != EXPECTED_COMPONENTS:
-        raise RuntimeError("release.json must contain exactly the Pi, Pi TUI, and Trellis components")
+        raise RuntimeError("release.json must contain exactly the Pi and Pi TUI components")
     if set(manifest.profiles) != EXPECTED_PROFILES:
         raise RuntimeError("release.json must contain exactly the supported extension profiles")
     if manifest.dove_extension:

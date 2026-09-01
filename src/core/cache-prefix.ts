@@ -177,6 +177,42 @@ function historyChange(previous: readonly string[] | undefined, current: readonl
 	return "rewritten";
 }
 
+const VOLATILE_HISTORY_MESSAGE_FIELDS = new Set([
+	"api",
+	"id",
+	"model",
+	"parentId",
+	"provider",
+	"rawStopReason",
+	"responseId",
+	"stopReason",
+	"timestamp",
+	"usage",
+]);
+
+/**
+ * Pi may rehydrate an existing chat message with session-storage metadata on
+ * the next round. Those fields are not conversation content, so omit them from
+ * diagnostic history identity. Nested tool-call IDs and content stay intact.
+ */
+function diagnosticHistoryMessage(message: unknown): unknown {
+	const withoutCacheMarkers = (value: unknown): unknown => {
+		if (Array.isArray(value)) return value.map(withoutCacheMarkers);
+		if (typeof value !== "object" || value === null) return value;
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>)
+				.filter(([key]) => key !== "cache_control" && key !== "cacheControl")
+				.map(([key, entry]) => [key, withoutCacheMarkers(entry)]),
+		);
+	};
+	if (typeof message !== "object" || message === null || Array.isArray(message)) return withoutCacheMarkers(message);
+	const object = message as Record<string, unknown>;
+	if (typeof object.role !== "string") return withoutCacheMarkers(message);
+	return withoutCacheMarkers(Object.fromEntries(
+		Object.entries(object).filter(([key]) => !VOLATILE_HISTORY_MESSAGE_FIELDS.has(key)),
+	));
+}
+
 function classification(changes: readonly CachePrefixChange[], history: CacheHistoryChange): CachePrefixClassification {
 	if (history === "initial") return "cold";
 	if (changes.length > 1) return "multiple-prefix-change";
@@ -201,8 +237,9 @@ export function inspectProviderCachePrefix(payload: unknown, requestId: string, 
 	const providerTools = deepestField(envelopes, "tools");
 	const tools = component(Array.isArray(providerTools) ? providerTools : []);
 	const doveContext = component(doveMessages);
-	const history = component(historyMessages);
-	const historyMessageDigests = historyMessages.map((message) => digestText(stableSerialize(message)));
+	const diagnosticHistory = historyMessages.map(diagnosticHistoryMessage);
+	const history = component(diagnosticHistory);
+	const historyMessageDigests = diagnosticHistory.map((message) => digestText(stableSerialize(message)));
 	// Logical requests share provider prefix caches within the same session/model.
 	// Callers should pass an explicit session+provider+model scope. The default
 	// deliberately continues the preceding comparison instead of marking every
