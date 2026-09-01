@@ -52,6 +52,32 @@ the current routing path adds no questions or tools to these prompts. The Work
 run created `task.json`, `prd.md`, `design.md`, `implement.md`, `acceptance.md`,
 and `evidence.jsonl`; the native goal advanced to phase `verifying`.
 
+## User-Like Coding A/B Run
+
+- Date: 2026-09-01
+- Fixture: two identical temporary JavaScript projects with one async cache bug
+- Prompt 1: inspect and fix `getOrCompute`, preserve async behavior, run tests
+- Prompt 2: continue with concurrent-call and failed-compute retry edge cases
+- Provider/model: `12321` / `deepseek-ai/DeepSeek-V4-Flash`
+- Tools: enabled; each follow-up reused the same session ID, with a new process
+
+| Runner | Provider rounds | Tool calls | Questions | Uncached input | Cache read | Warm ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| Native Pi | 12 | 10 | 0 | 47,366 | 224,768 | 82.59% |
+| Dove Auto | 12 | 10 | 0 | 51,505 | 241,408 | 82.42% |
+
+Both runners finished the two requests and their local fixture suites passed
+3/3. Dove used 4,139 more uncached input tokens (+8.74%) and was 0.17
+percentage points lower on the aggregate warm ratio. More importantly, Dove's
+second process had a full cache miss on provider round 5 (`input=23,787`,
+`cacheRead=0`) after the first request had already warmed the prefix. Native Pi
+kept the corresponding continuation warm (`input=457`, `cacheRead=22,272`).
+
+This is the next P0 investigation: reproduce same-process versus process-restart
+continuations while logging provider prefix components, tool schema digest,
+session affinity, and Dove context epoch/revision. Do not change routing or
+formal-task behavior until the extra cold start is reproduced and attributed.
+
 ## Automated Matrix
 
 - `npm test`: 235 passed, 0 failed.

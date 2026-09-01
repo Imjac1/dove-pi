@@ -73,6 +73,11 @@
 - Latest isolated real Provider run: Chat and Auto completed in 892/892/914
   input tokens; Work formal completed in 1,802 input tokens. All had zero
   questions and tools; the provider reported zero cache reads and writes.
+- User-like coding A/B: Native Pi and Dove each completed 12 Provider rounds
+  and 10 tool calls with zero questions; Dove used 51,505 uncached input tokens
+  versus 47,366 for Native Pi and had one extra full cache miss after a process
+  restart. Both fixture suites passed 3/3. Details are in the interaction-mode
+  validation evidence.
 - Remaining measurement: compare real provider cache/question metrics against
   the September 1 baseline on an upstream that exposes cache usage; unit tests
   cannot prove model quality or upstream cache behavior.
