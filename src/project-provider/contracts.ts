@@ -1,4 +1,5 @@
 import type { TrellisSnapshot, TrellisTaskRecord } from "../trellis-adapter/index.ts";
+import type { NativeTaskPhase } from "./native-state.ts";
 
 /** Contract version consumed by the Dove agent core. */
 export const PROJECT_PROVIDER_CONTRACT = "1.0" as const;
@@ -49,6 +50,16 @@ export interface ProjectTask extends ProjectTaskIdentity {
 	readonly status: string;
 	readonly priority?: string;
 	readonly files: readonly string[];
+	readonly formal?: boolean;
+	readonly phase?: NativeTaskPhase;
+}
+
+export interface ProjectTaskProgress {
+	readonly phase: NativeTaskPhase;
+	readonly nextStep?: string;
+	readonly verification?: string;
+	readonly decision?: string;
+	readonly evidence?: Readonly<Record<string, unknown>>;
 }
 
 export interface ProjectDocument {
@@ -76,8 +87,11 @@ export interface ProjectProvider {
 	getCurrentTask(): ProjectTask | undefined;
 	resolveTask(selector: string): ProjectTask | undefined;
 	readMemory(query?: string): readonly ProjectDocument[];
-	/** Silently establish a compact current goal for ordinary execution. */
+	/** Silently establish a compact current goal for explicit tracking or legacy continuation. */
 	ensureCurrentGoal?(title: string, description?: string): Promise<ProjectTask>;
+	/** Silently establish a formal task and its durable planning artifacts. */
+	ensureFormalTask?(title: string, description?: string): Promise<ProjectTask>;
+	recordTaskProgress?(taskId: string, progress: ProjectTaskProgress): Promise<void>;
 	runTaskOperation(operation: ProjectTaskOperation, args: readonly string[]): Promise<string>;
 	/** Read-only reconciliation of an interrupted mutation intent. */
 	reconcileTaskOperation?(operation: ProjectTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;

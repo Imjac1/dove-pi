@@ -85,13 +85,13 @@ export function buildInteroperableProjectContext(
 	provider: ProjectProvider,
 	query: string,
 	mode: AgentMode,
-	options: ContextCompileOptions & { readonly mcpResources?: readonly McpContextResource[] } = {},
+	options: ContextCompileOptions & { readonly mcpResources?: readonly McpContextResource[]; readonly includeFormalArtifacts?: boolean } = {},
 ): { readonly projection: InteroperableContextProjection; readonly context: CompiledContext } {
 	const projection = readInteroperableContextProjection(provider, options.mcpResources);
 	const additionalDocuments = selectExternalDocuments(projection.documents, query);
 	return {
 		projection,
-		context: buildProjectContext(provider, query, mode, { maxChars: options.maxChars, additionalDocuments }),
+		context: buildProjectContext(provider, query, mode, { maxChars: options.maxChars, additionalDocuments, includeFormalArtifacts: options.includeFormalArtifacts }),
 	};
 }
 

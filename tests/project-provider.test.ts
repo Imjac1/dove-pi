@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createProjectProvider, discoverProject, initializeNativeProject, nativeProjectStatePath, readNativeProjectState, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
+import { createProjectProvider, discoverProject, initializeNativeProject, nativeProjectStatePath, nativeTaskArtifactPath, readNativeProjectState, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../src/project-status.ts";
 
 describe("Dove native project provider", () => {
@@ -29,6 +29,12 @@ describe("Dove native project provider", () => {
 			const created = provider.getCurrentTask();
 			assert.equal(created?.provider, "native");
 			assert.equal(created?.title, "Fix cache flow");
+			assert.equal(created?.formal, true);
+			assert.equal(created?.phase, "intake");
+			assert.ok(existsSync(nativeTaskArtifactPath(root, created!.providerTaskId, "prd.md")));
+			assert.ok(existsSync(nativeTaskArtifactPath(root, created!.providerTaskId, "design.md")));
+			assert.ok(existsSync(nativeTaskArtifactPath(root, created!.providerTaskId, "implement.md")));
+			assert.ok(existsSync(nativeTaskArtifactPath(root, created!.providerTaskId, "acceptance.md")));
 			assert.equal(readNativeProjectState(root).kind, "valid");
 
 			await provider.runTaskOperation("finish", []);
@@ -41,6 +47,29 @@ describe("Dove native project provider", () => {
 			assert.equal(provider.getCurrentTask()?.stableId, created?.stableId);
 			await provider.runTaskOperation("archive", [created!.stableId]);
 			assert.equal(createProjectProvider(root).getContext().tasks.length, 0);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("keeps formal documents user-owned and records bounded progress evidence", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-formal-progress-"));
+		try {
+			const provider = createProjectProvider(root) as import("../src/project-provider/index.ts").NativeProvider;
+			const task = await provider.ensureFormalTask!("Formal cache work", "Keep durable engineering artifacts");
+			const prdPath = nativeTaskArtifactPath(root, task.providerTaskId, "prd.md");
+			await writeFile(prdPath, "# User-owned PRD\n", "utf8");
+			await provider.ensureFormalTask!("Formal cache work", "Changed description must not overwrite the PRD");
+			assert.equal(await readFile(prdPath, "utf8"), "# User-owned PRD\n");
+			await provider.recordTaskProgress!(task.stableId, { phase: "implementing", nextStep: "Run focused tests", decision: "Keep the provider boundary", verification: "Unit test pending", evidence: { kind: "test", command: "npm test", result: "pending" } });
+			const refreshed = createProjectProvider(root).getCurrentTask();
+			assert.equal(refreshed?.phase, "implementing");
+			const state = readNativeProjectState(root);
+			assert.equal(state.kind, "valid");
+			assert.equal(state.state.goals[0]?.nextStep, "Run focused tests");
+			assert.deepEqual(state.state.goals[0]?.decisions, ["Keep the provider boundary"]);
+			assert.deepEqual(state.state.goals[0]?.verification, ["Unit test pending"]);
+			assert.match(await readFile(join(root, ".dove", "tasks", task.providerTaskId, "evidence.jsonl"), "utf8"), /"command":"npm test"/);
+			await provider.recordTaskProgress!(task.stableId, { phase: "blocked", nextStep: "Fix the failing test", verification: "Request failed.", evidence: { kind: "request", outcome: "failed" } });
+			assert.equal(createProjectProvider(root).getCurrentTask()?.phase, "blocked");
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});
 
@@ -111,13 +140,46 @@ describe("Dove native project provider", () => {
 		try {
 			await mkdir(taskDir, { recursive: true });
 			await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: "legacy", title: "Legacy goal", status: "in_progress" }), "utf8");
+			await writeFile(join(taskDir, "prd.md"), "# Legacy PRD\n\nKeep the useful requirement.", "utf8");
+			await writeFile(join(taskDir, "design.md"), "# Legacy design", "utf8");
+			await writeFile(join(taskDir, "implement.md"), "# Legacy implementation", "utf8");
+			await writeFile(join(taskDir, "acceptance.md"), "# Legacy acceptance", "utf8");
 			const legacyBefore = await readFile(join(taskDir, "task.json"), "utf8");
 			const provider = createProjectProvider(root);
 			await provider.runTaskOperation("start", ["trellis:legacy"]);
 			const current = createProjectProvider(root).getCurrentTask();
 			assert.equal(current?.provider, "native");
 			assert.equal(current?.title, "Legacy goal");
+			assert.equal(JSON.parse(await readFile(join(root, ".dove", "tasks", current!.providerTaskId, "task.json"), "utf8")).source, "legacy-trellis");
+			assert.equal(await readFile(nativeTaskArtifactPath(root, current!.providerTaskId, "prd.md"), "utf8"), "# Legacy PRD\n\nKeep the useful requirement.");
+			assert.equal(await readFile(nativeTaskArtifactPath(root, current!.providerTaskId, "acceptance.md"), "utf8"), "# Legacy acceptance");
 			assert.equal(await readFile(join(taskDir, "task.json"), "utf8"), legacyBefore);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("projects observed formal evidence into acceptance without claiming unobserved success", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-acceptance-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Acceptance projection");
+			await provider.recordTaskProgress!(task.stableId, { phase: "verifying", verification: "npm test failed: 1 assertion", evidence: { kind: "test", outcome: "failed", command: "npm test" } });
+			const acceptance = await readFile(nativeTaskArtifactPath(root, task.providerTaskId, "acceptance.md"), "utf8");
+			assert.match(acceptance, /observed outcome: failed/);
+			assert.match(acceptance, /npm test failed: 1 assertion/);
+			assert.doesNotMatch(acceptance, /passed|success/i);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("bounds long-running evidence while retaining the newest observations", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-evidence-bound-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Evidence bound");
+			for (let index = 0; index < 120; index++) await provider.recordTaskProgress!(task.stableId, { phase: "verifying", evidence: { index, payload: "x".repeat(1_000) } });
+			const evidence = await readFile(join(root, ".dove", "tasks", task.providerTaskId, "evidence.jsonl"), "utf8");
+			assert.ok(evidence.length <= 32_000);
+			assert.ok(evidence.includes('"index":119'));
+			assert.ok(!evidence.includes('"index":0'));
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});
 
@@ -155,6 +217,10 @@ describe("Dove native project provider", () => {
 			assert.equal(readNativeProjectState(root).kind, "invalid");
 			const longPrefix = "x".repeat(160);
 			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals: [{ ...goal, id: `${longPrefix}a` }, { ...goal, id: `${longPrefix}b` }] }), "utf8");
+			assert.equal(readNativeProjectState(root).kind, "invalid");
+			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals: [{ ...goal, formal: "yes" }] }), "utf8");
+			assert.equal(readNativeProjectState(root).kind, "invalid");
+			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals: [{ ...goal, phase: "unknown" }] }), "utf8");
 			assert.equal(readNativeProjectState(root).kind, "invalid");
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});

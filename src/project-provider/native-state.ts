@@ -13,6 +13,8 @@ const MAX_GOAL_DETAIL_ITEMS = 20;
 const MAX_GOAL_DETAIL_CHARS = 1_000;
 
 export type NativeGoalStatus = "active" | "completed" | "archived";
+export type NativeTaskPhase = "intake" | "planning" | "designed" | "implementing" | "verifying" | "completed" | "blocked" | "archived";
+export type NativeTaskSource = "native" | "legacy-trellis";
 
 export interface NativeGoal {
 	readonly id: string;
@@ -24,6 +26,10 @@ export interface NativeGoal {
 	readonly nextStep?: string;
 	readonly decisions: readonly string[];
 	readonly verification: readonly string[];
+	readonly formal?: boolean;
+	readonly phase?: NativeTaskPhase;
+	readonly source?: NativeTaskSource;
+	readonly sourceRef?: string;
 }
 
 export interface NativeProjectState {
@@ -106,6 +112,10 @@ function normalizeGoal(value: unknown): NativeGoal | undefined {
 	if (!isBoundedStringArray(value.decisions) || !isBoundedStringArray(value.verification)) return undefined;
 	if (value.description !== undefined && (typeof value.description !== "string" || value.description.length > MAX_GOAL_DESCRIPTION_CHARS)) return undefined;
 	if (value.nextStep !== undefined && (typeof value.nextStep !== "string" || value.nextStep.length > MAX_GOAL_DETAIL_CHARS)) return undefined;
+	if (value.formal !== undefined && typeof value.formal !== "boolean") return undefined;
+	if (value.phase !== undefined && !isNativeTaskPhase(value.phase)) return undefined;
+	if (value.source !== undefined && value.source !== "native" && value.source !== "legacy-trellis") return undefined;
+	if (value.sourceRef !== undefined && (typeof value.sourceRef !== "string" || value.sourceRef.length > MAX_GOAL_DESCRIPTION_CHARS)) return undefined;
 	return Object.freeze({
 		id: value.id,
 		title: value.title.trim(),
@@ -116,7 +126,15 @@ function normalizeGoal(value: unknown): NativeGoal | undefined {
 		...(typeof value.nextStep === "string" && value.nextStep.trim() ? { nextStep: value.nextStep.trim() } : {}),
 		decisions: Object.freeze([...value.decisions]),
 		verification: Object.freeze([...value.verification]),
+		...(value.formal === true ? { formal: true } : {}),
+		...(value.phase === undefined ? {} : { phase: value.phase }),
+		...(value.source === undefined ? {} : { source: value.source }),
+		...(typeof value.sourceRef === "string" && value.sourceRef.trim() ? { sourceRef: value.sourceRef.trim() } : {}),
 	});
+}
+
+function isNativeTaskPhase(value: unknown): value is NativeTaskPhase {
+	return value === "intake" || value === "planning" || value === "designed" || value === "implementing" || value === "verifying" || value === "completed" || value === "blocked" || value === "archived";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

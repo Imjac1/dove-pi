@@ -1,7 +1,8 @@
-import { normalizeAgentMode, type AgentMode } from "./contracts.ts";
+import { normalizeAgentMode, normalizeInteractionMode, type AgentMode, type InteractionMode } from "./contracts.ts";
 
 /** The four intentionally distinct interaction classes understood by Dove Kernel. */
 export type RequestIntent = "chat" | "lookup" | "project-work" | "execution";
+export type RequestLane = "fast" | "formal";
 
 /** Provider-neutral workflow action that requires request-specific handling. */
 export type WorkflowAction = "continue" | "create-task" | "start-task" | "finish-task" | "archive-task";
@@ -13,11 +14,12 @@ export interface RequestPlanInput {
 	readonly message: string;
 	readonly requestId?: string;
 	readonly mode?: AgentMode;
+	readonly interactionMode?: InteractionMode;
 	readonly projectAvailable?: boolean;
 	readonly explicitIntent?: RequestIntent;
 	/** A one-shot pending plan that stopped for user confirmation. It is consulted
 	 * only for a short affirmative follow-up. Completed work must not be passed. */
-	readonly pendingPlan?: Pick<RequestPlan, "requestId" | "intent">;
+	readonly pendingPlan?: Pick<RequestPlan, "requestId" | "intent" | "lane">;
 	readonly deadlineMs?: number;
 	readonly outputBudget?: number;
 }
@@ -30,10 +32,12 @@ export interface RequestPlan {
 	readonly requestId: string;
 	readonly intent: RequestIntent;
 	readonly mode: AgentMode;
+	readonly interactionMode: InteractionMode;
 	readonly contextClasses: readonly string[];
 	readonly deadlineMs?: number;
 	readonly outputBudget: number;
 	readonly projectAvailable: boolean;
+	readonly lane: RequestLane;
 	readonly continuedFromRequestId?: string;
 	readonly workflowAction?: WorkflowAction;
 	/** @deprecated Use workflowAction. */
@@ -56,6 +60,11 @@ const WORKFLOW_ACTION_PATTERNS: readonly [WorkflowAction, RegExp][] = [
 	["finish-task", /(?:完成|结束)(?:当前|这个|该)?(?:项目)?任务|\bfinish\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
 	["archive-task", /(?:归档)(?:当前|这个|该)?(?:项目)?任务|\barchive\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
 ];
+const FORMAL_TASK_PATTERN = /(?:正式(?:任务|流程|工作)|规划|制定|生成|编写|保留|落盘).{0,48}(?:任务|工作|方案|prd|设计|实现计划|验收|阶段产物|文档|产物)|(?:多文件|跨层|跨模块|系统性|重构).{0,32}(?:修改|改造|实现|优化|开发|迁移)|\b(?:prd|design document|implementation plan|acceptance criteria|formal task|multi[- ]file|cross[- ]layer|refactor)\b/i;
+const ARCHITECTURE_TASK_PATTERN = /(?:设计|规划|制定|重构|改造|实现|文档化).{0,48}(?:架构|方案|系统|模块)|(?:架构|系统|模块).{0,48}(?:设计|方案|重构)|\b(?:design|define|redesign|document|implement|plan)\b.{0,48}\b(?:architecture|system design|module)\b|\b(?:architecture|system design|module)\b.{0,48}\b(?:design|plan|refactor)\b/i;
+const FORMAL_ACTION_PATTERN = /(?:正式|规划|制定|生成|编写|保留|落盘|设计|重构|改造|文档化|plan|define|design|redesign|document|implement|refactor|formal|multi[- ]file|cross[- ]layer)/i;
+
+const EXPLANATORY_QUERY_PATTERN = /(?:解释|说明|分析|总结|描述|什么是|如何|怎么|怎样|为什么|explain|describe|summari[sz]e|how|what|why)/i;
 
 function actionClauses(message: string): string[] {
 	const independentActions = message
@@ -130,6 +139,13 @@ function classifyProjectAction(message: string, intent: RequestIntent): ProjectA
 	return intent === "project-work" && PROJECT_CONTINUATION_PATTERN.test(message) ? "continue" : undefined;
 }
 
+export function isFormalTaskRequest(message: string, intent: RequestIntent, workflowAction?: WorkflowAction): boolean {
+	if (workflowAction === "create-task") return true;
+	if (EXPLANATORY_QUERY_PATTERN.test(message) && !/(?:规划|制定|生成|编写|保留|落盘|重构|实现|迁移|plan|generate|write|refactor|implement)/i.test(message)) return false;
+	if ((intent === "chat" || intent === "lookup") && !FORMAL_ACTION_PATTERN.test(message)) return false;
+	return FORMAL_TASK_PATTERN.test(message) || ARCHITECTURE_TASK_PATTERN.test(message);
+}
+
 function contextClassesForIntent(intent: RequestIntent, projectAvailable: boolean): readonly string[] {
 	switch (intent) {
 		case "chat":
@@ -152,10 +168,12 @@ function freezePlan(plan: RequestPlan): RequestPlan {
 export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 	const message = input.message.trim();
 	const projectAvailable = input.projectAvailable === true;
+	const interactionMode = normalizeInteractionMode(input.interactionMode) ?? "auto";
 	const workflowAction = classifyWorkflowAction(message);
 	const inheritedIntent = isShortAffirmativeReply(message) && input.pendingPlan
 		? input.pendingPlan.intent
 		: undefined;
+	const inheritedLane = isShortAffirmativeReply(message) && input.pendingPlan?.lane === "formal" ? "formal" : undefined;
 	const explicitIntent = isRequestIntent(input.explicitIntent) ? input.explicitIntent : inheritedIntent;
 	const classifiedIntent = classifyIntent(message, explicitIntent);
 	// Lifecycle wording still selects project context and workflow guidance. It
@@ -163,8 +181,10 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 	const intent = classifiedIntent === "execution" ? classifiedIntent : workflowAction && workflowAction !== "continue" ? "project-work" : classifiedIntent;
 	const effectiveWorkflowAction = intent === "execution" ? undefined : workflowAction;
 	const projectAction = classifyProjectAction(message, intent);
-	const contextClasses = contextClassesForIntent(intent, projectAvailable);
-	const outputBudget = input.outputBudget ?? (intent === "chat" ? 1024 : intent === "lookup" ? 2048 : 4096);
+	const contextAvailable = projectAvailable && interactionMode !== "chat";
+	const lane: RequestLane = interactionMode !== "chat" && projectAvailable && (inheritedLane === "formal" || isFormalTaskRequest(message, intent, effectiveWorkflowAction)) ? "formal" : "fast";
+	const contextClasses = interactionMode === "chat" ? ["conversation"] : lane === "formal" ? ["conversation", "project-task", "project-spec"] : contextClassesForIntent(intent, contextAvailable);
+	const outputBudget = input.outputBudget ?? (lane === "formal" ? 4096 : intent === "chat" ? 1024 : intent === "lookup" ? 2048 : 4096);
 	if (!Number.isInteger(outputBudget) || outputBudget <= 0) throw new RangeError("outputBudget must be a positive integer");
 	if (input.deadlineMs !== undefined && (!Number.isInteger(input.deadlineMs) || input.deadlineMs <= 0)) {
 		throw new RangeError("deadlineMs must be a positive integer when provided");
@@ -173,10 +193,12 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 		requestId: input.requestId ?? `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
 		intent,
 		mode: normalizeAgentMode(input.mode) ?? "standard",
+		interactionMode,
 		contextClasses,
 		deadlineMs: input.deadlineMs,
 		outputBudget,
 		projectAvailable,
+		lane,
 		...(inheritedIntent && input.pendingPlan ? { continuedFromRequestId: input.pendingPlan.requestId } : {}),
 		...(effectiveWorkflowAction ? { workflowAction: effectiveWorkflowAction } : {}),
 		...(projectAction ? { projectAction } : {}),

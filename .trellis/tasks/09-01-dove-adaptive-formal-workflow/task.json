@@ -1,0 +1,28 @@
+{
+  "id": "dove-adaptive-formal-workflow",
+  "name": "dove-adaptive-formal-workflow",
+  "title": "Dove Adaptive Formal Workflow",
+  "description": "Preserve formal PRD, design, implementation, acceptance, and evidence artifacts without restoring workflow gates.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": "src/core request/task identity; src/project-provider native artifacts and lifecycle; src/pi-adapter context projection; focused and real-flow tests",
+  "package": null,
+  "priority": "P0",
+  "creator": "aixi",
+  "assignee": "aixi",
+  "createdAt": "2026-09-01",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "priority": "P0"
+  }
+}

@@ -131,6 +131,11 @@ Inside Dove Pi:
 /mode fast
 /mode standard
 /mode ultra
+
+/dove-mode auto       choose context mode automatically
+/dove-mode chat       isolated conversation without project-task context
+/dove-mode work       retain project context and formalize only complex work
+/dove-mode status     show the current context mode
 ```
 
 - `fast`: small, clear work with low overhead.
@@ -141,10 +146,10 @@ Inside Dove Pi:
 
 ## Dove Native Workflow
 
-Ordinary chat and coding execute directly. There is no project initialization, task creation, or
-phase approval prerequisite. On the first execution request, Dove silently establishes a compact
-current goal in `.dove/state.json` containing only goal status, decisions, next step, and
-verification summary.
+Ordinary chat and small coding requests execute directly. There is no project initialization, task
+creation, or phase approval prerequisite. Explicit planning, architecture, cross-module, or
+multi-file requests silently establish a formal Dove task. `.dove/state.json` keeps the compact
+index, while durable artifacts live under `.dove/tasks/<task-id>/`.
 
 You may explicitly initialize or inspect that state:
 
@@ -153,9 +158,9 @@ dove-pi project init
 dove-pi project doctor
 ```
 
-Initialization creates only Dove's compact state. It installs no dependency and generates no PRD,
-design, implementation, workflow, or script files. Explicit task commands are optional tracking,
-not a gate before coding.
+Initialization creates only Dove's compact index and installs no dependency or Trellis script.
+Formal tasks generate PRD, design, implementation, and acceptance artifacts on demand. They support
+context recovery and verification; they are not a gate before coding.
 
 You can then say:
 
@@ -174,7 +179,7 @@ legacy directory. Continuing a legacy task imports only the useful goal metadata
 | --- | --- |
 | Pi | Models, sessions, TUI, and native tool hosting |
 | Dove | Request context, goal continuation, loop control, diagnostics, and execution records |
-| Dove Native Workflow | Compact goals, decisions, and verification state under `.dove/state.json` |
+| Dove Native Workflow | Compact state plus formal PRD, design, implementation, acceptance, and evidence artifacts under `.dove/` |
 | Legacy reader | Read-only projection of existing `.trellis` tasks, specs, and journals |
 
 Pi is the only tool and execution authority. Dove adds no permission layer; it manages context,
@@ -196,6 +201,7 @@ goal continuity, no-progress loops, and efficiency diagnostics.
 /dove-tools core        explicitly use the compact read-only compatibility set
 /dove-tools full        explicitly enable every installed tool
 /dove-thinking status   inspect thinking policy
+/dove-mode status       show the context mode
 ```
 
 `/thinking` remains Pi's native command. Dove uses `/dove-thinking` and does not shadow it.

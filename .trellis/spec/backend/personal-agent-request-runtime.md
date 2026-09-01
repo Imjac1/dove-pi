@@ -134,8 +134,6 @@ export function run(pi: ExtensionAPI) {
 ### Correct
 
 ```typescript
-// Core exposes a capability; the Pi adapter registers it and the Windows
-// runtime owns PowerShell process details.
 registry.register(windowsHostInfoCapability);
 const result = await executeFastPath(registry, ledger, "windows.host_info", {}, context);
 ```
@@ -143,7 +141,6 @@ const result = await executeFastPath(registry, ledger, "windows.host_info", {}, 
 #### Provider Budget: Wrong
 
 ```typescript
-// Accounting claims a smaller response, but transport still asks for 16,384.
 const gateway = new ModelGateway({ contextWindow: 12_800, reservedOutput: 4_096 });
 return originalPayload;
 ```
@@ -167,11 +164,8 @@ return limitProviderOutputTokens(payload, reservedOutput);
 **Context**: Dove is primarily used through Pi, so a generic host abstraction
 would add indirection without improving this boundary.
 
-**Options considered**:
-
-1. Make `src/pi-adapter/**` a minimal event translation layer.
-2. Keep all logic in the Pi extension.
-3. Keep Pi UX specialization while isolating safety-critical decisions.
+The alternatives were a minimal event layer or putting all logic in the Pi
+extension; both lose the boundary below.
 
 **Decision**: Use option 3. Pi and the native project provider are replaceable boundaries, not
 Kernel dependencies. Pi owns lifecycle, shortcuts, active tools, streaming,
@@ -182,15 +176,13 @@ second Pi tool-permission policy.
 **Example**:
 
 ```typescript
-// Pi-specific UX can remain here.
 pi.on("before_agent_start", async (event, ctx) => {
   const plan = createRequestPlan({ message: event.prompt, mode: mode.current });
   return runtime.prepareRequest(plan, ctx.model);
 });
 ```
 
-Future CLI or MCP hosts can reuse Kernel contracts without moving Pi-only
-behavior into generic abstractions.
+Future CLI/MCP hosts can reuse the Kernel contracts.
 
 ## V2 Request Planning and Provider Budgets
 
@@ -208,6 +200,13 @@ language project continuation is read-only Project Work.
 
 `RequestPlan.workflowAction` is compatibility metadata for explicit goal
 commands; it never injects a phase workflow or restricts Pi tools.
+
+`RequestPlan.interactionMode` is an independent user-facing context preference:
+`auto` keeps the adaptive default, `chat` omits project context and formal task
+persistence, and `work` permits project context while still keeping ordinary
+small edits on the fast lane. Neither interaction mode changes Pi's tool
+authority. A short affirmative continuation inherits a pending formal lane so
+an accidental model question cannot detach the follow-up from its durable task.
 
 Auto records Pi's provider-visible schema at session start and never calls
 `setActiveTools` because of Chat, Lookup, Project Work, or Execution intent.

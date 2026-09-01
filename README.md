@@ -125,6 +125,11 @@ Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影�
 /mode fast
 /mode standard
 /mode ultra
+
+/dove-mode auto       自动选择上下文模式
+/dove-mode chat       独立对话，不加载项目任务上下文
+/dove-mode work       保留项目上下文，复杂工作才创建正式产物
+/dove-mode status     查看当前上下文模式
 ```
 
 - `fast`：简单、明确、优先快速完成；
@@ -135,9 +140,9 @@ Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影�
 
 ## Dove Native Workflow
 
-普通聊天和代码任务直接执行，不需要初始化项目、创建任务或通过阶段门禁。首次执行型请求会在后台
-建立一个紧凑的当前目标；状态存放在 `.dove/state.json`，只包含目标、状态、关键决定、下一步和
-验证摘要。
+普通聊天和小型代码任务直接执行，不需要初始化项目、创建任务或通过阶段门禁。明确的规划、架构、
+跨模块或多文件请求会在后台建立一个正式 Dove 任务；状态索引存放在 `.dove/state.json`，正式产物
+存放在 `.dove/tasks/<task-id>/`。
 
 你也可以显式初始化或查看状态：
 
@@ -146,8 +151,8 @@ dove-pi project init
 dove-pi project doctor
 ```
 
-初始化只创建 Dove 的轻量状态，不安装依赖，也不生成 PRD、design、implement、workflow 或
-脚本。显式任务命令是可选记录功能，不是开始编码的前置条件。
+初始化只创建 Dove 的轻量索引，不安装依赖，也不执行 Trellis 脚本。正式任务会按需生成 PRD、design、
+implement 和 acceptance 产物；它们用于恢复上下文和验收记录，不是开始编码的前置条件。
 
 之后可以直接说：
 
@@ -165,7 +170,7 @@ Dove 会直接读取当前原生目标。已有 `.trellis` 的项目仍可读取
 | --- | --- |
 | Pi | 模型、会话、TUI 和原生工具宿主 |
 | Dove | 请求上下文、目标续接、循环控制、诊断和执行记录；不取代 Pi 的工具权限 |
-| Dove Native Workflow | `.dove/state.json` 中的紧凑目标、决定和验证状态 |
+| Dove Native Workflow | `.dove/` 中的紧凑状态，以及正式 PRD、设计、实现、验收和证据产物 |
 | Legacy reader | 只读投影已有 `.trellis` 任务、spec 和 journal |
 
 Pi 是唯一工具和执行权威。Dove 不增加权限层，只管理上下文、目标连续性、无进展循环和效率诊断。
@@ -186,6 +191,7 @@ Pi 是唯一工具和执行权威。Dove 不增加权限层，只管理上下文
 /dove-tools core        显式使用兼容的精简只读集合
 /dove-tools full        显式启用所有已安装工具
 /dove-thinking status   查看思考策略
+/dove-mode status       查看上下文模式
 ```
 
 `/thinking` 是 Pi 原生命令；Dove 使用 `/dove-thinking`，不会覆盖它。

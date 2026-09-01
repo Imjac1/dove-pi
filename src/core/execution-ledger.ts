@@ -83,6 +83,8 @@ export class ExecutionLedger {
 			correlation: { requestId: plan.requestId, sessionId, taskId },
 			details: {
 				requestId: plan.requestId,
+				interactionMode: plan.interactionMode,
+				lane: plan.lane,
 				continuedFromRequestId: plan.continuedFromRequestId,
 				intent: plan.intent,
 				workflowAction: plan.workflowAction,

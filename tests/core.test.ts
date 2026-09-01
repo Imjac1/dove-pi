@@ -161,13 +161,14 @@ describe("request and model observability", () => {
 	it("records the request plan and model budget decision in the ledger", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-request-ledger-"));
 		const ledger = new ExecutionLedger(join(temporary, "ledger.jsonl"));
-		const plan = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true, requestId: "req-1" });
+		const plan = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true, interactionMode: "work", requestId: "req-1" });
 		await ledger.appendRequestPlan("session:test", "request:req-1", plan, "sess-1");
 		await ledger.appendRuntimePhase({ taskId: "session:test", stepId: "prepare:req-1", mode: plan.mode, requestId: plan.requestId, sessionId: "sess-1", phase: "request-prepare", durationMs: 12.6, metrics: { intentMs: 1, projectContextMs: 8, contextRefreshed: true } });
 		await ledger.appendModelBudgetChecked("session:test", "request:req-1", plan.mode, plan.requestId, accountModelBudget({ payload: {}, segments: [{ id: "user", source: "user", content: "hi" }] }, { contextWindow: 12800, reservedOutput: 1024 }), "sess-1");
 		const records = await ledger.read();
 		assert.deepEqual(records.map((record) => record.kind), ["request.planned", "runtime.phase.completed", "model.budget.checked"]);
 		assert.equal(records[0]?.details.intent, "project-work");
+		assert.equal(records[0]?.details.interactionMode, "work");
 		assert.equal(records[0]?.details.projectAction, "continue");
 		assert.equal(records[1]?.details.durationMs, 13);
 		assert.deepEqual(records[1]?.details.metrics, { intentMs: 1, projectContextMs: 8, contextRefreshed: true });

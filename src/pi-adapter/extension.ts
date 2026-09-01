@@ -10,7 +10,7 @@ import { CAPABILITY_PROTOCOL_VERSION } from "../core/capability-protocol.ts";
 import { executeRecipe, type RecipeRegistry } from "../core/recipe-registry.ts";
 import { ExecutionLedger } from "../core/execution-ledger.ts";
 import { ModeController, type ModeChange } from "../core/mode-controller.ts";
-import { normalizeAgentMode, type AgentMode } from "../core/contracts.ts";
+import { normalizeAgentMode, normalizeInteractionMode, type AgentMode, type InteractionMode } from "../core/contracts.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
 import { applyWorkspacePatch, createWorkspaceSnapshot, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
 import { createProjectProvider, initializeNativeProject, summarizeProjectContinuation, updateProjectManifest, type ProjectContextSnapshot, type ProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskOperation } from "../project-provider/index.ts";
@@ -112,6 +112,14 @@ function parseMode(value: string): AgentMode | undefined {
 	if (normalized === "ultra") return "ultra";
 	if (normalized === "fast" || normalized === "standard") return normalized;
 	return undefined;
+}
+
+function displayInteractionMode(value: InteractionMode): string {
+	return value === "chat" ? "Chat" : value === "work" ? "Work" : "Auto";
+}
+
+function parseInteractionMode(value: string): InteractionMode | undefined {
+	return normalizeInteractionMode(value.trim().toLowerCase());
 }
 
 /**
@@ -398,6 +406,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	}
 	const thinkingPolicyEnv = process.env.DOVE_PI_THINKING_POLICY;
 	let thinkingPolicy: ThinkingPolicyState = thinkingPolicyEnv !== undefined ? parsePolicy(thinkingPolicyEnv) : readThinkingPolicyFlag();
+	const interactionModeFlagPath = join(stateDir, "interaction-mode");
+	function readInteractionModeFlag(): InteractionMode {
+		try { return parseInteractionMode(readFileSync(interactionModeFlagPath, "utf8")) ?? "auto"; } catch { return "auto"; }
+	}
+	function persistInteractionMode(): void {
+		try {
+			mkdirSync(stateDir, { recursive: true });
+			writeFileSync(interactionModeFlagPath, interactionMode, "utf8");
+		} catch { /* non-fatal: keep the in-memory mode */ }
+	}
+	let interactionMode: InteractionMode = parseInteractionMode(process.env.DOVE_PI_INTERACTION_MODE ?? "") ?? readInteractionModeFlag();
 	function persistThinkingPolicy(): void {
 		try {
 			mkdirSync(stateDir, { recursive: true });
@@ -484,7 +503,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const policyTag = thinkingPolicy.kind === "lock" ? `· 🔒${thinkingPolicy.level}` : thinkingPolicy.kind === "off" ? "· manual" : "";
 		const progress = progressGuard.snapshot();
 		const progressHint = progress.active && (progress.longRun || progress.warning) ? ` · ${progress.longRun ? `长任务 ${formatProgressSnapshot(progress)}` : `检查 ${progress.warning}`}` : "";
-		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${policyTag}${progressHint}`);
+		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${displayInteractionMode(interactionMode)} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${policyTag}${progressHint}`);
 	}
 
 	function persistMode(change: ModeChange): void {
@@ -582,6 +601,25 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			setMode(requested, ctx);
+		},
+	});
+
+	pi.registerCommand("dove-mode", {
+		description: "Show or change Dove context mode: auto, chat, or work",
+		handler: async (args, ctx) => {
+			const requested = parseInteractionMode(args);
+			if (!requested) {
+				if (!args.trim() || args.trim().toLowerCase() === "status") {
+					ctx.ui.notify(`Dove context mode: ${displayInteractionMode(interactionMode)}. Use /dove-mode auto|chat|work.`, "info");
+					return;
+				}
+				ctx.ui.notify("Dove context mode must be auto, chat, or work.", "warning");
+				return;
+			}
+			interactionMode = requested;
+			persistInteractionMode();
+			updateStatus(ctx);
+			ctx.ui.notify(`Dove context mode: ${displayInteractionMode(requested)}.`, "info");
 		},
 	});
 
@@ -1350,6 +1388,18 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const taskId = currentRequestTaskId ?? "pi-session";
 			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
 			await ledger.appendRequestAttemptCompleted({ taskId, stepId: `request:${currentRequestPlan.requestId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, sessionId, attemptId: completed.attemptId, number: completed.number, outcome, failureReason: pendingRequestTerminal?.detail ?? (observedFailure && !retry?.retry ? retry?.reason : undefined) });
+			if (currentRequestTaskId && currentRequestPlan.lane === "formal" && projectProvider.recordTaskProgress) {
+				try {
+					await projectProvider.recordTaskProgress(currentRequestTaskId, {
+						phase: outcome === "failed" ? "blocked" : outcome === "completed" ? "verifying" : "implementing",
+						nextStep: outcome === "failed" ? "Resolve the recorded failure and rerun verification." : outcome === "completed" ? "Review acceptance evidence and resolve remaining criteria." : "Retry the interrupted implementation step.",
+						verification: `Request ${currentRequestPlan.requestId} ended with ${outcome}.`,
+						evidence: { requestId: currentRequestPlan.requestId, intent: currentRequestPlan.intent, outcome, stopReason },
+					});
+				} catch (error) {
+					if (ctx.hasUI) ctx.ui.notify(`Dove task progress unavailable: ${error instanceof Error ? error.message : String(error)}`, "warning");
+				}
+			}
 			lastAttemptOutcome = outcome;
 			if (pendingRequestTerminal?.policyAbort || (observedFailure && !retry?.retry && observedFailure.reason !== "cancelled")) ctx.abort();
 		}
@@ -1570,7 +1620,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const contextWindow = typeof model?.contextWindow === "number" ? model.contextWindow : undefined;
 		if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return;
 		const validContextWindow: number = contextWindow;
-		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, projectAvailable: projectProvider.kind === "trellis" });
+		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, interactionMode, projectAvailable: projectProvider.kind !== "lightweight" });
 		const sessionManager = ctx.sessionManager as { getSessionId?: () => string };
 		const sessionId = sessionManager.getSessionId?.();
 		const taskId = currentRequestTaskId ?? (currentRequestPlan?.intent === "chat" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? "pi-session");
@@ -1676,6 +1726,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				message: event.prompt,
 				requestId: requestLease.logicalRequestId,
 				mode: mode.current,
+				interactionMode,
 				projectAvailable: true,
 				pendingPlan: pendingContinuationPlan,
 			});
@@ -1683,9 +1734,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			pendingContinuationPlan = undefined;
 			currentRequestHadNonQuestionTool = false;
 		}
-		if (requestLease.isNewRequest && requestPlan.intent === "execution" && projectProvider.ensureCurrentGoal) {
+		if (requestLease.isNewRequest && requestPlan.lane === "formal" && projectProvider.ensureFormalTask) {
 			try {
-				await projectProvider.ensureCurrentGoal(event.prompt.trim().split(/\r?\n/, 1)[0]?.slice(0, 240) || "Current coding goal");
+				await projectProvider.ensureFormalTask(event.prompt.trim().split(/\r?\n/, 1)[0]?.slice(0, 240) || "Current formal task");
 				projectProvider = createProjectProvider(projectProvider.projectRoot);
 			} catch (error) {
 				// Goal tracking is optional. A damaged metadata file must not block Pi
@@ -1695,8 +1746,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		const intentDurationMs = Date.now() - intentStartedAt;
 		const projectContextStartedAt = Date.now();
-		const continuationState = readProjectContinuationForPlan(projectProvider, requestPlan);
-		const requestProjectContext = continuationState?.context ?? (requestPlan.intent === "chat" ? undefined : projectProvider.getContext());
+		const contextlessRequest = requestPlan.interactionMode === "chat" || (requestPlan.intent === "chat" && requestPlan.lane !== "formal");
+		const continuationState = contextlessRequest ? undefined : readProjectContinuationForPlan(projectProvider, requestPlan);
+		const requestProjectContext = continuationState?.context ?? (contextlessRequest ? undefined : projectProvider.getContext());
 		const taskInventoryRequest = isTaskInventoryRequest(event.prompt);
 		const projectContextDurationMs = Date.now() - projectContextStartedAt;
 		currentRequestPlan = requestPlan;
@@ -1704,7 +1756,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const continuationTask = continuationState?.projection.kind === "current" || continuationState?.projection.kind === "single_candidate"
 			? continuationState.projection.task
 			: undefined;
-		const requestTaskId = requestPlan.intent === "chat" || requestPlan.workflowAction === "create-task"
+		const requestTaskId = requestPlan.lane !== "formal" || requestPlan.workflowAction === "create-task"
 			? "pi-session"
 			: continuationState
 				? continuationTask?.stableId ?? "pi-session"
@@ -1745,15 +1797,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// (workflow skill suggestion) and tool-set growth are excluded here because
 		// rebuilding the message on every intent flip invalidates the provider
 		// prompt-cache prefix (observed as frequent full cacheRead=0 misses).
-		const isChat = requestPlan.intent === "chat";
+		const isChat = contextlessRequest;
 		const epoch = isChat ? undefined : `${mode.current}:${requestProjectContext?.revision ?? "unknown"}`;
-		const shouldRefreshSnapshot = requestLease.isNewRequest && !isChat && requestPlan.projectAction !== "continue" && !taskInventoryRequest && requestContextEpoch !== epoch;
+		const shouldRefreshSnapshot = requestLease.isNewRequest && !isChat && (requestPlan.projectAction !== "continue" || requestPlan.lane === "formal") && !taskInventoryRequest && requestContextEpoch !== epoch;
 		let snapshotForTurn: string | undefined;
 		let contextCompileDurationMs = 0;
 		if (shouldRefreshSnapshot) {
-			const contextQuery = event.prompt;
+			const contextQuery = requestPlan.lane === "formal" ? `${event.prompt} prd design implementation acceptance` : event.prompt;
 			const contextCompileStartedAt = Date.now();
-			const context = buildInteroperableProjectContext(projectProvider, contextQuery, mode.current, { maxChars: remainingContextChars }).context;
+			const context = buildInteroperableProjectContext(projectProvider, contextQuery, mode.current, { maxChars: remainingContextChars, includeFormalArtifacts: requestPlan.lane === "formal" }).context;
 			contextCompileDurationMs = Date.now() - contextCompileStartedAt;
 			if (context.segments.length > 0 && context.text.trim()) {
 				requestContextRevision = `${epoch}:${context.charCount}`;
@@ -1774,7 +1826,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const guidanceForTurn = requestGuidance.length > 0 ? `[PERSONAL AGENT REQUEST GUIDANCE]\n${requestGuidance.join("\n")}` : undefined;
 		let messageForTurn = [snapshotForTurn, guidanceForTurn].filter((value): value is string => Boolean(value)).join("\n\n") || undefined;
 		const reasoningVoiceInstruction = reasoningVoice ? ` In your internal reasoning, speak in a concise, action-oriented first-person-plural voice ("We need …" / "We should …") instead of generic lead-ins like "Let me think…". This is a style preference; keep the final answer's substance and correctness unchanged.` : "";
-		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} Dove execution mode and compact project context are supplied separately at request time. Project tracking is automatic and never a prerequisite for using Pi tools.${reasoningVoiceInstruction}`;
+		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} Dove execution mode and adaptive project context are supplied separately at request time. Formal task artifacts organize work but never gate Pi tools.${reasoningVoiceInstruction}`;
 		// Preflight the newly compiled request fragment against the active model
 		// window. Historical conversation usage is accounted for by Pi's own
 		// context usage API; this gate prevents Dove's additions from consuming

@@ -1,8 +1,16 @@
 /** Public/runtime execution policy. Pi's thinking level and extension profiles are separate settings. */
 export type AgentMode = "fast" | "standard" | "ultra";
 
+/** User-facing context organization mode. It never changes Pi tool authority. */
+export type InteractionMode = "auto" | "chat" | "work";
+
 export function normalizeAgentMode(value: unknown): AgentMode | undefined {
 	if (value === "fast" || value === "standard" || value === "ultra") return value;
+	return undefined;
+}
+
+export function normalizeInteractionMode(value: unknown): InteractionMode | undefined {
+	if (value === "auto" || value === "chat" || value === "work") return value;
 	return undefined;
 }
 

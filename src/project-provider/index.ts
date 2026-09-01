@@ -9,6 +9,7 @@ export * from "./discovery.ts";
 export * from "./manifest.ts";
 export * from "./native-provider.ts";
 export * from "./native-state.ts";
+export * from "./native-artifacts.ts";
 export * from "./lock.ts";
 export * from "./continuation.ts";
 

@@ -36,6 +36,10 @@ interface NativeGoal {
   nextStep?: string;
   decisions: readonly string[];
   verification: readonly string[];
+  formal?: boolean;
+  phase?: "intake" | "planning" | "designed" | "implementing" | "verifying" | "completed" | "blocked" | "archived";
+  source?: "native" | "legacy-trellis";
+  sourceRef?: string;
 }
 ```
 
@@ -51,8 +55,15 @@ interface NativeGoal {
   being silently repaired.
 - Malformed state degrades diagnostics and blocks metadata mutation without
   overwriting the file. It never blocks ordinary Pi tools.
-- The first execution request may call `ensureCurrentGoal` silently. This is
+- Fast-lane execution does not create a formal task. Explicit planning,
+  architecture, multi-file/cross-layer, or continuation requests may call
+  `ensureFormalTask` silently to establish durable artifacts; this is
   background continuity, not a prerequisite or confirmation flow.
+- Formal tasks also own `.dove/tasks/<id>/task.json`, `prd.md`, `design.md`,
+  `implement.md`, `acceptance.md`, and optional append-only `evidence.jsonl`.
+- A legacy import sets `source="legacy-trellis"` and `sourceRef` to the
+  provider-qualified task identity, then copies matching public formal files
+  only when the native artifact is absent. The source files remain unchanged.
 
 ## 3. Native Provider
 
@@ -86,6 +97,22 @@ private runtime probing, or workflow-skill recommendations.
   text characters. Once native state exists, provider revision is derived only
   from the native revision; later legacy-file changes do not churn its cache.
 
+### Formal Evidence Projection
+
+`recordTaskProgress(taskId, progress)` is the only request-level formal
+progress writer. When `progress.evidence` exists, it appends one bounded JSONL
+record, retaining at most the newest 100 records and 32,000 characters, then
+rewrites only the generated `## Dove Evidence Projection` section of native
+`acceptance.md`; user-authored criteria remain intact. The projection uses
+`observed outcome` wording and never marks a criterion passed without an
+observed result.
+
+| Input | Required result |
+|---|---|
+| failed request/test | append evidence, phase `blocked` or supplied phase, no success claim |
+| completed request | append evidence, phase `verifying`, next step reviews acceptance |
+| missing or unreadable native artifact | keep Pi execution available and skip only that projection |
+
 ## 5. Context And Cache
 
 - `buildProjectContext` consumes only the normalized `ProjectProvider`
@@ -114,7 +141,8 @@ component or instruct the user to initialize it.
 | Condition | Required behavior |
 |---|---|
 | `.dove/state.json` absent | Healthy empty project; no initialization prompt |
-| First execution request | Execute normally; best-effort silent goal creation |
+| Fast-lane execution | Execute normally without creating formal task artifacts |
+| Formal-lane request | Execute normally; best-effort silent formal task creation |
 | Native state malformed | Preserve file, report degraded metadata, keep Pi tools usable |
 | Legacy `.trellis` present | Read bounded public data without executing scripts |
 | Legacy task selected | Import one compact native goal; leave legacy bytes unchanged |

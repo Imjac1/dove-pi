@@ -9,7 +9,7 @@ import { createRequestPlan } from "../src/core/request-plan.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
-import type { ProjectContextSnapshot, ProjectProvider, ProjectTask } from "../src/project-provider/index.ts";
+import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../src/project-provider/index.ts";
 import { SEPT1_QUESTION_VARIANTS, sept1QuestionInput } from "./fixtures/sept1-question-loop.ts";
 
 const adapterStateDir = mkdtempSync(join(tmpdir(), "pi-adapter-state-"));
@@ -51,7 +51,7 @@ describe("Pi adapter", () => {
 		} as unknown as ExtensionAPI;
 
 		extension(api);
-		assert.deepEqual([...commands.keys()], ["mode", "status", "sysprompt", "reasoning-voice", "dove-thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
+		assert.deepEqual([...commands.keys()], ["mode", "dove-mode", "status", "sysprompt", "reasoning-voice", "dove-thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
 		assert.equal(commands.has("thinking"), false, "Dove must not shadow Pi's built-in /thinking command");
 		assert.equal(shortcuts.size, 2);
 		assert.ok(shortcuts.has("ctrl+shift+l"));
@@ -126,7 +126,7 @@ describe("Pi adapter", () => {
 			unexpected: [],
 			finalProvider: undefined,
 		});
-		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Auto · Ready")));
 		assert.ok(statuses.some((value) => value.includes("Pi max")));
 		assert.ok(notifications.some((value) => value.includes("Ctrl+P 切换模型")));
 		await events.get("agent_start")?.({ type: "agent_start" }, context);
@@ -137,7 +137,7 @@ describe("Pi adapter", () => {
 		assert.match(guardedResult?.content?.map((part) => part.text ?? "").join("\n") ?? "", /Dove progress advisory/);
 		await events.get("agent_end")?.({ type: "agent_end", messages: [] }, context);
 		await shortcuts.get("ctrl+alt+m")?.handler(context);
-		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Auto · Ready")));
 		assert.ok(statusColors.includes("thinkingMax"));
 		providerAborted = false;
 		const unknownProviderPayload = { messages: [{ role: "user", content: "ok" }] };
@@ -170,9 +170,16 @@ describe("Pi adapter", () => {
 		assert.match(executionLog, /"cache":\{"classification":"cold"/);
 
 		await commands.get("mode")?.handler("fast", context);
-		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Auto · Ready")));
 		await commands.get("mode")?.handler("ultra", context);
-		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · Ready")).length >= 2);
+		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · Auto · Ready")).length >= 2);
+		await commands.get("dove-mode")?.handler("chat", context);
+		assert.equal(readFileSync(join(adapterStateDir, "interaction-mode"), "utf8"), "chat");
+		await commands.get("dove-mode")?.handler("status", context);
+		assert.ok(notifications.at(-1)?.includes("Chat"));
+		await commands.get("dove-mode")?.handler("work", context);
+		assert.ok(notifications.at(-1)?.includes("Work"));
+		await commands.get("dove-mode")?.handler("auto", context);
 		await commands.get("skills")?.handler("__missing_dove_skill__", context);
 		assert.ok(notifications.some((value) => value.includes("没有找到匹配的 skill")));
 		await commands.get("project")?.handler("doctor", context);
@@ -367,6 +374,23 @@ describe("Pi adapter", () => {
 				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {}, confirm: async () => { confirmations += 1; return true; } },
 				sessionManager: { getEntries: () => [], getSessionId: () => "planning-replay" },
 			};
+			const simplePrompt = "查看 README.md";
+			await events.get("input")?.({ type: "input", text: simplePrompt, source: "interactive", streamingBehavior: "immediate" }, context);
+			await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: simplePrompt, systemPrompt: "" }, context);
+			assert.equal(existsSync(join(root, ".dove", "state.json")), false, "fast-lane lookup must not create formal state");
+			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
+
+			const formalPrompt = "请规划并设计一个缓存命中率优化方案，只回复完成，不要调用工具。";
+			await events.get("input")?.({ type: "input", text: formalPrompt, source: "interactive", streamingBehavior: "immediate" }, context);
+			await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: formalPrompt, systemPrompt: "" }, context);
+			const formalTask = createProjectProvider(root).getCurrentTask();
+			assert.equal(formalTask?.formal, true);
+			assert.ok(formalTask?.providerTaskId);
+			for (const artifact of ["prd.md", "design.md", "implement.md", "acceptance.md"]) assert.equal(existsSync(join(root, ".dove", "tasks", formalTask!.providerTaskId, artifact)), true);
+			await events.get("agent_start")?.({ type: "agent_start" }, context);
+			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
+			assert.match(readFileSync(join(root, ".dove", "tasks", formalTask!.providerTaskId, "evidence.jsonl"), "utf8"), /"outcome":"completed"/);
+
 			await events.get("input")?.({ type: "input", text: "创建一个项目任务：缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
 			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建一个项目任务：缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };
 			assert.equal(activeTools.includes("agent_project_task"), true);

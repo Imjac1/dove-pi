@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ContextCompiler } from "../src/core/context-compiler.ts";
 import { buildProjectContext, buildTrellisContext } from "../src/trellis-adapter/context.ts";
-import { createProjectProvider, NativeProvider } from "../src/project-provider/index.ts";
+import { createProjectProvider, nativeTaskArtifactPath, NativeProvider } from "../src/project-provider/index.ts";
 import { isSensitiveProjectPath, readTrellisSnapshot } from "../src/trellis-adapter/index.ts";
 
 describe("context compiler", () => {
@@ -190,6 +190,21 @@ describe("Trellis context", () => {
 			assert.ok(native.charCount < legacy.charCount / 4);
 			assert.ok(native.items.some((item) => item.id.endsWith(".dove\\state.json") || item.id.endsWith(".dove/state.json")));
 			assert.ok(explicitLegacy.items.some((item) => item.sourceRef?.startsWith("legacy-trellis:")));
+		} finally { await rm(temporary, { recursive: true, force: true }); }
+	});
+
+	it("loads native formal artifacts only when the formal lane opts in", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-native-formal-context-"));
+		try {
+			const provider = createProjectProvider(temporary);
+			await provider.ensureFormalTask!("Formal context", "Load artifacts on demand");
+			const compact = buildProjectContext(provider, "验收标准", "standard");
+			assert.equal(compact.items.some((item) => item.id.endsWith("acceptance.md")), false);
+			const formal = buildProjectContext(provider, "验收标准", "standard", { includeFormalArtifacts: true });
+			assert.ok(formal.items.some((item) => item.id.endsWith("acceptance.md")));
+			const beforeRevision = provider.getContext().revision;
+			await writeFile(nativeTaskArtifactPath(temporary, provider.getCurrentTask()!.providerTaskId, "acceptance.md"), "# Updated acceptance\n", "utf8");
+			assert.notEqual(provider.getContext().revision, beforeRevision);
 		} finally { await rm(temporary, { recursive: true, force: true }); }
 	});
 

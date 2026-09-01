@@ -14,16 +14,55 @@ describe("request planning", () => {
 	it("keeps an ordinary hi turn as isolated chat", () => {
 		const plan = createRequestPlan({ message: "hi", projectAvailable: true, requestId: "r1" });
 		assert.equal(plan.intent, "chat");
+		assert.equal(plan.lane, "fast");
 		assert.deepEqual(plan.contextClasses, ["conversation"]);
 		assert.equal("capabilityIds" in plan, false);
 		assert.equal("approval" in plan, false);
 		assert.equal(Object.isFrozen(plan), true);
 	});
 
+	it("supports explicit chat and work context modes without changing intent safety", () => {
+		const chat = createRequestPlan({ message: "修复登录超时问题", projectAvailable: true, interactionMode: "chat" });
+		assert.equal(chat.interactionMode, "chat");
+		assert.equal(chat.intent, "execution");
+		assert.equal(chat.lane, "fast");
+		assert.deepEqual(chat.contextClasses, ["conversation"]);
+
+		const work = createRequestPlan({ message: "修复登录超时问题", projectAvailable: true, interactionMode: "work" });
+		assert.equal(work.interactionMode, "work");
+		assert.equal(work.intent, "execution");
+		assert.equal(work.lane, "fast");
+		assert.deepEqual(work.contextClasses, ["conversation", "project-task", "project-spec"]);
+
+		const formalChat = createRequestPlan({ message: "规划并生成 PRD", projectAvailable: true, interactionMode: "chat" });
+		assert.equal(formalChat.lane, "fast");
+		assert.equal(formalChat.intent, "project-work");
+		assert.deepEqual(formalChat.contextClasses, ["conversation"]);
+	});
+
 	it("distinguishes lookup, project work, and execution", () => {
 		assert.equal(createRequestPlan({ message: "show project status", projectAvailable: true }).intent, "lookup");
 		assert.equal(createRequestPlan({ message: "implement the login feature", projectAvailable: true }).intent, "execution");
 		assert.equal(createRequestPlan({ message: "work on the project plan", projectAvailable: true }).intent, "project-work");
+	});
+
+	it("selects formal persistence only for explicit or clearly complex work", () => {
+		assert.equal(createRequestPlan({ message: "修复登录超时问题", projectAvailable: true }).lane, "fast");
+		assert.equal(createRequestPlan({ message: "规划并重构登录模块，保留 PRD、设计和验收产物", projectAvailable: true }).lane, "formal");
+		assert.equal(createRequestPlan({ message: "设计登录模块架构", projectAvailable: true }).lane, "formal");
+		assert.equal(createRequestPlan({ message: "design the authentication architecture", projectAvailable: true }).lane, "formal");
+		assert.equal(createRequestPlan({ message: "继续当前项目任务", projectAvailable: true }).lane, "fast");
+		assert.equal(createRequestPlan({ message: "解释一下架构设计", projectAvailable: true }).lane, "fast");
+		assert.equal(createRequestPlan({ message: "how does the architecture work?", projectAvailable: true }).lane, "fast");
+		assert.equal(createRequestPlan({ message: "请规划并设计一个缓存命中率优化方案，只回复完成", projectAvailable: true }).lane, "formal");
+		const responseOnlyFormal = createRequestPlan({ message: "请规划并设计一个缓存命中率优化方案，只回复完成", projectAvailable: true });
+		assert.deepEqual(responseOnlyFormal.contextClasses, ["conversation", "project-task", "project-spec"]);
+		assert.equal(responseOnlyFormal.outputBudget, 4096);
+		assert.equal(createRequestPlan({ message: "查看 PRD 内容", projectAvailable: true }).lane, "fast");
+		const pendingFormal = createRequestPlan({ message: "规划并生成 PRD", projectAvailable: true, requestId: "formal-source" });
+		const affirmative = createRequestPlan({ message: "可以", projectAvailable: true, pendingPlan: pendingFormal });
+		assert.equal(affirmative.lane, "formal");
+		assert.equal(affirmative.continuedFromRequestId, "formal-source");
 	});
 
 	it("recognizes task inventory despite an explicit no-edit constraint", () => {

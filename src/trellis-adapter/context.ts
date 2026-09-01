@@ -13,6 +13,7 @@ import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvide
  */
 export interface ProjectContextCompileOptions extends ContextCompileOptions {
 	readonly additionalDocuments?: readonly ContextDocument[];
+	readonly includeFormalArtifacts?: boolean;
 }
 
 export function buildProjectContext(provider: ProjectProvider, query: string, mode: AgentMode, options: ProjectContextCompileOptions = {}): CompiledContext {
@@ -24,6 +25,7 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 	const intent = classifyContextIntent(normalizedQuery);
 
 	for (const document of context.documents) {
+		if (document.sourceRef.startsWith("native:") && !options.includeFormalArtifacts) continue;
 		const task = document.kind === "task" ? taskByFile.get(normalizePath(document.path)) : undefined;
 		const isActiveTask = task !== undefined && activeTask !== undefined && task.stableId === activeTask.stableId;
 		const isLegacyDocument = document.sourceRef.startsWith("legacy-trellis:");
