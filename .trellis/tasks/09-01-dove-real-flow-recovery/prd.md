@@ -82,19 +82,19 @@ cause.
 
 ## Acceptance Criteria
 
-- [ ] `先保存一下现在的上下文我记录一下用来审计优化agent流程` resolves to Execution and exposes a working file-write path without a clarification loop.
-- [ ] After a recorded pending action, `可以` inherits that action, asks zero additional structured questions, and executes or returns one exact blocker.
-- [ ] The 15-question September 1 replay terminates before question 2; no wording variant bypasses the per-goal limit.
-- [ ] Unfinished-task inventory normally completes in one provider call from the injected projection, without archive/source archaeology.
+- [x] `先保存一下现在的上下文我记录一下用来审计优化agent流程` resolves to Execution and exposes a working file-write path without a clarification loop.
+- [x] After a recorded pending action, `可以` inherits that action, asks zero additional structured questions, and executes or returns one exact blocker.
+- [x] The 15-question September 1 replay terminates before question 2; no wording variant bypasses the per-goal limit.
+- [x] Unfinished-task inventory normally completes in one provider call from the injected projection, without archive/source archaeology.
 - [x] A continuation request exposes the current task's next step and leaves Pi's active tools available for execution.
 - [x] A negated/explanatory lifecycle request creates or upgrades no formal task metadata.
-- [ ] Ordinary multi-turn tool/system digests remain stable; after the initial cold request, warm first-call cache hit rate is at least 70% in the real-provider matrix.
-- [ ] Auto mode makes zero `setActiveTools` calls across Chat/Lookup/Execution turns and preserves Pi-selected third-party tools.
-- [ ] Simple Chat uses one provider round; bounded Lookup uses at most three; a small edit-and-test flow uses at most five.
-- [ ] Every logical goal asks at most one clarification, has zero repeated confirmations, and finishes without cancellation in the acceptance matrix.
-- [ ] Warm simple goals use at most 10,000 uncached input tokens and Dove does not regress uncached tokens or completion rate versus direct Pi+Trellis.
-- [ ] Doctor fails or degrades when another extension changes Dove's final tool set after policy selection.
-- [ ] Unit tests, typecheck, installer tests, doctor, Pi smoke, task validation, source replay, and installed-release A/B pass.
+- [x] Ordinary multi-turn tool/system digests remain stable; after the initial cold request, warm first-call cache hit rate is at least 70% in the real-provider matrix.
+- [x] Auto mode makes zero `setActiveTools` calls across Chat/Lookup/Execution turns and preserves Pi-selected third-party tools.
+- [x] Simple Chat uses one provider round; bounded Lookup uses at most three; a small edit-and-test flow uses at most five.
+- [x] Every logical goal asks at most one clarification, has zero repeated confirmations, and finishes without cancellation in the acceptance matrix.
+- [x] Warm simple goals use at most 10,000 uncached input tokens and Dove does not regress uncached tokens or completion rate versus direct Pi+Trellis.
+- [x] Doctor fails or degrades when another extension changes Dove's final tool set after policy selection.
+- [x] Unit tests, typecheck, installer tests, doctor, Pi smoke, task validation, source replay, and installed-release A/B pass.
 
 ## Out Of Scope
 

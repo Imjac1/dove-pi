@@ -83,10 +83,11 @@ Run, in order:
 The source-level restart regression is covered by the adapter integration test;
 the remaining unchecked item requires a live upstream with cache usage fields.
 
-Source candidate installation completed with `0.1.5+source.e39170049f65`; the
-managed doctor reports that release as current and retains
-`0.1.5+source.9f1bce7a0751` as previous. The installed release contains the
-snapshot helper and passed quick release verification.
+An earlier source candidate installation completed with
+`0.1.5+source.e39170049f65`; the current HEAD was subsequently installed and
+validated as `0.1.5+source.659f79a5a9fd`, retaining the former release as
+previous. The current managed release contains the latest continuation and
+round-budget changes and passed quick release verification.
 
 ## Verification Result
 
@@ -97,6 +98,9 @@ snapshot helper and passed quick release verification.
 - `npm run pi:smoke`: passed.
 - `python .trellis/scripts/task.py validate 09-01-dove-real-flow-recovery`: passed.
 - `git diff --check`: passed.
+- Real-provider installed HEAD A/B: 4/4 requests completed, 7 Provider rounds,
+  3 tool calls, 0 structured questions, 3/4 warm first-call cache hits; evidence
+  is recorded in `research/real-provider-ab.md`.
 
 ## Review Gates
 
