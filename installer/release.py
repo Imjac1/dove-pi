@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import stat
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urljoin, urlsplit
@@ -226,7 +227,16 @@ def safe_extract_zip(archive: Path, destination: Path) -> None:
     root = destination.resolve(strict=False)
     try:
         with zipfile.ZipFile(archive) as bundle:
+            seen: set[str] = set()
             for item in bundle.infolist():
+                normalized_name = item.filename.replace("\\", "/")
+                duplicate_key = normalized_name.rstrip("/").casefold()
+                if duplicate_key in seen:
+                    raise RuntimeError(f"Duplicate archive entry: {item.filename}")
+                seen.add(duplicate_key)
+                mode = (item.external_attr >> 16) & 0xFFFF
+                if stat.S_ISLNK(mode):
+                    raise RuntimeError(f"Link-like archive entry is not allowed: {item.filename}")
                 target = (root / item.filename).resolve(strict=False)
                 if not is_path_within(target, root):
                     raise RuntimeError(f"Unsafe archive entry escapes staging: {item.filename}")

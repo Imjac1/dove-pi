@@ -136,6 +136,15 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
         )
         self.assertEqual(result, {"combined": "C:\\Machine;C:\\User", "machineOnly": "C:\\Machine"})
 
+    def test_proxy_resolution_prefers_explicit_then_https_environment(self):
+        result = self.run_harness(
+            "$env:HTTPS_PROXY='http://https-proxy:8443'; $env:HTTP_PROXY='http://http-proxy:8080'; $env:ALL_PROXY='http://all-proxy:1080'; "
+            "[pscustomobject]@{environment=(Get-DoveProxy '');explicit=(Get-DoveProxy 'http://explicit-proxy:3128');unsupported=(Get-DoveProxy 'socks5://unsupported')} | ConvertTo-Json -Compress"
+        )
+        self.assertEqual(result["environment"], "http://https-proxy:8443")
+        self.assertEqual(result["explicit"], "http://explicit-proxy:3128")
+        self.assertIsNone(result["unsupported"])
+
     def test_powershell_core_is_a_supported_same_release_fallback(self):
         result = self.run_harness(
             "function Get-DoveCommandPath([string]$Name) { "
@@ -191,7 +200,7 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
                 "function Ensure-DovePrerequisite { param($DisplayName); "
                 f"if($DisplayName -eq 'Python'){{[pscustomobject]@{{Path='{ps_quote(Path(os.sys.executable))}';Version='3.11.0';Compatible=$true;Reason=''}}}} "
                 "else{[pscustomobject]@{Path='C:\\node.exe';Version='22.19.0';Compatible=$true;Reason=''}} }; "
-                "function Invoke-WebRequest { param([switch]$UseBasicParsing,[string]$Uri,$Headers,[string]$OutFile,[switch]$PassThru); "
+                "function Invoke-WebRequest { param([switch]$UseBasicParsing,[string]$Uri,$Headers,[string]$OutFile,[switch]$PassThru,[int]$TimeoutSec,[int]$MaximumRedirection,[string]$Proxy); "
                 "$name=[IO.Path]::GetFileName(([Uri]$Uri).AbsolutePath); Copy-Item -LiteralPath (Join-Path $script:fixtureAssets $name) -Destination $OutFile; "
                 "if($PassThru){[pscustomobject]@{BaseResponse=$null}} }; "
                 "Invoke-DoveBootstrap"
@@ -326,7 +335,7 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
                 "function Ensure-DovePrerequisite { param($DisplayName); "
                 f"if($DisplayName -eq 'Python'){{[pscustomobject]@{{Path='{ps_quote(Path(os.sys.executable))}';Version='3.11.0';Compatible=$true;Reason=''}}}} "
                 "else{[pscustomobject]@{Path='C:\\node.exe';Version='22.19.0';Compatible=$true;Reason=''}} }; "
-                "function Invoke-WebRequest { param([switch]$UseBasicParsing,[string]$Uri,$Headers,[string]$OutFile,[switch]$PassThru); "
+                "function Invoke-WebRequest { param([switch]$UseBasicParsing,[string]$Uri,$Headers,[string]$OutFile,[switch]$PassThru,[int]$TimeoutSec,[int]$MaximumRedirection,[string]$Proxy); "
                 "$name=[IO.Path]::GetFileName(([Uri]$Uri).AbsolutePath); Copy-Item -LiteralPath (Join-Path $script:fixtureAssets $name) -Destination $OutFile; "
                 "if($PassThru){[pscustomobject]@{BaseResponse=$null}} }; "
                 "Invoke-DoveBootstrap; "

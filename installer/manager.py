@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 from tempfile import TemporaryDirectory
 from typing import Callable
 
@@ -23,7 +22,7 @@ from .release import (
     validate_stable_manifest,
     verify_sha256,
 )
-from .state import InstallState, ManagedExtensionState, ReleaseRef, load_state, write_state
+from .state import STATE_BACKUP_NAME, InstallState, ManagedExtensionState, ReleaseRef, StateLoadError, load_state, load_state_backup, write_state
 from .transaction import ManagedTransaction, PreparedRelease, TransactionError
 
 
@@ -69,6 +68,17 @@ class MaintenanceResult:
 
 
 ComponentReconciler = Callable[[InstallState], list[ManagedExtensionState]]
+CACHE_UNPROTECTED_RETENTION = 2
+
+
+def _cache_key(tag: str, version: str, release_id: str | None = None) -> str:
+    identity = release_id or ""
+    return sha256(f"{tag}\0{version}\0{identity}".encode("utf-8")).hexdigest()[:16]
+
+
+def _manifest_digest(manifest: ReleaseManifest) -> str:
+    payload = json.dumps(manifest.to_json(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _read_package_version(source: Path) -> str:
@@ -157,7 +167,6 @@ def _legacy_profile(source: Path) -> str | None:
 
 def write_managed_launchers(layout: ManagedLayout, *, python: Path | None = None) -> None:
     layout.bin_dir.mkdir(parents=True, exist_ok=True)
-    python_path = str((python or Path(sys.executable)).resolve()).replace("'", "''")
     state_relative = r"state\install.json"
     versions_relative = r"app\versions"
     ps1_content = f"""$ErrorActionPreference = 'Stop'
@@ -183,7 +192,26 @@ if (-not $targetRoot) {{
 }}
 if (-not $targetRoot) {{ Write-Error 'No runnable Dove Pi release is installed. Run dove-pi repair.'; exit 1 }}
 $script = Join-Path $targetRoot 'dove_pi.py'
-& '{python_path}' $script @args
+$python = $null
+$pythonArguments = @()
+foreach ($name in @('python.exe', 'python', 'py.exe', 'py')) {{
+    $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) {{
+        $candidate = if ($command.Source) {{ [string]$command.Source }} else {{ [string]$command.Path }}
+        $candidateArguments = if ($name -eq 'py.exe' -or $name -eq 'py') {{ @('-3') }} else {{ @() }}
+        try {{
+            $probeOutput = @(& $candidate @candidateArguments -c 'import platform; print(platform.python_version())' 2>$null)
+            $probeExitCode = $LASTEXITCODE
+            if ($probeExitCode -eq 0 -and $probeOutput.Count -gt 0 -and [version]([string]$probeOutput[0]).Trim() -ge [version]'3.10.0') {{
+                $python = $candidate
+                $pythonArguments = $candidateArguments
+                break
+            }}
+        }} catch {{}}
+    }}
+}}
+if (-not $python) {{ Write-Error 'Python 3.10 or newer is unavailable. Run the public Dove Pi bootstrap, then retry dove-pi repair.'; exit 1 }}
+& $python @pythonArguments $script @args
 exit $LASTEXITCODE
 """
     ps1 = layout.bin_dir / "dove-pi.ps1"
@@ -193,7 +221,7 @@ exit $LASTEXITCODE
     cmd = layout.bin_dir / "dove-pi.cmd"
     cmd_tmp = layout.bin_dir / f"dove-pi.cmd.tmp-{os.getpid()}"
     cmd_tmp.write_text(
-        '@echo off\r\npowershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0dove-pi.ps1" %*\r\nexit /b %ERRORLEVEL%\r\n',
+        '@echo off\r\nwhere powershell.exe >nul 2>nul\r\nif not errorlevel 1 goto windows_powershell\r\nwhere pwsh.exe >nul 2>nul\r\nif not errorlevel 1 goto powershell_core\r\necho PowerShell is unavailable. Run the Dove Pi bootstrap again. 1>&2\r\nexit /b 1\r\n:windows_powershell\r\npowershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0dove-pi.ps1" %*\r\nexit /b %ERRORLEVEL%\r\n:powershell_core\r\npwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0dove-pi.ps1" %*\r\nexit /b %ERRORLEVEL%\r\n',
         encoding="ascii",
     )
     os.replace(cmd_tmp, cmd)
@@ -217,7 +245,7 @@ class ManagedInstaller:
     ) -> MaintenanceResult:
         source = source.resolve(strict=True)
         with MaintenanceLock(self.layout.lock_path, "install"):
-            state = load_state(self.layout)
+            state = load_state(self.layout, strict=True)
             state.profile = profile or (_legacy_profile(source) if not self.layout.state_path.exists() else None) or state.profile
             manifest = source_release_manifest(source)
             if source_asset is not None:
@@ -232,11 +260,13 @@ class ManagedInstaller:
                     tag=tag,
                     version=prepared.manifest.version,
                     release_id=prepared.manifest.release_id,
+                    manifest=prepared.manifest,
                 )
             state = self.transaction.activate(prepared, state, command="install")
             state = self._reconcile_components(state, reconcile_components, command="install")
             write_managed_launchers(self.layout)
             self.transaction.prune(state)
+            self._prune_cache(state)
             return _result("install", not prepared.reused, state, f"Dove Pi {manifest.version} is installed.")
 
     def update(
@@ -246,11 +276,11 @@ class ManagedInstaller:
         verify: str = "quick",
         reconcile_components: ComponentReconciler | None = None,
     ) -> MaintenanceResult:
-        state = load_state(self.layout)
-        asset = self.fetch_release()
-        latest_pi_version = _asset_pi_version(asset)
-        current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
         if check:
+            asset = self.fetch_release()
+            latest_pi_version = _asset_pi_version(asset)
+            state = load_state(self.layout, strict=True)
+            current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
             current = state.current.release_id if state.current else None
             update_available = not current_matches_asset or not self._is_runnable_ref(state.current)
             return MaintenanceResult(
@@ -266,34 +296,9 @@ class ManagedInstaller:
                 latest_pi_version=latest_pi_version,
             )
         with MaintenanceLock(self.layout.lock_path, "update"):
-            state = load_state(self.layout)
-            current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
-            if current_matches_asset and self._is_runnable_ref(state.current):
-                state = self._reconcile_components(state, reconcile_components, command="update")
-                write_managed_launchers(self.layout)
-                if reconcile_components is None:
-                    write_state(self.layout, state, command="update")
-                return _result(
-                    "update",
-                    False,
-                    state,
-                    f"Dove Pi {asset.version} is already current.",
-                    latest_pi_version=latest_pi_version,
-                )
-            with TemporaryDirectory(prefix="dove-pi-release-") as temporary:
-                source, manifest = self._download_release(asset, Path(temporary))
-                prepared = self.transaction.prepare_source(source, manifest, verify=verify)
-                state = self.transaction.activate(prepared, state, command="update")
-                state = self._reconcile_components(state, reconcile_components, command="update")
-            write_managed_launchers(self.layout)
-            self.transaction.prune(state)
-            return _result(
-                "update",
-                not prepared.reused,
-                state,
-                f"Dove Pi is ready at {manifest.release_id}.",
-                latest_pi_version=latest_pi_version,
-            )
+            state = load_state(self.layout, strict=True)
+            asset = self.fetch_release()
+            return self._update_locked(state, asset, verify=verify, reconcile_components=reconcile_components)
 
     def repair(
         self,
@@ -302,20 +307,31 @@ class ManagedInstaller:
         reconcile_components: ComponentReconciler | None = None,
     ) -> MaintenanceResult:
         with MaintenanceLock(self.layout.lock_path, "repair"):
-            state = load_state(self.layout)
+            recovery_message = None
+            try:
+                state = load_state(self.layout, strict=True)
+            except StateLoadError as error:
+                state = self._recover_state()
+                recovery_message = str(error)
             if state.current and self._verify_ref(state.current, verify=verify):
                 state = self._reconcile_components(state, reconcile_components, command="repair")
                 write_managed_launchers(self.layout)
                 if reconcile_components is None:
                     write_state(self.layout, state, command="repair")
-                return _result("repair", False, state, "Current release and launcher are healthy.")
+                message = "Current release and launcher are healthy."
+                if recovery_message:
+                    message = f"Recovered managed state; {message}"
+                return _result("repair", False, state, message)
             if state.previous and self._verify_ref(state.previous, verify=verify):
                 state.current, state.previous = state.previous, state.current
                 write_state(self.layout, state, command="repair")
                 state = self._reconcile_components(state, reconcile_components, command="repair")
                 write_managed_launchers(self.layout)
                 return _result("repair", True, state, "Recovered the previous runnable release.")
-            cached = self._cached_asset(state.current.version if state.current else None)
+            cached = self._cached_asset(
+                state.current.version if state.current else None,
+                state.current.release_id if state.current else None,
+            )
             if cached:
                 with TemporaryDirectory(prefix="dove-pi-repair-") as temporary:
                     source, manifest = self._download_release(cached, Path(temporary))
@@ -324,14 +340,21 @@ class ManagedInstaller:
                     state = self._reconcile_components(state, reconcile_components, command="repair")
                 write_managed_launchers(self.layout)
                 self.transaction.prune(state)
+                self._prune_cache(state)
                 return _result("repair", True, state, f"Rebuilt Dove Pi {manifest.release_id} from the verified release cache.")
-        # Do not hold the lock while delegating to update, which owns the same
-        # transaction boundary and can rebuild from the stable release.
-        return self.update(check=False, verify=verify, reconcile_components=reconcile_components)
+            asset = self.fetch_release()
+            return self._update_locked(
+                state,
+                asset,
+                verify=verify,
+                reconcile_components=reconcile_components,
+                command="repair",
+                force_refresh=True,
+            )
 
     def rollback(self) -> MaintenanceResult:
         with MaintenanceLock(self.layout.lock_path, "rollback"):
-            state = self.transaction.rollback(load_state(self.layout))
+            state = self.transaction.rollback(load_state(self.layout, strict=True))
             write_managed_launchers(self.layout)
             return _result("rollback", True, state, "Switched to the previous Dove Pi application release; user extensions were not changed.")
 
@@ -351,25 +374,155 @@ class ManagedInstaller:
                 if directory.exists():
                     managed = self.layout.require_managed_path(directory)
                     shutil.rmtree(_deletion_path(managed), ignore_errors=False)
-            self.layout.state_path.unlink(missing_ok=True)
+            state_files = [self.layout.state_path, self.layout.state_dir / STATE_BACKUP_NAME]
+            for pattern in ("install.json.corrupt-*", "install.json.tmp-*", f"{STATE_BACKUP_NAME}.tmp-*", "maintenance.stale-*.json"):
+                state_files.extend(self.layout.state_dir.glob(pattern))
+            for state_file in state_files:
+                managed = self.layout.require_managed_path(state_file, boundary=self.layout.state_dir)
+                if managed.is_file() or managed.is_symlink():
+                    managed.unlink()
         # Keep the now-empty state/root directories. Removing the lock and then
         # recursively deleting its parent would create a race in which another
         # maintenance process could acquire a fresh lock and have it deleted.
         return MaintenanceResult("uninstall", True, None, profile="max", message="Dove Pi managed application files were removed; user and project data were preserved.")
 
+    def _recover_state(self) -> InstallState:
+        backup = load_state_backup(self.layout)
+        candidates: list[tuple[int, int, ReleaseRef]] = []
+        seen: set[Path] = set()
+        seen_release_ids: set[str] = set()
+        if backup is not None:
+            for priority, reference in ((2, backup.current), (1, backup.previous)):
+                if reference is None or not self._verify_ref(reference, verify="none"):
+                    continue
+                resolved = reference.install_path.resolve(strict=False)
+                seen.add(resolved)
+                seen_release_ids.add(reference.release_id)
+                candidates.append((priority, 0, reference))
+        if self.layout.versions_dir.is_dir():
+            for path in self.layout.versions_dir.iterdir():
+                if not path.is_dir():
+                    continue
+                try:
+                    managed_path = self.layout.require_version_path(path)
+                    if managed_path in seen:
+                        continue
+                    manifest = self.transaction.verify_existing(managed_path, verify="none")
+                    if manifest.release_id in seen_release_ids:
+                        continue
+                    timestamp = managed_path.stat().st_mtime_ns
+                except (OSError, RuntimeError):
+                    continue
+                seen_release_ids.add(manifest.release_id)
+                candidates.append((0, timestamp, ReleaseRef(manifest.release_id, managed_path, manifest.version)))
+        candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if not candidates:
+            raise StateLoadError(
+                f"Managed Dove Pi state is corrupt and no verified release is available at {self.layout.versions_dir}; "
+                "restore a backup or run the public installer.",
+            )
+        refs = [item[2] for item in candidates[:2]]
+        return InstallState(
+            current=refs[0],
+            previous=refs[1] if len(refs) > 1 else None,
+            profile=backup.profile if backup else "max",
+            managed_extensions=list(backup.managed_extensions) if backup else [],
+        )
+
+    def _update_locked(
+        self,
+        state: InstallState,
+        asset: ReleaseAsset,
+        *,
+        verify: str,
+        reconcile_components: ComponentReconciler | None,
+        command: str = "update",
+        force_refresh: bool = False,
+    ) -> MaintenanceResult:
+        latest_pi_version = _asset_pi_version(asset)
+        current_matches_asset = bool(state.current and self._matches_asset(state.current, asset))
+        if not force_refresh and current_matches_asset and self._is_runnable_ref(state.current):
+            state = self._reconcile_components(state, reconcile_components, command=command)
+            write_managed_launchers(self.layout)
+            if reconcile_components is None:
+                write_state(self.layout, state, command=command)
+            return _result(
+                "update" if command == "update" else command,
+                False,
+                state,
+                f"Dove Pi {asset.version} is already current.",
+                latest_pi_version=latest_pi_version,
+            )
+        with TemporaryDirectory(prefix="dove-pi-release-") as temporary:
+            source, manifest = self._download_release(asset, Path(temporary))
+            prepared = self.transaction.prepare_source(source, manifest, verify=verify)
+            state = self.transaction.activate(prepared, state, command=command)
+            state = self._reconcile_components(state, reconcile_components, command=command)
+        write_managed_launchers(self.layout)
+        self.transaction.prune(state)
+        self._prune_cache(state)
+        return _result(
+            "update" if command == "update" else command,
+            not prepared.reused,
+            state,
+            f"Dove Pi is ready at {manifest.release_id}.",
+            latest_pi_version=latest_pi_version,
+        )
+
     def _download_release(self, asset: ReleaseAsset, temporary: Path) -> tuple[Path, ReleaseManifest]:
-        cache_key = sha256(f"{asset.tag}\0{asset.version}".encode("utf-8")).hexdigest()[:16]
+        cache_key = _cache_key(asset.tag, asset.version, asset.release_id or (asset.manifest.release_id if asset.manifest else None))
         cache = self.layout.cache_dir / cache_key
         cache.mkdir(parents=True, exist_ok=True)
         archive = cache / "dove-pi-windows.zip"
         checksum = cache / "dove-pi-windows.zip.sha256"
+        cache_verified = False
         try:
             verify_sha256(archive, read_expected_sha256(checksum))
+            cache_verified = True
         except (OSError, RuntimeError):
             download_file(asset.archive_url, archive)
             download_file(asset.checksum_url, checksum)
             verify_sha256(archive, read_expected_sha256(checksum))
-        source, manifest = self._extract_release_root(archive, temporary / "extracted")
+        try:
+            source, manifest = self._extract_and_validate_release(asset, archive, temporary / "extracted")
+        except (RuntimeError, OSError):
+            if not cache_verified:
+                raise
+            archive.unlink(missing_ok=True)
+            checksum.unlink(missing_ok=True)
+            (cache / "asset.json").unlink(missing_ok=True)
+            try:
+                shutil.rmtree(temporary / "extracted")
+            except OSError as error:
+                raise RuntimeError(
+                    "Unable to reset the stale release cache extraction; close Dove Pi/Node processes and retry.",
+                ) from error
+            download_file(asset.archive_url, archive)
+            download_file(asset.checksum_url, checksum)
+            verify_sha256(archive, read_expected_sha256(checksum))
+            source, manifest = self._extract_and_validate_release(asset, archive, temporary / "extracted")
+        descriptor = cache / "asset.json"
+        descriptor_tmp = cache / f"asset.json.tmp-{os.getpid()}"
+        descriptor_tmp.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "tag": asset.tag,
+                    "version": asset.version,
+                    "releaseId": manifest.release_id,
+                    "manifestDigest": _manifest_digest(manifest),
+                    "sha256": read_expected_sha256(checksum),
+                },
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(descriptor_tmp, descriptor)
+        return source, manifest
+
+    @staticmethod
+    def _extract_and_validate_release(asset: ReleaseAsset, archive: Path, extracted: Path) -> tuple[Path, ReleaseManifest]:
+        source, manifest = ManagedInstaller._extract_release_root(archive, extracted)
         if (
             manifest.version != asset.version
             or asset.tag.removeprefix("v") != manifest.version
@@ -381,13 +534,6 @@ class ManagedInstaller:
                 f"Release metadata mismatch: expected {asset.tag} ({asset.release_id or asset.version}), "
                 f"archive {manifest.version} ({manifest.release_id})",
             )
-        descriptor = cache / "asset.json"
-        descriptor_tmp = cache / f"asset.json.tmp-{os.getpid()}"
-        descriptor_tmp.write_text(
-            json.dumps({"tag": asset.tag, "version": asset.version, "releaseId": manifest.release_id}, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(descriptor_tmp, descriptor)
         return source, manifest
 
     def _validate_local_asset(
@@ -429,10 +575,11 @@ class ManagedInstaller:
         tag: str,
         version: str,
         release_id: str | None = None,
+        manifest: ReleaseManifest | None = None,
     ) -> None:
         expected = read_expected_sha256(checksum)
         verify_sha256(archive, expected)
-        cache_key = sha256(f"{tag}\0{version}".encode("utf-8")).hexdigest()[:16]
+        cache_key = _cache_key(tag, version, release_id)
         cache = self.layout.cache_dir / cache_key
         cache.mkdir(parents=True, exist_ok=True)
         for source, name in ((archive, "dove-pi-windows.zip"), (checksum, "dove-pi-windows.zip.sha256")):
@@ -442,33 +589,109 @@ class ManagedInstaller:
         descriptor = cache / "asset.json"
         descriptor_tmp = cache / f"asset.json.tmp-{os.getpid()}"
         descriptor_tmp.write_text(
-            json.dumps({"tag": tag, "version": version, "releaseId": release_id}, indent=2) + "\n",
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "tag": tag,
+                    "version": version,
+                    "releaseId": release_id,
+                    "manifestDigest": _manifest_digest(manifest) if manifest else None,
+                    "sha256": expected,
+                },
+                indent=2,
+            ) + "\n",
             encoding="utf-8",
         )
         os.replace(descriptor_tmp, descriptor)
 
-    def _cached_asset(self, version: str | None) -> ReleaseAsset | None:
+    def _cached_asset(self, version: str | None, release_id: str | None = None) -> ReleaseAsset | None:
         if not version or not self.layout.cache_dir.is_dir():
             return None
         for descriptor in self.layout.cache_dir.glob("*/asset.json"):
             try:
                 value = json.loads(descriptor.read_text(encoding="utf-8"))
-                if not isinstance(value, dict) or value.get("version") != version or not isinstance(value.get("tag"), str):
+                if (
+                    not isinstance(value, dict)
+                    or value.get("schemaVersion") != 1
+                    or value.get("version") != version
+                    or not isinstance(value.get("tag"), str)
+                    or not isinstance(value.get("releaseId"), str)
+                    or not isinstance(value.get("manifestDigest"), str)
+                    or not isinstance(value.get("sha256"), str)
+                ):
+                    continue
+                if release_id is not None and value.get("releaseId") != release_id:
                     continue
                 archive = descriptor.parent / "dove-pi-windows.zip"
                 checksum = descriptor.parent / "dove-pi-windows.zip.sha256"
-                verify_sha256(archive, read_expected_sha256(checksum))
-                release_id = value.get("releaseId")
+                expected = read_expected_sha256(checksum)
+                if isinstance(value.get("sha256"), str) and value["sha256"] != expected:
+                    continue
+                verify_sha256(archive, expected)
+                with TemporaryDirectory(prefix="dove-pi-cache-validate-") as temporary:
+                    _source, manifest = self._extract_release_root(archive, Path(temporary) / "extracted")
+                if (
+                    manifest.version != version
+                    or manifest.release_id != value["releaseId"]
+                    or value["tag"] != f"v{manifest.version}"
+                    or _manifest_digest(manifest) != value["manifestDigest"]
+                ):
+                    continue
                 return ReleaseAsset(
                     value["tag"],
                     version,
                     archive.as_uri(),
                     checksum.as_uri(),
-                    release_id=release_id if isinstance(release_id, str) else None,
+                    release_id=manifest.release_id,
+                    manifest=manifest,
                 )
             except (OSError, RuntimeError, json.JSONDecodeError, UnicodeError):
                 continue
         return None
+
+    def _prune_cache(self, state: InstallState) -> None:
+        if not self.layout.cache_dir.is_dir():
+            return
+        protected = {reference.release_id for reference in (state.current, state.previous) if reference}
+        entries: list[tuple[bool, int, Path]] = []
+        invalid_entries: list[Path] = []
+        for candidate in self.layout.cache_dir.iterdir():
+            try:
+                entry = self.layout.require_managed_path(candidate, boundary=self.layout.cache_dir)
+                if not candidate.is_dir():
+                    invalid_entries.append(entry)
+                    continue
+                descriptor = candidate / "asset.json"
+                value = json.loads(descriptor.read_text(encoding="utf-8"))
+                if (
+                    not isinstance(value, dict)
+                    or value.get("schemaVersion") != 1
+                    or not isinstance(value.get("releaseId"), str)
+                    or not isinstance(value.get("manifestDigest"), str)
+                    or not isinstance(value.get("sha256"), str)
+                ):
+                    invalid_entries.append(entry)
+                    continue
+                release_id = value.get("releaseId")
+                entries.append((isinstance(release_id, str) and release_id in protected, entry.stat().st_mtime_ns, entry))
+            except (OSError, RuntimeError, json.JSONDecodeError, UnicodeError):
+                try:
+                    invalid_entries.append(self.layout.require_managed_path(candidate, boundary=self.layout.cache_dir))
+                except RuntimeError:
+                    continue
+        entries.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        keep = {entry for protected_entry, _timestamp, entry in entries if protected_entry}
+        unprotected = [entry for protected_entry, _timestamp, entry in entries if not protected_entry]
+        keep.update(unprotected[:CACHE_UNPROTECTED_RETENTION])
+        stale_entries = [entry for _protected_entry, _timestamp, entry in entries if entry not in keep]
+        for entry in invalid_entries + stale_entries:
+            try:
+                if entry.is_dir():
+                    shutil.rmtree(_deletion_path(entry), ignore_errors=False)
+                else:
+                    entry.unlink()
+            except OSError:
+                continue
 
     def _verify_ref(self, reference: ReleaseRef, *, verify: str) -> bool:
         try:

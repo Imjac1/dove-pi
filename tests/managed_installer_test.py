@@ -3,6 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -14,8 +15,8 @@ from installer.layout import ManagedLayout, _deletion_path, is_path_within
 from installer.lock import MaintenanceLock, MaintenanceLockedError
 from installer.manager import ManagedInstaller, source_release_manifest, write_managed_launchers
 from installer.release import ReleaseAsset, ReleaseManifest, safe_extract_zip
-from installer.state import InstallState, ManagedExtensionState, ReleaseRef, load_state, write_state
-from installer.transaction import ManagedTransaction, TransactionError
+from installer.state import InstallState, ManagedExtensionState, ReleaseRef, StateLoadError, load_state, load_state_backup, write_state
+from installer.transaction import ManagedTransaction, PreparedRelease, TransactionError
 
 
 def complete_manifest(version: str, release_id: str, commit: str, *, pi_version: str = "0.84.3") -> ReleaseManifest:
@@ -137,6 +138,87 @@ class ManagedStateTests(unittest.TestCase):
             loaded = load_state(layout)
             self.assertIsNone(loaded.current)
             self.assertEqual(loaded.profile, "max")
+
+    def test_strict_state_read_rejects_structurally_invalid_metadata(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            layout.ensure_base_directories()
+            layout.state_path.write_text(
+                json.dumps({"schemaVersion": 2, "profile": "max", "managedExtensions": [{"identity": 3}]}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(StateLoadError):
+                load_state(layout, strict=True)
+
+    def test_strict_state_read_rejects_duplicate_release_identities(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            layout.ensure_base_directories()
+            layout.state_path.write_text(
+                json.dumps({
+                    "schemaVersion": 2,
+                    "profile": "max",
+                    "current": {"releaseId": "same", "installPath": str(layout.versions_dir / "current")},
+                    "previous": {"releaseId": "same", "installPath": str(layout.versions_dir / "previous")},
+                }),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(StateLoadError):
+                load_state(layout, strict=True)
+
+    def test_strict_state_read_rejects_corruption_and_preserves_backup(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            layout.ensure_base_directories()
+            current_path = layout.versions_dir / "one"
+            write_state(layout, InstallState(current=ReleaseRef("one", current_path, "1.0.0")), command="install")
+            write_state(layout, InstallState(current=ReleaseRef("one", current_path, "1.0.0")), command="repair")
+            layout.state_path.write_text("{broken", encoding="utf-8")
+
+            with self.assertRaises(StateLoadError):
+                load_state(layout, strict=True)
+            restored = load_state_backup(layout)
+            self.assertIsNotNone(restored)
+            self.assertEqual(restored.current.release_id, "one")
+
+    def test_repair_recovers_state_from_verified_release_directories(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            current = layout.versions_dir / "one"
+            current.mkdir(parents=True)
+            (current / "dove_pi.py").write_text("print('one')\n", encoding="utf-8")
+            (current / "release.json").write_text(json.dumps(ReleaseManifest("1.0.0", "one").to_json()), encoding="utf-8")
+            (current / "node_modules").mkdir()
+            layout.state_dir.mkdir(parents=True)
+            layout.state_path.write_text("{broken", encoding="utf-8")
+
+            result = ManagedInstaller(layout).repair(verify="none")
+
+            self.assertFalse(result.changed)
+            self.assertEqual(load_state(layout, strict=True).current.release_id, "one")
+            self.assertTrue(any(layout.state_dir.glob("install.json.corrupt-*")))
+
+    def test_repair_ignores_broken_backup_refs_and_scans_verified_releases(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            broken = layout.versions_dir / "broken"
+            recovered = layout.versions_dir / "recovered"
+            broken.mkdir(parents=True)
+            recovered.mkdir()
+            (recovered / "dove_pi.py").write_text("print('recovered')\n", encoding="utf-8")
+            (recovered / "release.json").write_text(json.dumps(ReleaseManifest("1.0.0", "recovered").to_json()), encoding="utf-8")
+            (recovered / "node_modules").mkdir()
+            write_state(layout, InstallState(current=ReleaseRef("broken", broken, "0.9.0")), command="install")
+            write_state(layout, InstallState(current=ReleaseRef("broken", broken, "0.9.0")), command="repair")
+            layout.state_path.write_text("{broken", encoding="utf-8")
+
+            result = ManagedInstaller(layout).repair(verify="none")
+
+            self.assertEqual(result.current_release, "recovered")
+            self.assertEqual(load_state(layout, strict=True).current.release_id, "recovered")
 
 
 class MaintenanceLockTests(unittest.TestCase):
@@ -354,8 +436,155 @@ class ManagedTransactionTests(unittest.TestCase):
                     transaction.activate(prepared, load_state(layout), command="update")
             self.assertEqual(load_state(layout).current.release_id, "current")
 
+    def test_same_identity_rebuild_preserves_distinct_previous_release(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            rebuilt = layout.versions_dir / "same-repair"
+            rebuilt.mkdir(parents=True)
+            manifest = ReleaseManifest("1.0.0", "same")
+            (rebuilt / "dove_pi.py").write_text("print('ok')\n", encoding="utf-8")
+            (rebuilt / "release.json").write_text(json.dumps(manifest.to_json()), encoding="utf-8")
+            (rebuilt / "node_modules").mkdir()
+            state = InstallState(
+                current=ReleaseRef("same", layout.versions_dir / "same-broken", "1.0.0"),
+                previous=ReleaseRef("older", layout.versions_dir / "older", "0.9.0"),
+            )
+
+            activated = ManagedTransaction(layout).activate(PreparedRelease(manifest, rebuilt), state, command="repair")
+
+            self.assertEqual(activated.current.release_id, "same")
+            self.assertEqual(activated.previous.release_id, "older")
+
+    def test_formal_manifest_change_with_same_release_id_is_not_reused(self):
+        with TemporaryDirectory() as temporary:
+            layout = ManagedLayout.at(Path(temporary) / "DovePi")
+            target = layout.versions_dir / "same"
+            target.mkdir(parents=True)
+            installed = complete_manifest("1.0.0", "same", "old", pi_version="0.84.2")
+            advertised = complete_manifest("1.0.0", "same", "new", pi_version="0.84.3")
+            (target / "dove_pi.py").write_text("print('ok')\n", encoding="utf-8")
+            (target / "release.json").write_text(json.dumps(installed.to_json()), encoding="utf-8")
+            write_installed_components(target, installed.components)
+
+            self.assertFalse(ManagedTransaction(layout)._is_prepared(target, advertised))
+
 
 class ManagedInstallerCommandTests(unittest.TestCase):
+    def test_corrupt_state_blocks_update_without_pruning_releases(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            old = layout.versions_dir / "0.1.5+old"
+            old.mkdir(parents=True)
+            layout.state_dir.mkdir(parents=True)
+            layout.state_path.write_text("{broken", encoding="utf-8")
+            asset = ReleaseAsset("v0.1.6", "0.1.6", "https://invalid.example/archive", "https://invalid.example/checksum")
+            fetched = []
+
+            with self.assertRaises(StateLoadError):
+                ManagedInstaller(layout, fetch_release=lambda: fetched.append(True) or asset).update(verify="none")
+
+            self.assertTrue(old.exists())
+            self.assertEqual(layout.state_path.read_text(encoding="utf-8"), "{broken")
+            self.assertEqual(fetched, [])
+
+    def test_cached_manifest_mismatch_redownloads_once(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            cache_key = hashlib.sha256("v0.3.0\x000.3.0\x000.3.0+same".encode()).hexdigest()[:16]
+            cache = layout.cache_dir / cache_key
+            cache.mkdir(parents=True)
+            old_manifest = ReleaseManifest("0.3.0", "0.3.0+same", commit="old")
+            with zipfile.ZipFile(cache / "dove-pi-windows.zip", "w") as bundle:
+                bundle.writestr("dove_pi.py", "print('old')\n")
+                bundle.writestr("release.json", json.dumps(old_manifest.to_json()))
+            old_archive = cache / "dove-pi-windows.zip"
+            digest = hashlib.sha256(old_archive.read_bytes()).hexdigest()
+            (cache / "dove-pi-windows.zip.sha256").write_text(digest, encoding="ascii")
+            (cache / "asset.json").write_text(json.dumps({"tag": "v0.3.0", "version": "0.3.0", "releaseId": "0.3.0+same"}), encoding="utf-8")
+            new_manifest = ReleaseManifest("0.3.0", "0.3.0+same", commit="new")
+            asset = ReleaseAsset("v0.3.0", "0.3.0", "https://new.example/archive", "https://new.example/checksum", release_id="0.3.0+same", manifest=new_manifest)
+            calls = []
+
+            def redownload(url, destination):
+                calls.append(url)
+                if destination.name.endswith(".sha256"):
+                    destination.write_text(hashlib.sha256((cache / "dove-pi-windows.zip").read_bytes()).hexdigest(), encoding="ascii")
+                    return
+                fresh = root / "fresh.zip"
+                with zipfile.ZipFile(fresh, "w") as bundle:
+                    bundle.writestr("dove_pi.py", "print('new')\n")
+                    bundle.writestr("release.json", json.dumps(new_manifest.to_json()))
+                shutil.copy2(fresh, destination)
+
+            with patch("installer.manager.download_file", side_effect=redownload):
+                _source, manifest = ManagedInstaller(layout)._download_release(asset, root / "extracted")
+
+            self.assertEqual(manifest.commit, "new")
+            self.assertEqual(len(calls), 2)
+
+    def test_cache_pruning_keeps_current_previous_and_recent_recovery_assets(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            layout.cache_dir.mkdir(parents=True)
+            release_ids = ["current", "previous", "recent-one", "recent-two", "old"]
+            timestamps = {"current": 10, "previous": 9, "recent-one": 8, "recent-two": 7, "old": 1}
+            for index, release_id in enumerate(release_ids):
+                entry = layout.cache_dir / f"entry-{index}"
+                entry.mkdir()
+                (entry / "asset.json").write_text(
+                    json.dumps({
+                        "schemaVersion": 1,
+                        "tag": "v0.3.0",
+                        "version": "0.3.0",
+                        "releaseId": release_id,
+                        "manifestDigest": "a" * 64,
+                        "sha256": "b" * 64,
+                    }),
+                    encoding="utf-8",
+                )
+                os.utime(entry, (timestamps[release_id], timestamps[release_id]))
+            invalid = layout.cache_dir / "partial-download"
+            invalid.mkdir()
+            (invalid / "dove-pi-windows.zip.part").write_bytes(b"partial")
+            state = InstallState(
+                current=ReleaseRef("current", layout.versions_dir / "current", "0.3.0"),
+                previous=ReleaseRef("previous", layout.versions_dir / "previous", "0.2.0"),
+            )
+
+            ManagedInstaller(layout)._prune_cache(state)
+
+            self.assertTrue((layout.cache_dir / "entry-0").exists())
+            self.assertTrue((layout.cache_dir / "entry-1").exists())
+            self.assertTrue((layout.cache_dir / "entry-2").exists())
+            self.assertTrue((layout.cache_dir / "entry-3").exists())
+            self.assertFalse((layout.cache_dir / "entry-4").exists())
+            self.assertFalse(invalid.exists())
+
+    def test_repair_stable_fallback_fetches_release_under_maintenance_lock(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            layout = ManagedLayout.at(root / "DovePi")
+            current = layout.versions_dir / "broken"
+            current.mkdir(parents=True)
+            write_state(layout, InstallState(current=ReleaseRef("broken", current, "0.1.0")), command="install")
+            asset = ReleaseAsset("v0.2.0", "0.2.0", "https://invalid.example/archive", "https://invalid.example/checksum")
+            installer = ManagedInstaller(layout, fetch_release=lambda: asset)
+            observed = []
+
+            def fetch_under_lock():
+                observed.append(layout.lock_path.exists())
+                return asset
+
+            installer.fetch_release = fetch_under_lock
+            with patch.object(installer, "_update_locked", return_value=None) as update_locked:
+                installer.repair(verify="none")
+
+            self.assertEqual(observed, [True])
+            self.assertTrue(update_locked.call_args.kwargs["force_refresh"])
+
     def test_source_install_does_not_modify_checkout_and_writes_state_launcher(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -441,6 +670,13 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             self.assertIn("state\\install.json", script)
             self.assertIn("app\\versions", script)
             self.assertIn("StartsWith", script)
+            self.assertIn("python.exe", script)
+            self.assertIn("3.10.0", script)
+            self.assertNotIn("C:/Python/python.exe", script)
+            launcher = (layout.bin_dir / "dove-pi.cmd").read_text(encoding="ascii")
+            self.assertIn("goto windows_powershell", launcher)
+            self.assertIn("goto powershell_core", launcher)
+            self.assertNotIn("%* & exit", launcher)
 
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"), "Windows PowerShell launcher test")
     def test_managed_launcher_falls_back_when_current_directory_is_incomplete(self):
@@ -801,6 +1037,8 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             layout = ManagedLayout.at(root / "DovePi")
             layout.ensure_base_directories()
             (layout.bin_dir / "dove-pi.cmd").write_text("managed", encoding="utf-8")
+            (layout.state_dir / "install.json.bak").write_text("managed", encoding="utf-8")
+            (layout.state_dir / "install.json.corrupt-123").write_text("managed", encoding="utf-8")
             unknown = layout.root / "caller-owned.txt"
             unknown.write_text("keep", encoding="utf-8")
             preserved = [root / "pi-user", root / "project" / ".trellis", root / "checkout" / ".git"]
@@ -809,6 +1047,8 @@ class ManagedInstallerCommandTests(unittest.TestCase):
                 (path / "marker").write_text("keep", encoding="utf-8")
             ManagedInstaller(layout).uninstall(confirmed=True)
             self.assertFalse(layout.bin_dir.exists())
+            self.assertFalse((layout.state_dir / "install.json.bak").exists())
+            self.assertFalse((layout.state_dir / "install.json.corrupt-123").exists())
             self.assertTrue(unknown.is_file())
             self.assertTrue(all((path / "marker").is_file() for path in preserved))
 
@@ -852,6 +1092,25 @@ class ReleaseArchiveTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 safe_extract_zip(archive, root / "extract")
             self.assertFalse((root / "outside.txt").exists())
+
+    def test_safe_extract_rejects_duplicate_and_link_entries(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            duplicate = root / "duplicate.zip"
+            with zipfile.ZipFile(duplicate, "w") as bundle:
+                bundle.writestr("release.json", "one")
+                bundle.writestr("RELEASE.JSON", "two")
+            with self.assertRaisesRegex(RuntimeError, "Duplicate"):
+                safe_extract_zip(duplicate, root / "duplicate-extract")
+
+            link = root / "link.zip"
+            link_info = zipfile.ZipInfo("release.json")
+            link_info.create_system = 3
+            link_info.external_attr = (stat.S_IFLNK | 0o777) << 16
+            with zipfile.ZipFile(link, "w") as bundle:
+                bundle.writestr(link_info, "target")
+            with self.assertRaisesRegex(RuntimeError, "Link-like"):
+                safe_extract_zip(link, root / "link-extract")
 
 
 if __name__ == "__main__":

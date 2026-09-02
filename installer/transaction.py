@@ -174,7 +174,9 @@ class ManagedTransaction:
         if not self._is_prepared(path, prepared.manifest):
             raise TransactionError("activate", f"Prepared release failed validation at {path}")
         next_ref = ReleaseRef(prepared.manifest.release_id, path, prepared.manifest.version)
-        previous = state.current if state.current and state.current.install_path != path else state.previous
+        previous = state.previous
+        if state.current and state.current.install_path != path and state.current.release_id != prepared.manifest.release_id:
+            previous = state.current
         next_state = InstallState(
             current=next_ref,
             previous=previous,
@@ -234,4 +236,5 @@ class ManagedTransaction:
             self._verify_installed_components(path, installed)
         except RuntimeError:
             return False
-        return installed.release_id == manifest.release_id and (path / "dove_pi.py").is_file() and (path / "node_modules").is_dir()
+        manifest_matches = installed.release_id == manifest.release_id and (not manifest.components or installed == manifest)
+        return manifest_matches and (path / "dove_pi.py").is_file() and (path / "node_modules").is_dir()

@@ -6,7 +6,8 @@ param(
     [string]$Verify = 'quick',
     [switch]$NoPath,
     [switch]$NoFont,
-    [switch]$NoExtensions
+    [switch]$NoExtensions,
+    [string]$Proxy = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -184,6 +185,41 @@ function Read-DoveReleaseManifest([string]$Path) {
     return $manifest
 }
 
+function Get-DoveProxy([string]$ExplicitProxy) {
+    $candidate = $ExplicitProxy
+    if (-not $candidate) { $candidate = $env:HTTPS_PROXY }
+    if (-not $candidate) { $candidate = $env:HTTP_PROXY }
+    if (-not $candidate) { $candidate = $env:ALL_PROXY }
+    if ($candidate -and $candidate -match '^https?://') { return $candidate }
+    return $null
+}
+
+function Invoke-DoveWebRequest {
+    param(
+        [string]$Uri,
+        [hashtable]$Headers,
+        [string]$OutFile = '',
+        [switch]$PassThru
+    )
+    $parameters = @{
+        UseBasicParsing = $true
+        Uri = $Uri
+        Headers = $Headers
+        TimeoutSec = 120
+        MaximumRedirection = 5
+    }
+    if ($OutFile) { $parameters.OutFile = $OutFile }
+    if ($PassThru) { $parameters.PassThru = $true }
+    $proxy = Get-DoveProxy $Proxy
+    if ($proxy) { $parameters.Proxy = $proxy }
+    try {
+        return Invoke-WebRequest @parameters
+    }
+    catch {
+        throw "[Release] Unable to fetch $Uri within the configured network limits. $($_.Exception.Message)"
+    }
+}
+
 function Get-DoveResponseUri($Response, [string]$Fallback) {
     if ($Response -and $Response.BaseResponse) {
         if ($Response.BaseResponse.ResponseUri) { return [string]$Response.BaseResponse.ResponseUri.AbsoluteUri }
@@ -235,7 +271,16 @@ function Expand-DoveArchiveSafely([string]$Archive, [string]$Destination) {
     $boundary = $root + '\'
     $bundle = [IO.Compression.ZipFile]::OpenRead($Archive)
     try {
+        $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
         foreach ($entry in $bundle.Entries) {
+            $normalizedName = $entry.FullName.Replace('/', '\').TrimEnd('\')
+            if (-not $seen.Add($normalizedName)) {
+                throw "[Verify] Duplicate release archive entry: $($entry.FullName)"
+            }
+            $unixMode = ([int64]$entry.ExternalAttributes -shr 16) -band 0xFFFF
+            if (($unixMode -band 0xF000) -eq 0xA000) {
+                throw "[Verify] Link-like release archive entry is not allowed: $($entry.FullName)"
+            }
             $target = [IO.Path]::GetFullPath((Join-Path $root $entry.FullName))
             if ($target -ne $root -and -not $target.StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) {
                 throw "[Verify] Unsafe release archive entry: $($entry.FullName)"
@@ -329,7 +374,7 @@ function Invoke-DoveBootstrap {
         $headers = @{ Accept = 'application/json'; 'User-Agent' = 'dove-pi-installer' }
         Write-Host '[2/5] Release'
         $manifestPath = Join-Path $work 'release.json'
-        $manifestResponse = Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl -Headers $headers -OutFile $manifestPath -PassThru
+        $manifestResponse = Invoke-DoveWebRequest -Uri $ManifestUrl -Headers $headers -OutFile $manifestPath -PassThru
         $manifest = Read-DoveReleaseManifest $manifestPath
         $releaseTag = 'v' + [string]$manifest.version
         $finalManifestUrl = Get-DoveResponseUri $manifestResponse $ManifestUrl
@@ -363,8 +408,8 @@ function Invoke-DoveBootstrap {
 
         $archive = Join-Path $work 'dove-pi-windows.zip'
         $checksum = Join-Path $work 'dove-pi-windows.zip.sha256'
-        Invoke-WebRequest -UseBasicParsing -Uri ($resolvedBase + 'dove-pi-windows.zip') -Headers $headers -OutFile $archive
-        Invoke-WebRequest -UseBasicParsing -Uri ($resolvedBase + 'dove-pi-windows.zip.sha256') -Headers $headers -OutFile $checksum
+        Invoke-DoveWebRequest -Uri ($resolvedBase + 'dove-pi-windows.zip') -Headers $headers -OutFile $archive
+        Invoke-DoveWebRequest -Uri ($resolvedBase + 'dove-pi-windows.zip.sha256') -Headers $headers -OutFile $checksum
         $expected = Read-DoveExpectedSha256 $checksum
         $actual = Get-DoveSha256 $archive
         if ($actual -ne $expected) { throw "[Verify] Release checksum mismatch: expected $expected, got $actual." }
@@ -394,7 +439,12 @@ function Invoke-DoveBootstrap {
     finally {
         $resolvedWork = [IO.Path]::GetFullPath($work)
         if ($resolvedWork.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase) -and $resolvedWork -ne $tempBase.TrimEnd('\')) {
-            Remove-Item -LiteralPath $resolvedWork -Recurse -Force -ErrorAction SilentlyContinue
+            try {
+                Remove-Item -LiteralPath $resolvedWork -Recurse -Force -ErrorAction Stop
+            }
+            catch {
+                Write-Warning "Temporary bootstrap directory could not be removed: $resolvedWork. Close any process using it and remove it later."
+            }
         }
     }
 }
