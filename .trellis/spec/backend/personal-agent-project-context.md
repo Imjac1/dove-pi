@@ -76,6 +76,18 @@ recorded through existing project mutation ledger events.
 tool call executes directly under Pi; no `PlanningSession`, phase handshake, or
 second Dove confirmation exists.
 
+The local launcher exposes the same provider boundary through explicit
+commands: `dove-pi task list|current|status|continue|verify|create|start|finish|archive`.
+Task commands emit JSON, resolve provider-qualified identities, and delegate
+all mutations to `ProjectProvider.runTaskOperation`; they do not execute
+`.trellis/scripts/task.py`. `task verify` is a structural artifact check only
+and must not claim that tests or acceptance passed.
+
+`dove-pi session record` writes a bounded append-only `.dove/sessions.jsonl`
+record and `session list` reads it back. Native session records are also
+available through `ProjectProvider.readMemory()` as journal documents. The
+record is an optional developer journal, not a request-time workflow gate.
+
 Natural-language continuation uses `current`, `selected`, `single_candidate`,
 `ambiguous`, or `none` from one provider projection. `selected` is used only
 for an explicit task selector that resolves uniquely. Current, selected, and
@@ -158,6 +170,9 @@ component or instruct the user to initialize it.
 
 - Clean project is healthy without writing metadata.
 - Native create/finish/start/archive round trips and writes valid bounded JSON.
+- CLI task lifecycle and continuation commands round-trip through the public
+  launcher without requiring a Trellis runtime.
+- Session records round-trip through the CLI and native memory reader.
 - Automatic goal establishment is idempotent.
 - Malformed native state is never overwritten.
 - A legacy fixture containing an executable `task.py` never creates its marker

@@ -149,6 +149,21 @@ Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影�
 ```powershell
 dove-pi project init
 dove-pi project doctor
+
+# Dove task workflow; commands emit JSON
+dove-pi task list
+dove-pi task current
+dove-pi task status [task]
+dove-pi task continue [task]
+dove-pi task verify [task]
+dove-pi task create "Improve cache hit rate" --description "..."
+dove-pi task start <task>
+dove-pi task finish
+dove-pi task archive <task>
+
+# Lightweight session journal
+dove-pi session record --title "Cache validation" --summary "..." --test "npm test" --next-step "..."
+dove-pi session list
 ```
 
 初始化只创建 Dove 的轻量索引，不安装依赖，也不执行 Trellis 脚本。正式任务会按需生成 PRD、design、

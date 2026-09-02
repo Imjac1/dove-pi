@@ -686,6 +686,8 @@ After installation:
   dove-pi web status | dove-pi web auth <hosts...> [profile=name]
   dove-pi project doctor
   dove-pi project init
+  dove-pi task list | dove-pi task create <title> | dove-pi task verify [task]
+  dove-pi session record --title <title> | dove-pi session list
   dove-pi
   dove-pi --offline             skip all Pi startup network/package checks for this launch
   Auto mode leaves Pi's active tool schema unchanged. Request intent affects
@@ -720,7 +722,7 @@ def main(arguments: Sequence[str]) -> int:
         return run_managed_maintenance(arguments[0], arguments[1:])
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project", "skills", "web", "cache", "token", "capability", "rpc", "mcp"):
+    if arguments and arguments[0] in ("doctor", "project", "task", "session", "skills", "web", "cache", "token", "capability", "rpc", "mcp"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])

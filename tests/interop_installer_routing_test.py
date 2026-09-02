@@ -6,7 +6,7 @@ from dove_pi import main
 
 class InteropLauncherRoutingTests(unittest.TestCase):
     def test_interoperability_commands_route_to_local_cli(self):
-        for arguments in (["capability", "list"], ["rpc"], ["mcp"]):
+        for arguments in (["capability", "list"], ["rpc"], ["mcp"], ["task", "list"], ["session", "list"]):
             with self.subTest(command=arguments[0]), \
                     patch("dove_pi.run_local_cli", return_value=0) as local_cli, \
                     patch("dove_pi.launch") as launch:

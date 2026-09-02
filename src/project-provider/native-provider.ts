@@ -7,6 +7,7 @@ import { withProjectMutationLock } from "./lock.ts";
 import { appendNativeTaskEvidence, ensureNativeFormalArtifacts, nativeTaskFiles, nativeTaskArtifactPaths, readNativeFormalDocuments, updateNativeAcceptanceProjection, writeNativeTaskManifest, type NativeFormalArtifact } from "./native-artifacts.ts";
 import { MAX_NATIVE_GOALS, nativeProjectStatePath, readNativeProjectState, writeNativeProjectState, type NativeGoal, type NativeProjectState } from "./native-state.ts";
 import { PROJECT_PROVIDER_CONTRACT, resolveProjectTask, toProjectTask, type ProjectContextSnapshot, type ProjectDocument, type ProjectProvider, type ProjectTask, type ProjectTaskOperation, type ProjectTaskProgress, type ProviderHealth } from "./contracts.ts";
+import { nativeSessionPath, readNativeSessions } from "./native-sessions.ts";
 
 const ACTIVE_STATUSES = new Set(["active", "in_progress", "in-progress", "started", "working"]);
 const MAX_LEGACY_TASKS = 100;
@@ -64,7 +65,13 @@ export class NativeProvider implements ProjectProvider {
 	public getCurrentTask(): ProjectTask | undefined { return this.getContext().currentTask; }
 	public resolveTask(selector: string): ProjectTask | undefined { return resolveProjectTask(this.getContext(), selector); }
 	public readMemory(query?: string): readonly ProjectDocument[] {
-		const documents = readLegacyProjection(this.projectRoot).documents.filter((document) => document.kind === "memory" || document.kind === "journal");
+		const nativeSessions: ProjectDocument[] = readNativeSessions(this.projectRoot).map((session) => ({
+			path: nativeSessionPath(this.projectRoot),
+			kind: "journal",
+			content: [session.title, session.summary, ...session.changes, ...session.tests, ...session.nextSteps].filter(Boolean).join("\n"),
+			sourceRef: `native-session:${session.id}`,
+		}));
+		const documents = [...nativeSessions, ...readLegacyProjection(this.projectRoot).documents.filter((document) => document.kind === "memory" || document.kind === "journal")];
 		const terms = query?.trim().toLowerCase().split(/\s+/).filter(Boolean) ?? [];
 		return terms.length === 0 ? documents : documents.filter((document) => terms.every((term) => document.content.toLowerCase().includes(term)));
 	}

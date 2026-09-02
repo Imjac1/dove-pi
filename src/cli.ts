@@ -32,6 +32,8 @@ import { runDoveMcpStdio } from "./adapters/mcp.ts";
 import { readInteroperableContextProjection } from "./context/interoperable.ts";
 import { resolveDoveStateDir } from "./core/state-dir.ts";
 import { parseNonNegativeHours } from "./commands/cli-options.ts";
+import { runTaskCommand } from "./commands/task.ts";
+import { runSessionCommand } from "./commands/session.ts";
 
 const args = process.argv.slice(2);
 
@@ -120,6 +122,10 @@ if (args[0] === "doctor") {
 			),
 		);
 	}
+} else if (args[0] === "task") {
+	await runTaskCommand(args.slice(1));
+} else if (args[0] === "session") {
+	await runSessionCommand(args.slice(1));
 } else if (args[0] === "extensions") {
 	await runExtensionsCommand(args.slice(1));
 } else if (args[0] === "capability") {
@@ -225,7 +231,7 @@ if (args[0] === "doctor") {
 	console.log(formatCacheAudit(audit));
 } else {
 	console.error(
-		"Usage: dove-pi doctor | dove-pi capability list | dove-pi capability run <name> [--args=<json>] [--approve] | dove-pi rpc | dove-pi mcp | dove-pi project [init|doctor|bind native] | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit [--since=Nh] [--filter=substr] | dove-pi cache audit [--min-requests=N] [--filter=substr] [--below=0.8] | dove-pi extensions list | dove-pi extensions show <profile> | dove-pi extensions doctor <profile> | dove-pi extensions install <profile>",
+		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|create|start|finish|archive | dove-pi session list|record | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
 	);
 	process.exitCode = 1;
 }
