@@ -416,3 +416,24 @@ Fixed managed Dove wrapper authority, routed unfinished-task inventory through o
 ### Status
 
 [OK] **Completed**
+
+
+## Session 15: Installed Dove real-flow A/B validation
+
+**Date**: 2026-09-02
+**Task**: Installed Dove real-flow A/B validation
+**Branch**: `master`
+
+### Summary
+
+Installed current HEAD as 0.1.5+source.659f79a5a9fd and ran the four-prompt matrix through one long-lived RPC session with DeepSeek-V4-Flash. All 4 goals completed with 7 Provider rounds, 3 tool calls, 0 structured questions, 3/4 warm first-call cache hits, stable 47-tool schema, and 25,417 uncached input tokens versus 41,541 for direct Pi + Trellis. Archived dove-real-flow-recovery; other active tasks remain untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8a73d25` | (see git log) |
+
+### Status
+
+[OK] **Completed**
