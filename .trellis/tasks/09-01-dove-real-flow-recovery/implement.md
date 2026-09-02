@@ -63,6 +63,37 @@ Run, in order:
 10. Verify release ID, implementation digest, first-call prefix evidence, goal
     success, uncached tokens, provider rounds, tools, questions, and stop reason.
 
+## 8. P0 Cache Continuation Follow-Up
+
+- [~] Run the same-process, restart, session-replacement, and formal no-op
+  live-provider matrix from `research/cache-continuation-investigation.md`.
+- [~] Capture final payload digests, v2 context count, epoch/revision,
+  session-affinity metadata, process ID, and Provider usage for every live
+  request. Existing isolated ledger evidence is recorded; the strict old/new
+  same-prompt launcher comparison remains incomplete.
+- [x] If the restart miss is reproduced, hydrate the latest active-branch v2
+  context snapshot and clear it on session replacement before re-running tests.
+- [x] Accept only Provider-visible warm-rate and uncached-input evidence; retain
+  a provider-miss/expiry classification where serialized prefixes are equal.
+
+The source-level restart regression is covered by the adapter integration test;
+the remaining unchecked item requires a live upstream with cache usage fields.
+
+Source candidate installation completed with `0.1.5+source.e39170049f65`; the
+managed doctor reports that release as current and retains
+`0.1.5+source.9f1bce7a0751` as previous. The installed release contains the
+snapshot helper and passed quick release verification.
+
+## Verification Result
+
+- `npm test`: 236/236 passed.
+- `npm run typecheck`: passed.
+- `npm run test:installer`: 92/92 passed.
+- `npm run doctor`: passed; managed release `0.1.5+source.e39170049f65` is `in_sync`.
+- `npm run pi:smoke`: passed.
+- `python .trellis/scripts/task.py validate 09-01-dove-real-flow-recovery`: passed.
+- `git diff --check`: passed.
+
 ## Review Gates
 
 - No cache improvement may disable tools that Pi would otherwise make usable.

@@ -69,6 +69,27 @@ Add a goal-level summary derived from provider and terminal ledger events:
 The primary efficiency measure is uncached input per completed goal. Cumulative
 cache share remains secondary because repeated loops can inflate it.
 
+## 6. Restart-Safe Context Snapshot
+
+The v2 context message is already persisted by Pi as part of the active session
+branch. The adapter must treat that message as the source of truth when a
+runtime starts or a session is replaced: clear old in-memory snapshot state,
+scan the active branch for the newest valid v2 message, and restore only its
+bounded epoch/revision/segment metadata and content digest. If the current
+project revision matches, the next request must not append a duplicate derived
+message. If the revision differs, a new snapshot is an intentional context
+change and must remain observable as such.
+
+This is a cache-continuation repair, not a second permission or workflow gate.
+It does not alter Pi's active tools, system policy, provider payload semantics,
+or the persisted user history. The experiment and attribution rules live in
+`research/cache-continuation-investigation.md`.
+
+Short-lived request guidance is a separate case: when Pi builds the provider
+context, retain only the latest guidance-only v2 message and all real snapshot
+messages. This keeps current-turn continuation guidance available without
+accumulating one transient guidance entry per user turn.
+
 ## Compatibility And Rollout
 
 - Preserve existing JSONL readers by adding optional fields/events.

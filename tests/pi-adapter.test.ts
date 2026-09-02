@@ -11,6 +11,7 @@ import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../s
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../src/project-provider/index.ts";
 import { SEPT1_QUESTION_VARIANTS, sept1QuestionInput } from "./fixtures/sept1-question-loop.ts";
+import { restoreLatestContextSnapshot } from "../src/pi-adapter/context-snapshot.ts";
 
 const adapterStateDir = mkdtempSync(join(tmpdir(), "pi-adapter-state-"));
 const previousStateDir = process.env.DOVE_PI_STATE_DIR;
@@ -36,6 +37,8 @@ describe("Pi adapter", () => {
 		const notifications: string[] = [];
 		const activeToolSets: string[][] = [];
 		let hostActiveTools: string[] = [...representativeTools];
+		let sessionEntries: unknown[] = [];
+		let fallbackSessionEntries: unknown[] = [];
 		let providerAborted = false;
 		const api = {
 			registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
@@ -90,7 +93,7 @@ describe("Pi adapter", () => {
 				setStatus: (_key, value) => { if (value) statuses.push(value); },
 				notify: (message) => { notifications.push(message); },
 			},
-			sessionManager: { getEntries: () => [], getSessionId: () => "session-test" },
+			sessionManager: { getEntries: () => fallbackSessionEntries, getBranch: () => sessionEntries, getSessionId: () => "session-test" },
 			abort: () => { providerAborted = true; },
 		};
 		const capabilityTool = tools.get("agent_run_capability") as { execute: (...args: unknown[]) => Promise<{ details?: { status?: string } }> };
@@ -258,11 +261,47 @@ describe("Pi adapter", () => {
 			{ ...context, model: { contextWindow: 100_000 } },
 		);
 		// Relevant project context is delivered without a workflow skill gate.
-		const beforeStartMessage = (beforeStart as { message?: { content?: string; details?: { guidance?: boolean; segments?: unknown[] } } })?.message;
+		const beforeStartMessage = (beforeStart as { message?: { content?: string; details?: { guidance?: boolean; epoch?: string; revision?: string; segments?: unknown[] } } })?.message;
 		assert.doesNotMatch(beforeStartMessage?.content ?? "", /trellis-before-dev|Workflow suggestion/);
 		assert.match(beforeStartMessage?.content ?? "", /\[PERSONAL AGENT REQUEST CONTEXT\]/);
 		assert.equal(beforeStartMessage?.details?.guidance, false, "project context is not a workflow instruction");
 		assert.ok((beforeStartMessage?.details?.segments?.length ?? 0) > 0, "an empty lookup must not consume the epoch needed by a later relevant project request");
+		sessionEntries = [{
+			type: "custom_message",
+			customType: "personal-agent-context",
+			content: beforeStartMessage?.content,
+			details: {
+				schemaVersion: 2,
+				epoch: beforeStartMessage?.details?.epoch,
+				revision: beforeStartMessage?.details?.revision,
+				segments: beforeStartMessage?.details?.segments,
+			},
+		}];
+		fallbackSessionEntries = [{
+			type: "custom_message",
+			customType: "personal-agent-context",
+			content: "wrong branch context",
+			details: {
+				schemaVersion: 2,
+				epoch: "standard:wrong-branch",
+				revision: "wrong-branch",
+				segments: beforeStartMessage?.details?.segments,
+			},
+		}];
+		await events.get("session_start")?.({ type: "session_start" }, context);
+		const resumedStart = await events.get("before_agent_start")?.(
+			{ prompt: "修复 Provider Prompt-Cache Boundary", systemPrompt: "", type: "before_agent_start" },
+			{ ...context, model: { contextWindow: 100_000 } },
+		);
+		assert.equal((resumedStart as { message?: unknown })?.message, undefined, "an unchanged resumed branch must not append duplicate Dove context");
+		sessionEntries = [];
+		await events.get("session_shutdown")?.({ type: "session_shutdown", reason: "new" }, context);
+		await events.get("session_start")?.({ type: "session_start" }, context);
+		const freshStart = await events.get("before_agent_start")?.(
+			{ prompt: "修复 Provider Prompt-Cache Boundary", systemPrompt: "", type: "before_agent_start" },
+			{ ...context, model: { contextWindow: 100_000 } },
+		);
+		assert.match(String((freshStart as { message?: { content?: string } })?.message?.content), /\[PERSONAL AGENT REQUEST CONTEXT\]/, "a replacement session must compile its own context");
 		assert.doesNotMatch(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /trellis-before-dev/);
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
 		const sysCaptured = notifications.length;
@@ -299,6 +338,17 @@ describe("Pi adapter", () => {
 			],
 		}, context);
 		assert.equal(appendOnlyResult, undefined, "v2 context history remains append-only across provider requests");
+		const guidanceResult = await events.get("context")?.({
+			type: "context",
+			messages: [
+				{ role: "user", content: [{ type: "text", text: "keep" }], timestamp: 6 },
+				{ role: "custom", customType: "personal-agent-context", content: "old guidance", display: false, details: { schemaVersion: 2, guidance: true, segments: [] }, timestamp: 7 },
+				{ role: "assistant", content: [{ type: "text", text: "answer" }], timestamp: 8 },
+				{ role: "custom", customType: "personal-agent-context", content: "current guidance", display: false, details: { schemaVersion: 2, guidance: true, segments: [] }, timestamp: 9 },
+			],
+		}, context);
+		const guidanceMessages = (guidanceResult as { messages?: Array<{ content?: unknown; timestamp?: number }> })?.messages ?? [];
+		assert.deepEqual(guidanceMessages.map((message) => message.timestamp), [6, 8, 9], "only the current guidance message remains in the Provider context");
 
 		const derivedContext = `[PERSONAL AGENT REQUEST CONTEXT]\n${"d".repeat(250)}`;
 		await events.get("context")?.({
@@ -327,6 +377,30 @@ describe("Pi adapter", () => {
 			"budget fallback removes only the exact Dove-derived message and preserves user text containing the same marker",
 		);
 
+	});
+
+	it("restores only the newest valid context snapshot from the active branch", () => {
+		const segment = { id: "task", kind: "task", trust: "untrusted", included: true, estimatedChars: 12, estimatedTokens: 3, reason: "included" };
+		const snapshot = (epoch: string, revision: string, content: string) => ({
+			type: "custom_message",
+			customType: "personal-agent-context",
+			content,
+			details: { schemaVersion: 2, epoch, revision, segments: [segment] },
+		});
+		const restored = restoreLatestContextSnapshot([
+			snapshot("old", "old", "old context"),
+			{ type: "custom_message", customType: "personal-agent-context", content: "guidance only", details: { schemaVersion: 2, epoch: "guidance", segments: [] } },
+			snapshot("current", "revision-2", "current context"),
+		]);
+		assert.deepEqual(restored, { content: "current context", epoch: "current", revision: "revision-2", segments: [segment] });
+		const nested = restoreLatestContextSnapshot([{
+			type: "message",
+			message: { role: "custom", customType: "personal-agent-context", content: "nested context", details: { schemaVersion: 2, epoch: "nested", revision: "revision-1", segments: [segment] } },
+		}]);
+		assert.equal(nested?.epoch, "nested");
+		assert.equal(restoreLatestContextSnapshot([
+			{ type: "custom_message", customType: "personal-agent-context", content: "malformed", details: { schemaVersion: 2, epoch: "bad", revision: "bad", segments: [{ ...segment, trust: "trusted" }] } },
+		]), undefined);
 	});
 
 	it("records an optional native goal directly without planning questions or legacy script execution", async () => {
@@ -927,6 +1001,6 @@ interface FakeContext {
 		notify: (message: string, level?: string) => void;
 		confirm?: (message: string, detail?: string) => Promise<boolean>;
 	};
-	sessionManager: { getEntries: () => unknown[]; getSessionId?: () => string };
+	sessionManager: { getEntries: () => unknown[]; getBranch?: () => unknown[]; getSessionId?: () => string };
 	abort?: () => void;
 }

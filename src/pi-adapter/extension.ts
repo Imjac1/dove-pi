@@ -37,6 +37,7 @@ import { projectExtensionCapabilities } from "../extensions/capabilities.ts";
 import { createDoveRuntime } from "../runtime.ts";
 import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.ts";
 import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
+import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 
 type DoveRegistrationClaim = { readonly identity: DoveExtensionIdentity; readonly owner: ExtensionAPI };
 const DOVE_REGISTRATION_SYMBOL = Symbol.for("dove.personal-agent.registration-claim");
@@ -201,6 +202,17 @@ function payloadMessageText(message: unknown): string {
 		}
 	}
 	return "";
+}
+
+function isGuidanceOnlyContextMessage(message: unknown): boolean {
+	if (typeof message !== "object" || message === null) return false;
+	const value = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (value.role !== "custom" || value.customType !== "personal-agent-context" || typeof value.details !== "object" || value.details === null) return false;
+	const details = value.details as { schemaVersion?: unknown; guidance?: unknown; revision?: unknown; segments?: unknown };
+	return details.schemaVersion === 2
+		&& details.guidance === true
+		&& details.revision === undefined
+		&& (!Array.isArray(details.segments) || details.segments.length === 0);
 }
 
 function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
@@ -1319,8 +1331,21 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.on("session_start", async (_event, ctx) => {
 		pendingContinuationPlan = undefined;
 		currentRequestHadNonQuestionTool = false;
-		const entries = ctx.sessionManager.getEntries();
-		const last = [...entries].reverse().find((entry) => entry.type === "custom" && entry.customType === "personal-agent-mode") as { data?: { current?: AgentMode } } | undefined;
+		requestContextText = undefined;
+		requestContextRevision = undefined;
+		requestContextEpoch = undefined;
+		requestContextSegments = [];
+		doveContextPayloads.clear();
+		const sessionManager = ctx.sessionManager as unknown as { getBranch?: () => unknown[]; getEntries: () => unknown[] };
+		const entries = typeof sessionManager.getBranch === "function" ? sessionManager.getBranch() : sessionManager.getEntries();
+		const restoredContext = restoreLatestContextSnapshot(entries);
+		if (restoredContext) {
+			requestContextText = restoredContext.content;
+			requestContextRevision = restoredContext.revision;
+			requestContextEpoch = restoredContext.epoch;
+			requestContextSegments = restoredContext.segments;
+		}
+		const last = [...entries].reverse().find((entry) => typeof entry === "object" && entry !== null && (entry as { type?: unknown }).type === "custom" && (entry as { customType?: unknown }).customType === "personal-agent-mode") as { data?: { current?: AgentMode } } | undefined;
 		const resumedMode = normalizeAgentMode(last?.data?.current);
 		if (resumedMode) mode.change(resumedMode, "session-resume");
 		operation = "idle";
@@ -1449,6 +1474,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		currentRequestPlan = undefined;
 		currentRequestTaskId = undefined;
 		currentProviderCall = undefined;
+		requestContextText = undefined;
+		requestContextRevision = undefined;
+		requestContextEpoch = undefined;
+		requestContextSegments = [];
+		doveContextPayloads.clear();
 		lastAttemptOutcome = undefined;
 		lastProviderFailure = undefined;
 		pendingRequestTerminal = undefined;
@@ -1904,12 +1934,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// historical per-turn context payload forever. The entries remain in the
 	// session file for backwards-compatible rendering/inspection.
 	pi.on("context", async (event) => {
-		// Context transforms run before every provider request. Only remove
-		// legacy Dove entries that have no v2 schema marker; never reorder the
-		// current append-only context message.
+		// Context transforms run before every provider request. Remove legacy
+		// entries and stale guidance, but preserve real snapshots and ordering.
 		doveContextPayloads.clear();
-		const messages = event.messages.filter((message) => {
+		const latestGuidanceIndex = event.messages.reduce((latest, message, index) => isGuidanceOnlyContextMessage(message) ? index : latest, -1);
+		const messages = event.messages.filter((message, index) => {
 			if (message.role !== "custom" || message.customType !== "personal-agent-context") return true;
+			if (isGuidanceOnlyContextMessage(message)) return index === latestGuidanceIndex;
 			const details = message.details;
 			const isCurrent = typeof details === "object" && details !== null && (details as { schemaVersion?: unknown }).schemaVersion === 2;
 			if (isCurrent && typeof message.timestamp === "number") doveContextPayloads.set(message.timestamp, payloadMessageText(message));
