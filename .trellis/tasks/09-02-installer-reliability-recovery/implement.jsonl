@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "Managed installation, update, repair, launcher, cache, lock, and acceptance contracts"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Failure boundaries, actionable errors, and structured JSON output"}

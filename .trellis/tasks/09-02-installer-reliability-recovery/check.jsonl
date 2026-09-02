@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "Full installer quality and compatibility checks"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality gate and forbidden-pattern checks"}

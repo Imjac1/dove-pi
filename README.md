@@ -67,6 +67,13 @@ irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 -OutF
 .\install.ps1 -NoPath -NoFont -NoExtensions
 ```
 
+网络需要代理时可显式传入 HTTP/HTTPS 代理；未传入时安装器按
+`HTTPS_PROXY`、`HTTP_PROXY`、`ALL_PROXY` 的顺序读取环境变量：
+
+```powershell
+.\install.ps1 -Proxy http://127.0.0.1:10808
+```
+
 想先检查脚本再执行：
 
 ```powershell
@@ -225,6 +232,9 @@ Pi 是 Dove Release 中的锁定组件，不使用 Pi 的全局自更新。只�
 声明了新的 Pi 版本，`dove-pi update` 就会在 staging 中安装并验证该精确版本，成功后
 与 Dove 一起原子切换；失败时继续使用旧版本。更新输出会显示 Pi 的旧版本和新版本。
 卸载会同时删除 Dove 托管应用和持久化的 launcher PATH 项，新终端生效。
+`repair` 会依次检查当前版本、previous、精确匹配 release identity 的本地缓存和稳定
+Release。损坏的 `install.json` 不会被当成全新安装；修复会优先使用有效备份，再扫描已验证的
+托管版本。启动器也会在每次运行时重新寻找可用的 Python 3.10+，不绑定安装时的绝对路径。
 
 在首个 Release 发布前，从源码安装的用户通过下面的方式更新：
 
@@ -266,6 +276,7 @@ $env:LOCALAPPDATA\DovePi\
   app\versions\
   cache\releases\
   state\install.json
+  state\install.json.bak
   logs\
 ```
 
@@ -331,6 +342,16 @@ npm run pi:smoke
 
 源码安装请先安装 Python 3.10+ 和 Node.js 22.19+。Release 一键安装器会在 winget 可用时自动
 补齐运行时。
+
+### 安装状态损坏或更新中断
+
+重新运行下载的一键安装脚本，或在仍可用的 launcher 中执行：
+
+```powershell
+dove-pi repair
+```
+
+修复只操作 Dove 托管目录，会保留 Pi 用户数据、项目 `.dove`/`.trellis` 和源码目录。
 
 ### 扩展显示 degraded
 

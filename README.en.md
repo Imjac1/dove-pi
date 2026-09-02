@@ -70,6 +70,13 @@ irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 -OutF
 .\install.ps1 -NoPath -NoFont -NoExtensions
 ```
 
+For networks that require a proxy, pass an HTTP/HTTPS proxy explicitly. Without `-Proxy`, the
+installer checks `HTTPS_PROXY`, `HTTP_PROXY`, then `ALL_PROXY`:
+
+```powershell
+.\install.ps1 -Proxy http://127.0.0.1:10808
+```
+
 To inspect the script first:
 
 ```powershell
@@ -221,6 +228,10 @@ Release declares a newer Pi version, `dove-pi update` installs and verifies that
 staging and switches Dove and Pi together only after success. The update output reports the old and
 new Pi versions. Uninstall also removes Dove's persisted launcher PATH entry; new terminals see the
 change.
+`repair` checks current, previous, the exact release-identity cache, then the stable Release. A
+corrupt `install.json` is never treated as a fresh install: repair prefers a valid backup and then
+scans verified managed releases. The launcher also resolves a compatible Python 3.10+ runtime on
+each invocation instead of binding permanently to the installation-time path.
 
 Before the first Release, update a source installation with:
 
@@ -263,6 +274,7 @@ $env:LOCALAPPDATA\DovePi\
   app\versions\
   cache\releases\
   state\install.json
+  state\install.json.bak
   logs\
 ```
 
@@ -331,6 +343,17 @@ The repository has not published its first GitHub Release. Use the source instal
 
 For source installs, install Python 3.10+ and Node.js 22.19+ first. The Release bootstrap can install
 missing runtimes through winget when available.
+
+### Installation state is corrupt or an update was interrupted
+
+Run the downloaded Release bootstrap again, or use the remaining launcher:
+
+```powershell
+dove-pi repair
+```
+
+Repair modifies only Dove-managed directories and preserves Pi user data, project `.dove`/`.trellis`,
+and source checkouts.
 
 ### An extension is degraded
 
