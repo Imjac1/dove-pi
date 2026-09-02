@@ -85,6 +85,7 @@ export class ExecutionLedger {
 				requestId: plan.requestId,
 				interactionMode: plan.interactionMode,
 				lane: plan.lane,
+				taskSelector: plan.taskSelector,
 				continuedFromRequestId: plan.continuedFromRequestId,
 				intent: plan.intent,
 				workflowAction: plan.workflowAction,

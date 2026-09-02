@@ -138,51 +138,16 @@ registry.register(windowsHostInfoCapability);
 const result = await executeFastPath(registry, ledger, "windows.host_info", {}, context);
 ```
 
-#### Provider Budget: Wrong
-
-```typescript
-const gateway = new ModelGateway({ contextWindow: 12_800, reservedOutput: 4_096 });
-return originalPayload;
-```
-
-#### Provider Budget: Correct
-
-```typescript
-const reservedOutput = boundedOutputReservation({
-  contextWindow,
-  providerRequestedOutput: providerOutputTokenLimit(payload) ?? model.maxTokens,
-  planOutputBudget: plan.outputBudget,
-  inputTokens,
-  fixedOverhead,
-  canWriteProviderLimit: providerOutputTokenLimit(payload) !== undefined,
-});
-return limitProviderOutputTokens(payload, reservedOutput);
-```
-
 ## Design Decision: Adapter Coordination Boundary
 
 **Context**: Dove is primarily used through Pi, so a generic host abstraction
 would add indirection without improving this boundary.
-
-The alternatives were a minimal event layer or putting all logic in the Pi
-extension; both lose the boundary below.
 
 **Decision**: Use option 3. Pi and the native project provider are replaceable boundaries, not
 Kernel dependencies. Pi owns lifecycle, shortcuts, active tools, streaming,
 and TUI behavior. Dove's shared runtime owns context budgeting, execution
 records, mutation recovery, and standalone transport validation, but never a
 second Pi tool-permission policy.
-
-**Example**:
-
-```typescript
-pi.on("before_agent_start", async (event, ctx) => {
-  const plan = createRequestPlan({ message: event.prompt, mode: mode.current });
-  return runtime.prepareRequest(plan, ctx.model);
-});
-```
-
-Future CLI/MCP hosts can reuse the Kernel contracts.
 
 ## V2 Request Planning and Provider Budgets
 
@@ -195,8 +160,14 @@ mentions of an execution verb remain read-only. The
 planner evaluates clause-local actions and polarity so Chinese/English read-only
 constraints do not accidentally grant execution, while a later independent
 imperative is classified separately and still requires the execution boundary.
-Summaries of the immediately preceding conversation remain Chat, and natural
-language project continuation is read-only Project Work.
+Summaries of the immediately preceding conversation remain Chat. Continuation
+is Project Work: `继续当前任务` injects the next step and executes with Pi's
+normal tools; status/inventory projections remain read-only.
+
+`RequestPlan.taskSelector` is populated only by an explicit `继续任务
+<selector>` form and is persisted in `request.planned` details. A selector must
+resolve to exactly one provider task; otherwise continuation reports `none` or
+`ambiguous` and never silently falls back to another task.
 
 `RequestPlan.workflowAction` is compatibility metadata for explicit goal
 commands; it never injects a phase workflow or restricts Pi tools.
@@ -263,6 +234,12 @@ provider-call identifiers, while `after_provider_response` records the HTTP
 outcome and usage projection. Pi records and swallows extension-hook exceptions,
 so a rejected `before_provider_request` must call the host `ctx.abort()` boundary;
 throwing alone is only the fallback for hosts that do not expose that boundary.
+
+Within one live attempt, provider rounds are bounded by intent/mode: Fast uses
+`chat=1`, `lookup=3`, `project-work=4`, `execution=5`; Standard adds one and
+Ultra adds two. `RequestLifecycle` owns provider/network retries, so retry and
+compaction attempts do not consume this budget. On exhaustion, record failed
+detail `provider-round-budget:<limit>`, policy-abort, and call `ctx.abort()`.
 
 Capability executions receive a unique `executionId` and optional request,
 session, and tool-call correlation. Standalone host integrations may persist an

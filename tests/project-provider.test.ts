@@ -273,6 +273,10 @@ describe("Dove native project provider", () => {
 		const context = (tasks: readonly ProjectTask[], currentTask?: ProjectTask): ProjectContextSnapshot => ({ provider: "native", projectRoot: "C:/project", revision: "1", tasks, ...(currentTask ? { currentTask } : {}), documents: [] });
 		const current = task("current", "active");
 		assert.equal(summarizeProjectContinuation(context([current], current)).kind, "current");
+		assert.equal(summarizeProjectContinuation(context([current, task("other", "active")], current)).kind, "current");
+		assert.equal(summarizeProjectContinuation(context([current, task("other", "active")]), "other").kind, "selected");
+		assert.equal(summarizeProjectContinuation(context([current, task("done", "completed")]), "done").kind, "none");
+		assert.equal(summarizeProjectContinuation(context([current, task("other", "active")]), "missing").kind, "none");
 		assert.equal(summarizeProjectContinuation(context([task("done", "completed"), task("only", "active")])).kind, "single_candidate");
 		assert.equal(summarizeProjectContinuation(context([task("a", "active"), task("b", "active")])).kind, "ambiguous");
 	});

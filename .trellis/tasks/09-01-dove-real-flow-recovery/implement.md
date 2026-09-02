@@ -13,6 +13,10 @@
 - Extend request planning for save/export/record imperatives and effective-plan
   inheritance from an exact pending action.
 - Integrate lifecycle resets and ledger correlation in the Pi adapter.
+- Make `继续当前任务` execute the projected next step with Pi's native tools;
+  keep status/inventory projections read-only.
+- Preserve an explicit continuation selector and reject negated lifecycle
+  mentions before formal task creation.
 
 ## 3. Remove Dove's Pi Permission Layer
 
@@ -86,7 +90,7 @@ snapshot helper and passed quick release verification.
 
 ## Verification Result
 
-- `npm test`: 236/236 passed.
+- `npm test`: 238/238 passed.
 - `npm run typecheck`: passed.
 - `npm run test:installer`: 92/92 passed.
 - `npm run doctor`: passed; managed release `0.1.5+source.e39170049f65` is `in_sync`.

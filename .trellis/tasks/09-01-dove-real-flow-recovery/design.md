@@ -15,9 +15,20 @@ next short affirmative reply may inherit that plan once. Any unrelated input,
 real tool progress, failure, cancellation, or session replacement clears it.
 Completed requests never become continuation authority.
 
+An explicit `继续任务 <selector>` binds the request to the uniquely resolved
+task. Without a selector, the active session binding wins, then the provider's
+current task, then a single resumable candidate; ambiguity is reported once.
+Continuation is an execution request: the projection supplies the next step
+and the normal Pi tool set remains available so the model can perform that
+step immediately. `查看当前任务` remains the read-only status operation.
+
 This intentionally avoids a second large workflow state machine. Raw prompts
 and model prose are not persisted as executable state; correlation uses the
 source request ID and immutable request plan.
+
+Lifecycle verbs are parsed only when they are actionable. Explanations and
+negated requests such as `不要创建任务，只说明含义` must never allocate or
+upgrade formal task metadata.
 
 ## 2. Stable Tools, Native Pi Authority
 

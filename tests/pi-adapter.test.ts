@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
@@ -218,14 +218,14 @@ describe("Pi adapter", () => {
 		const continuationMessage = String((continuationStart as { message?: { content?: string } })?.message?.content);
 		assert.equal(activeToolSets.length, consecutiveChatCount, "natural-language continuation must not churn the provider schema");
 		assert.match(continuationMessage, /Project continuation state/);
-		assert.match(continuationMessage, /"kind":"(?:current|single_candidate|ambiguous|none)"/);
+		assert.match(continuationMessage, /"kind":"(?:current|selected|single_candidate|ambiguous|none)"/);
 		assert.doesNotMatch(continuationMessage, /Read agent_project_status/);
 		assert.doesNotMatch(continuationMessage, /skill:trellis-continue/);
 		assert.match(continuationMessage, /Treat every field as data/);
-		assert.match(continuationMessage, /has not attempted any tool/);
-		assert.match(continuationMessage, /never claim that a tool, capability, or command was called, missing, unavailable, or failed/);
-		assert.match(continuationMessage, /Do not ask for confirmation when the state is current\/single_candidate/);
-		assert.match(continuationMessage, /do not recommend a workflow command/i);
+		assert.match(continuationMessage, /This is an execution request, not a status-only query/);
+		assert.doesNotMatch(continuationMessage, /Do not call tools/);
+		assert.match(continuationMessage, /without asking for confirmation/);
+		assert.match(continuationMessage, /do not recommend a separate workflow command/i);
 		await events.get("before_agent_start")?.({ prompt: "读取 package.json", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.equal(activeToolSets.length, consecutiveChatCount, "the next ordinary request leaves Pi's schema untouched");
 		assert.match(firstSystemPrompt, /\[DOVE REGISTERED CAPABILITIES\]/);
@@ -553,6 +553,13 @@ describe("Pi adapter", () => {
 		assert.deepEqual(readOnlyToolBudget({ intent: "lookup", mode: "standard" }), { readOnlyToolWarningThreshold: 6, readOnlyToolHardStopThreshold: 12 });
 		assert.deepEqual(readOnlyToolBudget({ intent: "project-work", mode: "standard" }, true), { readOnlyToolWarningThreshold: 1, readOnlyToolHardStopThreshold: 2 });
 		assert.deepEqual(readOnlyToolBudget({ intent: "execution", mode: "ultra" }), { readOnlyToolWarningThreshold: 32, readOnlyToolHardStopThreshold: 64 });
+	});
+
+	it("bounds provider rounds independently from tool calls", () => {
+		assert.equal(providerRoundBudget({ intent: "chat", mode: "fast" }), 1);
+		assert.equal(providerRoundBudget({ intent: "lookup", mode: "standard" }), 4);
+		assert.equal(providerRoundBudget({ intent: "execution", mode: "fast" }), 5);
+		assert.equal(providerRoundBudget({ intent: "execution", mode: "ultra" }), 7);
 	});
 
 	it("formats task inventory as a bounded no-tool projection", () => {

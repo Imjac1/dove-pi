@@ -26,6 +26,10 @@ cause.
 
 - Resolve short affirmative/cancel/correction replies against a bounded pending
   user-goal state instead of classifying them as independent Chat requests.
+- `继续当前任务` resumes execution of the projected next step immediately;
+  `查看当前任务` remains a read-only status query.
+- `继续任务 <selector>` must target the uniquely resolved task instead of
+  silently falling back to the project-global current task.
 - Recognize save/export/record/generate-file imperatives as Execution.
 - Clear pending state on completion, cancellation, unrelated explicit requests,
   session replacement, and policy failure.
@@ -82,6 +86,8 @@ cause.
 - [ ] After a recorded pending action, `可以` inherits that action, asks zero additional structured questions, and executes or returns one exact blocker.
 - [ ] The 15-question September 1 replay terminates before question 2; no wording variant bypasses the per-goal limit.
 - [ ] Unfinished-task inventory normally completes in one provider call from the injected projection, without archive/source archaeology.
+- [x] A continuation request exposes the current task's next step and leaves Pi's active tools available for execution.
+- [x] A negated/explanatory lifecycle request creates or upgrades no formal task metadata.
 - [ ] Ordinary multi-turn tool/system digests remain stable; after the initial cold request, warm first-call cache hit rate is at least 70% in the real-provider matrix.
 - [ ] Auto mode makes zero `setActiveTools` calls across Chat/Lookup/Execution turns and preserves Pi-selected third-party tools.
 - [ ] Simple Chat uses one provider round; bounded Lookup uses at most three; a small edit-and-test flow uses at most five.

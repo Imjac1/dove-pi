@@ -55,8 +55,8 @@ interface NativeGoal {
   being silently repaired.
 - Malformed state degrades diagnostics and blocks metadata mutation without
   overwriting the file. It never blocks ordinary Pi tools.
-- Fast-lane execution does not create a formal task. Explicit planning,
-  architecture, multi-file/cross-layer, or continuation requests may call
+- Fast-lane execution and continuation do not create a formal task. Explicit
+  planning, architecture, or multi-file/cross-layer requests may call
   `ensureFormalTask` silently to establish durable artifacts; this is
   background continuity, not a prerequisite or confirmation flow.
 - Formal tasks also own `.dove/tasks/<id>/task.json`, `prd.md`, `design.md`,
@@ -76,9 +76,13 @@ recorded through existing project mutation ledger events.
 tool call executes directly under Pi; no `PlanningSession`, phase handshake, or
 second Dove confirmation exists.
 
-Natural-language continuation uses `current`, `single_candidate`, `ambiguous`,
-or `none` from one provider projection. It must not trigger shell archaeology,
-private runtime probing, or workflow-skill recommendations.
+Natural-language continuation uses `current`, `selected`, `single_candidate`,
+`ambiguous`, or `none` from one provider projection. `selected` is used only
+for an explicit task selector that resolves uniquely. Current, selected, and
+single-candidate continuation inject the next step and execute immediately with
+Pi's normal tools; ambiguous continuation asks one task-selection question,
+and none reports the missing resumable task. Continuation must not trigger shell
+archaeology, private runtime probing, or workflow-skill recommendations.
 
 ## 4. Legacy Trellis Compatibility
 

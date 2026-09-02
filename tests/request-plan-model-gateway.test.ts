@@ -113,7 +113,7 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "现在只读说明 src/invoice.js 修复后的计算公式，别修改或运行任何命令。" }).intent, "lookup");
 	});
 
-	it("keeps conversational summaries cheap and continuation read-only", () => {
+	it("keeps conversational summaries cheap and continuation executable", () => {
 		assert.equal(createRequestPlan({ message: "用一句话总结我们刚才完成了什么。" }).intent, "chat");
 		assert.equal(createRequestPlan({ message: "Briefly summarize what we just changed." }).intent, "chat");
 		const continuation = createRequestPlan({ message: "继续当前项目任务", projectAvailable: true });
@@ -123,6 +123,8 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "Resume the current project task", projectAvailable: true }).projectAction, "continue");
 		assert.equal(createRequestPlan({ message: "继续工作", projectAvailable: true }).projectAction, "continue");
 		assert.equal(createRequestPlan({ message: "Continue current work", projectAvailable: true }).projectAction, "continue");
+		assert.equal(createRequestPlan({ message: "继续任务 cache-flow", projectAvailable: true }).taskSelector, "cache-flow");
+		assert.equal(createRequestPlan({ message: "continue task cache-flow", projectAvailable: true }).taskSelector, "cache-flow");
 		assert.equal(createRequestPlan({ message: "create a task", projectAvailable: true }).workflowAction, "create-task");
 		assert.equal(createRequestPlan({ message: "create a task", projectAvailable: true }).intent, "project-work");
 		assert.equal(createRequestPlan({ message: "创建任务", projectAvailable: true, explicitIntent: "chat" }).intent, "project-work");
@@ -138,6 +140,18 @@ describe("request planning", () => {
 		const executingContinuation = createRequestPlan({ message: "继续当前项目任务，然后修复登录问题", projectAvailable: true });
 		assert.equal(executingContinuation.intent, "execution");
 		assert.equal(executingContinuation.projectAction, undefined);
+	});
+
+	it("does not enter lifecycle workflow for negated explanations", () => {
+		for (const message of [
+			"不要创建任务，只告诉我创建任务是什么意思",
+			"创建任务是什么意思，不要真的创建",
+			"do not create a task, just explain what it means",
+		]) {
+			const plan = createRequestPlan({ message, projectAvailable: true });
+			assert.equal(plan.workflowAction, undefined, message);
+			assert.equal(plan.lane, "fast", message);
+		}
 	});
 
 	it("keeps response-only probes cheap but preserves independent actions", () => {

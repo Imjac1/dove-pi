@@ -38,6 +38,7 @@ export interface RequestPlan {
 	readonly outputBudget: number;
 	readonly projectAvailable: boolean;
 	readonly lane: RequestLane;
+	readonly taskSelector?: string;
 	readonly continuedFromRequestId?: string;
 	readonly workflowAction?: WorkflowAction;
 	/** @deprecated Use workflowAction. */
@@ -49,7 +50,9 @@ const PROJECT_PATTERN = /\b(project|task|prd|design|implementation|code|reposito
 const LOOKUP_PATTERN = /\b(show|read|find|search|list|status|inspect|lookup|look\s+up|what|where|which|how|explain|describe|summarize|summary|read-only)\b|查看|读取|查找|搜索|列出|状态|检查|查询|什么|哪里|哪个|如何|怎么|怎样|解释|描述|说明|总结|分析|只读|打开网页|网页|截图|浏览器|浏览/i;
 const RESPONSE_ONLY_PATTERN = /\b(?:only|just)\s+(?:reply|respond|answer)\b|只(?:需|要)?回复|仅回复/i;
 const CONVERSATION_SUMMARY_PATTERN = /(?:一句话|简短|简单)?总结(?:一下)?(?:我们)?(?:刚才|刚刚|方才|这次|本次)(?:完成|做|讨论|处理|修改)|(?:总结|概括)(?:一下)?(?:我们|本次|当前)?的?(?:对话|会话|聊天)|\b(?:briefly\s+|in\s+one\s+sentence\s+)?summari[sz]e\s+(?:what\s+)?we\s+(?:just\s+)?(?:did|completed|discussed|changed)\b|\b(?:generate|create|provide|give)\s+(?:me\s+)?(?:a\s+)?summary\s+of\s+(?:our|the|this)\s+(?:conversation|session|chat)\b|\bsummari[sz]e\s+(?:our|the|this)\s+(?:conversation|session|chat)\b/i;
-const PROJECT_CONTINUATION_PATTERN = /^\s*(?:(?:请(?:帮我)?|帮我)\s*)?(?:(?:继续|恢复)(?:一下)?(?:当前|这个|该|本)?(?:项目)?(?:任务|工作)|(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:continue|resume)(?:\s+(?:the|this|that))?\s+(?:(?:current|existing)\s+)?(?:project\s+)?(?:task|work))(?=\s|[，。！？；,;.!?]|$)/i;
+const PROJECT_CONTINUATION_PATTERN = /^\s*(?:(?:请(?:帮我)?|帮我)\s*)?(?:(?:继续|恢复)(?:一下)?(?:(?:当前|这个|该|本)\s*)?(?:项目\s*)?(?:任务|工作)|(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:continue|resume)(?:\s+(?:the|this|that))?\s+(?:(?:current|existing)\s+)?(?:project\s+)?(?:task|work))(?=\s|[，。！？；,;.!?]|$)/i;
+const CONTINUATION_SELECTOR_PATTERN = /^\s*(?:(?:请(?:帮我)?|帮我)\s*)?(?:继续|恢复)(?:一下)?(?:(?:当前|这个|该|本)\s*)?(?:项目\s*)?(?:任务|工作)(?:\s*[:：]\s*(.+?)|\s+(.+?))?\s*$/i;
+const ENGLISH_CONTINUATION_SELECTOR_PATTERN = /^\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:continue|resume)(?:\s+(?:the|this|that))?\s+(?:(?:current|existing)\s+)?(?:project\s+)?(?:task|work)(?:\s*[:：]\s*(.+?)|\s+(.+?))?\s*$/i;
 const TEST_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?test\s+(?:(?:the|this|that|current)\s+)*(?:project|code|build|suite|application|app|feature|login|fix)\b|(?:^|[.!?;,，。！？；\n])\s*(?:(?:请(?:帮我)?|帮我)\s*)?测试(?:一下|下)?\s*(?:当前|这个|该|本)?\s*(?:项目|代码|构建|功能|应用|登录|修复|测试套件)/i;
 const BROWSER_INTERACTION_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s*(?:(?:please\s+)?(?:help\s+me\s+)?)?(?:click|tap|submit|log\s+in|sign\s+in)\b|(?:^|[.!?;,，。！？；\n])\s*(?:请(?:帮我)?|帮我)?(?:点击|点一下|轻触|提交|登录)(?:这个|该|当前)?/i;
 const BROWSER_LOOKUP_PATTERN = /\b(?:open|browse|view)\s+(?:(?:the|this|that|current)\s+)?(?:website|web\s*page|page|browser)\b|\b(?:take\s+)?(?:a\s+)?screenshot\b|打开(?:这个|该|当前)?(?:登录)?页面|查看(?:这个|该|当前)?(?:网页|页面)|网页|浏览器|截图/i;
@@ -63,6 +66,8 @@ const WORKFLOW_ACTION_PATTERNS: readonly [WorkflowAction, RegExp][] = [
 const FORMAL_TASK_PATTERN = /(?:正式(?:任务|流程|工作)|规划|制定|生成|编写|保留|落盘).{0,48}(?:任务|工作|方案|prd|设计|实现计划|验收|阶段产物|文档|产物)|(?:多文件|跨层|跨模块|系统性|重构).{0,32}(?:修改|改造|实现|优化|开发|迁移)|\b(?:prd|design document|implementation plan|acceptance criteria|formal task|multi[- ]file|cross[- ]layer|refactor)\b/i;
 const ARCHITECTURE_TASK_PATTERN = /(?:设计|规划|制定|重构|改造|实现|文档化).{0,48}(?:架构|方案|系统|模块)|(?:架构|系统|模块).{0,48}(?:设计|方案|重构)|\b(?:design|define|redesign|document|implement|plan)\b.{0,48}\b(?:architecture|system design|module)\b|\b(?:architecture|system design|module)\b.{0,48}\b(?:design|plan|refactor)\b/i;
 const FORMAL_ACTION_PATTERN = /(?:正式|规划|制定|生成|编写|保留|落盘|设计|重构|改造|文档化|plan|define|design|redesign|document|implement|refactor|formal|multi[- ]file|cross[- ]layer)/i;
+
+const NEGATED_WORKFLOW_ACTION_PATTERN = /(?:不要|别|无需|不需要|不必|无须|don't|do\s+not|without|no\s+need\s+to)[^，。！？；,;.!?\n]{0,24}(?:创建|新建|建立|开始|启动|完成|结束|归档|create|new|start|begin|finish|archive)/i;
 
 const EXPLANATORY_QUERY_PATTERN = /(?:解释|说明|分析|总结|描述|什么是|如何|怎么|怎样|为什么|explain|describe|summari[sz]e|how|what|why)/i;
 
@@ -101,8 +106,20 @@ function hasActionableExecution(message: string): boolean {
 }
 
 function classifyWorkflowAction(message: string): WorkflowAction | undefined {
+	if (NEGATED_WORKFLOW_ACTION_PATTERN.test(message)) return undefined;
 	for (const [action, pattern] of WORKFLOW_ACTION_PATTERNS) if (pattern.test(message)) return action;
 	return undefined;
+}
+
+export function extractProjectTaskSelector(message: string): string | undefined {
+	const match = CONTINUATION_SELECTOR_PATTERN.exec(message) ?? ENGLISH_CONTINUATION_SELECTOR_PATTERN.exec(message);
+	if (!match) return undefined;
+	const selector = (match[1] ?? match[2])?.trim();
+	return selector && !/^(?:当前|这个|该|本|current|existing|the|this|that)$/i.test(selector) ? selector : undefined;
+}
+
+function isProjectContinuationRequest(message: string): boolean {
+	return PROJECT_CONTINUATION_PATTERN.test(message) || CONTINUATION_SELECTOR_PATTERN.test(message) || ENGLISH_CONTINUATION_SELECTOR_PATTERN.test(message);
 }
 
 export function isShortAffirmativeReply(message: string): boolean {
@@ -126,7 +143,7 @@ function classifyIntent(message: string, explicitIntent?: RequestIntent): Reques
 	// A leading, explicit continuation request owns the turn even when a later
 	// fallback clause asks "how to start". The anchored pattern does not match
 	// explanatory lookups such as "查看如何继续当前任务".
-	if (PROJECT_CONTINUATION_PATTERN.test(message)) return "project-work";
+	if (isProjectContinuationRequest(message)) return "project-work";
 	if (BROWSER_LOOKUP_PATTERN.test(message)) return "lookup";
 	if (LOOKUP_PATTERN.test(message)) return "lookup";
 	if (PROJECT_PATTERN.test(message)) return "project-work";
@@ -134,9 +151,7 @@ function classifyIntent(message: string, explicitIntent?: RequestIntent): Reques
 }
 
 function classifyProjectAction(message: string, intent: RequestIntent): ProjectAction | undefined {
-	// An independent execution verb already promoted the request above. Only a
-	// read-only Project Work turn receives the deterministic continuation path.
-	return intent === "project-work" && PROJECT_CONTINUATION_PATTERN.test(message) ? "continue" : undefined;
+	return intent === "project-work" && isProjectContinuationRequest(message) ? "continue" : undefined;
 }
 
 export function isFormalTaskRequest(message: string, intent: RequestIntent, workflowAction?: WorkflowAction): boolean {
@@ -170,6 +185,7 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 	const projectAvailable = input.projectAvailable === true;
 	const interactionMode = normalizeInteractionMode(input.interactionMode) ?? "auto";
 	const workflowAction = classifyWorkflowAction(message);
+	const taskSelector = workflowAction === "continue" ? extractProjectTaskSelector(message) : undefined;
 	const inheritedIntent = isShortAffirmativeReply(message) && input.pendingPlan
 		? input.pendingPlan.intent
 		: undefined;
@@ -199,6 +215,7 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 		outputBudget,
 		projectAvailable,
 		lane,
+		...(taskSelector ? { taskSelector } : {}),
 		...(inheritedIntent && input.pendingPlan ? { continuedFromRequestId: input.pendingPlan.requestId } : {}),
 		...(effectiveWorkflowAction ? { workflowAction: effectiveWorkflowAction } : {}),
 		...(projectAction ? { projectAction } : {}),
