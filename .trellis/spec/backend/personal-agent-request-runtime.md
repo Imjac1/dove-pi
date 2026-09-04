@@ -324,9 +324,9 @@ host boundary. Dove keeps the policy terminal reason separately, so
 misreporting a policy abort as user cancellation. Retry safety uses a reviewed
 read-only Pi-tool allowlist, Core capability idempotency, and every capability
 step in a recipe; unknown plugin tools fail closed as non-idempotent.
-Classify provider errors by HTTP status, transport code, or authorization before
-generic `abort`/`cancel` wording; HTTP 401/429 markers outrank cancellation.
-Ledger events
+Classify provider errors by status/code/auth before generic abort wording; 401/429
+markers outrank cancellation.
+Events
 `request.received`, `request.redelivery.coalesced`,
 `request.attempt.started`, `request.attempt.completed`, and `request.terminal`
 are additive; legacy readers may ignore them.
