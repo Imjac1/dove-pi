@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
-- **Last Active**: 2026-09-04
+- **Total Sessions**: 17
+- **Last Active**: 2026-09-05
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~462 | Active |
+| `journal-1.md` | ~484 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-09-05 | Dove Pi 策略可观测性与上下文预算修复 | `3e32ac4` | `master` |
 | 16 | 2026-09-04 | Dove Pi workflow audit and terminal diagnostics | `9ed0c29`, `f3fbf70` | `master` |
 | 15 | 2026-09-02 | Installed Dove real-flow A/B validation | `8a73d25` | `master` |
 | 14 | 2026-09-01 | Deterministic task inventory runtime | `6beabf1`, `6b20d04` | `master` |

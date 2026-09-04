@@ -460,3 +460,25 @@ Completed the Dove Pi full-workflow audit: fixed local launcher routing and CLI 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: Dove Pi 策略可观测性与上下文预算修复
+<!-- trellis-session: v=2 fp=1f22f39dcc1ca972 -->
+
+**Date**: 2026-09-05
+**Task**: Dove Pi 策略可观测性与上下文预算修复
+**Branch**: `master`
+
+### Summary
+
+完成 Dove Pi 策略快照、终止原因归因、真实 RPC 黑盒回归与 README 说明；移除 Dove 自有固定上下文上限，并修复大型 legacy task 投影挤出 runtime contract 的问题。聚焦测试、黑盒、安装器、类型检查、doctor、Pi smoke 与 diff 检查通过；全量 Node 仅剩并行 task-convergence-control 未注册 convergence 子命令导致的 2 项失败。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3e32ac4` | fix: remove Dove-owned context ceilings and add strategy diagnostics |
+
+### Status
+
+[OK] **Completed**
