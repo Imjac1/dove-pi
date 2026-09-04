@@ -246,6 +246,40 @@ dove-pi web status
 
 `/thinking` 是 Pi 原生命令；Dove 使用 `/dove-thinking`，不会覆盖它。
 
+### 策略如何生效
+
+这些设置分工不同：`/mode` 只控制执行强度，`/dove-mode` 只控制项目上下文，
+`/dove-thinking` 只控制思考策略，`/dove-tools` 只改变显式兼容工具档案；Auto 模式下
+工具权限仍由 Pi 和已安装扩展决定。用 `/status full` 或 `agent_doctor` 查看同一份实际生效
+快照，包括请求 intent/lane、策略来源、活动工具数、provider/read-only 预算、上下文与缓存
+观察，以及最近的终止原因。快照是诊断投影，不会新增权限或改变现有上限。
+
+Dove 不按 Fast、Standard、Ultra 预设上下文总量，也不截取模型窗口的固定百分比。
+上下文预算只在 Pi 报告活动模型窗口和 usage 时按实际剩余容量估算；最终完整 payload
+仍由 provider-window 校验决定。窗口或 usage 不可知时显示 `unknown`，不会猜一个较小
+预算。只有最终校验确认放不下时，才会省略 Dove 项目上下文。
+
+### 终止原因与恢复
+
+Pi 可能仍显示通用的 `Operation aborted`，但 Dove 会保留具体终止对象：
+
+| 原因 | 含义 | 下一步 |
+| --- | --- | --- |
+| `provider-authorization-denied` | provider 未授权或 API key 无效 | 检查 `/login` 或 provider 凭据后重试 |
+| `model-budget-rejected` | 当前请求无法放入模型上下文 | 缩小上下文或更换模型后重试 |
+| `provider-round-budget` | 多轮没有新的有效进展 | 查看 `/status full`，改变策略后继续 |
+| `progress-*` | 工具循环重复或停滞 | 使用已有证据，改用更窄的查询 |
+| `user-cancelled` | 用户主动取消 | 准备好后提交新请求 |
+| `startup-conflict` / `superseded` | 会话被其他运行实例接管 | 关闭旧实例或从新会话继续 |
+
+无 UI 时运行 `dove-pi doctor`，或通过 `diagnostics/status` 查看相同的结构化原因和下一步；
+资源/token/cache 数值仅用于观察和建议，不会因为数值较大而自动中止请求。
+
+要复现隔离的真实 RPC 路径，可运行
+`node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`。
+该命令只使用临时项目和测试 provider，输出会脱敏；长文档的 `compacted` 是单文档提取
+证据，不等于 Dove 的总上下文上限。
+
 ### 维护安装
 
 ```powershell

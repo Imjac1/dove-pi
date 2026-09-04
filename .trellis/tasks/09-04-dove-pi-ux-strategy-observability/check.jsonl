@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/personal-agent-request-runtime.md", "reason": "Check request strategy and terminal behavior against the canonical runtime contract."}
+{"file": ".trellis/spec/backend/personal-agent-project-context.md", "reason": "Check fast/formal context isolation and cache stability."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check redaction, compatibility, cross-layer tests, and quality gates."}
+{"file": ".trellis/tasks/09-04-dove-pi-ux-strategy-observability/research/baseline-and-external-guidance.md", "reason": "Check implementation against the recorded evidence and deferred scope."}

@@ -29,6 +29,7 @@ import { attributeProviderCache, inspectProviderCachePrefix, type CachePrefixSna
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan, isTaskInventoryRequest, type RequestPlan } from "../core/request-plan.ts";
 import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalEnvelope, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
+import { createStrategySnapshot, formatStrategySnapshot, type StrategySnapshot, type StrategyValueSource } from "../core/strategy-snapshot.ts";
 import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens, type BudgetAccounting } from "../core/model-gateway.ts";
 import { stablePromptPolicy } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
@@ -672,6 +673,52 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${displayInteractionMode(interactionMode)} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${policyTag}${progressHint}`);
 	}
 
+	function currentStrategySnapshot(ctx: ExtensionContext): StrategySnapshot {
+		const usage = typeof ctx.getContextUsage === "function" ? ctx.getContextUsage() : undefined;
+		const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
+		const progress = progressGuard.snapshot();
+		const readBudget = readOnlyToolBudget(currentRequestPlan, currentRequestIsTaskInventory);
+		const thinkingLevel = ctx.thinkingLevel ?? (typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : undefined);
+		const thinkingSource: StrategyValueSource = thinkingPolicy.kind === "auto" ? "auto" : "user";
+		const toolSource: StrategyValueSource = hasExplicitToolSelection || toolProfile !== "auto" ? "user" : "pi";
+		const contextText = requestContextText ?? "";
+		return createStrategySnapshot({
+			plan: currentRequestPlan,
+			interactionMode,
+			executionMode: mode.current,
+			executionModeSource: "user",
+			thinkingPolicy: thinkingPolicy.kind === "lock" ? `lock:${thinkingPolicy.level}` : thinkingPolicy.kind,
+			thinkingPolicySource: thinkingSource,
+			thinkingLevel,
+			toolProfile,
+			toolProfileSource: toolSource,
+			activeToolCount: (typeof pi.getActiveTools === "function" ? pi.getActiveTools() : activeToolSnapshot).length,
+			providerRound: { used: currentRequestProviderRounds, limit: currentRequestPlan ? effectiveProviderRoundBudget(currentRequestPlan, currentRequestToolCalls) : undefined },
+			readOnlyBudget: { used: progress.readOnlyToolCalls, warning: readBudget.readOnlyToolWarningThreshold, hardStop: readBudget.readOnlyToolHardStopThreshold },
+			context: {
+				contextWindow,
+				observedTokens: usage?.tokens ?? undefined,
+				doveBudgetChars: getProjectContextBudget({ tokens: usage?.tokens ?? undefined, contextWindow, promptChars: contextText.length }),
+				budgetSource: typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0 && typeof usage?.tokens === "number" && Number.isFinite(usage.tokens) ? "provider-window" : "unknown",
+				omitted: requestContextRevision?.endsWith(":budget-omitted") === true,
+				compacted: contextText.includes("context compacted") || contextText.includes("上下文已压缩"),
+			},
+			cache: inspectCacheDiagnostics(ctx.sessionManager.getEntries()),
+			resources: {
+				toolCalls: currentRequestToolCalls,
+				toolDurationMs: currentRequestToolDurationMs,
+				elapsedMs: currentRequestStartedAt ? Date.now() - currentRequestStartedAt : 0,
+				inputTokens: currentRequestResources.inputTokens,
+				cacheReadTokens: currentRequestResources.cacheReadTokens,
+				cacheWriteTokens: currentRequestResources.cacheWriteTokens,
+				outputTokens: currentRequestResources.outputTokens,
+				reasoningTokens: currentRequestResources.reasoningTokens,
+				stopReasons: currentRequestStopReasons,
+			},
+			terminal: requestLifecycle.terminalHistory().filter((entry) => !currentRequestPlan?.requestId || entry.logicalRequestId === currentRequestPlan.requestId).at(-1)?.terminal,
+		});
+	}
+
 	function persistMode(change: ModeChange): void {
 		pi.appendEntry("personal-agent-mode", change);
 	}
@@ -801,9 +848,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const sessionId = (ctx?.sessionManager as { getSessionId?: () => string } | undefined)?.getSessionId?.();
 			const goalEfficiency = full ? inspectGoalEfficiency(await ledger.read(), sessionId) : undefined;
 			const cacheText = full ? ` Cache: ${formatCacheDiagnostics(cache)}. Goals: ${formatGoalEfficiency(goalEfficiency!)}.` : " Use /status full for cache diagnostics.";
-			const plan = currentRequestPlan;
+			const strategy = currentStrategySnapshot(ctx);
 			const strategyText = full
-				? ` Strategy roles: /mode controls execution intensity (thinking/round/read budgets); /dove-mode controls context (chat/work/auto); /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. Current request=${plan ? `${plan.intent}/${plan.lane}` : "idle"}, provider rounds=${plan ? `${currentRequestProviderRounds}/${effectiveProviderRoundBudget(plan, currentRequestToolCalls)}` : "n/a"}, read-only=${plan ? JSON.stringify(readOnlyToolBudget(plan, currentRequestIsTaskInventory)) : "n/a"}. Resources=${plan ? `tools=${currentRequestToolCalls}, toolDurationMs=${currentRequestToolDurationMs}, elapsedMs=${currentRequestStartedAt ? Date.now() - currentRequestStartedAt : 0}, input=${currentRequestResources.inputTokens}, cacheRead=${currentRequestResources.cacheReadTokens}, cacheWrite=${currentRequestResources.cacheWriteTokens}, output=${currentRequestResources.outputTokens}, reasoning=${currentRequestResources.reasoningTokens}, stops=${currentRequestStopReasons.join(">") || "n/a"}` : "n/a"}. Last terminal=${JSON.stringify(requestLifecycle.terminalHistory().at(-1)?.terminal ?? (requestLifecycle.terminalHistory().at(-1) ? terminalForReason(requestLifecycle.terminalHistory().at(-1)!.reason, requestLifecycle.terminalHistory().at(-1)!.detail) : undefined))}.`
+				? ` Strategy roles: /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
 				: "";
 			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText} ${detail}`, "info");
 		},
@@ -1311,6 +1358,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const activeToolSet = new Set(activeToolNames);
 			const latestProviderStart = [...ledgerRecords].reverse().find((record) => record.kind === "provider.request.started" && (!sessionId || record.correlation?.sessionId === sessionId));
 			const diagnostics = projectExecutionDiagnostics(ledgerRecords, sessionId ? { sessionId } : {});
+			const strategy = currentStrategySnapshot(ctx);
 			const report = {
 				pi: getPiVersion(),
 				node: process.version,
@@ -1327,6 +1375,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					cacheRetention: process.env.PI_CACHE_RETENTION ?? "short",
 				},
 				cache: inspectCacheDiagnostics(ctx.sessionManager.getEntries()),
+				strategy,
 				goalEfficiency: inspectGoalEfficiency(ledgerRecords, sessionId),
 				toolSchemaStability: {
 					expectedCount: expectedToolNames.length,
@@ -2169,7 +2218,6 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		currentRequestTaskId = requestTaskId;
 		const requestSessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
 		requestMetadata.set(requestPlan.requestId, { taskId: requestTaskId, sessionId: requestSessionId, mode: requestPlan.mode });
-		if (requestLease.isNewRequest) await ledger.appendRequestPlan(requestTaskId, `request:${requestPlan.requestId}`, requestPlan, requestSessionId);
 		// Thinking policy: assert the intended level at the turn boundary so the
 		// agent loop (createLoopConfig) picks it up for every request in this turn.
 		// Locked levels pin every turn; auto re-derives from the execution mode;
@@ -2279,6 +2327,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		if (snapshotForTurn) requestContextEpoch = epoch;
 		lastSystemPrompt = builtSystemPrompt;
+		if (requestLease.isNewRequest) {
+			try {
+				await ledger.appendRequestPlan(requestTaskId, `request:${requestPlan.requestId}`, requestPlan, requestSessionId, currentStrategySnapshot(ctx));
+			} catch { /* diagnostic projection must never block request preparation */ }
+		}
 		try {
 			await ledger.appendRuntimePhase({
 				taskId: requestTaskId,
@@ -2347,18 +2400,18 @@ export function getRemainingContextChars(tokens: number | null | undefined, cont
 	if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
 	const reserveTokens = Math.min(8_192, Math.max(2_048, Math.floor(contextWindow * 0.05)));
 	const remainingTokens = contextWindow - tokens - reserveTokens;
-	if (remainingTokens <= 0) return 4_096;
+	if (remainingTokens <= 0) return undefined;
 	// ASCII-heavy project text averages ~4 chars/token; using 3 keeps a safety
-	// margin for CJK and structured delimiters without imposing a fixed Ultra cap.
-	return Math.max(4_096, Math.floor(remainingTokens * 3));
+	// margin for CJK and structured delimiters. This is derived only from the
+	// active provider window and observed usage, not from a Dove mode ceiling.
+	return Math.floor(remainingTokens * 3);
 }
 
 /**
- * Derive a safe project-context budget even on a model's first request, when
- * Pi has not reported a live context-usage value yet. The project fragment is
- * deliberately limited to a share of the model window so system instructions,
- * tool schemas, the user turn, and a response still have room. This is a
- * provider/model-limit guard, not a fixed Ultra application cap.
+ * Derive a provider-window-based project-context budget when live usage is
+ * available. Dove does not reserve a percentage share of the model window and
+ * does not guess a small budget when usage is unknown; the final ModelGateway
+ * payload check remains authoritative in that case.
  */
 export function getProjectContextBudget(input: {
 	tokens?: number | null;
@@ -2367,14 +2420,12 @@ export function getProjectContextBudget(input: {
 }): number | undefined {
 	const contextWindow = input.contextWindow;
 	if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
-	const observedTokens = input.tokens !== null && input.tokens !== undefined && Number.isFinite(input.tokens)
-		? Math.max(0, input.tokens)
-		: Math.ceil(Math.max(0, input.promptChars ?? 0) / 3) + 2_048;
+	if (input.tokens === null || input.tokens === undefined || !Number.isFinite(input.tokens)) return undefined;
+	const observedTokens = Math.max(0, input.tokens);
 	const responseReserve = Math.min(8_192, Math.max(2_048, Math.floor(contextWindow * 0.1)));
 	const remainingTokens = contextWindow - observedTokens - responseReserve;
-	const windowShareChars = Math.floor(contextWindow * 3 * 0.2);
-	if (remainingTokens <= 0) return 1_024;
-	return Math.max(1_024, Math.min(Math.floor(remainingTokens * 3), windowShareChars));
+	if (remainingTokens <= 0) return undefined;
+	return Math.floor(remainingTokens * 3);
 }
 
 function summarizeProjectTask(task: ProjectTask | undefined): (ProjectTask & { fileCount: number; filesOmitted: number }) | undefined {

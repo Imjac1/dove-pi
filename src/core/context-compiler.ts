@@ -40,7 +40,7 @@ export interface ContextSegment {
 }
 
 export interface ContextCompileOptions {
-	/** Optional remaining model-context budget in characters. */
+	/** Optional provider/model-derived remaining context budget in characters. */
 	readonly maxChars?: number;
 }
 
@@ -54,7 +54,7 @@ export class ContextCompiler {
 
 	public compile(query: string, mode: AgentMode, options: ContextCompileOptions = {}): CompiledContext {
 		const terms = tokenize(query);
-		const contextBudget = contextBudgetChars(mode, options.maxChars);
+		const contextBudget = contextBudgetChars(options.maxChars);
 		const scored = this.documents
 			.map((document) => ({ ...document, relevance: score(document, terms) }))
 			.filter((document) => document.required || document.relevance > 0)
@@ -128,13 +128,13 @@ function segment(item: ContextItem, included: boolean, estimatedChars: number, r
 	};
 }
 
-function contextBudgetChars(mode: AgentMode, maxChars?: number): number {
-	// Ultra deliberately has no fixed application token cap. Pi/provider model
-	// limits, relevance scoring, deduplication, and per-document compaction remain
-	// the protection there; Fast/Standard keep explicit latency-oriented budgets.
-	const modeBudget = mode === "fast" ? 16_000 : mode === "standard" ? 24_000 : Number.POSITIVE_INFINITY;
-	if (maxChars === undefined || !Number.isFinite(maxChars) || maxChars <= 0) return modeBudget;
-	return Math.min(modeBudget, Math.floor(maxChars));
+function contextBudgetChars(maxChars?: number): number {
+	// Dove modes do not own a total context ceiling. An explicit value is
+	// accepted only when a host has derived it from the active provider/model
+	// window. Unknown or absent capacity stays unbounded here and is checked by
+	// the final provider payload gate instead of being guessed conservatively.
+	if (maxChars === undefined || !Number.isFinite(maxChars) || maxChars < 0) return Number.POSITIVE_INFINITY;
+	return Math.floor(maxChars);
 }
 
 /** Source labels are metadata, but file names are project-controlled input.

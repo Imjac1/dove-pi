@@ -253,14 +253,24 @@ function readLegacyProjection(projectRoot: string): { tasks: ProjectTask[]; docu
 		if (documents.length >= MAX_LEGACY_DOCUMENTS || remainingChars <= 0) return;
 		remainingChars -= addLegacyDocument(documents, projectRoot, path, kind, remainingChars);
 	};
-	for (const task of snapshot.tasks.slice(0, MAX_LEGACY_TASKS)) for (const path of task.files) add(path, "task");
-	for (const path of snapshot.specFiles) add(path, "spec");
+	// Workflow and runtime contracts are top-level execution contracts. Add them
+	// before the broad task/spec projection so a large legacy project cannot
+	// evict the policy documents needed to compile a later request.
 	for (const path of snapshot.workflowFiles) add(path, "workflow");
+	const runtimeSpecs = snapshot.specFiles.filter(isRuntimeSpecPath);
+	for (const path of runtimeSpecs) add(path, "spec");
+	for (const task of snapshot.tasks.slice(0, MAX_LEGACY_TASKS)) for (const path of task.files) add(path, "task");
+	for (const path of snapshot.specFiles) if (!runtimeSpecs.includes(path)) add(path, "spec");
 	for (const memory of snapshot.memories) add(memory.path, memory.kind === "journal" ? "journal" : "memory");
 	let latest = 0;
 	const revisionPaths = [...documents.map((document) => document.path), ...snapshot.tasks.slice(0, MAX_LEGACY_TASKS).map((task) => resolve(task.path, "task.json"))];
 	for (const path of revisionPaths) try { latest = Math.max(latest, statSync(path).mtimeMs); } catch { /* legacy file changed during read */ }
 	return { tasks, documents, revision: String(latest) };
+}
+
+function isRuntimeSpecPath(path: string): boolean {
+	const name = path.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+	return name === "personal-agent-runtime.md" || name === "personal-agent-request-runtime.md";
 }
 
 function addLegacyDocument(documents: ProjectDocument[], projectRoot: string, path: string, kind: ProjectDocument["kind"], maxChars: number): number {

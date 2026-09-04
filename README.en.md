@@ -255,6 +255,46 @@ switches only to previous; `uninstall --yes` removes only Dove-managed files and
 
 `/thinking` remains Pi's native command. Dove uses `/dove-thinking` and does not shadow it.
 
+### How strategy takes effect
+
+The controls have separate roles: `/mode` changes execution intensity, `/dove-mode` changes
+project-context organization, `/dove-thinking` changes thinking policy, and `/dove-tools` changes
+only an explicit compatibility profile. In Auto mode, Pi and installed extensions still own tool
+authority. Use `/status full` or `agent_doctor` to inspect one effective snapshot containing intent/
+lane, policy sources, active tool count, provider/read-only budgets, context and cache observations,
+and the latest terminal cause. The snapshot is diagnostic evidence; it does not add permissions or
+change existing ceilings.
+
+Dove does not assign Fast, Standard, or Ultra a fixed total context budget, and it does not
+reserve a fixed percentage of the model window. When Pi reports the active model window and
+usage, Dove may derive the actual remaining capacity; the final complete payload is still
+checked by the provider-window gate. Missing window or usage stays `unknown` instead of being
+turned into a guessed small budget. Dove context is omitted only when that final check cannot
+fit the payload.
+
+### Terminal causes and recovery
+
+Pi may still render the generic `Operation aborted`, but Dove preserves a specific terminal object:
+
+| Cause | Meaning | Next action |
+| --- | --- | --- |
+| `provider-authorization-denied` | Provider authorization or API key failed | Check `/login` or provider credentials, then retry |
+| `model-budget-rejected` | The request did not fit the model context | Reduce context or choose another model |
+| `provider-round-budget` | Several rounds produced no meaningful progress | Inspect `/status full`, change strategy, then continue |
+| `progress-*` | A tool loop repeated or stalled | Use existing evidence and issue a narrower query |
+| `user-cancelled` | The user cancelled the request | Submit a new request when ready |
+| `startup-conflict` / `superseded` | Another runtime took over the session | Close the old runtime or continue in a new session |
+
+Without a UI, run `dove-pi doctor` or query `diagnostics/status` for the same structured cause and
+next action. Resource, token, and cache values are observation-only; large values do not cause an
+automatic abort.
+
+To replay an isolated real RPC path, run
+`node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`.
+The command uses only a temporary project and test provider and writes redacted evidence. A
+`compacted` long-document observation describes per-document extraction; it is not a Dove-wide
+context ceiling.
+
 ### Maintain the installation
 
 ```powershell

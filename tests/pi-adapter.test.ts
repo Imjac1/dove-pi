@@ -147,8 +147,14 @@ describe("Pi adapter", () => {
 			policyAbort: true,
 			terminal: { origin: "provider", code: "provider-authorization-denied", summary: "The provider rejected authentication or authorization.", retryable: false, nextAction: "Check provider credentials and retry." },
 		});
-		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { diagnostics: { lastTerminal?: { terminal?: { origin?: string; code?: string } } }; toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
+		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { strategy: { schemaVersion: number; executionMode: string; toolProfile: string; activeToolCount: number; providerRound: { used: number } }; diagnostics: { lastTerminal?: { terminal?: { origin?: string; code?: string } } }; toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
 		const doctorResult = await doctorTool.execute("doctor-call", {}, undefined, undefined, context);
+		assert.equal(doctorResult.details.strategy.schemaVersion, 1);
+		assert.equal(doctorResult.details.strategy.executionMode, "standard");
+		assert.equal(doctorResult.details.strategy.toolProfile, "auto");
+		assert.equal(doctorResult.details.strategy.activeToolCount, piSessionBaseline.length);
+		assert.ok(Number.isInteger(doctorResult.details.strategy.providerRound.used));
+		assert.ok(doctorResult.details.strategy.providerRound.used >= 0);
 		assert.deepEqual(doctorResult.details.toolSchemaStability, {
 			inSync: true,
 			expectedCount: piSessionBaseline.length,
@@ -984,20 +990,23 @@ describe("Pi adapter", () => {
 		assert.equal(getToolResultCharBudget("bash", "project-work"), 32_000);
 	});
 
-	it("derives an Ultra context budget from the active model window", () => {
+	it("derives context capacity only from observed provider-window usage", () => {
 		assert.equal(getRemainingContextChars(undefined, 200_000), undefined);
 		assert.equal(getRemainingContextChars(10_000, undefined), undefined);
 		const remaining = getRemainingContextChars(180_000, 200_000);
-		assert.ok(remaining && remaining >= 4_096 && remaining < 60_000);
+		assert.ok(remaining && remaining > 0 && remaining < 60_000);
 	});
 
-	it("limits first-request project context for small model windows", () => {
-		const budget = getProjectContextBudget({ contextWindow: 12_800, promptChars: 18_000 });
-		assert.ok(budget);
-		assert.ok(budget <= 8_000, `budget=${budget}`);
+	it("does not guess a first-request budget when usage is unknown", () => {
+		assert.equal(getProjectContextBudget({ contextWindow: 12_800, promptChars: 18_000 }), undefined);
 		const observed = getProjectContextBudget({ tokens: 23_218, contextWindow: 12_800 });
-		assert.equal(observed, 1_024);
+		assert.equal(observed, undefined);
 		assert.equal(getProjectContextBudget({ promptChars: 1_000 }), undefined);
+	});
+
+	it("does not apply a percentage share cap when provider capacity is known", () => {
+		const budget = getProjectContextBudget({ tokens: 10_000, contextWindow: 200_000 });
+		assert.equal(budget, (200_000 - 10_000 - 8_192) * 3);
 	});
 
 	it("settles from lifecycle state without reading a stale Pi context", async () => {

@@ -335,6 +335,9 @@ are additive; legacy readers may ignore them.
 envelope. Persist it before host abort; shutdown must preserve a specific
 policy/provider cause and use `startup-failed` only for queued preflight work.
 
+`StrategySnapshot` is evidence in `request.planned`/
+`diagnostics/status`; separate preflight failures.
+
 ### 4. Validation & Error Matrix
 
 | Condition | Required behavior |

@@ -139,6 +139,15 @@ observed result.
   when the `mode + project revision` epoch changes.
 - Empty or budget-omitted retrieval emits no wrapper and does not consume the
   epoch. Pi tool-schema changes do not rebuild project context.
+- Runtime policy retrieval must recognize both the canonical
+  `personal-agent-runtime.md` contract and the request-specific
+  `personal-agent-request-runtime.md` contract. Filename checks must not
+  silently classify the latter as an ordinary spec, or a provider/policy
+  request can compile an empty context after a budget retry.
+- Legacy projection reserves the workflow and both runtime contracts before
+  broad task/spec discovery, so a large repository cannot evict the policy
+  documents needed by a later request. This ordering is a compatibility
+  priority, not a new model-context budget.
 - Task inventory serializes at most 50 records plus omission counts and should
   complete from one projection without tool calls.
 - The static system prompt contains no per-request goal or workflow text.

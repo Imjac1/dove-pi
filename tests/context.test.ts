@@ -27,14 +27,27 @@ describe("context compiler", () => {
 		assert.match(compiled.text, /trust=untrusted kind=spec/);
 	});
 
-	it("caps broad retrieval so large projects cannot dump every matching document", () => {
+	it("does not impose a mode-owned total context ceiling", () => {
 		const compiler = new ContextCompiler();
-		for (let index = 0; index < 100; index++) {
+		for (let index = 0; index < 20; index++) {
 			compiler.add({ id: `spec-${index}`, kind: "spec", content: `PowerShell convention ${index} ${"x".repeat(2000)}` });
 		}
 		const compiled = compiler.compile("PowerShell", "standard");
-		assert.ok(compiled.charCount < 30_000);
-		assert.match(compiled.text, /PROJECT_CONTEXT budget: omitted/);
+		assert.equal(compiled.items.length, 20);
+		assert.doesNotMatch(compiled.text, /PROJECT_CONTEXT budget: omitted/);
+		assert.ok(compiled.charCount > 30_000);
+	});
+
+	it("applies only an explicit provider-derived budget across modes", () => {
+		for (const mode of ["fast", "standard", "ultra"] as const) {
+			const compiler = new ContextCompiler();
+			compiler.add({ id: "runtime", kind: "runtime", content: "x".repeat(30_000), required: true });
+			const compiled = compiler.compile("runtime", mode);
+			assert.equal(compiled.items.length, 1, mode);
+			const bounded = compiler.compile("runtime", mode, { maxChars: 1_000 });
+			assert.equal(bounded.items.length, 0, mode);
+			assert.deepEqual(bounded.omittedRequired, ["runtime"]);
+		}
 	});
 
 	it("honors a model-derived budget in Ultra without adding a fixed Ultra cap", () => {
@@ -149,6 +162,27 @@ describe("Trellis context", () => {
 		} finally {
 			await rm(temporary, { recursive: true, force: true });
 		}
+	});
+
+	it("keeps runtime contracts ahead of a large legacy task projection", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-runtime-priority-"));
+		try {
+			const taskRoot = join(temporary, ".trellis", "tasks");
+			const specRoot = join(temporary, ".trellis", "spec", "backend");
+			await mkdir(taskRoot, { recursive: true });
+			await mkdir(specRoot, { recursive: true });
+			await writeFile(join(specRoot, "personal-agent-runtime.md"), "# Runtime\nProvider runtime contract.\n", "utf8");
+			await writeFile(join(specRoot, "personal-agent-request-runtime.md"), "# Request runtime\nProvider prompt budget contract.\n", "utf8");
+			for (let index = 0; index < 40; index++) {
+				const taskDir = join(taskRoot, `large-${index}`);
+				await mkdir(taskDir, { recursive: true });
+				await writeFile(join(taskDir, "task.json"), JSON.stringify({ id: `large-${index}`, title: `Large task ${index}`, status: "in_progress" }), "utf8");
+				await writeFile(join(taskDir, "prd.md"), `# Large task ${index}\n${"acceptance requirement ".repeat(2_000)}`, "utf8");
+			}
+			const context = buildProjectContext(new NativeProvider(temporary), "Provider prompt budget", "ultra");
+			assert.ok(context.items.some((item) => item.id.endsWith("personal-agent-runtime.md")));
+			assert.ok(context.items.some((item) => item.id.endsWith("personal-agent-request-runtime.md")));
+		} finally { await rm(temporary, { recursive: true, force: true }); }
 	});
 
 	it("does not inject the runtime contract on an unrelated standard turn", () => {
