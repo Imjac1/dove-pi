@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/personal-agent-managed-install.md","reason":"核对 launcher/maintenance 路由和 JSON/锁/恢复契约。"}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"核对 .dove/.trellis 数据边界和任务状态投影。"}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"核对 CLI、RPC、MCP 协议和权限边界。"}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"核对 Pi 扩展和托管身份一致性。"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"执行最终跨层质量检查和完整测试矩阵。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"检查代码、协议、安装器和 README 是否同步。"}
+{"file":".trellis/tasks/09-03-dove-pi-workflow-audit/research/workflow-audit.md","reason":"复核每个缺陷是否有可复现证据、回归覆盖或明确延期。"}

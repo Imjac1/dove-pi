@@ -75,6 +75,8 @@ describe("Pi request lifecycle integration", () => {
 			assert.equal(plans[1]?.correlation?.requestId, received.at(-1)?.correlation?.requestId, "streaming leases must not leak into the next before_agent_start");
 			assert.equal(terminals.length, 1, "one active logical request gets one terminal transition even with deliberate streaming deliveries");
 			assert.equal(terminals[0]?.correlation?.requestId, plans[0]?.correlation?.requestId);
+			assert.equal((terminals[0]?.details as { terminal?: { origin?: string; code?: string } } | undefined)?.terminal?.origin, "session");
+			assert.equal((terminals[0]?.details as { terminal?: { origin?: string; code?: string } } | undefined)?.terminal?.code, "completed");
 			assert.equal(abortCount, 0);
 		} finally {
 			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
@@ -125,6 +127,12 @@ describe("Pi request lifecycle integration", () => {
 			const limited = await failAttempt(503);
 			assert.equal(aborts, 1, "the configured third-attempt limit stops a fourth live attempt");
 			assert.equal(limited.stopReason, "aborted", "message_end must stop Pi's real post-agent retry loop before agent_end");
+			// A host may deliver the next prompt before the explicit abort's
+			// `agent_settled` callback. The new request must not inherit the old
+			// provider terminal state.
+			await startRequest("request after policy abort");
+			await events.get("agent_start")?.({ type: "agent_start" }, context);
+			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, context);
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
 			await startRequest("terminal auth");
@@ -156,6 +164,12 @@ describe("Pi request lifecycle integration", () => {
 			assert.equal(aborts, 6, "agent_end retains the structured policy reason even if message_end was skipped abnormally");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
+			await startRequest("shutdown before message end");
+			await events.get("agent_start")?.({ type: "agent_start" }, context);
+			await events.get("before_provider_request")?.({ type: "before_provider_request", payload: { max_tokens: 4_096, messages: [{ role: "user", content: "x" }] } }, context);
+			await events.get("after_provider_response")?.({ type: "after_provider_response", status: 401, headers: {} }, context);
+			await events.get("session_shutdown")?.({ type: "session_shutdown", reason: "new" }, context);
+
 			await startRequest("user cancellation");
 			await events.get("agent_start")?.({ type: "agent_start" }, context);
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "aborted", errorMessage: "Request was aborted", content: [] }] }, context);
@@ -165,14 +179,28 @@ describe("Pi request lifecycle integration", () => {
 			const records = readFileSync(join(stateDir, "execution.jsonl"), "utf8")
 				.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind: string; details?: { reason?: string; detail?: string; policyAbort?: boolean; failureReason?: string } });
 			const terminals = records.filter((record) => record.kind === "request.terminal");
+			const terminalEnvelopes = terminals.map((record) => (record.details as { terminal?: { origin?: string; code?: string; retryable?: boolean } } | undefined)?.terminal);
 			assert.deepEqual(terminals.map((record) => [record.details?.reason, record.details?.detail, record.details?.policyAbort]), [
 				["failed", "attempt-limit", true],
+				["completed", undefined, undefined],
 				["authorization-denied", "authorization-denied", true],
 				["failed", "non-idempotent-effect", true],
 				["failed", "non-idempotent-effect", true],
 				["failed", "non-idempotent-effect", true],
+				["authorization-denied", "authorization-denied", true],
 				["authorization-denied", "authorization-denied", true],
 				["cancelled", "cancelled", undefined],
+			]);
+			assert.deepEqual(terminalEnvelopes.map((terminal) => [terminal?.origin, terminal?.code, terminal?.retryable]), [
+				["provider", "provider-attempt-limit", true],
+				["session", "completed", false],
+				["provider", "provider-authorization-denied", false],
+				["provider", "retry-refused-after-effect", false],
+				["provider", "retry-refused-after-effect", false],
+				["provider", "retry-refused-after-effect", false],
+				["provider", "provider-authorization-denied", false],
+				["provider", "provider-authorization-denied", false],
+				["user", "user-cancelled", false],
 			]);
 			assert.deepEqual(records.filter((record) => record.kind === "request.attempt.completed").filter((record) => record.details?.failureReason).map((record) => record.details?.failureReason), ["attempt-limit", "authorization-denied", "non-idempotent-effect", "non-idempotent-effect", "non-idempotent-effect", "authorization-denied", "cancelled"]);
 		} finally {

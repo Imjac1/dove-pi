@@ -2,9 +2,165 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { AgentMode, DispatchActual, DispatchDecision, ExecutionRecord } from "./contracts.ts";
 import type { RequestPlan } from "./request-plan.ts";
-import type { RequestAttemptOutcome, RequestAttemptTrigger, RequestDelivery, RequestInputSource, RequestTerminalReason } from "./request-lifecycle.ts";
+import type { RequestAttemptOutcome, RequestAttemptTrigger, RequestDelivery, RequestInputSource, RequestTerminalEnvelope, RequestTerminalReason } from "./request-lifecycle.ts";
 import type { BudgetAccounting, BudgetDiagnostic } from "./model-gateway.ts";
 import type { CachePrefixEvidence, ProviderCacheAttribution } from "./cache-prefix.ts";
+
+export interface ExecutionDiagnosticsFilter {
+	readonly sessionId?: string;
+	readonly requestId?: string;
+}
+
+export interface ExecutionTerminalDiagnostic {
+	readonly timestamp: string;
+	readonly taskId: string;
+	readonly requestId?: string;
+	readonly sessionId?: string;
+	readonly reason?: string;
+	readonly detail?: string;
+	readonly policyAbort?: boolean;
+	readonly terminal?: RequestTerminalEnvelope;
+}
+
+export interface ExecutionResourceDiagnostic {
+	readonly timestamp: string;
+	readonly taskId: string;
+	readonly requestId?: string;
+	readonly sessionId?: string;
+	readonly attemptId?: string;
+	readonly acceptanceId?: string;
+	readonly toolCalls?: number;
+	readonly providerRounds?: number;
+	readonly elapsedMs?: number;
+	readonly toolDurationMs?: number;
+	readonly inputTokens?: number;
+	readonly cacheReadTokens?: number;
+	readonly cacheWriteTokens?: number;
+	readonly outputTokens?: number;
+	readonly reasoningTokens?: number;
+	readonly stopReasons?: readonly string[];
+}
+
+export interface ExecutionDiagnosticsProjection {
+	readonly schemaVersion: 1;
+	readonly lastTerminal?: ExecutionTerminalDiagnostic;
+	readonly lastResourceObservation?: ExecutionResourceDiagnostic;
+}
+
+/**
+ * Project the latest bounded request diagnostics for headless and Pi hosts.
+ * The ledger remains the source of truth; this projection deliberately drops
+ * arbitrary details so a diagnostic query cannot echo secrets or large logs.
+ */
+export function projectExecutionDiagnostics(
+	records: readonly ExecutionRecord[],
+	filter: ExecutionDiagnosticsFilter = {},
+): ExecutionDiagnosticsProjection {
+	const matching = records.filter((record) => matchesDiagnosticsFilter(record, filter));
+	const terminalRecord = [...matching].reverse().find((record) => record.kind === "request.terminal");
+	const resourceRecord = [...matching].reverse().find((record) => record.kind === "task.convergence.observed" && isRecord(record.details) && record.details.observationOnly === true);
+	return {
+		schemaVersion: 1,
+		...(terminalRecord ? { lastTerminal: projectTerminalDiagnostic(terminalRecord) } : {}),
+		...(resourceRecord ? { lastResourceObservation: projectResourceDiagnostic(resourceRecord) } : {}),
+	};
+}
+
+const TERMINAL_ORIGINS = new Set<RequestTerminalEnvelope["origin"]>([
+	"user", "provider", "model-budget", "provider-round", "progress-guard", "convergence", "session",
+]);
+const RESOURCE_METRIC_KEYS = [
+	"toolCalls", "providerRounds", "elapsedMs", "toolDurationMs", "inputTokens", "cacheReadTokens",
+	"cacheWriteTokens", "outputTokens", "reasoningTokens",
+] as const;
+type ResourceMetricKey = typeof RESOURCE_METRIC_KEYS[number];
+
+function matchesDiagnosticsFilter(record: ExecutionRecord, filter: ExecutionDiagnosticsFilter): boolean {
+	const details = isRecord(record.details) ? record.details : {};
+	const requestId = stringValue(record.correlation?.requestId) ?? stringValue(details.logicalRequestId);
+	if (filter.requestId !== undefined && requestId !== filter.requestId) return false;
+	if (filter.sessionId !== undefined && stringValue(record.correlation?.sessionId) !== filter.sessionId) return false;
+	return true;
+}
+
+function projectTerminalDiagnostic(record: ExecutionRecord): ExecutionTerminalDiagnostic {
+	const details = isRecord(record.details) ? record.details : {};
+	const requestId = stringValue(record.correlation?.requestId) ?? stringValue(details.logicalRequestId);
+	const sessionId = stringValue(record.correlation?.sessionId);
+	const reason = stringValue(details.reason);
+	const detail = stringValue(details.detail);
+	const policyAbort = typeof details.policyAbort === "boolean" ? details.policyAbort : undefined;
+	const terminal = normalizeTerminalEnvelope(details.terminal);
+	return {
+		timestamp: record.timestamp,
+		taskId: record.taskId,
+		...(requestId ? { requestId } : {}),
+		...(sessionId ? { sessionId } : {}),
+		...(reason ? { reason } : {}),
+		...(detail ? { detail } : {}),
+		...(policyAbort === undefined ? {} : { policyAbort }),
+		...(terminal ? { terminal } : {}),
+	};
+}
+
+function projectResourceDiagnostic(record: ExecutionRecord): ExecutionResourceDiagnostic {
+	const details = isRecord(record.details) ? record.details : {};
+	const metrics: Partial<Record<ResourceMetricKey, number>> = {};
+	for (const key of RESOURCE_METRIC_KEYS) {
+		const value = nonNegativeNumber(details[key]);
+		if (value !== undefined) metrics[key] = value;
+	}
+	const stopReasons = Array.isArray(details.stopReasons)
+		? details.stopReasons.filter((value): value is string => typeof value === "string").map((value) => value.slice(0, 128)).slice(0, 64)
+		: undefined;
+	const requestId = stringValue(record.correlation?.requestId);
+	const sessionId = stringValue(record.correlation?.sessionId);
+	const attemptId = stringValue(record.correlation?.attemptId);
+	const acceptanceId = stringValue(details.acceptanceId);
+	return {
+		timestamp: record.timestamp,
+		taskId: record.taskId,
+		...(requestId ? { requestId } : {}),
+		...(sessionId ? { sessionId } : {}),
+		...(attemptId ? { attemptId } : {}),
+		...(acceptanceId ? { acceptanceId } : {}),
+		...metrics,
+		...(stopReasons && stopReasons.length > 0 ? { stopReasons } : {}),
+	};
+}
+
+function normalizeTerminalEnvelope(value: unknown): RequestTerminalEnvelope | undefined {
+	if (typeof value !== "object" || value === null) return undefined;
+	const candidate = value as Record<string, unknown>;
+	const origin = candidate.origin;
+	const code = stringValue(candidate.code);
+	const summary = stringValue(candidate.summary);
+	if (typeof origin !== "string" || !TERMINAL_ORIGINS.has(origin as RequestTerminalEnvelope["origin"]) || !code || !summary || typeof candidate.retryable !== "boolean") return undefined;
+	const nextAction = stringValue(candidate.nextAction);
+	const requestId = stringValue(candidate.requestId);
+	const attemptId = stringValue(candidate.attemptId);
+	return {
+		origin: origin as RequestTerminalEnvelope["origin"],
+		code: code.slice(0, 256),
+		summary: summary.slice(0, 2048),
+		retryable: candidate.retryable,
+		...(nextAction ? { nextAction: nextAction.slice(0, 1024) } : {}),
+		...(requestId ? { requestId: requestId.slice(0, 256) } : {}),
+		...(attemptId ? { attemptId: attemptId.slice(0, 256) } : {}),
+	};
+}
+
+function stringValue(value: unknown): string | undefined {
+	return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonNegativeNumber(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
 
 export class ExecutionLedger {
 	public constructor(private readonly filePath: string) {}
@@ -57,8 +213,8 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "request.attempt.completed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId, attemptId: input.attemptId }, details: { logicalRequestId: input.requestId, attemptId: input.attemptId, number: input.number, outcome: input.outcome, ...(input.failureReason ? { failureReason: input.failureReason } : {}) } });
 	}
 
-	public async appendRequestTerminal(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; reason: RequestTerminalReason; detail?: string; policyAbort?: boolean }): Promise<void> {
-		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "request.terminal", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { logicalRequestId: input.requestId, reason: input.reason, ...(input.detail ? { detail: input.detail } : {}), ...(input.policyAbort ? { policyAbort: true } : {}) } });
+	public async appendRequestTerminal(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; reason: RequestTerminalReason; detail?: string; policyAbort?: boolean; terminal?: RequestTerminalEnvelope }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "request.terminal", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { logicalRequestId: input.requestId, reason: input.reason, ...(input.detail ? { detail: input.detail } : {}), ...(input.policyAbort ? { policyAbort: true } : {}), ...(input.terminal ? { terminal: input.terminal } : {}) } });
 	}
 
 	public async appendRuntimePhase(input: { taskId: string; stepId: string; mode: AgentMode; requestId?: string; sessionId?: string; attemptId?: string; toolCallId?: string; providerCallId?: string; phase: "request-prepare" | "tool" | "provider" | "pi-post-hook"; durationMs: number; name?: string; metrics?: Readonly<Record<string, number | boolean>> }): Promise<void> {
@@ -147,6 +303,14 @@ export class ExecutionLedger {
 
 	public async appendProjectMutationReconciled(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string, outcome: "unknown" | "observed"): Promise<void> {
 		await this.append({ taskId, stepId, kind: "project.mutation.reconciled", timestamp: new Date().toISOString(), mode, details: { mutationId, operation, provider, revision, outcome, incomplete: true } });
+	}
+
+	public async appendTaskConvergenceDecision(input: { taskId: string; stepId: string; mode: AgentMode; requestId?: string; sessionId?: string; attemptId?: string; toolCallId?: string; acceptanceId?: string; eventKind: string; state: string; snapshotRevision: number; acceptanceRevision: string; findingId?: string; findingKind?: string; nextAction?: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "task.convergence.decision", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { eventKind: input.eventKind, state: input.state, snapshotRevision: input.snapshotRevision, acceptanceRevision: input.acceptanceRevision, ...(input.acceptanceId ? { acceptanceId: input.acceptanceId } : {}), ...(input.findingId ? { findingId: input.findingId } : {}), ...(input.findingKind ? { findingKind: input.findingKind } : {}), ...(input.nextAction ? { nextAction: input.nextAction } : {}) } });
+	}
+
+	public async appendTaskResourceObservation(input: { taskId: string; stepId: string; mode: AgentMode; requestId?: string; sessionId?: string; attemptId?: string; acceptanceId?: string; toolCalls: number; providerRounds: number; elapsedMs: number; toolDurationMs?: number; inputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; outputTokens?: number; reasoningTokens?: number; stopReasons?: readonly string[] }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "task.convergence.observed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, taskId: input.taskId }, details: { observationOnly: true, ...(input.acceptanceId ? { acceptanceId: input.acceptanceId } : {}), toolCalls: input.toolCalls, providerRounds: input.providerRounds, elapsedMs: Math.max(0, Math.round(input.elapsedMs)), ...(input.toolDurationMs === undefined ? {} : { toolDurationMs: Math.max(0, Math.round(input.toolDurationMs)) }), ...(input.inputTokens === undefined ? {} : { inputTokens: input.inputTokens }), ...(input.cacheReadTokens === undefined ? {} : { cacheReadTokens: input.cacheReadTokens }), ...(input.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: input.cacheWriteTokens }), ...(input.outputTokens === undefined ? {} : { outputTokens: input.outputTokens }), ...(input.reasoningTokens === undefined ? {} : { reasoningTokens: input.reasoningTokens }), ...(input.stopReasons === undefined ? {} : { stopReasons: input.stopReasons.slice(0, 64) }) } });
 	}
 
 	/** Read the append-only ledger for startup recovery and diagnostics. */

@@ -22,7 +22,7 @@ dove-pi capability run <name> [--args=<json>] [--approve]
 dove-pi rpc
 dove-pi mcp
 
-JSON-RPC: capabilities/list | capabilities/invoke
+JSON-RPC: capabilities/list | capabilities/invoke | diagnostics/status
 MCP tools: dove_capabilities | dove_context | dove_invoke
 ```
 
@@ -63,7 +63,8 @@ new CapabilityInvocationService(registry, ledger, {
 | MCP stdio | None in protocol `1.0.0` | `dove_invoke` exposes no approval argument; side effects fail closed |
 
 JSON-RPC is newline-delimited JSON over local stdio, limits each input line to
-128 KiB, and accepts only `capabilities/list` and `capabilities/invoke`. MCP is
+128 KiB, and accepts only `capabilities/list`, `capabilities/invoke`, and the
+read-only `diagnostics/status` projection. MCP is
 implemented through the official SDK and exposes only `dove_capabilities`,
 `dove_context`, and `dove_invoke`. Network/cloud transport, arbitrary shell
 fields, and implicit vendor accounts are outside these adapter contracts.
@@ -92,6 +93,15 @@ and evidence contracts still apply to Dove-owned executors.
   key names, private-key names, and key/certificate/keystore extensions by
   default. Evidence filtering is defense in depth at the shared execution
   boundary and applies consistently to every adapter.
+- `diagnostics/status` reads the append-only execution ledger without executing
+  capabilities and returns `schemaVersion: 1` plus optional `lastTerminal` and
+  `lastResourceObservation` records. Filters may restrict `sessionId` and/or
+  `requestId`; the projection bounds terminal strings, stop reasons, and
+  numeric resource fields and never echoes arbitrary ledger details. Pi's
+  `agent_doctor` and CLI `doctor` (under `requestDiagnostics`) use the same
+  projection so headless and interactive clients can attribute a generic host
+  `Operation aborted` to one stable origin/code. The existing CLI install
+  diagnostics array remains backwards compatible alongside this projection.
 
 ### 4. Validation & Error Matrix
 
@@ -104,6 +114,7 @@ and evidence contracts still apply to Dove-owned executors.
 | Duplicate project authorities | Preserve source labels and report a conflict; never silently merge |
 | Evidence reference names credential/key material | Exclude it at the shared execution boundary |
 | Capability platform is unsupported | Return `unsupported_platform` with an execution correlation ID |
+| Diagnostics filter is not an object or contains non-string IDs | Return a JSON-RPC error without reading or mutating state |
 
 ### 5. Good / Base / Bad Cases
 
@@ -112,8 +123,8 @@ and evidence contracts still apply to Dove-owned executors.
 - Base: a read-only capability needs no approval, but still passes schema,
   platform, ledger, evidence, and response validation.
 - Bad: trust `approval: "granted"` or `approval: "not_required"` from an RPC/MCP
-  payload, copy a Pi plugin executor into Core, or buffer an unbounded RPC line
-  before checking its size.
+  payload, copy a Pi plugin executor into Core, buffer an unbounded RPC line
+  before checking its size, or expose raw ledger records through diagnostics.
 
 ### 6. Tests Required
 
@@ -126,7 +137,9 @@ registered tool is backed by the shared invocation service and adds no Dove UI
 confirmation. Separate contract
 tests cover terminal outcomes, ledger correlation, bounded RPC methods,
 fail-closed RPC/MCP authorization, normalized context conflicts, and evidence
-secret filtering. No interoperability claim requires a live provider account.
+secret filtering. Diagnostics tests assert session/request filtering, bounded
+terminal/resource projection, and parity with Pi doctor. No interoperability
+claim requires a live provider account.
 
 ### 7. Wrong vs Correct
 

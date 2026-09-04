@@ -49,7 +49,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 ### 3. Contracts
 
 - The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
-- The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; unknown/interactive arguments alone may fall through to Pi. Adding a CLI command without updating and testing this router is an incomplete cross-layer change.
+- The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; the startup prefixes `--offline` and `--skip-version-check` may appear before a known local family and must be stripped only for that routing decision. Unknown/interactive arguments alone may fall through to Pi. Adding a CLI command or prefix alias without updating and testing this router is an incomplete cross-layer change.
 - Exact `version` and `--version` requests are handled before Pi launch and read both release-locked identities from the packaged `package.json`, producing `Dove Pi <dove-version> (Pi <pi-version>)`.
 - Pi is an exact Release component, not an independently mutable global runtime. Managed launches suppress Pi's direct version/self-update path; `dove-pi update` installs the manifest/lockfile Pi version in staging, reads the actual installed Pi/TUI package versions back from `node_modules`, and activates only when both match. Check/update results project current, previous, and latest Pi versions and report whether Pi changes.
 - Install into a staging sibling, run locked dependency installation and verification, move to an immutable version, then activate with atomic state replacement. Retain current and previous.
@@ -96,6 +96,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 | Pi reports a newer upstream version outside the Dove channel | Do not self-update; wait for a Dove Release that locks and verifies that Pi version |
 | Confirmed uninstall | Remove Dove-managed files, including dependency paths beyond legacy Windows `MAX_PATH`, and the exact launcher PATH entry; preserve all Pi/user/project/runtime data |
 | A documented Dove command reaches the launcher | Route it to the bundled local CLI; never pass it through as a Pi prompt/argument |
+| `--offline` or `--skip-version-check` prefixes a documented local command | Strip the recognized prefixes, route the command to the local CLI, and never launch Pi |
 | Managed extension child emits progress | Stream it on stderr while preserving exactly one TypeScript JSON document on stdout |
 | JSON maintenance command fails | Emit one parseable error document on stdout and put human details in the local log/stderr |
 | `update --force` is supplied | Reject with a repair instruction; never reset a checkout |

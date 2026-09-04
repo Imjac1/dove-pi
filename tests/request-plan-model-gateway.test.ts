@@ -59,6 +59,16 @@ describe("request planning", () => {
 		assert.deepEqual(responseOnlyFormal.contextClasses, ["conversation", "project-task", "project-spec"]);
 		assert.equal(responseOnlyFormal.outputBudget, 4096);
 		assert.equal(createRequestPlan({ message: "查看 PRD 内容", projectAvailable: true }).lane, "fast");
+		const inventory = createRequestPlan({ message: "查看当前项目有哪些未完成任务，只读，不修改文件", projectAvailable: true });
+		assert.equal(inventory.intent, "lookup");
+		assert.equal(inventory.workflowAction, undefined, "inventory wording must not trigger finish-task");
+		assert.equal(inventory.lane, "fast");
+		const formalCreate = createRequestPlan({ message: "创建正式任务，编写 PRD、设计和验收标准", projectAvailable: true });
+		assert.equal(formalCreate.workflowAction, "create-task");
+		assert.equal(formalCreate.lane, "formal");
+		const multiFile = createRequestPlan({ message: "规划并实现缓存优化，修改多个文件", projectAvailable: true });
+		assert.equal(multiFile.intent, "execution");
+		assert.equal(multiFile.lane, "formal", "planning plus multi-file implementation must use formal lane");
 		const pendingFormal = createRequestPlan({ message: "规划并生成 PRD", projectAvailable: true, requestId: "formal-source" });
 		const affirmative = createRequestPlan({ message: "可以", projectAvailable: true, pendingPlan: pendingFormal });
 		assert.equal(affirmative.lane, "formal");

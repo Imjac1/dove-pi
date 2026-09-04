@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { LocalCapabilityAdapter, MAX_RPC_LINE_BYTES, runLocalRpcStdio } from "../src/adapters/local-rpc.ts";
 import { CAPABILITY_PROTOCOL_VERSION } from "../src/core/capability-protocol.ts";
+import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 
 describe("local CLI/RPC capability adapter", () => {
 	it("lists and executes the same host-neutral capability with ledger correlation", async () => {
@@ -90,6 +91,70 @@ describe("local CLI/RPC capability adapter", () => {
 			assert.match(responses[0]?.error?.message ?? "", /exceeds 131072 bytes/);
 			assert.equal(responses[1]?.id, 5);
 			assert.ok(Array.isArray((responses[1]?.result as { capabilities?: unknown[] })?.capabilities));
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	it("exposes a bounded terminal/resource projection through read-only RPC", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "dove-local-rpc-diagnostics-"));
+		try {
+			const ledgerPath = join(temporary, "ledger.jsonl");
+			const ledger = new ExecutionLedger(ledgerPath);
+			await ledger.appendRequestTerminal({
+				taskId: "rpc:test",
+				stepId: "request:req-diagnostics",
+				mode: "standard",
+				requestId: "req-diagnostics",
+				sessionId: "rpc-session",
+				reason: "failed",
+				detail: "provider-round-budget",
+				policyAbort: true,
+				terminal: {
+					origin: "provider-round",
+					code: "provider-round-budget",
+					summary: "Dove stopped after the provider-round budget.",
+					retryable: false,
+					nextAction: "Review the last evidence.",
+				},
+			});
+			await ledger.appendTaskResourceObservation({
+				taskId: "rpc:test",
+				stepId: "request:req-diagnostics",
+				mode: "standard",
+				requestId: "req-diagnostics",
+				sessionId: "rpc-session",
+				attemptId: "attempt-1",
+				toolCalls: 3,
+				providerRounds: 2,
+				elapsedMs: 1200,
+				toolDurationMs: 800,
+				inputTokens: 100,
+				cacheReadTokens: 40,
+				cacheWriteTokens: 5,
+				outputTokens: 60,
+				reasoningTokens: 10,
+				stopReasons: ["tool_call", "length"],
+			});
+			const adapter = new LocalCapabilityAdapter(ledgerPath);
+			const response = await adapter.handleRpc({ jsonrpc: "2.0", id: "diagnostics", method: "diagnostics/status", params: { sessionId: "rpc-session" } });
+			assert.ok("result" in response);
+			const result = response.result as { schemaVersion: number; lastTerminal?: { terminal?: { origin?: string; code?: string }; policyAbort?: boolean }; lastResourceObservation?: { inputTokens?: number; toolDurationMs?: number; stopReasons?: readonly string[] } };
+			assert.equal(result.schemaVersion, 1);
+			assert.deepEqual(result.lastTerminal?.terminal, {
+				origin: "provider-round",
+				code: "provider-round-budget",
+				summary: "Dove stopped after the provider-round budget.",
+				retryable: false,
+				nextAction: "Review the last evidence.",
+			});
+			assert.equal(result.lastTerminal?.policyAbort, true);
+			assert.equal(result.lastResourceObservation?.inputTokens, 100);
+			assert.equal(result.lastResourceObservation?.toolDurationMs, 800);
+			assert.deepEqual(result.lastResourceObservation?.stopReasons, ["tool_call", "length"]);
+			const filtered = await adapter.handleRpc({ jsonrpc: "2.0", id: "filtered", method: "diagnostics/status", params: { requestId: "other-request" } });
+			assert.ok("result" in filtered);
+			assert.deepEqual((filtered.result as { lastTerminal?: unknown }).lastTerminal, undefined);
 		} finally {
 			await rm(temporary, { recursive: true, force: true });
 		}

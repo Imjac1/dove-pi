@@ -197,6 +197,34 @@ Dove 会直接读取当前原生目标。已有 `.trellis` 的项目仍可读取
 
 Pi 是唯一工具和执行权威。Dove 不增加权限层，只管理上下文、目标连续性、无进展循环和效率诊断。
 
+## 完整工作流与真实验证
+
+每次调用都按同一条边界处理：启动器先判断 `--version`、维护命令和本地 CLI；只有未匹配的参数才启动 Pi。CLI 在当前工作目录运行，Native 状态写入项目 `.dove/`，Pi 会话和凭据留在 Pi 用户目录。`rpc`/`mcp` 使用 stdio 时，stdout 只保留协议帧，诊断写 stderr。
+
+推荐按下面顺序做一次真实黑盒检查（使用临时项目，不要指向生产代码）：
+
+```powershell
+$env:DOVE_PI_HOME = Join-Path $env:TEMP "dove-pi-audit-home"
+$env:PI_CODING_AGENT_DIR = Join-Path $env:TEMP "dove-pi-audit-pi"
+New-Item -ItemType Directory $env:PI_CODING_AGENT_DIR -Force | Out-Null
+mkdir (Join-Path $env:TEMP "dove-pi-audit-project") -Force | Out-Null
+cd (Join-Path $env:TEMP "dove-pi-audit-project")
+dove-pi --version
+dove-pi --offline doctor
+dove-pi project init
+dove-pi task create "Smoke task"
+dove-pi task status
+dove-pi session record --title "Smoke" --test "not run"
+dove-pi capability list
+dove-pi web status
+```
+
+`--offline` 和 `--skip-version-check` 可以放在已知本地 CLI 前面；它们不会把 CLI 单词当成 Pi prompt。`task verify` 只检查产物结构和规划字段，不会运行测试，也不代表验收通过。正式任务需要先冻结 acceptance，再记录 evidence，最后由用户决定 finish/archive。
+
+如果会话看起来停在 `pending`、像模型自行停止，先运行 `dove-pi doctor` 和 `/status full`：前者会显示实际执行的 managed release 及其与工作区源码的 `sourceDrift=drifted` 状态；后者会拆分模式、thinking、provider round、只读预算和策略终止原因。源码修复后必须执行 `dove-pi update` 或 `python .\\dove_pi.py install` 才会进入全局启动路径；本项目不会自动改写全局安装。
+
+出现异常时先运行 `dove-pi doctor`，再按“当前版本 → previous → 精确身份缓存 → 稳定 Release”的顺序执行 `dove-pi repair`；更新失败不会替换 current。`rollback` 只切换 previous，`uninstall --yes` 只删除 Dove 托管目录和精确 PATH 项。
+
 ## 常用命令
 
 ### Dove Pi 内部
@@ -253,6 +281,8 @@ dove-pi --offline             # 本次启动不做 Pi 网络/扩展包检查
 回滚能力；统一使用 `dove-pi update`。兼容参数 `--skip-version-check` 仍可使用。
 `--offline` 不会禁用之后显式执行的安装或更新命令。
 
+未知的 CLI 子命令会返回非零退出和单个 JSON 错误对象；不要依赖 Node 堆栈文本做自动化解析。工具调用、耗时和 token 指标当前仅用于诊断观察，未设置硬上限。
+
 ## 扩展组合
 
 默认安装 `max`。其他可选组合：`minimal`、`dev`、`research`、`security`。
@@ -300,6 +330,15 @@ dove-pi capability run workspace.inspect --args='{"path":"package.json"}'
 dove-pi capability run dev.project_test --approve
 dove-pi rpc
 dove-pi mcp
+```
+
+无 UI 调试时，`dove-pi doctor` 的 `requestDiagnostics` 和 JSON-RPC 的只读
+`diagnostics/status` 都从项目隔离的 `execution.jsonl` 投影最近一次终止和资源观察；它们与 Pi
+内的 `agent_doctor` 返回相同的 `lastTerminal` / `lastResourceObservation` 字段。终止对象包含
+`origin`、`code`、摘要、是否可重试和下一步建议，因此 Pi 显示通用 `Operation aborted` 后仍能归因：
+
+```powershell
+'{"jsonrpc":"2.0","id":1,"method":"diagnostics/status"}' | dove-pi rpc
 ```
 
 MCP stdio 配置：

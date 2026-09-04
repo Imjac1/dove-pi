@@ -16,6 +16,18 @@ export type RequestTerminalReason =
 	| "failed";
 export type RequestAttemptTrigger = "initial" | "provider-retry" | "compaction-retry" | "continuation" | "recovery";
 export type RequestAttemptOutcome = "completed" | "transient-failure" | "failed" | "cancelled" | "superseded";
+export type RequestTerminalOrigin = "user" | "provider" | "model-budget" | "provider-round" | "progress-guard" | "convergence" | "session";
+
+/** Stable cross-surface explanation for a logical request terminal state. */
+export interface RequestTerminalEnvelope {
+	readonly origin: RequestTerminalOrigin;
+	readonly code: string;
+	readonly summary: string;
+	readonly retryable: boolean;
+	readonly nextAction?: string;
+	readonly requestId?: string;
+	readonly attemptId?: string;
+}
 
 export interface RequestLease {
 	readonly logicalRequestId: string;
@@ -43,6 +55,7 @@ export interface RequestTerminalTransition {
 	readonly reason: RequestTerminalReason;
 	readonly detail?: string;
 	readonly policyAbort?: boolean;
+	readonly terminal?: RequestTerminalEnvelope;
 	readonly settledAt: string;
 }
 
@@ -249,7 +262,7 @@ export class RequestLifecycleController {
 		return { retry: true, reason: failure.reason };
 	}
 
-	public settle(reason: RequestTerminalReason, options: { readonly detail?: string; readonly policyAbort?: boolean } = {}): readonly RequestTerminalTransition[] {
+	public settle(reason: RequestTerminalReason, options: { readonly detail?: string; readonly policyAbort?: boolean; readonly terminal?: RequestTerminalEnvelope } = {}): readonly RequestTerminalTransition[] {
 		const transitions: RequestTerminalTransition[] = [];
 		if (this.#active && this.#active.state !== "settled") transitions.push(this.#settleLease(this.#active, reason, options));
 		// Streaming steer/follow-up submissions are consumed inside Pi's existing
@@ -264,7 +277,7 @@ export class RequestLifecycleController {
 	}
 
 	/** Close every lease when the host tears down before normal settlement. */
-	public terminateAll(reason: RequestTerminalReason, options: { readonly detail?: string; readonly policyAbort?: boolean } = {}): readonly RequestTerminalTransition[] {
+	public terminateAll(reason: RequestTerminalReason, options: { readonly detail?: string; readonly policyAbort?: boolean; readonly terminal?: RequestTerminalEnvelope } = {}): readonly RequestTerminalTransition[] {
 		const transitions: RequestTerminalTransition[] = [];
 		if (this.#active && this.#active.state !== "settled") transitions.push(this.#settleLease(this.#active, reason, options));
 		for (const pending of [...this.#pending]) {
@@ -272,7 +285,13 @@ export class RequestLifecycleController {
 			// An initial input that never reached before_agent_start failed in Pi's
 			// preflight gap. Host shutdown is the final observation boundary for it.
 			const pendingReason = pending.delivery === "initial" && pending.state === "queued" ? "startup-failed" : reason;
-			transitions.push(this.#settleLease(pending, pendingReason, pendingReason === "startup-failed" ? { detail: "host-shutdown-preflight" } : options));
+			transitions.push(this.#settleLease(
+				pending,
+				pendingReason,
+				pendingReason === "startup-failed"
+					? { detail: "host-shutdown-preflight" }
+					: options,
+			));
 		}
 		this.#removeSettledPending();
 		return transitions;
@@ -297,7 +316,7 @@ export class RequestLifecycleController {
 		attempt.outcome = outcome;
 	}
 
-	#settleLease(lease: MutableLease, reason: RequestTerminalReason, options: { readonly detail?: string; readonly policyAbort?: boolean } = {}): RequestTerminalTransition {
+	#settleLease(lease: MutableLease, reason: RequestTerminalReason, options: { readonly detail?: string; readonly policyAbort?: boolean; readonly terminal?: RequestTerminalEnvelope } = {}): RequestTerminalTransition {
 		if (lease.currentAttempt && !lease.currentAttempt.completedAt) this.#finishAttempt(lease.currentAttempt, reason === "cancelled" ? "cancelled" : reason === "completed" ? "completed" : "failed");
 		lease.currentAttempt = undefined;
 		lease.state = "settled";
@@ -307,6 +326,7 @@ export class RequestLifecycleController {
 			reason,
 			...(options.detail ? { detail: options.detail } : {}),
 			...(options.policyAbort ? { policyAbort: true } : {}),
+			...(options.terminal ? { terminal: options.terminal } : {}),
 			settledAt: this.#now().toISOString(),
 		} as const;
 		this.#terminals.push(transition);

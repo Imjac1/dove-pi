@@ -38,6 +38,11 @@ ICON_FONT_PACKAGE = "DEVCOM.JetBrainsMonoNerdFont"
 MIN_NODE = (22, 19, 0)
 PROFILES = ("minimal", "dev", "research", "security", "max")
 DEFAULT_PROFILE = "max"
+LOCAL_CLI_COMMANDS = frozenset({
+    "doctor", "project", "task", "session", "skills", "web", "cache",
+    "token", "capability", "rpc", "mcp", "extensions",
+})
+LOCAL_CLI_PREFIX_FLAGS = frozenset({"--offline", "--skip-version-check"})
 PUBLIC_BOOTSTRAP = "irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex"
 
 
@@ -713,6 +718,14 @@ def main(arguments: Sequence[str]) -> int:
     if list(arguments) in (["version"], ["--version"]):
         print_version()
         return 0
+    # Startup flags are also accepted before a local CLI command. Strip only
+    # the recognized prefix flags; ordinary Pi arguments remain untouched and
+    # still fall through to the Pi host.
+    local_cli_index = 0
+    while local_cli_index < len(arguments) and arguments[local_cli_index] in LOCAL_CLI_PREFIX_FLAGS:
+        local_cli_index += 1
+    if local_cli_index > 0 and local_cli_index < len(arguments) and arguments[local_cli_index] in LOCAL_CLI_COMMANDS:
+        return run_local_cli(arguments[local_cli_index:])
     if arguments and arguments[0] in {"install", "setup"}:
         options = parse_install(arguments[1:])
         return run_managed_install(options)

@@ -58,7 +58,7 @@ const BROWSER_INTERACTION_IMPERATIVE_PATTERN = /(?:^|[.!?;,，。！？；\n])\s
 const BROWSER_LOOKUP_PATTERN = /\b(?:open|browse|view)\s+(?:(?:the|this|that|current)\s+)?(?:website|web\s*page|page|browser)\b|\b(?:take\s+)?(?:a\s+)?screenshot\b|打开(?:这个|该|当前)?(?:登录)?页面|查看(?:这个|该|当前)?(?:网页|页面)|网页|浏览器|截图/i;
 const WORKFLOW_ACTION_PATTERNS: readonly [WorkflowAction, RegExp][] = [
 	["continue", /(?:继续|恢复)(?:一下)?(?:当前|这个|该|本)?(?:项目)?(?:任务|工作)|\b(?:continue|resume)(?:\s+(?:the|this|that))?\s+(?:(?:current|existing)\s+)?(?:project\s+)?(?:task|work)\b/i],
-	["create-task", /(?:创建|新建|建立)(?:一个)?(?:Trellis)?(?:项目)?任务|\b(?:create|new)\s+(?:a\s+)?(?:Trellis\s+)?task\b|\btask\s+(?:create|new)\b/i],
+	["create-task", /(?:创建|新建|建立)(?:(?:一个|正式|新的?|Trellis)?)(?:Trellis)?(?:项目)?任务|\b(?:create|new)\s+(?:a\s+)?(?:formal\s+)?(?:Trellis\s+)?task\b|\btask\s+(?:create|new)\b/i],
 	["start-task", /(?:开始|启动)(?:当前|这个|该)?(?:项目)?任务|\b(?:start|begin)\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
 	["finish-task", /(?:完成|结束)(?:当前|这个|该)?(?:项目)?任务|\bfinish\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
 	["archive-task", /(?:归档)(?:当前|这个|该)?(?:项目)?任务|\barchive\s+(?:(?:the|a)\s+)?(?:current\s+)?task\b/i],
@@ -66,6 +66,7 @@ const WORKFLOW_ACTION_PATTERNS: readonly [WorkflowAction, RegExp][] = [
 const FORMAL_TASK_PATTERN = /(?:正式(?:任务|流程|工作)|规划|制定|生成|编写|保留|落盘).{0,48}(?:任务|工作|方案|prd|设计|实现计划|验收|阶段产物|文档|产物)|(?:多文件|跨层|跨模块|系统性|重构).{0,32}(?:修改|改造|实现|优化|开发|迁移)|\b(?:prd|design document|implementation plan|acceptance criteria|formal task|multi[- ]file|cross[- ]layer|refactor)\b/i;
 const ARCHITECTURE_TASK_PATTERN = /(?:设计|规划|制定|重构|改造|实现|文档化).{0,48}(?:架构|方案|系统|模块)|(?:架构|系统|模块).{0,48}(?:设计|方案|重构)|\b(?:design|define|redesign|document|implement|plan)\b.{0,48}\b(?:architecture|system design|module)\b|\b(?:architecture|system design|module)\b.{0,48}\b(?:design|plan|refactor)\b/i;
 const FORMAL_ACTION_PATTERN = /(?:正式|规划|制定|生成|编写|保留|落盘|设计|重构|改造|文档化|plan|define|design|redesign|document|implement|refactor|formal|multi[- ]file|cross[- ]layer)/i;
+const MULTI_FILE_FORMAL_PATTERN = /(?:规划|设计|制定|重构|改造|实现|优化|开发|plan|design|refactor|implement|optimi[sz]e|develop).{0,96}(?:多个文件|多文件|跨层|跨模块|multi[- ]file|cross[- ]layer)|(?:多个文件|多文件|跨层|跨模块|multi[- ]file|cross[- ]layer).{0,96}(?:修改|改造|实现|优化|开发|modify|change|implement|refactor|optimi[sz]e|develop)/i;
 
 const NEGATED_WORKFLOW_ACTION_PATTERN = /(?:不要|别|无需|不需要|不必|无须|don't|do\s+not|without|no\s+need\s+to)[^，。！？；,;.!?\n]{0,24}(?:创建|新建|建立|开始|启动|完成|结束|归档|create|new|start|begin|finish|archive)/i;
 
@@ -140,6 +141,7 @@ function classifyIntent(message: string, explicitIntent?: RequestIntent): Reques
 	if (explicitIntent) return explicitIntent;
 	if (RESPONSE_ONLY_PATTERN.test(message)) return "chat";
 	if (CONVERSATION_SUMMARY_PATTERN.test(message)) return "chat";
+	if (isTaskInventoryRequest(message)) return "lookup";
 	// A leading, explicit continuation request owns the turn even when a later
 	// fallback clause asks "how to start". The anchored pattern does not match
 	// explanatory lookups such as "查看如何继续当前任务".
@@ -158,7 +160,7 @@ export function isFormalTaskRequest(message: string, intent: RequestIntent, work
 	if (workflowAction === "create-task") return true;
 	if (EXPLANATORY_QUERY_PATTERN.test(message) && !/(?:规划|制定|生成|编写|保留|落盘|重构|实现|迁移|plan|generate|write|refactor|implement)/i.test(message)) return false;
 	if ((intent === "chat" || intent === "lookup") && !FORMAL_ACTION_PATTERN.test(message)) return false;
-	return FORMAL_TASK_PATTERN.test(message) || ARCHITECTURE_TASK_PATTERN.test(message);
+	return FORMAL_TASK_PATTERN.test(message) || ARCHITECTURE_TASK_PATTERN.test(message) || MULTI_FILE_FORMAL_PATTERN.test(message);
 }
 
 function contextClassesForIntent(intent: RequestIntent, projectAvailable: boolean): readonly string[] {
@@ -184,18 +186,26 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 	const message = input.message.trim();
 	const projectAvailable = input.projectAvailable === true;
 	const interactionMode = normalizeInteractionMode(input.interactionMode) ?? "auto";
-	const workflowAction = classifyWorkflowAction(message);
+	// Inventory/status queries contain lifecycle words such as "完成" or
+	// "finish" as data. Let the read-only inventory classifier own these turns
+	// before lifecycle action matching can promote them to a mutation.
+	const taskInventoryRequest = isTaskInventoryRequest(message);
+	const workflowAction = taskInventoryRequest ? undefined : classifyWorkflowAction(message);
 	const taskSelector = workflowAction === "continue" ? extractProjectTaskSelector(message) : undefined;
 	const inheritedIntent = isShortAffirmativeReply(message) && input.pendingPlan
 		? input.pendingPlan.intent
 		: undefined;
 	const inheritedLane = isShortAffirmativeReply(message) && input.pendingPlan?.lane === "formal" ? "formal" : undefined;
 	const explicitIntent = isRequestIntent(input.explicitIntent) ? input.explicitIntent : inheritedIntent;
-	const classifiedIntent = classifyIntent(message, explicitIntent);
+	const classifiedIntent = taskInventoryRequest ? "lookup" : classifyIntent(message, explicitIntent);
 	// Lifecycle wording still selects project context and workflow guidance. It
 	// never grants or removes tools; Pi remains the execution authority.
 	const intent = classifiedIntent === "execution" ? classifiedIntent : workflowAction && workflowAction !== "continue" ? "project-work" : classifiedIntent;
-	const effectiveWorkflowAction = intent === "execution" ? undefined : workflowAction;
+	// Keep explicit lifecycle metadata (especially create-task) even when the
+	// same sentence also contains an execution verb. A continuation followed by
+	// a mutation is the exception: the mutation owns that turn and must not
+	// inherit the earlier continuation action.
+	const effectiveWorkflowAction = intent === "execution" && workflowAction === "continue" ? undefined : workflowAction;
 	const projectAction = classifyProjectAction(message, intent);
 	const contextAvailable = projectAvailable && interactionMode !== "chat";
 	const lane: RequestLane = interactionMode !== "chat" && projectAvailable && (inheritedLane === "formal" || isFormalTaskRequest(message, intent, effectiveWorkflowAction)) ? "formal" : "fast";
@@ -233,7 +243,7 @@ export function isTaskInventoryRequest(message: string): boolean {
 	const mentionsInventory = /(?:未完成|没完成|待办|遗留|剩余|进行中|还存在).{0,20}(?:任务|工作)|(?:任务|工作).{0,20}(?:未完成|没完成|待办|遗留|剩余|进行中)|\b(?:unfinished|incomplete|pending|remaining|open)\b.{0,40}\b(?:tasks?|work)\b|\b(?:tasks?|work)\b.{0,40}\b(?:unfinished|incomplete|pending|remaining|open)\b/i.test(value);
 	if (!mentionsInventory) return false;
 	const withoutStatus = value
-		.replace(/(?:不要|别|无需|不需要|只读)[^，。！？；,;.!?\n]{0,24}(?:修改|编辑|写入|变更)[^，。！？；,;.!?\n]{0,12}(?:文件|代码)?/gi, " ")
+		.replace(/(?:不要|别|无需|不需要|不|只读)[^，。！？；,;.!?\n]{0,24}(?:修改|编辑|写入|变更)[^，。！？；,;.!?\n]{0,12}(?:文件|代码)?/gi, " ")
 		.replace(/\b(?:without|do\s+not|don't|never)\s+(?:modifying|editing|writing|changing)\s+(?:any\s+)?(?:files?|code)\b/gi, " ")
 		.replace(/未完成|没完成|待办|遗留|剩余|进行中|unfinished|incomplete|pending|remaining|open/gi, " ");
 	return !/(?:继续|恢复|修复|实现|执行|修改|编写|开发|处理|完成|删除|归档|提交|推送|开始|优化|解决|逐个|逐项|代码|源码|测试|文件|日志|历史)|\b(?:continue|resume|fix|implement|execute|modify|write|develop|handle|complete|finish|delete|archive|commit|push|start|optimi[sz]e|resolve|code|source|tests?|files?|logs?|history)\b/i.test(withoutStatus);

@@ -8,12 +8,12 @@ import type { CapabilityRegistry } from "../core/capability-registry.ts";
 import { CapabilityInvocationService } from "../core/capability-invocation.ts";
 import { CAPABILITY_PROTOCOL_VERSION } from "../core/capability-protocol.ts";
 import { executeRecipe, type RecipeRegistry } from "../core/recipe-registry.ts";
-import { ExecutionLedger } from "../core/execution-ledger.ts";
+import { ExecutionLedger, projectExecutionDiagnostics } from "../core/execution-ledger.ts";
 import { ModeController, type ModeChange } from "../core/mode-controller.ts";
 import { normalizeAgentMode, normalizeInteractionMode, type AgentMode, type InteractionMode } from "../core/contracts.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
 import { applyWorkspacePatch, createWorkspaceSnapshot, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
-import { createProjectProvider, initializeNativeProject, summarizeProjectContinuation, updateProjectManifest, type ProjectContextSnapshot, type ProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskOperation } from "../project-provider/index.ts";
+import { createProjectProvider, initializeNativeProject, summarizeProjectContinuation, updateProjectManifest, type ProjectContextSnapshot, type ProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskOperation } from "../project-provider/index.ts";
 import { buildInteroperableProjectContext, readInteroperableContextProjection } from "../context/interoperable.ts";
 import type { ContextSegment } from "../core/context-compiler.ts";
 import { getPiVersion } from "./host-version.ts";
@@ -28,7 +28,7 @@ import { formatCacheDiagnostics, formatGoalEfficiency, inspectCacheDiagnostics, 
 import { attributeProviderCache, inspectProviderCachePrefix, type CachePrefixSnapshot } from "../core/cache-prefix.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan, isTaskInventoryRequest, type RequestPlan } from "../core/request-plan.ts";
-import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
+import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalEnvelope, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
 import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens, type BudgetAccounting } from "../core/model-gateway.ts";
 import { stablePromptPolicy } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
@@ -38,6 +38,7 @@ import { createDoveRuntime } from "../runtime.ts";
 import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.ts";
 import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
 import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
+import type { FindingKind } from "../core/task-convergence.ts";
 
 type DoveRegistrationClaim = { readonly identity: DoveExtensionIdentity; readonly owner: ExtensionAPI };
 const DOVE_REGISTRATION_SYMBOL = Symbol.for("dove.personal-agent.registration-claim");
@@ -88,6 +89,7 @@ const REVIEWED_IDEMPOTENT_PI_TOOLS = new Set([
 	"lens_diagnostics", "lsp_diagnostics", "symbol_search", "project_report", "module_report", "read_symbol", "read_enclosing",
 	"web_search", "source_check", "fetch_content", "get_search_content",
 ]);
+const FORMAL_PRODUCT_MUTATION_TOOLS = new Set(["write", "edit", "replace", "insert", "delete", "mkdir", "agent_workspace_patch", "agent_workspace_restore"]);
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
 	fast: "thinkingLow",
 	standard: "thinkingMedium",
@@ -176,6 +178,30 @@ function matchLeading(normalized: string, hintNorm: string): boolean {
 	return normalized === hintNorm || normalized.startsWith(`${hintNorm} `) || normalized.startsWith(`${hintNorm} 2>&1`) || normalized.startsWith(`${hintNorm}&&`) || normalized.startsWith(`${hintNorm};`);
 }
 
+const READ_ONLY_SHELL_SEGMENT = /^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+))|(?:env\s+)?(?:git(?:\s+-C\s+(?:"[^"]*"|'[^']*'|\S+))?\s+(?:status|log|diff|show|ls-files|rev-parse|branch|describe|remote|tag|blame|shortlog|cat-file)\b|go\s+(?:test|vet|list|version|env)\b|(?:ls|dir|find|rg|grep|sed|awk|cat|head|tail|wc|pwd|echo|env|printenv)\b|(?:Get-ChildItem|Get-Content|Select-String|Test-Path)\b).*)$/i;
+const READ_ONLY_SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:\$\?|\d+)$/;
+
+/**
+ * Shell is a general-purpose Pi tool, so its name alone cannot establish a
+ * product mutation. Keep the formal mutation gate conservative while allowing
+ * common read-only inspection and verification commands to run before an
+ * acceptance contract is frozen.
+ */
+export function isReadOnlyShellCommand(toolName: string, input: Readonly<Record<string, unknown>>): boolean {
+	if (toolName !== "bash" && toolName !== "powershell") return false;
+	const command = typeof input.command === "string" ? input.command : typeof input.script === "string" ? input.script : undefined;
+	if (!command?.trim()) return false;
+	const normalized = command
+		.replace(/\s+\d?>&\d+/g, "")
+		.replace(/\s+\d?>\s*(?:\/dev\/null|nul|\$null|(?:\/tmp\/|\/var\/tmp\/|\$TEMP[\\/]|%TEMP%[\\/]|\$env:TEMP[\\/])[^\s;|&]+)/gi, "")
+		.replace(/\s+\d?<\s*(?:\/tmp\/|\/var\/tmp\/|\$TEMP[\\/]|%TEMP%[\\/]|\$env:TEMP[\\/])[^\s;|&]+/gi, "")
+		.trim();
+	if (/[<>]/.test(normalized)) return false;
+	if (/\b(?:rm|del|erase|mv|move|cp|copy|mkdir|rmdir|touch|tee|sed\s+-i|Set-Content|Out-File|Add-Content|Remove-Item|Move-Item|Copy-Item|New-Item|git\s+(?:apply|checkout|reset|clean|restore|commit|merge|rebase|switch|add|rm)|git\s+diff\b[^;|]*--output(?:=|\s)|npm\s+(?:install|ci)|go\s+(?:generate|env\s+-w))\b/i.test(normalized)) return false;
+	const segments = normalized.split(/(?<!\\)\s*(?:&&|\|\||[;|])\s*/).map((segment) => segment.trim()).filter(Boolean);
+	return segments.length > 0 && segments.every((segment) => READ_ONLY_SHELL_SEGMENT.test(segment) || READ_ONLY_SHELL_ASSIGNMENT.test(segment));
+}
+
 function runtimeReadOnly(): boolean {
 	return /^(1|true|yes|on)$/i.test(process.env.DOVE_PI_READ_ONLY ?? "");
 }
@@ -215,17 +241,17 @@ function isGuidanceOnlyContextMessage(message: unknown): boolean {
 		&& (!Array.isArray(details.segments) || details.segments.length === 0);
 }
 
-function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
+export function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
 	if (typeof message !== "object" || message === null) return classifyProviderFailure({ category: "unknown" });
 	const value = message as { errorMessage?: unknown; error?: unknown };
 	const text = String(value.errorMessage ?? value.error ?? "");
 	const code = text.match(/\b(?:ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_SOCKET)\b/i)?.[0];
 	if (code) return classifyProviderFailure({ code });
-	if (/cancel(?:led|ed)?|abort(?:ed)?/i.test(text)) return classifyProviderFailure({ cancelled: true });
+	const httpStatus = Number(text.match(/(?:^|\D)(401|403|408|425|429|500|502|503|504|524)(?:\D|$)/)?.[1]);
+	if (Number.isSafeInteger(httpStatus)) return classifyProviderFailure({ httpStatus });
 	if (/authorization denied|permission denied|unauthorized|forbidden|invalid api key/i.test(text)) return classifyProviderFailure({ category: "authorization-denied" });
 	if (/invalid (?:configuration|config|model|provider)|configuration error/i.test(text)) return classifyProviderFailure({ category: "invalid-configuration" });
-	const httpStatus = Number(text.match(/(?:^|\D)(408|425|429|500|502|503|504|524)(?:\D|$)/)?.[1]);
-	if (Number.isSafeInteger(httpStatus)) return classifyProviderFailure({ httpStatus });
+	if (/cancel(?:led|ed)?|abort(?:ed)?/i.test(text)) return classifyProviderFailure({ cancelled: true });
 	if (/overloaded|rate.?limit|too many requests|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|connection.?refused|connection.?lost|socket hang up|fetch failed|getaddrinfo|ENOTFOUND|upstream.?connect|reset before headers|timed? out|timeout|websocket.?closed|stream ended before/i.test(text)) {
 		return { kind: "transient", reason: "reviewed-provider-message" };
 	}
@@ -277,6 +303,60 @@ export function normalizeLsToolInput(toolName: string, input: Record<string, unk
 	return true;
 }
 
+function convergenceOperationFromPiInput(input: {
+	readonly operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume";
+	readonly acceptanceId?: string;
+	readonly acceptanceRevision?: string;
+	readonly criteria?: readonly { id: string; text: string }[];
+	readonly status?: "started" | "evidence" | "passed" | "failed" | "waived" | "step_completed" | "verification_started";
+	readonly evidenceRef?: string;
+	readonly evidenceRefs?: readonly string[];
+	readonly stepId?: string;
+	readonly findingId?: string;
+	readonly findingKind?: "blocking" | "regression" | "follow_up" | "scope_change" | "serious_unexpected_risk";
+	readonly summary?: string;
+	readonly nextAction?: string;
+	readonly unblockCondition?: string;
+}): ProjectTaskConvergenceOperation {
+	if (input.operation === "status") throw new Error("status is read-only.");
+	const required = (value: string | undefined, field: string): string => {
+		if (!value?.trim()) throw new Error(`agent_task_convergence requires ${field}.`);
+		return value.trim();
+	};
+	if (input.operation === "freeze") return { action: "freeze", criteria: input.criteria ?? [], ...(input.acceptanceId ? { acceptanceId: input.acceptanceId } : {}) };
+	const acceptanceId = required(input.acceptanceId, "acceptanceId");
+	if (input.operation === "progress") {
+		const status = input.status;
+		if (!status) throw new Error("agent_task_convergence progress requires status.");
+		switch (status) {
+			case "started": return { action: "progress", acceptanceId, progress: { kind: "started" } };
+			case "verification_started": return { action: "progress", acceptanceId, progress: { kind: "verification_started" } };
+			case "evidence": return { action: "progress", acceptanceId, progress: { kind: "evidence", evidenceRef: required(input.evidenceRef, "evidenceRef") } };
+			case "passed": return { action: "progress", acceptanceId, progress: { kind: "passed", ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) } };
+			case "failed": return { action: "progress", acceptanceId, progress: { kind: "failed", ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) } };
+			case "waived": return { action: "progress", acceptanceId, progress: { kind: "waived", evidenceRef: required(input.evidenceRef, "evidenceRef") } };
+			case "step_completed": return { action: "progress", acceptanceId, progress: { kind: "step_completed", stepId: required(input.stepId, "stepId") } };
+		}
+	}
+	if (input.operation === "finding" || input.operation === "update_finding") {
+		if (input.operation === "update_finding") {
+			const findingId = required(input.findingId, "findingId");
+			const evidenceRefs = input.evidenceRefs?.filter((value) => value.trim().length > 0);
+			const summary = input.summary?.trim();
+			const nextAction = input.nextAction?.trim();
+			if ((!evidenceRefs || evidenceRefs.length === 0) && !summary && !nextAction) throw new Error("agent_task_convergence update_finding requires evidenceRefs, summary, or nextAction.");
+			return { action: "update_finding", acceptanceId, findingId, ...(evidenceRefs ? { evidenceRefs } : {}), ...(summary ? { summary } : {}), ...(nextAction ? { nextAction } : {}) };
+		}
+		const findingKind = input.findingKind;
+		if (!findingKind) throw new Error("agent_task_convergence finding requires findingKind.");
+		return { action: "finding", acceptanceId, finding: { id: required(input.findingId, "findingId"), kind: findingKind, summary: required(input.summary, "summary"), evidenceRefs: input.evidenceRefs ?? [], ...(input.nextAction ? { nextAction: input.nextAction } : {}) }, ...(input.nextAction ? { nextAction: input.nextAction } : {}) };
+	}
+	if (input.operation === "resolve_finding") return { action: "resolve_finding", acceptanceId, findingId: required(input.findingId, "findingId"), ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) };
+	if (input.operation === "decide") return { action: "decide", acceptanceId, nextAction: required(input.nextAction, "nextAction") };
+	if (input.operation === "checkpoint") return { action: "checkpoint", acceptanceId, nextAction: required(input.nextAction, "nextAction"), ...(input.unblockCondition ? { unblockCondition: input.unblockCondition } : {}) };
+	return { action: "resume", acceptanceId, acceptanceRevision: required(input.acceptanceRevision, "acceptanceRevision") };
+}
+
 export function getLsObservationMetadata(
 	input: Readonly<Record<string, unknown>>,
 	details: unknown,
@@ -309,14 +389,57 @@ interface PendingRequestTerminal {
 	readonly reason: RequestTerminalReason;
 	readonly detail?: string;
 	readonly policyAbort: boolean;
+	readonly terminal: RequestTerminalEnvelope;
+}
+
+export interface RequestResourceSnapshot {
+	inputTokens: number;
+	cacheReadTokens: number;
+	cacheWriteTokens: number;
+	outputTokens: number;
+	reasoningTokens: number;
+}
+
+export function emptyRequestResourceSnapshot(): RequestResourceSnapshot {
+	return { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+}
+
+export function accumulateRequestUsage(snapshot: RequestResourceSnapshot, usage: Readonly<Record<string, unknown>> | undefined): void {
+	if (!usage) return;
+	const read = (key: string): number => {
+		const value = usage[key];
+		return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+	};
+	snapshot.inputTokens += read("input") || read("inputTokens");
+	snapshot.cacheReadTokens += read("cacheRead") || read("cacheReadTokens");
+	snapshot.cacheWriteTokens += read("cacheWrite") || read("cacheWriteTokens");
+	snapshot.outputTokens += read("output") || read("outputTokens");
+	snapshot.reasoningTokens += read("reasoning") || read("reasoningTokens");
+}
+
+export function isMeaningfulToolProgress(input: { readonly isError: boolean; readonly idempotent: boolean; readonly repeatedSuccessCount: number }): boolean {
+	return !input.isError && (!input.idempotent || input.repeatedSuccessCount <= 1);
 }
 
 function terminalForFailure(failure: ProviderFailureClassification, decisionReason: string): PendingRequestTerminal {
-	if (failure.reason === "cancelled") return { reason: "cancelled", detail: failure.reason, policyAbort: false };
-	if (failure.reason === "startup-conflict") return { reason: "startup-conflict", detail: failure.reason, policyAbort: true };
-	if (failure.reason === "invalid-configuration") return { reason: "invalid-configuration", detail: failure.reason, policyAbort: true };
-	if (failure.reason === "authorization-denied") return { reason: "authorization-denied", detail: failure.reason, policyAbort: true };
-	return { reason: "failed", detail: decisionReason, policyAbort: true };
+	if (failure.reason === "cancelled") return { reason: "cancelled", detail: failure.reason, policyAbort: false, terminal: { origin: "user", code: "user-cancelled", summary: "The user cancelled the request.", retryable: false, nextAction: "Submit a new request when ready." } };
+	if (failure.reason === "startup-conflict") return { reason: "startup-conflict", detail: failure.reason, policyAbort: true, terminal: { origin: "session", code: "startup-conflict", summary: "Another Dove/Pi runtime owns this session.", retryable: false, nextAction: "Close the other runtime or start a separate session." } };
+	if (failure.reason === "invalid-configuration") return { reason: "invalid-configuration", detail: failure.reason, policyAbort: true, terminal: { origin: "model-budget", code: "model-budget-rejected", summary: "The provider request could not fit the model or provider budget.", retryable: true, nextAction: "Use a smaller context or model, then retry." } };
+	if (failure.reason === "authorization-denied") return { reason: "authorization-denied", detail: failure.reason, policyAbort: true, terminal: { origin: "provider", code: "provider-authorization-denied", summary: "The provider rejected authentication or authorization.", retryable: false, nextAction: "Check provider credentials and retry." } };
+	if (decisionReason === "attempt-limit") return { reason: "failed", detail: decisionReason, policyAbort: true, terminal: { origin: "provider", code: "provider-attempt-limit", summary: "Dove stopped after the transient provider retry limit was exhausted.", retryable: true, nextAction: "Check provider availability, then submit the request again." } };
+	if (decisionReason === "non-idempotent-effect") return { reason: "failed", detail: decisionReason, policyAbort: true, terminal: { origin: "provider", code: "retry-refused-after-effect", summary: "Dove refused to replay a provider failure after a non-idempotent effect.", retryable: false, nextAction: "Inspect the workspace and reconcile the effect before retrying." } };
+	return { reason: "failed", detail: decisionReason, policyAbort: true, terminal: { origin: "provider", code: `provider-${decisionReason.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`, summary: `The provider request ended with ${decisionReason}.`, retryable: failure.kind === "transient", nextAction: failure.kind === "transient" ? "Retry after checking provider availability." : "Inspect the provider error and adjust the request." } };
+}
+
+function terminalForPolicy(origin: Extract<RequestTerminalEnvelope["origin"], "model-budget" | "provider-round" | "progress-guard" | "convergence">, code: string, summary: string, nextAction: string): PendingRequestTerminal {
+	return { reason: "failed", detail: code, policyAbort: true, terminal: { origin, code, summary, retryable: false, nextAction } };
+}
+
+function terminalForReason(reason: RequestTerminalReason, detail?: string): RequestTerminalEnvelope {
+	if (reason === "cancelled") return { origin: "user", code: "user-cancelled", summary: "The user cancelled the request.", retryable: false, nextAction: "Submit a new request when ready." };
+	if (reason === "completed") return { origin: "session", code: "completed", summary: "The request completed normally.", retryable: false };
+	if (reason === "superseded") return { origin: "session", code: "superseded", summary: "The request was replaced by a newer session action.", retryable: true, nextAction: "Continue from the newer request." };
+	return { origin: "session", code: detail ?? reason, summary: `The request ended with ${detail ?? reason}.`, retryable: false, nextAction: "Inspect the terminal diagnostics before retrying." };
 }
 
 /** Remove only Dove's derived context messages when a final payload is over budget. */
@@ -376,6 +499,35 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let currentRequestIsTaskInventory = false;
 	let currentRequestTaskId: string | undefined;
 	let currentRequestProviderRounds = 0;
+	let currentRequestToolCalls = 0;
+	let currentRequestStartedAt: number | undefined;
+	let currentRequestResources = emptyRequestResourceSnapshot();
+	let currentRequestProgressSinceRound = false;
+	let currentRequestProviderGraceUsed = false;
+	let currentRequestStopReasons: string[] = [];
+	let currentRequestToolDurationMs = 0;
+	let currentRequestHostAbortIssued = false;
+	let currentRequestTerminalPersisted = false;
+	let currentRequestTerminalNotified = false;
+	async function issueRequestHostAbort(ctx: ExtensionContext, terminal: PendingRequestTerminal): Promise<void> {
+		pendingRequestTerminal ??= terminal;
+		// Preflight hooks can be exercised without an active Pi lease (for
+		// example by a host test or a provider-selection failure). Such an
+		// isolated request must still be able to issue its own abort.
+		if (!requestLifecycle.activeLease() && !currentRequestTerminalPersisted) currentRequestHostAbortIssued = false;
+		if (!currentRequestTerminalPersisted) {
+			const transitions = requestLifecycle.settle(terminal.reason, { detail: terminal.detail, policyAbort: terminal.policyAbort, terminal: terminal.terminal });
+			for (const transition of transitions) await appendRequestTerminal(transition);
+			currentRequestTerminalPersisted = transitions.length > 0;
+		}
+		if (terminal.policyAbort && terminal.terminal.origin !== "user" && ctx.hasUI && !currentRequestTerminalNotified) {
+			ctx.ui.notify(`[Dove ${terminal.terminal.code}] ${terminal.terminal.summary}${terminal.terminal.nextAction ? ` ${terminal.terminal.nextAction}` : ""}`, "warning");
+			currentRequestTerminalNotified = true;
+		}
+		if (currentRequestHostAbortIssued || typeof ctx.abort !== "function") return;
+		currentRequestHostAbortIssued = true;
+		ctx.abort();
+	}
 	let currentProviderCall: { id: string; requestId: string; attemptId?: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number; cachePrefix?: CachePrefixSnapshot; startedAt: number } | undefined;
 	const toolTimings = new Map<string, { startedAt: number; toolName: string }>();
 	// Keep one comparison chain per provider cache scope. Switching models and
@@ -483,6 +635,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			reason: transition.reason,
 			detail: transition.detail,
 			policyAbort: transition.policyAbort,
+			terminal: { ...(transition.terminal ?? terminalForReason(transition.reason, transition.detail)), requestId: transition.logicalRequestId },
 		});
 		requestMetadata.delete(transition.logicalRequestId);
 	}
@@ -645,10 +798,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const hashline = hasHashlineEditTools(pi.getAllTools().map((tool) => tool.name));
 			const cache = inspectCacheDiagnostics(ctx.sessionManager.getEntries());
 			const full = args.trim().toLowerCase() === "full";
-			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+			const sessionId = (ctx?.sessionManager as { getSessionId?: () => string } | undefined)?.getSessionId?.();
 			const goalEfficiency = full ? inspectGoalEfficiency(await ledger.read(), sessionId) : undefined;
 			const cacheText = full ? ` Cache: ${formatCacheDiagnostics(cache)}. Goals: ${formatGoalEfficiency(goalEfficiency!)}.` : " Use /status full for cache diagnostics.";
-			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText} ${detail}`, "info");
+			const plan = currentRequestPlan;
+			const strategyText = full
+				? ` Strategy roles: /mode controls execution intensity (thinking/round/read budgets); /dove-mode controls context (chat/work/auto); /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. Current request=${plan ? `${plan.intent}/${plan.lane}` : "idle"}, provider rounds=${plan ? `${currentRequestProviderRounds}/${effectiveProviderRoundBudget(plan, currentRequestToolCalls)}` : "n/a"}, read-only=${plan ? JSON.stringify(readOnlyToolBudget(plan, currentRequestIsTaskInventory)) : "n/a"}. Resources=${plan ? `tools=${currentRequestToolCalls}, toolDurationMs=${currentRequestToolDurationMs}, elapsedMs=${currentRequestStartedAt ? Date.now() - currentRequestStartedAt : 0}, input=${currentRequestResources.inputTokens}, cacheRead=${currentRequestResources.cacheReadTokens}, cacheWrite=${currentRequestResources.cacheWriteTokens}, output=${currentRequestResources.outputTokens}, reasoning=${currentRequestResources.reasoningTokens}, stops=${currentRequestStopReasons.join(">") || "n/a"}` : "n/a"}. Last terminal=${JSON.stringify(requestLifecycle.terminalHistory().at(-1)?.terminal ?? (requestLifecycle.terminalHistory().at(-1) ? terminalForReason(requestLifecycle.terminalHistory().at(-1)!.reason, requestLifecycle.terminalHistory().at(-1)!.detail) : undefined))}.`
+				: "";
+			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText} ${detail}`, "info");
 		},
 	});
 
@@ -1004,7 +1161,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const typedParams = params as { name: string; args?: Record<string, unknown> };
 			const request = currentRequestPlan;
-			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+			const sessionId = (ctx?.sessionManager as { getSessionId?: () => string } | undefined)?.getSessionId?.();
 			const definition = registry.require(typedParams.name);
 			const service = new CapabilityInvocationService(registry, ledger, {
 				ownerPid: process.pid,
@@ -1032,6 +1189,58 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				approval: "granted",
 			}, signal);
 			return { content: [{ type: "text", text: JSON.stringify(compactModelPayload(result), null, 2) }], details: result };
+		},
+	});
+
+	pi.registerTool({
+		name: "agent_task_convergence",
+		label: "Dove Task Convergence",
+		description: "Record formal-task acceptance progress, findings, finding evidence updates, checkpoints, and resume decisions for the current native task. operation=status is read-only; use operation=update_finding with an existing findingId to append evidenceRefs or nextAction.",
+		promptSnippet: "Use only for a formal task when recording evidence or a convergence decision tied to an existing AC-* criterion",
+		promptGuidelines: ["Select an existing acceptanceId before product work. To mark work started, call operation=progress with acceptanceId and status=started; operation=status only reads the snapshot and must not carry mutation fields. Follow-up findings are recorded without fixing them in the current task. If a finding already exists, use update_finding with the same findingId instead of repeating finding. Resource observations never decide convergence."],
+		parameters: Type.Object({
+			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume")]),
+			acceptanceId: Type.Optional(Type.String()),
+			acceptanceRevision: Type.Optional(Type.String()),
+			criteria: Type.Optional(Type.Array(Type.Object({ id: Type.String(), text: Type.String() }))),
+			status: Type.Optional(Type.Union([Type.Literal("started"), Type.Literal("evidence"), Type.Literal("passed"), Type.Literal("failed"), Type.Literal("waived"), Type.Literal("step_completed"), Type.Literal("verification_started")])),
+			evidenceRef: Type.Optional(Type.String()),
+			evidenceRefs: Type.Optional(Type.Array(Type.String())),
+			stepId: Type.Optional(Type.String()),
+			findingId: Type.Optional(Type.String()),
+			findingKind: Type.Optional(Type.Union([Type.Literal("blocking"), Type.Literal("regression"), Type.Literal("follow_up"), Type.Literal("scope_change"), Type.Literal("serious_unexpected_risk")])),
+			summary: Type.Optional(Type.String()),
+			nextAction: Type.Optional(Type.String()),
+			unblockCondition: Type.Optional(Type.String()),
+			task: Type.Optional(Type.String()),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			const typed = params as {
+				operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume";
+				acceptanceId?: string; acceptanceRevision?: string; criteria?: readonly { id: string; text: string }[];
+				status?: "started" | "evidence" | "passed" | "failed" | "waived" | "step_completed" | "verification_started";
+				evidenceRef?: string; evidenceRefs?: readonly string[]; stepId?: string; findingId?: string;
+				findingKind?: "blocking" | "regression" | "follow_up" | "scope_change" | "serious_unexpected_risk"; summary?: string;
+				nextAction?: string; unblockCondition?: string; task?: string;
+			};
+			if (!projectProvider.readTaskConvergence || !projectProvider.mutateTaskConvergence) throw new Error("Dove task convergence is unavailable for this provider.");
+			const target = typed.task?.trim() ? projectProvider.resolveTask(typed.task.trim()) : projectProvider.getCurrentTask();
+			if (!target?.formal || target.provider !== "native") throw new Error("Task convergence requires the current native formal task.");
+			if (typed.operation === "status") {
+				const mutationFields = ["acceptanceId", "acceptanceRevision", "criteria", "status", "evidenceRef", "evidenceRefs", "stepId", "findingId", "findingKind", "summary", "nextAction", "unblockCondition"] as const;
+				const suppliedMutationField = mutationFields.find((field) => typed[field] !== undefined);
+				if (suppliedMutationField) throw new Error(`agent_task_convergence status is read-only; remove ${suppliedMutationField} and use operation=progress with acceptanceId plus status=started|verification_started|evidence|passed|failed|waived|step_completed.`);
+				return { content: [{ type: "text", text: JSON.stringify(projectProvider.readTaskConvergence(target.stableId), null, 2) }], details: projectProvider.readTaskConvergence(target.stableId) };
+			}
+			if (runtimeReadOnly()) return { content: [{ type: "text", text: "形式任务收敛元数据变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
+			const operation = convergenceOperationFromPiInput(typed);
+			const snapshot = await projectProvider.mutateTaskConvergence(target.stableId, operation);
+			const taskId = target.stableId;
+			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+			try {
+				await ledger.appendTaskConvergenceDecision({ taskId, stepId: `convergence:${_toolCallId}`, mode: mode.current, requestId: currentRequestPlan?.requestId, sessionId, attemptId: requestLifecycle.currentAttempt()?.attemptId, toolCallId: _toolCallId, acceptanceId: "acceptanceId" in operation ? operation.acceptanceId : undefined, eventKind: operation.action, state: snapshot.state, snapshotRevision: snapshot.revision, acceptanceRevision: snapshot.acceptanceRevision, nextAction: snapshot.checkpoint?.nextAction ?? snapshot.correctiveAction?.nextAction });
+			} catch { /* convergence ledger is additive evidence and must not change the provider decision */ }
+			return { content: [{ type: "text", text: JSON.stringify({ state: snapshot.state, acceptanceRevision: snapshot.acceptanceRevision, nextAction: snapshot.checkpoint?.nextAction ?? snapshot.correctiveAction?.nextAction, openFindingIds: snapshot.findings.filter((finding) => finding.open).map((finding) => finding.id) }, null, 2) }], details: snapshot };
 		},
 	});
 
@@ -1101,6 +1310,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const expectedToolSet = new Set(expectedToolNames);
 			const activeToolSet = new Set(activeToolNames);
 			const latestProviderStart = [...ledgerRecords].reverse().find((record) => record.kind === "provider.request.started" && (!sessionId || record.correlation?.sessionId === sessionId));
+			const diagnostics = projectExecutionDiagnostics(ledgerRecords, sessionId ? { sessionId } : {});
 			const report = {
 				pi: getPiVersion(),
 				node: process.version,
@@ -1133,6 +1343,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				hostCapabilities,
 				contextAuthorities: { authorities: contextProjection.authorities, conflicts: contextProjection.conflicts },
 				powershell,
+				diagnostics,
 				project: { provider: project.provider, root: project.projectRoot, capabilities: project.capabilities, issues: project.issues, legacyTrellisCompatibility: project.trellisCompatibility, specFiles: documentCount("spec"), taskFiles: documentCount("task"), memoryFiles: documentCount("memory") + documentCount("journal"), workflowFiles: documentCount("workflow") },
 			};
 			return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }], details: report };
@@ -1425,9 +1636,51 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				} catch (error) {
 					if (ctx.hasUI) ctx.ui.notify(`Dove task progress unavailable: ${error instanceof Error ? error.message : String(error)}`, "warning");
 				}
+				try {
+					const convergence = projectProvider.readTaskConvergence?.(currentRequestTaskId);
+					const activeAcceptanceId = convergence?.kind === "valid"
+						? convergence.snapshot.checkpoint?.nextAcceptanceId ?? convergence.snapshot.correctiveAction?.acceptanceId ?? convergence.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id
+						: undefined;
+					if (activeAcceptanceId && projectProvider.mutateTaskConvergence && convergence?.kind === "valid" && convergence.snapshot.state !== "ready_to_finish" && convergence.snapshot.state !== "checkpointed" && convergence.snapshot.state !== "blocked") {
+						await projectProvider.mutateTaskConvergence(currentRequestTaskId, {
+							action: "decide",
+							acceptanceId: activeAcceptanceId,
+							nextAction: outcome === "failed" ? `Resolve the recorded failure and rerun verification for ${activeAcceptanceId}.` : outcome === "completed" ? `Review evidence and decide the next action for ${activeAcceptanceId}.` : `Retry the interrupted step for ${activeAcceptanceId}.`,
+						});
+					}
+				} catch (error) {
+					if (ctx.hasUI) ctx.ui.notify(`Dove convergence decision unavailable: ${error instanceof Error ? error.message : String(error)}`, "warning");
+				}
+			}
+			if (currentRequestPlan.lane === "formal" && currentRequestTaskId) {
+				try {
+					const currentTask = projectProvider.resolveTask(currentRequestTaskId);
+					const convergence = projectProvider.readTaskConvergence?.(currentRequestTaskId);
+					await ledger.appendTaskResourceObservation({
+						taskId: currentRequestTaskId,
+						stepId: `request:${currentRequestPlan.requestId}`,
+						mode: currentRequestPlan.mode,
+						requestId: currentRequestPlan.requestId,
+						sessionId,
+						attemptId: completed.attemptId,
+						acceptanceId: convergence?.kind === "valid" ? convergence.snapshot.checkpoint?.nextAcceptanceId ?? convergence.snapshot.correctiveAction?.acceptanceId : currentTask?.convergence?.health === "valid" ? currentTask.convergence.activeAcceptanceId : undefined,
+						toolCalls: currentRequestToolCalls,
+						providerRounds: currentRequestProviderRounds,
+						elapsedMs: currentRequestStartedAt ? Date.now() - currentRequestStartedAt : 0,
+						toolDurationMs: currentRequestToolDurationMs,
+						inputTokens: currentRequestResources.inputTokens,
+						cacheReadTokens: currentRequestResources.cacheReadTokens,
+						cacheWriteTokens: currentRequestResources.cacheWriteTokens,
+						outputTokens: currentRequestResources.outputTokens,
+						reasoningTokens: currentRequestResources.reasoningTokens,
+						stopReasons: currentRequestStopReasons,
+					});
+				} catch { /* resource telemetry is observation-only */ }
 			}
 			lastAttemptOutcome = outcome;
-			if (pendingRequestTerminal?.policyAbort || (observedFailure && !retry?.retry && observedFailure.reason !== "cancelled")) ctx.abort();
+			if (pendingRequestTerminal?.policyAbort || (observedFailure && !retry?.retry && observedFailure.reason !== "cancelled")) {
+				await issueRequestHostAbort(ctx, pendingRequestTerminal ?? terminalForFailure(observedFailure!, retry?.reason ?? observedFailure!.reason));
+			}
 		}
 		if (currentProviderCall) {
 			const call = currentProviderCall;
@@ -1441,11 +1694,16 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		updateStatus(ctx);
 	});
 
-	pi.on("agent_settled", async (_event, ctx) => {
-		const terminal = pendingRequestTerminal ?? (ctx.signal?.aborted || lastAttemptOutcome === "cancelled"
-			? { reason: "cancelled", policyAbort: false } as const
-			: lastAttemptOutcome === "failed" ? { reason: "failed", policyAbort: false } as const : { reason: "completed", policyAbort: false } as const);
-		for (const transition of requestLifecycle.settle(terminal.reason, { detail: terminal.detail, policyAbort: terminal.policyAbort })) await appendRequestTerminal(transition);
+	pi.on("agent_settled", async (_event, _ctx) => {
+		// `agent_end` may call ctx.abort(), which can replace/reload the Pi
+		// session before this callback is delivered.  Reading the callback's
+		// context here then raises Pi's "stale ctx" error and masks the real
+		// terminal record.  agent_end already projected cancellation into the
+		// request state, so agent_settled must use that state-only snapshot.
+		const terminal: PendingRequestTerminal = pendingRequestTerminal ?? (lastAttemptOutcome === "cancelled"
+			? { reason: "cancelled", policyAbort: false, terminal: terminalForReason("cancelled") }
+			: lastAttemptOutcome === "failed" ? { reason: "failed", policyAbort: false, terminal: terminalForReason("failed") } : { reason: "completed", policyAbort: false, terminal: terminalForReason("completed") });
+		for (const transition of requestLifecycle.settle(terminal.reason, { detail: terminal.detail, policyAbort: terminal.policyAbort, terminal: terminal.terminal })) await appendRequestTerminal(transition);
 		const progress = progressGuard.snapshot();
 		pendingContinuationPlan = currentRequestPlan
 			&& terminal.reason === "completed"
@@ -1462,6 +1720,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		lastProviderFailure = undefined;
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
+		currentRequestResources = emptyRequestResourceSnapshot();
+		currentRequestProgressSinceRound = false;
+		currentRequestProviderGraceUsed = false;
+		currentRequestStopReasons = [];
+		currentRequestHostAbortIssued = false;
+		currentRequestTerminalPersisted = false;
+		currentRequestTerminalNotified = false;
+		currentRequestToolDurationMs = 0;
 		toolTimings.clear();
 	});
 
@@ -1471,7 +1737,23 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 
 	pi.on("session_shutdown", async (event) => {
 		const reason = event.reason === "reload" || event.reason === "new" || event.reason === "resume" || event.reason === "fork" ? "superseded" : "cancelled";
-		for (const transition of requestLifecycle.terminateAll(reason)) await appendRequestTerminal(transition);
+		// Shutdown can race the normal agent_end hook after a policy decision has
+		// already been made (for example convergence blocked a product mutation).
+		// Preserve that specific terminal envelope instead of replacing it with the
+		// generic session replacement/cancellation reason.
+		const shutdownTerminal = pendingRequestTerminal
+			?? (lastProviderFailure?.kind === "terminal"
+				? terminalForFailure(lastProviderFailure, lastProviderFailure.reason)
+				: {
+					reason,
+					policyAbort: false,
+					terminal: terminalForReason(reason),
+				} satisfies PendingRequestTerminal);
+		for (const transition of requestLifecycle.terminateAll(shutdownTerminal.reason, {
+			detail: shutdownTerminal.detail,
+			policyAbort: shutdownTerminal.policyAbort,
+			terminal: shutdownTerminal.terminal,
+		})) await appendRequestTerminal(transition);
 		currentRequestPlan = undefined;
 		currentRequestTaskId = undefined;
 		currentProviderCall = undefined;
@@ -1484,6 +1766,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		lastProviderFailure = undefined;
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
+		currentRequestResources = emptyRequestResourceSnapshot();
+		currentRequestProgressSinceRound = false;
+		currentRequestProviderGraceUsed = false;
+		currentRequestStopReasons = [];
+		currentRequestHostAbortIssued = false;
+		currentRequestTerminalPersisted = false;
+		currentRequestTerminalNotified = false;
+		currentRequestToolDurationMs = 0;
 		providerCachePrefixes.clear();
 		toolTimings.clear();
 		pendingContinuationPlan = undefined;
@@ -1495,8 +1785,41 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		progressGuard.beginToolBatch();
 	});
 
-	pi.on("tool_call", async (event) => {
+	pi.on("tool_call", async (event, ctx) => {
 		if (!requestLifecycle.activeLease()) return;
+		const capabilityMutation = event.toolName === "agent_run_capability" && typeof event.input?.name === "string" && registry.get(event.input.name)?.sideEffects.some((effect) => effect !== "read_only");
+		let recipeMutation = false;
+		if (event.toolName === "agent_run_recipe" && typeof event.input?.name === "string") {
+			try { recipeMutation = recipes.require(event.input.name).steps.some((step) => registry.get(step.capability)?.sideEffects.some((effect) => effect !== "read_only")); } catch { recipeMutation = true; }
+		}
+		const shellMutation = (event.toolName === "bash" || event.toolName === "powershell") && !isReadOnlyShellCommand(event.toolName, event.input);
+		if (currentRequestPlan?.lane === "formal" && (FORMAL_PRODUCT_MUTATION_TOOLS.has(event.toolName) || shellMutation || capabilityMutation || recipeMutation)) {
+			const convergence = currentRequestTaskId && projectProvider.readTaskConvergence ? projectProvider.readTaskConvergence(currentRequestTaskId) : { kind: "missing" as const };
+			let blockedReason: string | undefined;
+			let blockedState = "missing";
+			let blockedAcceptanceId: string | undefined;
+			if (convergence.kind === "invalid") { blockedReason = `[Dove convergence] Formal task metadata is invalid: ${convergence.issue}`; blockedState = "invalid"; }
+			else if (convergence.kind !== "valid") blockedReason = "[Dove convergence] Freeze stable acceptance criteria with agent_task_convergence before the first formal product mutation.";
+			else {
+				blockedState = convergence.snapshot.state;
+				blockedAcceptanceId = convergence.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id;
+				if (convergence.snapshot.state === "ready_to_finish") blockedReason = "[Dove convergence] This formal task is ready_to_finish; do not start another implement/check mutation cycle.";
+				else if (convergence.snapshot.state === "checkpointed" || convergence.snapshot.state === "blocked") blockedReason = `[Dove convergence] Resume the checkpoint for ${convergence.snapshot.checkpoint?.nextAcceptanceId ?? "the active acceptance"} before mutating product files.`;
+				else if (!blockedAcceptanceId) blockedReason = "[Dove convergence] Select an active acceptance criterion with agent_task_convergence before mutating product files.";
+			}
+			if (blockedReason) {
+				if (currentRequestTaskId && currentRequestPlan) {
+					try {
+						await ledger.appendTaskConvergenceDecision({ taskId: currentRequestTaskId, stepId: `tool:${event.toolCallId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, toolCallId: event.toolCallId, acceptanceId: blockedAcceptanceId, eventKind: "product_mutation.blocked", state: blockedState, snapshotRevision: convergence.kind === "valid" ? convergence.snapshot.revision : 0, acceptanceRevision: convergence.kind === "valid" ? convergence.snapshot.acceptanceRevision : "unknown", nextAction: convergence.kind === "valid" ? convergence.snapshot.checkpoint?.nextAction ?? convergence.snapshot.correctiveAction?.nextAction : undefined });
+					} catch { /* blocking diagnostics are best effort */ }
+				}
+				pendingRequestTerminal = terminalForPolicy("convergence", `convergence-${blockedState}`, blockedReason, "Resume the active acceptance criterion before mutating product files.");
+				if (blockedState === "ready_to_finish" || blockedState === "invalid" || blockedState === "missing") {
+					await issueRequestHostAbort(ctx, pendingRequestTerminal);
+				}
+				return { block: true, terminate: blockedState === "ready_to_finish" || blockedState === "invalid" || blockedState === "missing", reason: blockedReason };
+			}
+		}
 		if (event.toolName === "ask_user_question") {
 			if (currentRequestPlan?.continuedFromRequestId) {
 				return {
@@ -1510,6 +1833,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
 		const progressDecision = progressGuard.beforeToolCall(event.toolCallId, event.toolName, event.input, idempotent);
 		if (progressDecision.action !== "allow") {
+			if (progressDecision.action === "terminate") {
+				pendingRequestTerminal = terminalForPolicy("progress-guard", `progress-${progressDecision.reason ? "guarded" : "limit"}`, progressDecision.reason ?? "Dove stopped a non-progressing tool loop.", "Change strategy or continue from the evidence already collected.");
+				await issueRequestHostAbort(ctx, pendingRequestTerminal);
+			} else if (ctx?.hasUI) {
+				ctx.ui.notify(`Dove 进度策略已合并本次工具调用：${progressDecision.reason ?? progressDecision.action}。`, "warning");
+			}
 			return {
 				block: true,
 				terminate: progressDecision.action === "terminate",
@@ -1517,6 +1846,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			};
 		}
 		if (event.toolName !== "ask_user_question") currentRequestHadNonQuestionTool = true;
+		currentRequestToolCalls += 1;
 		requestLifecycle.markEffectStarted({ effectId: event.toolCallId, idempotent });
 		toolTimings.set(event.toolCallId, { startedAt: Date.now(), toolName: event.toolName });
 	});
@@ -1526,6 +1856,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		toolTimings.delete(event.toolCallId);
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
 		const warning = progressGuard.recordToolResult({ toolName: event.toolName, isError: event.isError, input: event.input, observation: event.content, details: event.details, idempotent });
+		// A successful read is progress only when it produced a new observation.
+		// Mutations and other non-idempotent operations remain progress boundaries;
+		// repeated identical reads must not buy a provider-round grace turn.
+		const progressSnapshot = progressGuard.snapshot();
+		if (isMeaningfulToolProgress({ isError: event.isError, idempotent, repeatedSuccessCount: progressSnapshot.repeatedSuccessCount })) currentRequestProgressSinceRound = true;
+		const toolDurationMs = toolTiming ? Math.max(0, Date.now() - toolTiming.startedAt) : 0;
+		currentRequestToolDurationMs += toolDurationMs;
 		if (warning && ctx.hasUI) ctx.ui.notify(`Dove 进度守护：${warning.message}`, "warning");
 		updateStatus(ctx);
 		const compactable = event.toolName === "read" || event.toolName === "bash" || event.toolName === "powershell" || event.toolName === "grep" || event.toolName === "find" || event.toolName === "ls";
@@ -1557,7 +1894,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (toolTiming && currentRequestPlan) {
 			try {
 				const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
-				await ledger.appendRuntimePhase({ taskId: currentRequestTaskId ?? "pi-session", stepId: `tool:${event.toolCallId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, sessionId, attemptId: requestLifecycle.currentAttempt()?.attemptId, toolCallId: event.toolCallId, phase: "tool", durationMs: Date.now() - toolTiming.startedAt, name: toolTiming.toolName });
+				await ledger.appendRuntimePhase({ taskId: currentRequestTaskId ?? "pi-session", stepId: `tool:${event.toolCallId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, sessionId, attemptId: requestLifecycle.currentAttempt()?.attemptId, toolCallId: event.toolCallId, phase: "tool", durationMs: toolDurationMs, name: toolTiming.toolName });
 			} catch { /* timing evidence must never change the tool result */ }
 		}
 		return changed ? { content, details } : undefined;
@@ -1570,6 +1907,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			if (message.role !== "assistant") return;
 			const observed = message as unknown as { stopReason?: unknown; usage?: Readonly<Record<string, number>> };
 			const stopReason = normalizeStopReason(observed.stopReason);
+			if (currentRequestPlan && currentRequestStopReasons.length < 64) currentRequestStopReasons.push(stopReason);
+			accumulateRequestUsage(currentRequestResources, observed.usage as Readonly<Record<string, unknown>> | undefined);
 			if (currentProviderCall) {
 				const call = currentProviderCall;
 				const providerDurationMs = Date.now() - call.startedAt;
@@ -1652,15 +1991,23 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return;
 		const validContextWindow: number = contextWindow;
 		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, interactionMode, projectAvailable: projectProvider.kind !== "lightweight" });
-		const providerRoundLimit = providerRoundBudget(plan);
+		// A chat request that starts using project/read tools follows the lookup
+		// budget once that work is observable.
+		const providerRoundLimit = effectiveProviderRoundBudget(plan, currentRequestToolCalls);
 		const attemptTrigger = requestLifecycle.currentAttempt()?.trigger;
 		if (attemptTrigger !== "provider-retry" && attemptTrigger !== "compaction-retry") {
 			if (currentRequestProviderRounds >= providerRoundLimit) {
-				pendingRequestTerminal = { reason: "failed", detail: `provider-round-budget:${providerRoundLimit}`, policyAbort: true };
-				if (typeof ctx.abort === "function") ctx.abort();
-				return;
+				if (currentRequestProgressSinceRound && !currentRequestProviderGraceUsed) {
+					currentRequestProviderGraceUsed = true;
+					if (ctx.hasUI) ctx.ui.notify(`Dove provider-round budget reached (${providerRoundLimit}); one synthesis round is allowed because the last tool batch produced new progress.`, "warning");
+				} else {
+					pendingRequestTerminal = terminalForPolicy("provider-round", "provider-round-budget", `Dove stopped after ${providerRoundLimit} provider rounds without new progress.`, "Review /status full, then continue from the last evidence.");
+					await issueRequestHostAbort(ctx, pendingRequestTerminal);
+					return;
+				}
 			}
 			currentRequestProviderRounds += 1;
+			currentRequestProgressSinceRound = false;
 		}
 		const sessionManager = ctx.sessionManager as { getSessionId?: () => string };
 		const sessionId = sessionManager.getSessionId?.();
@@ -1722,16 +2069,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				await ledger.appendProviderRequestRejected({ taskId, stepId, mode: plan.mode, requestId: plan.requestId, sessionId, attemptId, providerCallId, diagnostic: rejection.diagnostic });
 			}
 			lastProviderFailure = classifyProviderFailure({ category: "invalid-configuration" });
-			pendingRequestTerminal = {
-				reason: "invalid-configuration",
-				detail: rejection instanceof ModelBudgetError ? rejection.diagnostic.code : "provider-payload-rejected",
-				policyAbort: true,
-			};
+			pendingRequestTerminal = rejection instanceof ModelBudgetError
+				? { reason: "invalid-configuration", detail: rejection.diagnostic.code, policyAbort: true, terminal: { origin: "model-budget", code: rejection.diagnostic.code, summary: "The provider request was rejected by model budget validation.", retryable: true, nextAction: "Use a smaller context or model, then retry." } }
+				: terminalForPolicy("model-budget", "provider-payload-rejected", "The provider payload was rejected before transport.", "Inspect /status full and retry with a smaller request.");
 			// Pi intentionally swallows extension exceptions. Aborting the host's
 			// active operation is the public cancellation boundary that prevents an
 			// already-rejected payload from reaching fetch/transport.
 			if (typeof ctx.abort === "function") {
-				ctx.abort();
+				await issueRequestHostAbort(ctx, pendingRequestTerminal!);
 				return payload === event.payload ? undefined : payload;
 			}
 			throw rejection;
@@ -1775,6 +2120,22 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			pendingContinuationPlan = undefined;
 			currentRequestHadNonQuestionTool = false;
 			currentRequestProviderRounds = 0;
+			currentRequestToolCalls = 0;
+			currentRequestStartedAt = Date.now();
+			currentRequestResources = emptyRequestResourceSnapshot();
+			currentRequestProgressSinceRound = false;
+			currentRequestProviderGraceUsed = false;
+			currentRequestStopReasons = [];
+			currentRequestHostAbortIssued = false;
+			currentRequestTerminalPersisted = false;
+			currentRequestTerminalNotified = false;
+			currentRequestToolDurationMs = 0;
+			// A policy abort can settle the previous lease before Pi delivers its
+			// `agent_settled` callback. Clear terminal/provider state at the new
+			// logical-request boundary so the next request cannot inherit it.
+			pendingRequestTerminal = undefined;
+			lastAttemptOutcome = undefined;
+			lastProviderFailure = undefined;
 		}
 		if (requestLease.isNewRequest && requestPlan.lane === "formal" && projectProvider.ensureFormalTask) {
 			try {
@@ -1843,7 +2204,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// prompt-cache prefix (observed as frequent full cacheRead=0 misses).
 		const isChat = contextlessRequest;
 		const epoch = isChat ? undefined : `${mode.current}:${requestProjectContext?.revision ?? "unknown"}`;
-		const shouldRefreshSnapshot = requestLease.isNewRequest && !isChat && !taskInventoryRequest && requestContextEpoch !== epoch;
+		// A snapshot is reusable whenever its epoch matches. If the previous
+		// compilation was empty or omitted for budget, no epoch is committed, so
+		// the next request (including a host redelivery) must retry compilation.
+		const retryableMissingSnapshot = requestContextRevision === `${epoch}:budget-omitted`
+			|| requestContextRevision === `${epoch}:empty`;
+		const shouldRefreshSnapshot = !isChat && !taskInventoryRequest && requestContextEpoch !== epoch
+			&& (requestLease.isNewRequest || retryableMissingSnapshot);
+		if (process.env.DOVE_PI_DEBUG_CONTEXT === "1" && event.prompt.includes("Provider Prompt")) console.error("DEBUG_CONTEXT", { isChat, taskInventoryRequest, requestLeaseNew: requestLease.isNewRequest, epoch, requestContextEpoch, requestContextRevision, shouldRefreshSnapshot, plan: requestPlan.intent, lane: requestPlan.lane });
 		let snapshotForTurn: string | undefined;
 		let contextCompileDurationMs = 0;
 		if (shouldRefreshSnapshot) {
@@ -1897,9 +2265,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			} catch (error) {
 				if (error instanceof ModelBudgetError) {
 					requestContextText = undefined;
+					// Budget omission is not a valid snapshot. Leave the epoch
+					// uncommitted so a later request with more headroom can rebuild
+					// the same project revision.
+					requestContextEpoch = undefined;
+					snapshotForTurn = undefined;
 					requestContextRevision = `${epoch}:budget-omitted`;
 					requestContextSegments = [];
-					snapshotForTurn = undefined;
 					messageForTurn = guidanceForTurn;
 					if (ctx.hasUI) ctx.ui.notify("Dove 已在发送前移除项目上下文以保留模型输出空间。", "warning");
 				}
@@ -2044,6 +2416,10 @@ export function providerRoundBudget(plan: Pick<RequestPlan, "intent" | "mode">):
 	const base = { chat: 1, lookup: 3, "project-work": 4, execution: 5 }[plan.intent];
 	const modeExtra = plan.mode === "fast" ? 0 : plan.mode === "standard" ? 1 : 2;
 	return base + modeExtra;
+}
+
+export function effectiveProviderRoundBudget(plan: Pick<RequestPlan, "intent" | "mode">, toolCalls: number): number {
+	return providerRoundBudget(plan.intent === "chat" && toolCalls > 0 ? { intent: "lookup", mode: plan.mode } : plan);
 }
 
 /** Build the complete bounded task inventory from the projection already read

@@ -34,8 +34,26 @@ import { resolveDoveStateDir } from "./core/state-dir.ts";
 import { parseNonNegativeHours } from "./commands/cli-options.ts";
 import { runTaskCommand } from "./commands/task.ts";
 import { runSessionCommand } from "./commands/session.ts";
+import { ExecutionLedger, projectExecutionDiagnostics } from "./core/execution-ledger.ts";
 
 const args = process.argv.slice(2);
+let cliFailureEmitted = false;
+
+function emitCliFailure(reason: unknown): void {
+	if (cliFailureEmitted) return;
+	cliFailureEmitted = true;
+	const message = reason instanceof Error ? reason.message : String(reason);
+	const payload = JSON.stringify({ ok: false, error: { code: "CLI_ERROR", message } });
+	// JSON-RPC and MCP own stdout as a protocol stream. Never contaminate it
+	// with a human/JSON wrapper error when their startup fails.
+	const command = args.find((arg) => !arg.startsWith("-"));
+	if (command !== "rpc" && command !== "mcp") console.log(payload);
+	console.error(message);
+	process.exitCode = 1;
+}
+
+process.on("uncaughtException", (error) => emitCliFailure(error));
+process.on("unhandledRejection", (reason) => emitCliFailure(reason));
 
 if (args[0] === "doctor") {
 	const provider = createProjectProvider(process.cwd());
@@ -43,8 +61,12 @@ if (args[0] === "doctor") {
 	const context = provider.getContext();
 	const powershell = await inspectWindowsEnvironment(process.cwd());
 	const managedInstall = inspectManagedInstall();
+	const managedInstallDiagnostics = managedInstall.sourceDrift === "drifted"
+		? ["Managed Dove release differs from the current source checkout. Run 'dove-pi update' for a release update or 'python dove_pi.py install' to refresh from this checkout."]
+		: [];
 	const extensions = await inspectExtensionProfile("max", { cwd: process.cwd(), piVersion: getPiVersion(), checkExecutables: false });
 	const interoperableContext = readInteroperableContextProjection(provider);
+	const diagnostics = projectExecutionDiagnostics(await new ExecutionLedger(localLedgerPath()).read());
 	console.log(
 		JSON.stringify(
 			{
@@ -52,6 +74,7 @@ if (args[0] === "doctor") {
 				platform: process.platform,
 				powershell,
 				managedInstall,
+				diagnostics: managedInstallDiagnostics,
 				adapters: {
 					protocolVersion: CAPABILITY_PROTOCOL_VERSION,
 					pi: { status: "available", version: getPiVersion() },
@@ -60,6 +83,7 @@ if (args[0] === "doctor") {
 				},
 				hostCapabilities: extensions.capabilities,
 				contextAuthorities: { authorities: interoperableContext.authorities, conflicts: interoperableContext.conflicts },
+				requestDiagnostics: diagnostics,
 				project: {
 					...health,
 					currentTask: context.currentTask,
@@ -113,14 +137,7 @@ if (args[0] === "doctor") {
 	} else if (args[1] === "doctor") {
 		console.log(JSON.stringify(inspectProjectStatus(provider), null, 2));
 	} else {
-		const context = provider.getContext();
-		console.log(
-			JSON.stringify(
-				{ health: provider.getHealth(), context, continuation: summarizeProjectContinuation(context) },
-				null,
-				2,
-			),
-		);
+		throw new Error("Usage: dove-pi project init|doctor|bind native|update");
 	}
 } else if (args[0] === "task") {
 	await runTaskCommand(args.slice(1));
@@ -230,10 +247,9 @@ if (args[0] === "doctor") {
 	});
 	console.log(formatCacheAudit(audit));
 } else {
-	console.error(
-		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|create|start|finish|archive | dove-pi session list|record | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
+	throw new Error(
+		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
 	);
-	process.exitCode = 1;
 }
 
 async function runExtensionsCommand(commandArgs: string[]): Promise<void> {

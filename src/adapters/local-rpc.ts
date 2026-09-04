@@ -1,7 +1,7 @@
 import type { Readable, Writable } from "node:stream";
 import { CapabilityInvocationService } from "../core/capability-invocation.ts";
 import type { CapabilityInvocationRequest } from "../core/capability-protocol.ts";
-import { ExecutionLedger } from "../core/execution-ledger.ts";
+import { ExecutionLedger, projectExecutionDiagnostics, type ExecutionDiagnosticsFilter, type ExecutionDiagnosticsProjection } from "../core/execution-ledger.ts";
 import { createDoveRuntime } from "../runtime.ts";
 
 export const LOCAL_RPC_VERSION = "1.0.0" as const;
@@ -10,7 +10,7 @@ export const MAX_RPC_LINE_BYTES = 128 * 1024;
 export interface JsonRpcRequest {
 	readonly jsonrpc: "2.0";
 	readonly id: string | number | null;
-	readonly method: "capabilities/list" | "capabilities/invoke";
+	readonly method: "capabilities/list" | "capabilities/invoke" | "diagnostics/status";
 	readonly params?: unknown;
 }
 
@@ -21,9 +21,11 @@ export type JsonRpcResponse =
 export class LocalCapabilityAdapter {
 	private readonly runtime = createDoveRuntime();
 	private readonly service: CapabilityInvocationService;
+	private readonly ledger: ExecutionLedger;
 
 	public constructor(ledgerPath: string, options: { readonly ownerPid?: number; readonly authorize?: (request: CapabilityInvocationRequest) => boolean | Promise<boolean> } = {}) {
-		this.service = new CapabilityInvocationService(this.runtime.capabilities, new ExecutionLedger(ledgerPath), {
+		this.ledger = new ExecutionLedger(ledgerPath);
+		this.service = new CapabilityInvocationService(this.runtime.capabilities, this.ledger, {
 			ownerPid: options.ownerPid,
 			authorize: options.authorize,
 		});
@@ -41,12 +43,19 @@ export class LocalCapabilityAdapter {
 		return await this.service.invoke(request, signal);
 	}
 
+	/** Read-only projection of the latest request terminal/resource evidence. */
+	public async diagnosticsStatus(filter: ExecutionDiagnosticsFilter = {}): Promise<ExecutionDiagnosticsProjection> {
+		return projectExecutionDiagnostics(await this.ledger.read(), filter);
+	}
+
 	public async handleRpc(raw: unknown): Promise<JsonRpcResponse> {
 		const request = parseRpcRequest(raw);
 		try {
 			const result = request.method === "capabilities/list"
 				? { rpcVersion: LOCAL_RPC_VERSION, capabilities: this.discover() }
-				: await this.service.invoke(request.params);
+				: request.method === "diagnostics/status"
+					? { rpcVersion: LOCAL_RPC_VERSION, ...await this.diagnosticsStatus(parseDiagnosticsFilter(request.params)) }
+					: await this.service.invoke(request.params);
 			return { jsonrpc: "2.0", id: request.id, result };
 		} catch (error) {
 			return { jsonrpc: "2.0", id: request.id, error: { code: -32_000, message: error instanceof Error ? error.message : String(error) } };
@@ -105,7 +114,21 @@ function parseRpcRequest(value: unknown): JsonRpcRequest {
 	if (typeof value !== "object" || value === null) throw new Error("Invalid JSON-RPC request.");
 	const candidate = value as Record<string, unknown>;
 	if (candidate.jsonrpc !== "2.0") throw new Error("JSON-RPC version must be 2.0.");
-	if (candidate.method !== "capabilities/list" && candidate.method !== "capabilities/invoke") throw new Error("Unsupported JSON-RPC method.");
+	if (candidate.method !== "capabilities/list" && candidate.method !== "capabilities/invoke" && candidate.method !== "diagnostics/status") throw new Error("Unsupported JSON-RPC method.");
 	if (candidate.id !== null && typeof candidate.id !== "string" && typeof candidate.id !== "number") throw new Error("JSON-RPC id must be a string, number, or null.");
 	return candidate as unknown as JsonRpcRequest;
+}
+
+function parseDiagnosticsFilter(value: unknown): ExecutionDiagnosticsFilter {
+	if (value === undefined) return {};
+	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("diagnostics/status params must be an object.");
+	const candidate = value as Record<string, unknown>;
+	const sessionId = candidate.sessionId;
+	const requestId = candidate.requestId;
+	if (sessionId !== undefined && typeof sessionId !== "string") throw new Error("diagnostics/status sessionId must be a string.");
+	if (requestId !== undefined && typeof requestId !== "string") throw new Error("diagnostics/status requestId must be a string.");
+	return {
+		...(typeof sessionId === "string" && sessionId.trim() ? { sessionId: sessionId.trim().slice(0, 256) } : {}),
+		...(typeof requestId === "string" && requestId.trim() ? { requestId: requestId.trim().slice(0, 256) } : {}),
+	};
 }

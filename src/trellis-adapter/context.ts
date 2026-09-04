@@ -45,7 +45,14 @@ export function buildProjectContext(provider: ProjectProvider, query: string, mo
 		}
 
 		if (document.kind === "spec") {
-			const isRuntimeSpec = document.path.toLowerCase().endsWith("personal-agent-runtime.md");
+			// Runtime policy is split across the canonical contract and the
+			// request-specific contract.  Both must participate in runtime
+			// retrieval; checking only the canonical filename silently drops
+			// `personal-agent-request-runtime.md` (the file most provider/policy
+			// queries actually match), producing an empty context projection.
+			const normalizedPath = document.path.toLowerCase();
+			const isRuntimeSpec = normalizedPath.endsWith("personal-agent-runtime.md")
+				|| normalizedPath.endsWith("personal-agent-request-runtime.md");
 			if (mode === "fast" && !isRuntimeSpec) continue;
 			if (mode !== "fast" && !isRuntimeSpec && !intent.spec) continue;
 			if (mode !== "fast" && isRuntimeSpec && !intent.runtime) continue;

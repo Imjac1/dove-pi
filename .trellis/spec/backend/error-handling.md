@@ -17,7 +17,7 @@ Use `Error` with actionable messages at the boundary. Structured results should 
 
 ## API Error Responses
 
-Pi tools return structured JSON-safe payloads on success and throw an actionable error on failure. CLI commands print JSON for machine-readable status and use a non-zero exit code for failures.
+Pi tools return structured JSON-safe payloads on success and throw an actionable error on failure. CLI commands print JSON for machine-readable status and use a non-zero exit code for failures. The TypeScript CLI has one terminal error boundary that emits exactly one `{ok:false,error:{code,message}}` object without a runtime stack. `rpc` and `mcp` reserve stdout for protocol frames and write startup/dispatch diagnostics to stderr instead.
 
 ## Common Mistakes
 

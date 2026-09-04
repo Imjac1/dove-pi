@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
 	RequestLifecycleController,
 	classifyProviderFailure,
+	type RequestTerminalEnvelope,
 } from "../src/core/request-lifecycle.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 
@@ -158,6 +159,22 @@ describe("request lifecycle", () => {
 		assert.equal(lifecycle.activeLease(), undefined);
 	});
 
+	it("does not attach an active policy envelope to a queued startup failure", () => {
+		const lifecycle = new RequestLifecycleController({ createId: deterministicIds() });
+		const queued = lifecycle.acceptSubmission({ text: "hi", source: "interactive" });
+		const envelope: RequestTerminalEnvelope = {
+			origin: "convergence",
+			code: "convergence-missing",
+			summary: "Freeze acceptance first.",
+			retryable: false,
+		};
+		const [transition] = lifecycle.terminateAll("cancelled", { policyAbort: true, terminal: envelope });
+		assert.equal(transition?.logicalRequestId, queued.lease.logicalRequestId);
+		assert.equal(transition?.reason, "startup-failed");
+		assert.equal(transition?.terminal, undefined);
+		assert.equal(transition?.policyAbort, undefined);
+	});
+
 	it("preserves structured policy terminal details separately from cancellation", () => {
 		const lifecycle = new RequestLifecycleController({ createId: deterministicIds() });
 		lifecycle.acceptSubmission({ text: "deploy", source: "interactive" });
@@ -165,6 +182,33 @@ describe("request lifecycle", () => {
 		const [terminal] = lifecycle.settle("authorization-denied", { detail: "http_401", policyAbort: true });
 		assert.equal(terminal?.reason, "authorization-denied");
 		assert.equal(terminal?.detail, "http_401");
+		assert.equal(terminal?.policyAbort, true);
+	});
+
+	it("carries one stable terminal envelope across lifecycle settlement", () => {
+		const lifecycle = new RequestLifecycleController({ createId: deterministicIds() });
+		lifecycle.acceptSubmission({ text: "inspect", source: "rpc" });
+		lifecycle.beginRequest({ prompt: "inspect" });
+		const envelope: RequestTerminalEnvelope = { origin: "provider-round", code: "provider-round-budget", summary: "No new progress.", retryable: false, nextAction: "Review evidence." };
+		const [terminal] = lifecycle.settle("failed", { detail: "provider-round-budget", policyAbort: true, terminal: envelope });
+		assert.deepEqual(terminal?.terminal, envelope);
+		assert.equal(lifecycle.settle("completed").length, 0, "settlement remains idempotent");
+	});
+
+	it("preserves a specific terminal when host shutdown races settlement", () => {
+		const lifecycle = new RequestLifecycleController({ createId: deterministicIds() });
+		lifecycle.acceptSubmission({ text: "edit", source: "interactive" });
+		lifecycle.beginRequest({ prompt: "edit" });
+		const envelope: RequestTerminalEnvelope = {
+			origin: "convergence",
+			code: "convergence-checkpointed",
+			summary: "The formal task is checkpointed.",
+			retryable: false,
+			nextAction: "Resume the checkpoint.",
+		};
+		const [terminal] = lifecycle.terminateAll("superseded", { detail: envelope.code, policyAbort: true, terminal: envelope });
+		assert.equal(terminal?.reason, "superseded");
+		assert.deepEqual(terminal?.terminal, envelope);
 		assert.equal(terminal?.policyAbort, true);
 	});
 

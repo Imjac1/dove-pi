@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+import extension, { accumulateRequestUsage, classifyAssistantProviderFailure, compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
+import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
@@ -27,6 +28,20 @@ after(() => {
 });
 
 describe("Pi adapter", () => {
+	it("allows only explicitly read-only shell checks before formal acceptance freeze", () => {
+		assert.equal(isReadOnlyShellCommand("bash", { command: "git -C /repo log --oneline -5; echo ---; git -C /repo status --porcelain" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "cd /repo && go vet ./... 2>&1 | head -40" }), true);
+		assert.equal(isReadOnlyShellCommand("powershell", { command: "Get-ChildItem -Force; Get-Content README.md" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "go vet ./... > /tmp/vet.out 2>&1; rc=$?; echo vet-exit=$rc; wc -c < /tmp/vet.out" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "grep -n \"prof, err := listener.LoadProfile\\|operator.NewHandlers\" file.go; echo ---; git status --short" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python -c \"open('file.txt','w').write('x')\"" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "git status > status.txt" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "sed -i 's/a/b/' file.go" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "git diff --output=patch.txt" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "go env -w GOPATH=/tmp" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "unknown-tool --inspect" }), false);
+	});
+
 	it("registers modes, shortcuts, capabilities, and doctor", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: FakeContext) => Promise<void> }>();
 		const shortcuts = new Map<string, { handler: (ctx: FakeContext) => Promise<void> }>();
@@ -64,6 +79,7 @@ describe("Pi adapter", () => {
 		assert.ok(tools.has("agent_doctor"));
 		assert.ok(tools.has("agent_project_status"));
 		assert.ok(tools.has("agent_project_task"));
+		assert.ok(tools.has("agent_task_convergence"));
 		assert.ok(tools.has("agent_project_context"));
 		assert.ok(tools.has("agent_workspace_snapshot"));
 		assert.ok(tools.has("agent_workspace_verify"));
@@ -119,7 +135,19 @@ describe("Pi adapter", () => {
 		await events.get("session_start")?.(undefined, context);
 		const piSessionBaseline = [...representativeTools];
 		assert.equal(activeToolSets.length, 0, "Auto must observe Pi's active tools without calling setActiveTools");
-		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
+		const diagnosticLedger = new ExecutionLedger(join(adapterStateDir, "execution.jsonl"));
+		await diagnosticLedger.appendRequestTerminal({
+			taskId: "pi-session",
+			stepId: "request:doctor-diagnostics",
+			mode: "standard",
+			requestId: "doctor-diagnostics",
+			sessionId: "session-test",
+			reason: "failed",
+			detail: "provider-authorization-denied",
+			policyAbort: true,
+			terminal: { origin: "provider", code: "provider-authorization-denied", summary: "The provider rejected authentication or authorization.", retryable: false, nextAction: "Check provider credentials and retry." },
+		});
+		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { diagnostics: { lastTerminal?: { terminal?: { origin?: string; code?: string } } }; toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
 		const doctorResult = await doctorTool.execute("doctor-call", {}, undefined, undefined, context);
 		assert.deepEqual(doctorResult.details.toolSchemaStability, {
 			inSync: true,
@@ -128,6 +156,13 @@ describe("Pi adapter", () => {
 			missing: [],
 			unexpected: [],
 			finalProvider: undefined,
+		});
+		assert.deepEqual(doctorResult.details.diagnostics.lastTerminal?.terminal, {
+			origin: "provider",
+			code: "provider-authorization-denied",
+			summary: "The provider rejected authentication or authorization.",
+			retryable: false,
+			nextAction: "Check provider credentials and retry.",
 		});
 		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Auto · Ready")));
 		assert.ok(statuses.some((value) => value.includes("Pi max")));
@@ -461,9 +496,30 @@ describe("Pi adapter", () => {
 			assert.equal(formalTask?.formal, true);
 			assert.ok(formalTask?.providerTaskId);
 			for (const artifact of ["prd.md", "design.md", "implement.md", "acceptance.md"]) assert.equal(existsSync(join(root, ".dove", "tasks", formalTask!.providerTaskId, artifact)), true);
+			const convergenceTool = tools.get("agent_task_convergence");
+			assert.ok(convergenceTool);
+			await assert.rejects(
+				() => convergenceTool!.execute("invalid-status-mutation", { operation: "status", acceptanceId: "AC-001", status: "started" }, undefined, undefined, context),
+				/status is read-only.*operation=progress/,
+				"status must reject mutation-shaped arguments instead of silently returning an unchanged snapshot",
+			);
+			await convergenceTool!.execute("freeze-convergence", { operation: "freeze", criteria: [{ id: "AC-001", text: "The formal request completes without a product regression." }] }, undefined, undefined, context);
+			await convergenceTool!.execute("start-convergence", { operation: "progress", acceptanceId: "AC-001", status: "started" }, undefined, undefined, context);
+			await convergenceTool!.execute("record-follow-up", { operation: "finding", acceptanceId: "AC-001", findingId: "follow-up-1", findingKind: "follow_up", summary: "Related cleanup is outside this task." }, undefined, undefined, context);
+			const amendedFinding = await convergenceTool!.execute("amend-follow-up", { operation: "update_finding", acceptanceId: "AC-001", findingId: "follow-up-1", evidenceRefs: ["evidence:follow-up"], nextAction: "Create a separate follow-up task." }, undefined, undefined, context);
+			assert.deepEqual(amendedFinding.details.findings.find((finding: { id: string }) => finding.id === "follow-up-1")?.evidenceRefs, ["evidence:follow-up"]);
+			await assert.rejects(
+				() => convergenceTool!.execute("empty-finding-update", { operation: "update_finding", acceptanceId: "AC-001", findingId: "follow-up-1" }, undefined, undefined, context),
+				/update_finding requires evidenceRefs, summary, or nextAction/,
+			);
 			await events.get("agent_start")?.({ type: "agent_start" }, context);
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
 			assert.match(readFileSync(join(root, ".dove", "tasks", formalTask!.providerTaskId, "evidence.jsonl"), "utf8"), /"outcome":"completed"/);
+			await convergenceTool!.execute("pass-convergence", { operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["evidence:formal-pass"] }, undefined, undefined, context);
+			const blockedAfterFinish = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "formal-write-after-finish", toolName: "write", input: { path: "should-not-write.txt", content: "blocked" } }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
+			assert.equal(blockedAfterFinish?.block, true);
+			assert.equal(blockedAfterFinish?.terminate, true);
+			assert.match(blockedAfterFinish?.reason ?? "", /ready_to_finish/);
 
 			await events.get("input")?.({ type: "input", text: "创建一个项目任务：缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
 			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建一个项目任务：缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };
@@ -479,7 +535,9 @@ describe("Pi adapter", () => {
 			assert.match(readFileSync(join(root, ".dove", "state.json"), "utf8"), /缓存命中率优化/);
 			assert.match(taskResult.details.goal.taskId, /^native:goal-/);
 			assert.match(taskResult.details.goal.path, /[\\\/]\.dove[\\\/]state\.json$/);
-			const mutationRecords = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { operation?: string; revision?: string } });
+			const mutationRecords = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { operation?: string; revision?: string; observationOnly?: boolean } });
+			assert.ok(mutationRecords.some((record) => record.kind === "task.convergence.decision"), "formal convergence decisions must be correlated in the ledger");
+			assert.ok(mutationRecords.some((record) => record.kind === "task.convergence.observed" && record.details?.observationOnly === true), "resource telemetry must be observation-only");
 			const createStart = mutationRecords.find((record) => record.kind === "project.mutation.started" && record.details?.operation === "create");
 			assert.ok(createStart);
 			assert.notEqual(createStart?.details?.revision, "before", "mutation recovery must retain the actual pre-state revision");
@@ -560,6 +618,28 @@ describe("Pi adapter", () => {
 		assert.equal(providerRoundBudget({ intent: "lookup", mode: "standard" }), 4);
 		assert.equal(providerRoundBudget({ intent: "execution", mode: "fast" }), 5);
 		assert.equal(providerRoundBudget({ intent: "execution", mode: "ultra" }), 7);
+		assert.equal(effectiveProviderRoundBudget({ intent: "chat", mode: "standard" }, 0), 2);
+		assert.equal(effectiveProviderRoundBudget({ intent: "chat", mode: "standard" }, 1), 4);
+	});
+
+	it("accumulates usage across provider rounds using Pi usage field names", () => {
+		const snapshot = emptyRequestResourceSnapshot();
+		accumulateRequestUsage(snapshot, { input: 100, cacheRead: 200, cacheWrite: 3, output: 40, reasoning: 5 });
+		accumulateRequestUsage(snapshot, { input: 7, cacheRead: 11, output: 13, reasoning: 2 });
+		assert.deepEqual(snapshot, { inputTokens: 107, cacheReadTokens: 211, cacheWriteTokens: 3, outputTokens: 53, reasoningTokens: 7 });
+	});
+
+	it("prioritizes provider status over abort wording in assistant failures", () => {
+		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 401: request aborted" }), { kind: "terminal", reason: "authorization-denied" });
+		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 429: operation aborted" }), { kind: "transient", reason: "http_429" });
+		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
+	});
+
+	it("only treats new observations or effects as provider-round progress", () => {
+		assert.equal(isMeaningfulToolProgress({ isError: false, idempotent: false, repeatedSuccessCount: 99 }), true);
+		assert.equal(isMeaningfulToolProgress({ isError: false, idempotent: true, repeatedSuccessCount: 1 }), true);
+		assert.equal(isMeaningfulToolProgress({ isError: false, idempotent: true, repeatedSuccessCount: 2 }), false);
+		assert.equal(isMeaningfulToolProgress({ isError: true, idempotent: false, repeatedSuccessCount: 0 }), false);
 	});
 
 	it("formats task inventory as a bounded no-tool projection", () => {
@@ -918,6 +998,20 @@ describe("Pi adapter", () => {
 		const observed = getProjectContextBudget({ tokens: 23_218, contextWindow: 12_800 });
 		assert.equal(observed, 1_024);
 		assert.equal(getProjectContextBudget({ promptChars: 1_000 }), undefined);
+	});
+
+	it("settles from lifecycle state without reading a stale Pi context", async () => {
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const api = {
+			registerCommand() {}, registerShortcut() {}, registerTool() {}, registerFlag() {}, appendEntry() {},
+			getAllTools() { return []; }, setActiveTools() {}, getActiveTools() { return []; }, getThinkingLevel() { return "medium"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const staleContext = new Proxy({} as FakeContext, {
+			get() { throw new Error("stale ctx must not be read after session replacement"); },
+		});
+		await events.get("agent_settled")?.({ type: "agent_settled" }, staleContext);
 	});
 
 	it("auto policy respects explicit per-model thinking level from settings", async () => {

@@ -192,6 +192,48 @@ legacy directory. Continuing a legacy task imports only the useful goal metadata
 Pi is the only tool and execution authority. Dove adds no permission layer; it manages context,
 goal continuity, no-progress loops, and efficiency diagnostics.
 
+## Full workflow and a real-user smoke check
+
+Every invocation follows one boundary: the launcher handles `--version`, maintenance commands,
+and local CLI families first; only unmatched arguments start Pi. The CLI runs in the current
+working directory, Native state lives in project `.dove/`, and Pi credentials/sessions remain in
+the Pi user directory. For stdio `rpc`/`mcp`, stdout is reserved for protocol frames and diagnostics
+go to stderr.
+
+Run this black-box check in a temporary project, never against production source:
+
+```powershell
+$env:DOVE_PI_HOME = Join-Path $env:TEMP "dove-pi-audit-home"
+$env:PI_CODING_AGENT_DIR = Join-Path $env:TEMP "dove-pi-audit-pi"
+New-Item -ItemType Directory $env:PI_CODING_AGENT_DIR -Force | Out-Null
+mkdir (Join-Path $env:TEMP "dove-pi-audit-project") -Force | Out-Null
+cd (Join-Path $env:TEMP "dove-pi-audit-project")
+dove-pi --version
+dove-pi --offline doctor
+dove-pi project init
+dove-pi task create "Smoke task"
+dove-pi task status
+dove-pi session record --title "Smoke" --test "not run"
+dove-pi capability list
+dove-pi web status
+```
+
+`--offline` and `--skip-version-check` may prefix a known local CLI command; they never turn the
+CLI words into a Pi prompt. `task verify` checks artifact structure and planning fields only: it
+does not run tests or claim acceptance. Formal work freezes acceptance criteria, records evidence,
+and is finished/archived explicitly.
+
+If a session appears stuck at `pending` or looks as if the model stopped by itself, run
+`dove-pi doctor` and `/status full`: doctor shows the managed release actually executing and
+whether it differs from the checkout (`sourceDrift=drifted`); full status breaks down mode,
+thinking, provider rounds, read-only budget, and policy termination reason. After a source fix,
+run `dove-pi update` or `python .\\dove_pi.py install` before expecting the global launcher to use
+it; Dove never rewrites the managed installation automatically.
+
+For failures, run `dove-pi doctor`, then let `dove-pi repair` try current, previous, the exact-identity
+cache, and the stable Release in that order. A failed update leaves current untouched. `rollback`
+switches only to previous; `uninstall --yes` removes only Dove-managed files and its exact PATH entry.
+
 ## Command reference
 
 ### Inside Dove Pi
@@ -250,6 +292,10 @@ Managed launches suppress Pi's own update prompt because an independent Pi updat
 Release identity and rollback. Use `dove-pi update`; the compatibility flag `--skip-version-check`
 remains accepted. `--offline` does not disable a later explicit install or update command.
 
+Unknown CLI subcommands return a non-zero exit and one JSON error object; do not parse Node stack
+traces. Tool-call, elapsed-time, and token metrics are observation-only for now and have no hard
+runtime ceiling.
+
 ## Extension profiles
 
 The default profile is `max`. Other profiles are `minimal`, `dev`, `research`, and `security`.
@@ -299,6 +345,17 @@ dove-pi capability run workspace.inspect --args='{"path":"package.json"}'
 dove-pi capability run dev.project_test --approve
 dove-pi rpc
 dove-pi mcp
+```
+
+For headless diagnostics, `dove-pi doctor` exposes the projection as `requestDiagnostics`, and the
+read-only JSON-RPC `diagnostics/status` method projects the latest terminal and resource observation
+from the project-scoped `execution.jsonl`. Both return the same `lastTerminal` /
+`lastResourceObservation` fields exposed by Pi's `agent_doctor`; the terminal
+contains `origin`, `code`, summary, retryability, and the next action, so a generic Pi
+`Operation aborted` can still be attributed:
+
+```powershell
+'{"jsonrpc":"2.0","id":1,"method":"diagnostics/status"}' | dove-pi rpc
 ```
 
 MCP stdio configuration:

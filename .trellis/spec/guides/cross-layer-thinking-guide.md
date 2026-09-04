@@ -201,6 +201,22 @@ against both fresh init and upgrade paths.
       assert the installed file reaches the current packaged shape
 - [ ] Update the backend spec that owns the runtime contract
 
+### Runtime Contract Filename Checklist
+
+When a retriever assigns special semantics by filename, treat the filename set
+as an explicit cross-layer contract. Enumerate every canonical and
+request-specific contract before changing the matcher, then exercise a query
+that should select each one. A successful unit test for the canonical file is
+not evidence that sibling contracts are reachable. In Dove's runtime, both
+`personal-agent-runtime.md` and `personal-agent-request-runtime.md` are runtime
+policy documents; omitting the latter makes provider/policy retrieval compile
+an empty context, especially after a budget-omitted retry.
+
+- [ ] Keep the canonical filename set in one visible matcher
+- [ ] Add a retrieval regression for each sibling contract
+- [ ] Test empty/budget-omitted retry followed by a larger-window request
+- [ ] Record source/managed-release drift separately from code behavior
+
 ---
 
 ## Versioned Documentation Boundary

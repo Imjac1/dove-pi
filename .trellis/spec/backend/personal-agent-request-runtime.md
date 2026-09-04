@@ -44,6 +44,7 @@ boundedOutputReservation(input: {
 interface RecoveryOwnerOptions {
   isProcessActive?: (pid: number) => boolean;
 }
+
 ```
 
 ## 3. Contracts
@@ -99,7 +100,6 @@ interface RecoveryOwnerOptions {
 - Bad: embed a Pi `ExtensionAPI` object in a core capability or regenerate a long PowerShell script for an already-registered capability.
 - Bad: reserve fewer tokens in accounting without updating the provider payload, or impose the plan's 4,096-token target as an Ultra ceiling.
 - Bad: key diagnostics by raw tool arguments, classify every zero cache-read value as a prefix rewrite, or share a mutation result by fingerprint.
-- Bad: treat `ask_user_question` as an unlimited non-idempotent escape hatch after the user has already confirmed the same action.
 - Bad: sum reasoning per project but omit it from the aggregate, or filter input/cache while counting all session output.
 
 ## 6. Tests Required
@@ -324,9 +324,16 @@ host boundary. Dove keeps the policy terminal reason separately, so
 misreporting a policy abort as user cancellation. Retry safety uses a reviewed
 read-only Pi-tool allowlist, Core capability idempotency, and every capability
 step in a recipe; unknown plugin tools fail closed as non-idempotent.
-Ledger events `request.received`, `request.redelivery.coalesced`,
+Classify provider errors by HTTP status, transport code, or authorization before
+generic `abort`/`cancel` wording; HTTP 401/429 markers outrank cancellation.
+Ledger events
+`request.received`, `request.redelivery.coalesced`,
 `request.attempt.started`, `request.attempt.completed`, and `request.terminal`
 are additive; legacy readers may ignore them.
+
+`request.terminal` carries one `{origin, code, summary, retryable, nextAction}`
+envelope. Persist it before host abort; shutdown must preserve a specific
+policy/provider cause and use `startup-failed` only for queued preflight work.
 
 ### 4. Validation & Error Matrix
 

@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { compareDoveExtensionIdentity, doveImplementationDigest, type DoveExtensionSyncState } from "./core/extension-identity.ts";
@@ -21,6 +22,26 @@ export interface ManagedInstallStatus {
 		readonly entryPath: string;
 		readonly syncState?: DoveExtensionSyncState;
 	};
+	readonly sourceDrift?: "in_sync" | "drifted" | "unknown";
+}
+
+function sourceDigest(root: string): string | undefined {
+	const included = ["src", "installer", ".pi", "scripts/build-release-manifest.mts", "dove_pi.py", "package.json", "package-lock.json"];
+	const files: string[] = [];
+	const collect = (relative: string): void => {
+		const path = resolve(root, relative);
+		try { if (statSync(path).isFile()) { files.push(relative.replaceAll("\\", "/")); return; } } catch { return; }
+		try {
+			for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+				if (!["node_modules", "dist", "__pycache__"].includes(entry.name)) collect(`${relative}/${entry.name}`);
+			}
+		} catch { return; }
+	};
+	for (const path of included) collect(path);
+	if (files.length === 0) return undefined;
+	const digest = createHash("sha256");
+	for (const relative of files.sort()) { digest.update(relative); digest.update("\0"); digest.update(readFileSync(resolve(root, relative))); digest.update("\0"); }
+	return digest.digest("hex");
 }
 
 type ManagedDoveExtensionStatus = NonNullable<ManagedInstallStatus["doveExtension"]>;
@@ -90,6 +111,14 @@ export function inspectManagedInstall(env: NodeJS.ProcessEnv = process.env): Man
 				}];
 			})
 			: [];
+		let sourceDrift: ManagedInstallStatus["sourceDrift"] = "unknown";
+		try {
+			const manifestPath = currentPath ? join(resolve(currentPath), "release.json") : "";
+			const manifest = manifestPath ? JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown> : {};
+			const sourcePath = typeof manifest.sourcePath === "string" ? manifest.sourcePath : undefined;
+			const expected = typeof manifest.sourceDigest === "string" ? manifest.sourceDigest : undefined;
+			if (sourcePath && expected) sourceDrift = sourceDigest(resolve(sourcePath)) === expected ? "in_sync" : "drifted";
+		} catch { sourceDrift = "unknown"; }
 		return {
 			installed: Boolean(releaseId(parsed.current)),
 			root,
@@ -98,6 +127,7 @@ export function inspectManagedInstall(env: NodeJS.ProcessEnv = process.env): Man
 			profile: typeof parsed.profile === "string" ? parsed.profile : undefined,
 			extensions,
 			doveExtension,
+			sourceDrift,
 		};
 	} catch {
 		return { installed: false, root, extensions: [] };
