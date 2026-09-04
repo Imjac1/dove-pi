@@ -39,6 +39,8 @@ class ReleaseManifest:
     components: dict[str, str] = field(default_factory=dict)
     profiles: dict[str, list[str]] = field(default_factory=dict)
     dove_extension: dict[str, str] = field(default_factory=dict)
+    source_path: str = ""
+    source_digest: str = ""
 
     @classmethod
     def from_json(cls, value: object) -> "ReleaseManifest":
@@ -67,7 +69,9 @@ class ReleaseManifest:
         commit = value.get("commit")
         platform = value.get("platform")
         dove_extension = _string_map(value.get("doveExtension"))
-        return cls(version.strip(), release_id, commit.strip() if isinstance(commit, str) else "", platform.strip() if isinstance(platform, str) and platform.strip() else "windows", runtime, components, profiles, dove_extension)
+        source_path = value.get("sourcePath")
+        source_digest = value.get("sourceDigest")
+        return cls(version.strip(), release_id, commit.strip() if isinstance(commit, str) else "", platform.strip() if isinstance(platform, str) and platform.strip() else "windows", runtime, components, profiles, dove_extension, source_path.strip() if isinstance(source_path, str) else "", source_digest.strip() if isinstance(source_digest, str) else "")
 
     @classmethod
     def read(cls, path: Path) -> "ReleaseManifest":
@@ -77,7 +81,7 @@ class ReleaseManifest:
             raise RuntimeError(f"Unable to read release manifest at {path}: {error}") from error
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schemaVersion": 1,
             "version": self.version,
             "releaseId": self.release_id,
@@ -88,6 +92,11 @@ class ReleaseManifest:
             "profiles": self.profiles,
             **({"doveExtension": self.dove_extension} if self.dove_extension else {}),
         }
+        if self.source_path:
+            payload["sourcePath"] = self.source_path
+        if self.source_digest:
+            payload["sourceDigest"] = self.source_digest
+        return payload
 
 
 def _string_map(value: object) -> dict[str, str]:

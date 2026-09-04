@@ -153,6 +153,8 @@ def source_release_manifest(source: Path) -> ReleaseManifest:
         # identity digest; leave it unknown instead of inventing a divergent
         # value that would incorrectly report drift.
         dove_extension=generated.dove_extension if generated else {},
+        source_path=str(source),
+        source_digest=generated.source_digest if generated and generated.source_digest else fingerprint,
     )
 
 

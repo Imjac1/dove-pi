@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { getProfilePackages, PROFILE_PACKAGE_IDS, type ExtensionProfile } from "../src/extensions/catalog.ts";
 import { DOVE_EXTENSION_ID, DOVE_EXTENSION_CONTRACT_VERSION, doveImplementationDigest } from "../src/core/extension-identity.ts";
@@ -64,6 +65,24 @@ const profiles = Object.fromEntries(
 		getProfilePackages(profile).map((entry) => `npm:${entry.packageName}@${entry.currentVersion}`),
 	]),
 );
+function sourceDigest(root: string): string {
+	const includedRoots = ["src", "installer", ".pi", "scripts/build-release-manifest.mts", "dove_pi.py", "package.json", "package-lock.json"];
+	const files: string[] = [];
+	const collect = (relative: string): void => {
+		const absolute = resolve(root, relative);
+		let stat;
+		try { stat = statSync(absolute); } catch { return; }
+		if (stat.isFile()) { files.push(relative.replaceAll("\\", "/")); return; }
+		for (const entry of readdirSync(absolute, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+			if (entry.name === "node_modules" || entry.name === "dist" || entry.name === "__pycache__") continue;
+			collect(`${relative}/${entry.name}`);
+		}
+	};
+	for (const root of includedRoots) collect(root);
+	const digest = createHash("sha256");
+	for (const relative of files.sort()) { digest.update(relative); digest.update("\0"); digest.update(readFileSync(resolve(root, relative))); digest.update("\0"); }
+	return digest.digest("hex");
+}
 const manifest = {
 	schemaVersion: 1,
 	version,
@@ -83,6 +102,7 @@ const manifest = {
 		entryPath: ".pi/extensions/personal-agent.ts",
 		contractVersion: String(DOVE_EXTENSION_CONTRACT_VERSION),
 	},
+	sourceDigest: sourceDigest(process.cwd()),
 };
 const destination = resolve(destinationArg);
 writeFileSync(destination, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
