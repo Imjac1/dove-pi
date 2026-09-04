@@ -437,3 +437,26 @@ Installed current HEAD as 0.1.5+source.659f79a5a9fd and ran the four-prompt matr
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: Dove Pi workflow audit and terminal diagnostics
+<!-- trellis-session: v=2 fp=3b3112c6a6e058b2 -->
+
+**Date**: 2026-09-04
+**Task**: Dove Pi workflow audit and terminal diagnostics
+**Branch**: `master`
+
+### Summary
+
+Completed the Dove Pi full-workflow audit: fixed local launcher routing and CLI error boundaries, preserved Legacy workflow context priority, added request planning and bounded resource/terminal diagnostics, attributed provider failures before generic abort wording, exposed diagnostics through Pi doctor/CLI/RPC, documented lifecycle and recovery in both READMEs, and verified 274 TypeScript tests, 105 installer tests, typecheck, doctor, Pi smoke, Trellis validation, and isolated no-key RPC black-box behavior.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ed0c29` | fix: audit Dove Pi workflow and harden request diagnostics |
+| `f3fbf70` | docs: refine provider error attribution contract |
+
+### Status
+
+[OK] **Completed**

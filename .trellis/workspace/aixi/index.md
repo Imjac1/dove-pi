@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
-- **Last Active**: 2026-09-02
+- **Total Sessions**: 16
+- **Last Active**: 2026-09-04
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~439 | Active |
+| `journal-1.md` | ~462 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-09-04 | Dove Pi workflow audit and terminal diagnostics | `9ed0c29`, `f3fbf70` | `master` |
 | 15 | 2026-09-02 | Installed Dove real-flow A/B validation | `8a73d25` | `master` |
 | 14 | 2026-09-01 | Deterministic task inventory runtime | `6beabf1`, `6b20d04` | `master` |
 | 13 | 2026-09-01 | 发布并验证 Dove Pi 0.1.5 | `dea33bf`, `28cc55e`, `af4776d` | `master` |
