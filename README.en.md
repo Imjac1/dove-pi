@@ -263,7 +263,10 @@ only an explicit compatibility profile. In Auto mode, Pi and installed extension
 authority. Use `/status full` or `agent_doctor` to inspect one effective snapshot containing intent/
 lane, policy sources, active tool count, provider/read-only budgets, context and cache observations,
 and the latest terminal cause. The snapshot is diagnostic evidence; it does not add permissions or
-change existing ceilings.
+change existing ceilings. The `hardStop` field in the read-only budget is retained for compatibility
+and telemetry as a historical request-count advisory; it cannot terminate a read that produces a
+new observation. Only semantic no-progress guards, such as unchanged observations, repeated
+failures, or confirmation loops, terminate tool calls.
 
 Dove does not assign Fast, Standard, or Ultra a fixed total context budget, and it does not
 reserve a fixed percentage of the model window. When Pi reports the active model window and
@@ -286,14 +289,43 @@ Pi may still render the generic `Operation aborted`, but Dove preserves a specif
 | `startup-conflict` / `superseded` | Another runtime took over the session | Close the old runtime or continue in a new session |
 
 Without a UI, run `dove-pi doctor` or query `diagnostics/status` for the same structured cause and
-next action. Resource, token, and cache values are observation-only; large values do not cause an
-automatic abort.
+next action. Resource, token, and cache values are observation-only; reaching the historical
+read-only request count is advisory and does not abort by itself. Separate provider-round and repeated-read progress guards can still end a
+stalled loop as described above.
 
 To replay an isolated real RPC path, run
 `node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`.
 The command uses only a temporary project and test provider and writes redacted evidence. A
 `compacted` long-document observation describes per-document extraction; it is not a Dove-wide
 context ceiling.
+
+The black-box driver models one real Pi session. Each run gets a private project copy, Dove state,
+Pi session, and provider-capture root, so concurrent cases cannot share ledgers even when they use
+the same output parent. The legacy `--prompt` form remains a one-turn scenario; use
+`--scenario <json>` for ordered user steps:
+
+```json
+{"steps":[
+  {"kind":"prompt","message":"Read the project and audit only"},
+  {"kind":"prompt","message":"/mode fast"},
+  {"kind":"prompt","message":"/dove-thinking off"},
+  {"kind":"prompt","message":"/dove-tools core"},
+  {"kind":"prompt","message":"/dove-tools auto"},
+  {"kind":"follow_up","message":"Continue the audit and give acceptance criteria"},
+  {"kind":"state"},
+  {"kind":"stats"}
+]}
+```
+
+Steps are sent only after the preceding step settles. `prompt` can be a model request or a real
+slash-command input; `follow_up` keeps the same session while starting a new logical turn. After
+the final settle the driver requests state/stats and closes stdin, allowing Pi to exit normally.
+`exitCode: 0` with `signal: null` is a clean run; only `harnessTimedOut: true` means the harness
+had to force-kill an unresponsive host. JSONL evidence keeps only digests, event types, and
+whitelisted counters, never raw prompts, tool arguments, credentials, or absolute paths. The
+summary also records per-model-turn strategy values and sources, logical request IDs, active tool
+counts, and relative `.dove/` artifact facts. Slash commands and `state`/`stats` are
+`command-only` steps and do not invent ledger strategy records.
 
 ### Maintain the installation
 
@@ -333,8 +365,9 @@ Release identity and rollback. Use `dove-pi update`; the compatibility flag `--s
 remains accepted. `--offline` does not disable a later explicit install or update command.
 
 Unknown CLI subcommands return a non-zero exit and one JSON error object; do not parse Node stack
-traces. Tool-call, elapsed-time, and token metrics are observation-only for now and have no hard
-runtime ceiling.
+traces. Tool-call, elapsed-time, and token values are observation-only; their numeric size alone
+has no fixed hard ceiling, while repeated or stalled loops remain subject to the progress guards
+listed above.
 
 ## Extension profiles
 

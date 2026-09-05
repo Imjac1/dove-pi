@@ -622,7 +622,12 @@ def resolve_active_task(
         if active:
             return active
 
-    if allow_single_session_fallback:
+    # An explicit identity is authoritative, even when its runtime file has
+    # not been created yet. Falling back in that case can make a fresh window
+    # inherit another window's sole session pointer (and `clear_active_task`
+    # could then delete the unrelated pointer). Degraded single-session
+    # inference is only safe when the caller supplied no usable identity.
+    if allow_single_session_fallback and not context_key:
         fallback = _resolve_single_session_fallback(repo_root)
         if fallback is not None:
             return fallback

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Request lifecycle, strategy projection, provider and terminal correlation contracts."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Fast/formal lane, project context, task and artifact isolation contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Redaction, typed boundaries, bounded diagnostics, and validation requirements."}
+{"file":".trellis/tasks/09-05-dove-pi-multiturn-real-user-replay/research/baseline.md","reason":"Observed public RPC EOF behavior, forced-kill reporting, and shared-root baseline."}

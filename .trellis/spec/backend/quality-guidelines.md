@@ -18,6 +18,14 @@ The project uses strict TypeScript, Node's test runner through `tsx`, and focuse
 - Keep provider-qualified task IDs and execution IDs correlated but separate.
 - Make mutations recoverable and lock concurrent provider writes.
 - Add tests for mode boundaries, degraded paths, and failure/recovery behavior.
+- Real RPC replay harnesses must allocate a private project, state directory,
+  Pi session directory, provider capture, and logical session key per scenario.
+  Do not infer a scenario's current request from a shared parent ledger.
+- Treat an RPC host that reaches final evidence and exits after stdin EOF as a
+  clean completion. Reserve forced termination for an explicit harness timeout.
+- Black-box evidence is a diagnostic projection: retain digests, event types,
+  and bounded counters, but never persist raw prompts, tool arguments,
+  credentials, or absolute local paths.
 
 ## Testing Requirements
 

@@ -600,7 +600,7 @@ describe("Pi adapter", () => {
 		assert.equal(changingGuard.beforeToolCall("changing-5", "ls", { path: "." }, true).action, "allow", "changed arguments reset the contiguous stagnation window");
 	});
 
-	it("warns and stops varied read-only exploration at the request budget", () => {
+	it("warns but allows varied read-only exploration beyond the historical request budget", () => {
 		const guard = new ProgressGuard();
 		guard.start(1_000, { readOnlyToolWarningThreshold: 2, readOnlyToolHardStopThreshold: 3 });
 		for (let index = 0; index < 2; index++) {
@@ -610,10 +610,10 @@ describe("Pi adapter", () => {
 		}
 		assert.equal(guard.beforeToolCall("read-2", "read", { path: "2.ts" }, true).action, "allow");
 		guard.recordToolResult({ toolName: "read", input: { path: "2.ts" }, observation: [2], idempotent: true, isError: false });
-		const stopped = guard.beforeToolCall("read-3", "read", { path: "3.ts" }, true);
-		assert.equal(stopped.action, "terminate");
-		assert.match(stopped.reason ?? "", /3-call limit/);
-		assert.equal(guard.snapshot().readOnlyToolCalls, 3);
+		const beyondBudget = guard.beforeToolCall("read-3", "read", { path: "3.ts" }, true);
+		assert.equal(beyondBudget.action, "allow", "a changing observation is productive even after the advisory threshold");
+		guard.recordToolResult({ toolName: "read", input: { path: "3.ts" }, observation: [3], idempotent: true, isError: false });
+		assert.equal(guard.snapshot().readOnlyToolCalls, 4);
 		assert.deepEqual(readOnlyToolBudget({ intent: "lookup", mode: "standard" }), { readOnlyToolWarningThreshold: 6, readOnlyToolHardStopThreshold: 12 });
 		assert.deepEqual(readOnlyToolBudget({ intent: "project-work", mode: "standard" }, true), { readOnlyToolWarningThreshold: 1, readOnlyToolHardStopThreshold: 2 });
 		assert.deepEqual(readOnlyToolBudget({ intent: "execution", mode: "ultra" }), { readOnlyToolWarningThreshold: 32, readOnlyToolHardStopThreshold: 64 });

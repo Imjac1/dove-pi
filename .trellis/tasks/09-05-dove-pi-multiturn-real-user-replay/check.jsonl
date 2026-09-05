@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Verify lifecycle and strategy changes against the owning runtime contract."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Verify lane classification and formal artifact isolation."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify redaction, compatibility, and quality gates."}
+{"file":".trellis/tasks/09-05-dove-pi-multiturn-real-user-replay/research/baseline.md","reason":"Compare corrected replay evidence with the pre-fix baseline."}

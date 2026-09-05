@@ -252,7 +252,7 @@ dove-pi web status
 `/dove-thinking` 只控制思考策略，`/dove-tools` 只改变显式兼容工具档案；Auto 模式下
 工具权限仍由 Pi 和已安装扩展决定。用 `/status full` 或 `agent_doctor` 查看同一份实际生效
 快照，包括请求 intent/lane、策略来源、活动工具数、provider/read-only 预算、上下文与缓存
-观察，以及最近的终止原因。快照是诊断投影，不会新增权限或改变现有上限。
+观察，以及最近的终止原因。快照是诊断投影，不会新增权限或改变现有上限。只读预算中的 `hardStop` 字段保留用于兼容和观测；它是历史请求数提示，不会单独终止产生新观察的读取。只有重复且未变化的观察、重复失败或确认循环等语义上的无进展保护会终止工具调用。
 
 Dove 不按 Fast、Standard、Ultra 预设上下文总量，也不截取模型窗口的固定百分比。
 上下文预算只在 Pi 报告活动模型窗口和 usage 时按实际剩余容量估算；最终完整 payload
@@ -273,12 +273,38 @@ Pi 可能仍显示通用的 `Operation aborted`，但 Dove 会保留具体终止
 | `startup-conflict` / `superseded` | 会话被其他运行实例接管 | 关闭旧实例或从新会话继续 |
 
 无 UI 时运行 `dove-pi doctor`，或通过 `diagnostics/status` 查看相同的结构化原因和下一步；
-资源/token/cache 数值仅用于观察和建议，不会因为数值较大而自动中止请求。
+资源/token/cache 数值仅用于观察和建议；只读请求数达到历史阈值也仅产生 advisory，不会因数量本身终止；重复且无进展的
+provider round/read-only guard 仍可能按上表策略结束停滞的请求。
 
 要复现隔离的真实 RPC 路径，可运行
 `node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`。
 该命令只使用临时项目和测试 provider，输出会脱敏；长文档的 `compacted` 是单文档提取
 证据，不等于 Dove 的总上下文上限。
+
+黑盒回放按一个真实 Pi 会话运行：每次运行会创建独立的项目副本、Dove state、Pi session
+和 provider capture 根目录，即使多个回放共享输出父目录也不会串账。默认的 `--prompt` 仍
+兼容单回合用法；需要多回合时用 `--scenario <json>`，格式如下：
+
+```json
+{"steps":[
+  {"kind":"prompt","message":"读取项目并只做审计"},
+  {"kind":"prompt","message":"/mode fast"},
+  {"kind":"prompt","message":"/dove-thinking off"},
+  {"kind":"prompt","message":"/dove-tools core"},
+  {"kind":"prompt","message":"/dove-tools auto"},
+  {"kind":"follow_up","message":"继续刚才的审计并给出验收标准"},
+  {"kind":"state"},
+  {"kind":"stats"}
+]}
+```
+
+步骤严格按前一步完成后发送；`prompt` 既可是真实请求，也可是真实用户输入的 slash
+command，`follow_up` 保持同一会话但使用新的逻辑回合。驱动在最后一次 settle 后请求
+state/stats 并关闭 stdin，让 Pi 自己正常退出；`exitCode: 0` 且 `signal: null` 表示正常
+结束，只有 `harnessTimedOut: true` 才表示测试器超时强制终止。JSONL 只保留 digest、事件
+类型和白名单计数，不写入原始 prompt、工具参数、凭据或绝对路径。摘要还会记录每个模型
+回合的策略值与来源、逻辑请求 ID、活动工具数，以及项目 `.dove/` 产物的相对路径/计数；
+slash command 和 `state`/`stats` 是 `command-only` 步骤，不会伪造 ledger strategy。
 
 ### 维护安装
 
@@ -315,7 +341,7 @@ dove-pi --offline             # 本次启动不做 Pi 网络/扩展包检查
 回滚能力；统一使用 `dove-pi update`。兼容参数 `--skip-version-check` 仍可使用。
 `--offline` 不会禁用之后显式执行的安装或更新命令。
 
-未知的 CLI 子命令会返回非零退出和单个 JSON 错误对象；不要依赖 Node 堆栈文本做自动化解析。工具调用、耗时和 token 指标当前仅用于诊断观察，未设置硬上限。
+未知的 CLI 子命令会返回非零退出和单个 JSON 错误对象；不要依赖 Node 堆栈文本做自动化解析。工具调用、耗时和 token 数值仅用于诊断观察；数值本身没有固定硬上限，但重复或停滞的循环仍受上表的进度保护约束。
 
 ## 扩展组合
 

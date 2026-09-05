@@ -278,9 +278,10 @@ export class ProgressGuard {
 		if (previous && previous.callFingerprint === fingerprint && previous.count >= this.repeatedSuccessHardStopThreshold) {
 			return { action: "terminate", fingerprint, reason: `Unchanged read-only observation repeated ${previous.count} times; stop and change strategy` };
 		}
-		if (this.readOnlyToolHardStopThreshold !== undefined && this.state.readOnlyToolCalls >= this.readOnlyToolHardStopThreshold) {
-			return { action: "terminate", fingerprint, reason: `Read-only exploration reached its ${this.readOnlyToolHardStopThreshold}-call limit; answer from the evidence already collected instead of issuing another lookup` };
-		}
+		// The historical read-only hard-stop is retained as diagnostic metadata,
+		// but a raw call count is not evidence of stagnation. Productive reads
+		// with changed inputs/observations must remain executable; semantic
+		// repetition is enforced by the fingerprint check above.
 		this.batchCalls.set(fingerprint, toolCallId);
 		this.state = { ...this.state, readOnlyToolCalls: this.state.readOnlyToolCalls + 1 };
 		return { action: "allow", fingerprint };
@@ -370,7 +371,7 @@ export class ProgressGuard {
 			this.state.warning = "read-only-budget";
 			return {
 				kind: "read-only-budget",
-				message: `只读探索已调用 ${this.state.readOnlyToolCalls} 次；请用现有证据回答或明确说明缺口，不要继续扩大搜索范围。`,
+				message: `只读探索已调用 ${this.state.readOnlyToolCalls} 次；这是资源观察提示，不是硬停止。若下一次读取会产生新的输入或观察，可以继续；若结果未变化，请停止重复读取并总结现有证据。`,
 				snapshot: this.snapshot(),
 			};
 		}

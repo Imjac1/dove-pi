@@ -59,10 +59,10 @@ interface RecoveryOwnerOptions {
 - The Pi adapter normalizes complete DeepSeek DSML text tool calls at `message_end` into standard Pi `toolCall` blocks. It accepts only complete wrapper/invocation/parameter tags, preserves non-DSML content, leaves malformed text unchanged, and uses Pi's normal policy/approval path.
 - Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
 - Dispatches write correlated `dispatch.decided` and `dispatch.completed` records. Completion includes unique ID, route, duration, status, and optional token/retry/intervention metrics. Failed dispatches record completion before propagating the error.
-- Tool-loop fingerprints are deterministic opaque hashes. `ls` defaults to `.`; same-batch duplicate idempotent calls coalesce, while mutation/unknown tools are never cached. Successful stagnation compares call and bounded observation fingerprints, warns then terminates at configured bounds, and resets on changed arguments, observations, errors, or mutations.
+- Tool-loop fingerprints coalesce duplicate reads and stop unchanged repeats. The read-only budget is advisory metadata, not an unconditional terminal: changing reads continue past its historical threshold. Test changing and unchanged cases.
 - Structured `ask_user_question` calls are bounded separately from read caching. A logical user goal may execute one structured question; a second call is blocked and terminates regardless of wording, option shape, or intervening tool results. A new logical goal receives a fresh budget. Semantic fingerprints remain diagnostic evidence, not the enforcement boundary.
 - Project tracking is automatic and optional. No `PlanningSession`, task-creation handshake, or workflow-specific question guard exists; the general one-question-per-goal progress bound remains.
-- Provider cache evidence is per-call with bounded digests/sizes for system policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish stable-prefix reuse, appended history, prefix changes, rewrites, and misses without treating cumulative reads as regressions.
+- Provider cache evidence is per-call with bounded digests/sizes for policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish reuse, appended history, rewrites, and misses.
 - Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call; the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
 - Usage-only diagnostics may attribute a miss to model change or an explicit idle gap. Without prefix evidence they report `provider-miss-or-expiry`, never infer a Dove prefix change. A session with no Dove context message is labelled `no-context`, meaning the minimal prefix path rather than unknown policy.
 - Oversized built-in read/shell/search observations are compacted before model re-entry with sizes, digest, and narrowing metadata; complete output remains in tool details.
@@ -84,7 +84,7 @@ interface RecoveryOwnerOptions {
 | Pi provider hook rejects a request | Call `ctx.abort()` because a thrown hook exception alone is swallowed by Pi |
 | Incomplete ledger record belongs to a live process | Leave it pending; recover only legacy, unowned, or inactive-owner records |
 | Same idempotent call appears twice in one batch | Coalesce the later call before execution |
-| Same successful read repeats without a changed observation | Warn, then terminate at the configured hard bound |
+| Same successful read repeats without a changed observation | Warn, then terminate at the configured repeated-observation bound; a raw read count alone is advisory |
 | A second structured question is attempted in one logical goal | Block and terminate before the third-party question tool runs |
 | Question wording changes or another tool returns | Preserve the one-question goal budget; wording and tool churn do not bypass it |
 | Ordinary execution has no native state | Execute normally and best-effort create a compact current goal without asking |
