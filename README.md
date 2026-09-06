@@ -82,8 +82,8 @@ Get-Content .\install-dove-pi.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-dove-pi.ps1
 ```
 
-如果地址返回 `404`，表示仓库还没有发布首个 Release，请使用上面的源码安装。不要把
-`master` 分支压缩包当作正式安装包。
+如果地址返回 `404`，请确认网络、仓库地址和该 Release 资产是否仍可用；也可以使用上面的
+源码安装。不要把 `master` 分支压缩包当作正式安装包。
 
 Release 安装器会复用符合版本要求的 Python 和 Node.js；缺失或版本过旧时，会通过 `winget`
 安装运行时（此时需要系统已安装 Microsoft App Installer）。它还会校验下载文件的 SHA-256，
@@ -144,6 +144,27 @@ Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影�
 - `ultra`：复杂项目、长链路分析和高强度执行。
 
 `Ultra` 是运行策略；`max` 是安装时的扩展组合，两者不是同一个概念。
+
+### Subagent（实验性只读能力）
+
+Dove Pi 现在提供显式的 `agent_subagent` 工具和 `/subagent` 状态命令。它会启动一个独立
+Pi 子进程，用于读取、搜索和梳理当前项目；子进程只拥有 `read`、`grep`、`find`、`ls`，
+不能写文件、执行 shell、访问网络或继续委派。普通请求不会自动创建子进程。
+
+启用前需要显式配置子进程入口（建议使用托管安装中的 Node 可执行文件和 Pi CLI 路径）：
+
+```powershell
+$env:DOVE_PI_SUBAGENT_EXECUTABLE = (Get-Command node).Source
+$env:DOVE_PI_SUBAGENT_PREFIX_ARGS = '["C:\\path\\to\\pi-cli.js"]'
+```
+
+配置缺失、路径不可用或子进程失败时，`/subagent` 会返回明确诊断；不会伪造成功，也不会
+把显式 subagent 调用悄悄改成普通 inline 请求。自动 dispatch 接入仍在验证中，当前稳定
+合同不包含可写子 agent、worktree 合并、嵌套编排或硬 token/耗时上限。
+
+`pi-background-tasks` 仍可通过 Pi 自己的 `bg_run`、`bg_delegate` 等工具显式使用。由于 Pi
+扩展 API 不允许 Dove 直接调用另一个扩展的私有执行函数，Dove 不会把这些工具冒充成已经
+由 Core 自动接管的 subagent provider。
 
 ## Dove Native Workflow
 
@@ -221,7 +242,11 @@ dove-pi web status
 
 `--offline` 和 `--skip-version-check` 可以放在已知本地 CLI 前面；它们不会把 CLI 单词当成 Pi prompt。`task verify` 只检查产物结构和规划字段，不会运行测试，也不代表验收通过。正式任务需要先冻结 acceptance，再记录 evidence，最后由用户决定 finish/archive。
 
+任务命令如果显式传入不存在或不唯一的任务选择器会返回非零错误；未知的 task/session 参数也会被拒绝，不会静默忽略。完成当前任务后，如果恰好只剩一个 active 任务，Dove 会自动把它设为 current；剩余多个任务时仍需显式选择。
+
 如果会话看起来停在 `pending`、像模型自行停止，先运行 `dove-pi doctor` 和 `/status full`：前者会显示实际执行的 managed release 及其与工作区源码的 `sourceDrift=drifted` 状态；后者会拆分模式、thinking、provider round、只读预算和策略终止原因。源码修复后必须执行 `dove-pi update` 或 `python .\\dove_pi.py install` 才会进入全局启动路径；本项目不会自动改写全局安装。
+
+交互启动会直接进入已锁定版本的 Pi Node 运行时，跳过 Python 安装器中间层；安装、更新、修复和诊断命令仍由 Python 处理。这样减少一次进程启动和安装器依赖加载，不改变 Pi 的工具、上下文或请求策略。
 
 出现异常时先运行 `dove-pi doctor`，再按“当前版本 → previous → 精确身份缓存 → 稳定 Release”的顺序执行 `dove-pi repair`；更新失败不会替换 current。`rollback` 只切换 previous，`uninstall --yes` 只删除 Dove 托管目录和精确 PATH 项。
 
@@ -267,14 +292,14 @@ Pi 可能仍显示通用的 `Operation aborted`，但 Dove 会保留具体终止
 | --- | --- | --- |
 | `provider-authorization-denied` | provider 未授权或 API key 无效 | 检查 `/login` 或 provider 凭据后重试 |
 | `model-budget-rejected` | 当前请求无法放入模型上下文 | 缩小上下文或更换模型后重试 |
-| `provider-round-budget` | 多轮没有新的有效进展 | 查看 `/status full`，改变策略后继续 |
+| `provider-round-budget` | provider 轮次观察阈值已达到 | 查看 `/status full`；该阈值不会单独中止请求 |
 | `progress-*` | 工具循环重复或停滞 | 使用已有证据，改用更窄的查询 |
 | `user-cancelled` | 用户主动取消 | 准备好后提交新请求 |
 | `startup-conflict` / `superseded` | 会话被其他运行实例接管 | 关闭旧实例或从新会话继续 |
 
 无 UI 时运行 `dove-pi doctor`，或通过 `diagnostics/status` 查看相同的结构化原因和下一步；
 资源/token/cache 数值仅用于观察和建议；只读请求数达到历史阈值也仅产生 advisory，不会因数量本身终止；重复且无进展的
-provider round/read-only guard 仍可能按上表策略结束停滞的请求。
+read-only guard 仍可能按上表策略结束停滞的请求。
 
 要复现隔离的真实 RPC 路径，可运行
 `node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`。
@@ -324,7 +349,7 @@ Pi 是 Dove Release 中的锁定组件，不使用 Pi 的全局自更新。只�
 Release。损坏的 `install.json` 不会被当成全新安装；修复会优先使用有效备份，再扫描已验证的
 托管版本。启动器也会在每次运行时重新寻找可用的 Python 3.10+，不绑定安装时的绝对路径。
 
-在首个 Release 发布前，从源码安装的用户通过下面的方式更新：
+从源码安装的用户通过下面的方式更新：
 
 ```powershell
 git pull
@@ -435,7 +460,7 @@ npm run pi:smoke
 
 ### 一键安装地址返回 404
 
-仓库还没有发布首个 GitHub Release。先使用源码安装。
+检查网络、仓库地址和 Release 资产是否仍可用；也可以先使用源码安装。
 
 ### Python、Node.js 或 npm 版本不够
 

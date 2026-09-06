@@ -85,8 +85,9 @@ Get-Content .\install-dove-pi.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-dove-pi.ps1
 ```
 
-If the URL returns `404`, the repository has not published its first Release yet. Use the source
-installation above; do not treat a `master` branch archive as a release package.
+If the URL returns `404`, check the network, repository address, and whether that Release asset is
+still available. You can also use the source installation above; do not treat a `master` branch
+archive as a release package.
 
 The Release installer reuses compatible Python and Node.js runtimes. If either is missing or too
 old, it installs the runtime through `winget` (which requires Microsoft App Installer). It also
@@ -151,6 +152,30 @@ Inside Dove Pi:
 
 `Ultra` is a runtime policy. `max` is an installed extension profile; they are unrelated names.
 
+### Subagent (experimental, read-only)
+
+Dove Pi exposes an explicit `agent_subagent` tool and `/subagent` status command. It starts one
+isolated Pi child for reading, searching, and understanding the current project. The child gets
+only `read`, `grep`, `find`, and `ls`; it cannot write files, run shell commands, use the network,
+or delegate recursively. Ordinary requests never create a child automatically.
+
+Enable it only with an explicit child entrypoint (prefer the managed Node executable and Pi CLI):
+
+```powershell
+$env:DOVE_PI_SUBAGENT_EXECUTABLE = (Get-Command node).Source
+$env:DOVE_PI_SUBAGENT_PREFIX_ARGS = '["C:\\path\\to\\pi-cli.js"]'
+```
+
+When configuration is absent, the executable is unavailable, or the child fails, `/subagent`
+returns a diagnostic. It never fabricates success and never silently changes an explicit
+subagent request into ordinary inline work. Automatic dispatch integration is still under
+verification; the stable contract does not include writable children, worktree merging, nested
+orchestration, or hard token/time ceilings.
+
+`pi-background-tasks` remains available through Pi's explicit `bg_run`, `bg_delegate`, and related
+tools. Pi's extension API does not let Dove call another extension's private executor, so Dove does
+not claim that those tools are already transparently controlled by the Core subagent provider.
+
 ## Dove Native Workflow
 
 Ordinary chat and small coding requests execute directly. There is no project initialization, task
@@ -200,6 +225,11 @@ working directory, Native state lives in project `.dove/`, and Pi credentials/se
 the Pi user directory. For stdio `rpc`/`mcp`, stdout is reserved for protocol frames and diagnostics
 go to stderr.
 
+Interactive launches go directly to the release-locked Pi Node runtime and skip the Python
+installer layer. Install, update, repair, and diagnostic commands still use Python. This removes
+one process hop and avoids installer dependency loading without changing Pi tools, context, or
+request policy.
+
 Run this black-box check in a temporary project, never against production source:
 
 ```powershell
@@ -222,6 +252,11 @@ dove-pi web status
 CLI words into a Pi prompt. `task verify` checks artifact structure and planning fields only: it
 does not run tests or claim acceptance. Formal work freezes acceptance criteria, records evidence,
 and is finished/archived explicitly.
+
+An explicit task selector that is missing or ambiguous returns a non-zero error, and unknown
+task/session options are rejected instead of being ignored. After finishing the current task,
+Dove promotes the only remaining active task to `current`; when several remain, choose one
+explicitly.
 
 If a session appears stuck at `pending` or looks as if the model stopped by itself, run
 `dove-pi doctor` and `/status full`: doctor shows the managed release actually executing and
@@ -283,15 +318,14 @@ Pi may still render the generic `Operation aborted`, but Dove preserves a specif
 | --- | --- | --- |
 | `provider-authorization-denied` | Provider authorization or API key failed | Check `/login` or provider credentials, then retry |
 | `model-budget-rejected` | The request did not fit the model context | Reduce context or choose another model |
-| `provider-round-budget` | Several rounds produced no meaningful progress | Inspect `/status full`, change strategy, then continue |
+| `provider-round-budget` | Provider-round observation threshold reached | Inspect `/status full`; the threshold does not abort by itself |
 | `progress-*` | A tool loop repeated or stalled | Use existing evidence and issue a narrower query |
 | `user-cancelled` | The user cancelled the request | Submit a new request when ready |
 | `startup-conflict` / `superseded` | Another runtime took over the session | Close the old runtime or continue in a new session |
 
 Without a UI, run `dove-pi doctor` or query `diagnostics/status` for the same structured cause and
 next action. Resource, token, and cache values are observation-only; reaching the historical
-read-only request count is advisory and does not abort by itself. Separate provider-round and repeated-read progress guards can still end a
-stalled loop as described above.
+read-only request count and provider-round thresholds are advisory and do not abort by themselves. Repeated-read progress guards can still end a stalled loop as described above.
 
 To replay an isolated real RPC path, run
 `node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`.
@@ -347,7 +381,7 @@ corrupt `install.json` is never treated as a fresh install: repair prefers a val
 scans verified managed releases. The launcher also resolves a compatible Python 3.10+ runtime on
 each invocation instead of binding permanently to the installation-time path.
 
-Before the first Release, update a source installation with:
+To update a source installation:
 
 ```powershell
 git pull
@@ -467,7 +501,8 @@ Open a new terminal, or run:
 
 ### The one-line installer returns 404
 
-The repository has not published its first GitHub Release. Use the source installation for now.
+Check the network, repository address, and whether the Release asset is still available. You can
+also use the source installation.
 
 ### Python, Node.js, or npm is too old
 

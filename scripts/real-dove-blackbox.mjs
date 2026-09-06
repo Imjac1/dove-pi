@@ -18,6 +18,7 @@ const timeoutMs = Number(valueFor("--timeout-ms", "600000"));
 const launcher = valueFor("--launcher", "dove-pi");
 const providerMode = valueFor("--provider", "real");
 const progressCase = valueFor("--progress-case", "");
+const subagentCase = valueFor("--subagent-case", "");
 const parsedContextWindow = Number(valueFor("--context-window", "128000"));
 const scenarioPath = valueFor("--scenario", "");
 const legacyPrompt = valueFor("--prompt", "请检查当前项目中未完成的任务，找出一个最小、明确、可以真实完成的优化目标。先只做审计，不修改文件。说明你选择的任务、验收标准、计划执行的测试，以及可能的阻塞点。");
@@ -40,6 +41,8 @@ const sessionDir = requestedSessionDir ? resolve(sessionBase, `${scenarioSlug}-$
 const runLogPath = resolve(scenarioRoot, basename(requestedOutputPath));
 const outputPath = requestedOutputPath;
 const providerCapturePath = resolve(scenarioRoot, `${basename(requestedOutputPath)}.provider.jsonl`);
+const providerIdentityCapturePath = resolve(scenarioRoot, `${basename(requestedOutputPath)}.identity.jsonl`);
+const subagentCapturePath = resolve(scenarioRoot, `${basename(requestedOutputPath)}.subagent.jsonl`);
 const scenarioSessionKey = `blackbox_${scenarioSlug}_${nonce}`;
 
 mkdirSync(dirname(outputPath), { recursive: true });
@@ -51,6 +54,8 @@ if (progressCase === "changing") {
   for (let index = 0; index < 20; index++) writeFileSync(resolve(workspaceRoot, `probe-${index}.txt`), `probe-${index}\n`, "utf8");
 } else if (progressCase === "repeated") {
   writeFileSync(resolve(workspaceRoot, "probe-same.txt"), "stable probe\n", "utf8");
+} else if (progressCase === "midstream") {
+  writeFileSync(resolve(workspaceRoot, "probe-same.txt"), "mid-stream probe\n", "utf8");
 }
 const steps = loadScenario();
 // Keep the legacy top-level digest meaningful for scenario runs by pointing
@@ -61,12 +66,19 @@ const primaryPrompt = steps.find((step) =>
   && !/^\s*\//.test(step.message)
 )?.message || legacyPrompt;
 const providerExtension = providerMode === "faux" ? writeFauxProvider() : undefined;
+const providerIdentityExtension = providerMode === "faux" ? writeFauxIdentity() : undefined;
+const subagentChild = subagentCase ? writeSubagentChild() : undefined;
 
 const launcherCommand = launcher === "source" ? "python" : process.platform === "win32" ? "cmd.exe" : "dove-pi";
 const managedLauncherArgs = process.platform === "win32" ? ["/d", "/s", "/c", "dove-pi.cmd"] : [];
 const launcherArgs = launcher === "source"
   ? [resolve(repoRoot, "dove_pi.py"), "--offline", "--mode", "rpc", "--session-dir", sessionDir]
   : [...managedLauncherArgs, "--offline", "--mode", "rpc", "--session-dir", sessionDir];
+// Keep the Dove extension under test owned by the launcher. The faux provider
+// is a project-owned extension passed through Pi's public explicit-extension
+// flag, so provider registration happens before CLI model resolution.
+if (providerExtension) launcherArgs.push("--extension", providerExtension);
+if (providerIdentityExtension) launcherArgs.push("--extension", providerIdentityExtension);
 if (providerMode === "faux") launcherArgs.push("--provider", "dove-blackbox", "--model", "blackbox");
 const child = spawn(launcherCommand, launcherArgs, {
   cwd: workspaceRoot,
@@ -77,7 +89,9 @@ const child = spawn(launcherCommand, launcherArgs, {
     DOVE_PI_STATE_DIR: stateDir,
     DOVE_PI_BLACKBOX_SESSION_ID: scenarioSessionKey,
     TRELLIS_CONTEXT_ID: scenarioSessionKey,
-    ...(providerExtension ? { DOVE_PI_FAUX_CAPTURE: providerCapturePath, DOVE_PI_PROJECT_EXTENSION: providerExtension, DOVE_PI_TRUST_PROJECT_EXTENSION: "1" } : {}),
+    ...(providerExtension ? { DOVE_PI_FAUX_CAPTURE: providerCapturePath } : {}),
+    ...(subagentCase === "delegated" && subagentChild ? { DOVE_PI_SUBAGENT_EXECUTABLE: process.execPath, DOVE_PI_SUBAGENT_PREFIX_ARGS: JSON.stringify([subagentChild]) } : {}),
+    ...(subagentCase === "unavailable" ? { DOVE_PI_SUBAGENT_EXECUTABLE: resolve(scenarioRoot, "missing-pi-child.exe") } : {}),
   },
   shell: false,
   stdio: ["pipe", "pipe", "pipe"],
@@ -116,6 +130,13 @@ const record = (event) => {
       const providerWarning = stepRecords[currentStep]?.events.some((observed) => observed.type === "extension_ui_request" && observed.notifyType === "warning" && typeof observed.message === "string" && observed.message.startsWith("[Dove provider-"));
       completeActiveStep(providerWarning);
     }
+  }
+  if (event.type === "tool_execution_start" && activeState?.queueDuringTools && !activeState.queueInjected) {
+    activeState.queueInjected = true;
+    const suffix = currentStep + 1;
+    activeState.queueCommandIds = [`step-${suffix}-steer`, `step-${suffix}-follow-up`];
+    writeCommand({ id: activeState.queueCommandIds[0], type: "steer", message: "Prioritize the active tool result and report it." });
+    writeCommand({ id: activeState.queueCommandIds[1], type: "follow_up", message: "After that, state one remaining risk." });
   }
   if (event.type === "extension_ui_request" && ["select", "input", "editor"].includes(event.method)) writeCommand({ type: "extension_ui_response", id: event.id, cancelled: true });
   else if (event.type === "extension_ui_request" && event.method === "confirm") writeCommand({ type: "extension_ui_response", id: event.id, confirmed: false });
@@ -177,9 +198,11 @@ child.on("close", (code, signal) => {
   const ledger = readLedgerEvidence(stateDir);
   const terminals = ledger.filter((entry) => entry?.kind === "request.terminal");
   const plans = ledger.filter((entry) => entry?.kind === "request.planned");
+  const resourceRecords = ledger.filter((entry) => entry?.kind === "task.convergence.observed" && entry?.details?.observationOnly === true);
   const rpcFailure = stepRecords.flatMap((step) => step.events).find((event) => event.type === "rpc_failure");
   const lastTerminal = terminals.at(-1);
   const lastPlan = plans.at(-1);
+  const lastResourceObservation = resourceRecords.at(-1);
   const ledgerCode = lastTerminal?.details?.terminal?.code;
   const rpcCode = rpcFailure?.terminal?.code;
   const allEvents = stepRecords.flatMap((step) => step.events);
@@ -207,10 +230,11 @@ child.on("close", (code, signal) => {
       return { ...step, terminal: terminal ? redactLedgerTerminal(terminal) : undefined, strategy: plan?.details?.strategy ? redactStrategy(plan.details.strategy) : undefined, toolNames: extractToolNames(step.events) };
     }),
     ledgerTerminal: lastTerminal ? redactLedgerTerminal(lastTerminal) : undefined,
-    strategy: lastPlan?.details?.strategy ? redactStrategy(lastPlan.details.strategy) : undefined,
+    strategy: lastPlan?.details?.strategy ? redactStrategy(lastPlan.details.strategy, lastResourceObservation) : undefined,
+    resourceObservation: lastResourceObservation ? redactResourceObservation(lastResourceObservation) : undefined,
     rpcFailure: rpcFailure ? { message: undefined, terminal: rpcFailure.terminal } : undefined,
     diagnosticGap: rpcFailure && rpcCode !== ledgerCode ? "rpc-error-not-preserved-in-ledger" : undefined,
-    ledgerTerminals: terminals.map(redactLedgerTerminal), providerEvidence: readProviderEvidence(providerCapturePath),
+    ledgerTerminals: terminals.map(redactLedgerTerminal), providerEvidence: readProviderEvidence(providerCapturePath), providerIdentity: readProviderIdentity(providerIdentityCapturePath), subagentEvidence: readSubagentEvidence(subagentCapturePath),
     artifactEvidence: readArtifactEvidence(workspaceRoot),
     terminalConsistency: harnessTimedOut ? "harness-timeout" : rpcFailure && rpcCode !== ledgerCode ? "mismatch" : lastTerminal ? "completed-ledger-only" : "none",
     closeWaitMs: closeStartedAt ? Date.now() - closeStartedAt : undefined,
@@ -232,7 +256,7 @@ function startNextStep() {
   currentStep += 1;
   if (currentStep >= steps.length) return requestFinalEvidence();
   const step = steps[currentStep];
-  activeState = { kind: step.kind, sawStart: false, sawEnd: false, sawSettled: false };
+  activeState = { kind: step.kind, sawStart: false, sawEnd: false, sawSettled: false, queueDuringTools: step.queueDuringTools === true, queueInjected: false };
   // Pi's follow_up/steer RPC forms queue input for an agent that is currently
   // running. Our replay deliberately sends one step after the previous one
   // settles, so continuation is a fresh prompt in the same session, matching
@@ -273,7 +297,7 @@ function loadScenario() {
     if (typeof step === "string") return { kind: "prompt", message: step };
     const kind = step?.kind || "prompt";
     if (!["prompt", "follow_up", "steer", "state", "stats"].includes(kind)) throw new Error(`Unsupported black-box step kind: ${kind}`);
-    return { kind, message: typeof step?.message === "string" ? step.message : "" };
+    return { kind, message: typeof step?.message === "string" ? step.message : "", queueDuringTools: step?.queueDuringTools === true };
   });
 }
 
@@ -287,12 +311,35 @@ function prepareWorkspace() {
 }
 
 function writeFauxProvider() {
-  const path = resolve(scenarioRoot, "blackbox-faux-provider.mjs");
-  const managedExtension = pathToFileURL(resolve(repoRoot, "src/pi-adapter/extension.ts")).href;
+  const path = resolve(workspaceRoot, ".pi", "extensions", "blackbox-faux-provider.mjs");
   const fauxModule = pathToFileURL(resolve(repoRoot, "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/providers/faux.js")).href;
   const window = Number.isFinite(parsedContextWindow) && parsedContextWindow > 0 ? Math.floor(parsedContextWindow) : 128000;
-  const mode = JSON.stringify(progressCase);
-  writeFileSync(path, `import { appendFileSync } from "node:fs";\nimport managed from ${JSON.stringify(managedExtension)};\nimport { fauxAssistantMessage, fauxProvider, fauxToolCall } from ${JSON.stringify(fauxModule)};\nexport default function blackboxProvider(pi) {\n  managed(pi);\n  const faux = fauxProvider({ provider: "dove-blackbox", models: [{ id: "blackbox", name: "Dove Black-box", reasoning: false, contextWindow: ${window}, maxTokens: 4096 }] });\n  const mode = ${mode};\n  const responses = mode === "changing"\n    ? Array.from({ length: 20 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-" + index + ".txt" }, { id: "progress-read-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("Completed all changing reads."))\n    : mode === "repeated"\n      ? Array.from({ length: 4 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-same.txt" }, { id: "progress-repeat-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("This response must not be reached."))\n      : Array.from({ length: 64 }, () => fauxAssistantMessage("Deterministic black-box provider response."));\n  faux.setResponses(responses);\n  pi.registerProvider("dove-blackbox", { api: faux.api, apiKey: "blackbox-test-key", models: faux.models, streamSimple(model, context, options) {\n    const messages = Array.isArray(context.messages) ? context.messages : [];\n    appendFileSync(${JSON.stringify(providerCapturePath)}, JSON.stringify({ model: model.id, systemPromptChars: typeof context.systemPrompt === "string" ? context.systemPrompt.length : 0, messageCount: messages.length, messageChars: messages.reduce((total, message) => total + JSON.stringify(message).length, 0), toolCount: Array.isArray(context.tools) ? context.tools.length : 0 }) + "\\n", "utf8");\n    return faux.provider.streamSimple(model, context, options);\n  } });\n}\n`, "utf8");
+  const mode = JSON.stringify(progressCase === "midstream" ? "repeated" : progressCase);
+  const subagent = JSON.stringify(subagentCase);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `import { appendFileSync } from "node:fs";\nimport { fauxAssistantMessage, fauxProvider, fauxToolCall } from ${JSON.stringify(fauxModule)};\nexport default function blackboxProvider(pi) {\n  const faux = fauxProvider({ provider: "dove-blackbox", models: [{ id: "blackbox", name: "Dove Black-box", reasoning: false, contextWindow: ${window}, maxTokens: 4096 }] });\n  const mode = ${mode};\n  const subagent = ${subagent};\n  const responses = mode === "changing"\n    ? Array.from({ length: 20 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-" + index + ".txt" }, { id: "progress-read-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("Completed all changing reads."))\n    : mode === "repeated"\n      ? Array.from({ length: 4 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-same.txt" }, { id: "progress-repeat-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("This response must not be reached."))\n      : subagent === "delegated" || subagent === "unavailable"\n        ? [fauxAssistantMessage([fauxToolCall("agent_subagent", { name: "blackbox-investigation", prompt: "Read the project and return a short inventory." }, { id: "subagent-call-1" })], { stopReason: "toolUse" }), fauxAssistantMessage("Subagent investigation completed.")]\n        : Array.from({ length: 64 }, () => fauxAssistantMessage("Deterministic black-box provider response."));\n  faux.setResponses(responses);\n  pi.registerProvider("dove-blackbox", { api: faux.api, apiKey: "blackbox-test-key", models: faux.models, streamSimple(model, context, options) {\n    const messages = Array.isArray(context.messages) ? context.messages : [];\n    appendFileSync(${JSON.stringify(providerCapturePath)}, JSON.stringify({ model: model.id, systemPromptChars: typeof context.systemPrompt === "string" ? context.systemPrompt.length : 0, messageCount: messages.length, messageChars: messages.reduce((total, message) => total + JSON.stringify(message).length, 0), toolCount: Array.isArray(context.tools) ? context.tools.length : 0 }) + "\\n", "utf8");\n    return faux.provider.streamSimple(model, context, options);\n  } });\n}\n`, "utf8");
+  return path;
+}
+
+function writeFauxIdentity() {
+  const path = resolve(workspaceRoot, ".pi", "extensions", "blackbox-identity.mjs");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `import { appendFileSync } from "node:fs";
+const entry = process.env.DOVE_PI_EXTENSION_ENTRY || "";
+appendFileSync(${JSON.stringify(providerIdentityCapturePath)}, JSON.stringify({ doveExtensionOrigin: process.env.DOVE_PI_EXTENSION_ORIGIN, doveExtensionTrust: process.env.DOVE_PI_EXTENSION_TRUST, entryKind: /app.*versions/i.test(entry) ? "managed-release" : "source-or-explicit" }) + "\\n", "utf8");
+export default function blackboxIdentity() {}
+`, "utf8");
+  return path;
+}
+
+function writeSubagentChild() {
+  const path = resolve(workspaceRoot, ".pi", "subagent-child.mjs");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `import { appendFileSync } from "node:fs";
+const capture = ${JSON.stringify(subagentCapturePath)};
+appendFileSync(capture, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }) + "\\n", "utf8");
+process.stdout.write("Read-only delegated investigation result.");
+`, "utf8");
   return path;
 }
 
@@ -353,8 +400,9 @@ function readArtifactEvidence(projectRoot) {
   };
 }
 function redactLedgerTerminal(record) { const details = record?.details || {}; return { reason: details.reason, detail: details.detail ? redact(details.detail) : undefined, terminal: details.terminal && { origin: details.terminal.origin, code: details.terminal.code, retryable: details.terminal.retryable, nextAction: details.terminal.nextAction } }; }
-function redactStrategy(strategy) {
+function redactStrategy(strategy, resourceRecord) {
   const context = strategy?.context || {};
+  const resources = resourceRecord ? redactResourceObservation(resourceRecord) : strategy?.resources;
   return {
     schemaVersion: strategy?.schemaVersion,
     logicalRequestId: strategy?.logicalRequestId,
@@ -378,7 +426,22 @@ function redactStrategy(strategy) {
     doveBudgetChars: context.doveBudgetChars,
     omitted: context.omitted,
     compacted: context.compacted,
-    resources: strategy?.resources,
+    resources,
+  };
+}
+function redactResourceObservation(record) {
+  const details = record?.details || {};
+  return {
+    toolCalls: details.toolCalls,
+    providerRounds: details.providerRounds,
+    elapsedMs: details.elapsedMs,
+    toolDurationMs: details.toolDurationMs,
+    inputTokens: details.inputTokens,
+    cacheReadTokens: details.cacheReadTokens,
+    cacheWriteTokens: details.cacheWriteTokens,
+    outputTokens: details.outputTokens,
+    reasoningTokens: details.reasoningTokens,
+    stopReasons: Array.isArray(details.stopReasons) ? details.stopReasons : undefined,
   };
 }
 function pathWithin(parent, candidate) {
@@ -387,3 +450,5 @@ function pathWithin(parent, candidate) {
 }
 function extractToolNames(events) { const names = new Set(); for (const event of events) if (event.type === "tool_start" && typeof event.toolName === "string") names.add(event.toolName); return [...names].sort(); }
 function readProviderEvidence(path) { try { return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => { try { const value = JSON.parse(line); return [{ model: value.model, systemPromptChars: value.systemPromptChars, messageCount: value.messageCount, messageChars: value.messageChars, toolCount: value.toolCount }]; } catch { return []; } }); } catch { return []; } }
+function readProviderIdentity(path) { try { return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } }); } catch { return []; } }
+function readSubagentEvidence(path) { try { return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => { try { const value = JSON.parse(line); return [{ argv: Array.isArray(value.argv) ? value.argv : [], cwd: value.cwd ? "<subagent-cwd>" : undefined }]; } catch { return []; } }); } catch { return []; } }

@@ -40,6 +40,7 @@ import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.t
 import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
 import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
+import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 
 type DoveRegistrationClaim = { readonly identity: DoveExtensionIdentity; readonly owner: ExtensionAPI };
 const DOVE_REGISTRATION_SYMBOL = Symbol.for("dove.personal-agent.registration-claim");
@@ -482,6 +483,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const mode = new ModeController();
 	const { capabilities: registry, recipes } = createDoveRuntime();
 	const cwd = process.cwd();
+	const subagentProvider = createConfiguredPiSubagentProvider();
+	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
 	if (!process.env.DOVE_PI_STATE_DIR?.trim()) migrateLegacyDoveState(cwd, stateDir);
 	let projectProvider = createProjectProvider(cwd);
@@ -504,7 +507,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let currentRequestStartedAt: number | undefined;
 	let currentRequestResources = emptyRequestResourceSnapshot();
 	let currentRequestProgressSinceRound = false;
-	let currentRequestProviderGraceUsed = false;
+	let currentRequestProviderRoundWarningIssued = false;
 	let currentRequestStopReasons: string[] = [];
 	let currentRequestToolDurationMs = 0;
 	let currentRequestHostAbortIssued = false;
@@ -856,6 +859,19 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		},
 	});
 
+	pi.registerCommand("subagent", {
+		description: "Show the explicitly configured read-only Pi subagent provider",
+		handler: async (_args, ctx) => {
+			if (!subagentProvider) {
+				ctx.ui.notify("Subagent provider: unavailable (set DOVE_PI_SUBAGENT_EXECUTABLE to enable an isolated read-only child). Ordinary requests remain inline.", "warning");
+				return;
+			}
+			const health = await subagentProvider.inspect();
+			const last = subagentLastState ? ` Last: ${subagentLastState.state}${subagentLastState.runId ? ` (${subagentLastState.runId})` : ""}${subagentLastState.reason ? ` - ${subagentLastState.reason}` : ""}.` : "";
+			ctx.ui.notify(`Subagent provider: ${health.available ? "available" : "unavailable"} (${health.provider})${health.reason ? ` - ${health.reason}` : ""}.${last} Read-only capabilities: read, grep, find, ls.`, health.available ? "info" : "warning");
+		},
+	});
+
 	pi.registerCommand("sysprompt", {
 		description: "Show the effective system prompt that was sent to the model in the last request, or dump it to a readable file",
 		handler: async (args, ctx) => {
@@ -1198,6 +1214,44 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.registerTool({
+		name: "agent_subagent",
+		label: "Read-only Subagent",
+		description: "Explicitly start one isolated read-only Pi child to inspect the current project. This never edits files, runs shell commands, uses the network, or delegates recursively.",
+		promptSnippet: "Delegate a bounded read-only project investigation to an isolated Pi child",
+		promptGuidelines: ["Use only when an isolated second set of eyes is useful and the user request permits delegation. The child is read-only and may be unavailable unless DOVE_PI_SUBAGENT_EXECUTABLE is configured. Do not use this tool for edits or tests."],
+		parameters: Type.Object({
+			name: Type.String({ description: "Short human-readable investigation name" }),
+			prompt: Type.String({ description: "Bounded read-only investigation prompt" }),
+		}),
+		async execute(_toolCallId, params, signal) {
+			type SubagentToolDetails = { available: boolean; provider?: string; reason?: string; runId?: string; state?: string; error?: unknown };
+			if (!subagentProvider) {
+				subagentLastState = { state: "unavailable", reason: "DOVE_PI_SUBAGENT_EXECUTABLE is not configured" };
+				const details: SubagentToolDetails = { available: false, reason: "provider_not_configured" };
+				return { content: [{ type: "text", text: "Subagent unavailable: configure DOVE_PI_SUBAGENT_EXECUTABLE for an explicit isolated Pi child. No inline fallback was started by this explicit tool." }], details };
+			}
+			const typed = params as { name: string; prompt: string };
+			const health = await subagentProvider.inspect();
+			if (!health.available) {
+				subagentLastState = { state: "unavailable", reason: health.reason };
+				const details: SubagentToolDetails = { available: false, provider: health.provider, reason: health.reason ?? "provider is unavailable" };
+				return { content: [{ type: "text", text: `Subagent unavailable: ${details.reason}` }], details };
+			}
+			const dispatchId = `explicit-${Date.now()}-${_toolCallId}`;
+			const launch = await subagentProvider.launch({ dispatchId, name: typed.name, prompt: typed.prompt, cwd, capabilities: ["read", "grep", "find", "ls"] });
+			subagentLastState = { state: launch.state, runId: launch.runId };
+			const terminal = await subagentProvider.collect(launch.runId, signal);
+			subagentLastState = { state: terminal.state, runId: terminal.runId, reason: terminal.error?.code };
+			if (terminal.state !== "succeeded") {
+				const details: SubagentToolDetails = { available: true, provider: launch.provider, runId: terminal.runId, state: terminal.state, error: terminal.error };
+				return { content: [{ type: "text", text: `Subagent ${terminal.state}: ${terminal.error?.summary ?? "no answer"}` }], details };
+			}
+			const details: SubagentToolDetails = { available: true, provider: launch.provider, runId: terminal.runId, state: terminal.state };
+			return { content: [{ type: "text", text: terminal.value ?? "Subagent returned an empty answer." }], details };
+		},
+	});
+
+	pi.registerTool({
 		name: "agent_run_capability",
 		label: "Agent Capability",
 		description: "Run a verified reusable capability through the Personal Agent Fast Path.",
@@ -1358,6 +1412,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const activeToolSet = new Set(activeToolNames);
 			const latestProviderStart = [...ledgerRecords].reverse().find((record) => record.kind === "provider.request.started" && (!sessionId || record.correlation?.sessionId === sessionId));
 			const diagnostics = projectExecutionDiagnostics(ledgerRecords, sessionId ? { sessionId } : {});
+			const subagentConfiguration = resolvePiChildCommand();
+			const subagentHealth = subagentProvider
+				? await subagentProvider.inspect()
+				: { available: false, provider: "pi-child", reason: subagentConfiguration ? "invalid child configuration" : "DOVE_PI_SUBAGENT_EXECUTABLE is not configured" };
 			const strategy = currentStrategySnapshot(ctx);
 			const report = {
 				pi: getPiVersion(),
@@ -1377,6 +1435,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				cache: inspectCacheDiagnostics(ctx.sessionManager.getEntries()),
 				strategy,
 				goalEfficiency: inspectGoalEfficiency(ledgerRecords, sessionId),
+				subagent: {
+					provider: subagentHealth.provider,
+					configured: Boolean(subagentConfiguration),
+					available: subagentHealth.available,
+					reason: subagentHealth.reason,
+					activeRun: subagentLastState?.state === "launching" || subagentLastState?.state === "running" ? subagentLastState : undefined,
+					lastTerminal: subagentLastState && subagentLastState.state !== "launching" && subagentLastState.state !== "running" ? subagentLastState : undefined,
+				},
 				toolSchemaStability: {
 					expectedCount: expectedToolNames.length,
 					activeCount: activeToolNames.length,
@@ -1674,37 +1740,48 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const taskId = currentRequestTaskId ?? "pi-session";
 			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
 			await ledger.appendRequestAttemptCompleted({ taskId, stepId: `request:${currentRequestPlan.requestId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, sessionId, attemptId: completed.attemptId, number: completed.number, outcome, failureReason: pendingRequestTerminal?.detail ?? (observedFailure && !retry?.retry ? retry?.reason : undefined) });
-			if (currentRequestTaskId && currentRequestPlan.lane === "formal" && projectProvider.recordTaskProgress) {
+			// A transient provider failure is an attempt-level event. Pi may call
+			// agent_end here and immediately start another attempt for the same
+			// logical request, so it must not advance the semantic convergence
+			// review or rewrite the task's next action yet.
+			if (currentRequestTaskId && currentRequestPlan.lane === "formal" && projectProvider.recordTaskProgress && outcome !== "transient-failure") {
+				let decidedConvergence: ReturnType<NonNullable<ProjectProvider["readTaskConvergence"]>> | undefined;
+				try {
+					const beforeConvergence = projectProvider.readTaskConvergence?.(currentRequestTaskId);
+					const activeAcceptanceId = beforeConvergence?.kind === "valid"
+						? beforeConvergence.snapshot.checkpoint?.nextAcceptanceId ?? beforeConvergence.snapshot.correctiveAction?.acceptanceId ?? beforeConvergence.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id
+						: undefined;
+					if (activeAcceptanceId && projectProvider.mutateTaskConvergence && beforeConvergence?.kind === "valid" && beforeConvergence.snapshot.state !== "ready_to_finish" && beforeConvergence.snapshot.state !== "checkpointed" && beforeConvergence.snapshot.state !== "blocked") {
+						await projectProvider.mutateTaskConvergence(currentRequestTaskId, {
+							action: "decide",
+							acceptanceId: activeAcceptanceId,
+							nextAction: outcome === "failed" ? `Resolve the recorded failure and rerun verification for ${activeAcceptanceId}.` : outcome === "completed" ? `Review evidence and decide the next action for ${activeAcceptanceId}.` : `Retry the interrupted step for ${activeAcceptanceId}`,
+						});
+					}
+					decidedConvergence = projectProvider.readTaskConvergence?.(currentRequestTaskId);
+				} catch (error) {
+					if (ctx.hasUI) ctx.ui.notify(`Dove convergence decision unavailable: ${error instanceof Error ? error.message : String(error)}`, "warning");
+				}
+				const convergenceNextAction = decidedConvergence?.kind === "valid"
+					? decidedConvergence.snapshot.state === "ready_to_finish"
+						? "Complete final verification, spec capture, commit, and wrap-up."
+						: decidedConvergence.snapshot.checkpoint?.nextAction ?? decidedConvergence.snapshot.correctiveAction?.nextAction
+					: undefined;
 				try {
 					await projectProvider.recordTaskProgress(currentRequestTaskId, {
 						phase: outcome === "failed" ? "blocked" : outcome === "completed" ? "verifying" : "implementing",
-						nextStep: outcome === "failed" ? "Resolve the recorded failure and rerun verification." : outcome === "completed" ? "Review acceptance evidence and resolve remaining criteria." : "Retry the interrupted implementation step.",
+						nextStep: convergenceNextAction ?? (outcome === "failed" ? "Resolve the recorded failure and rerun verification." : outcome === "completed" ? "Review acceptance evidence and decide the next action." : "Retry the interrupted implementation step."),
 						verification: `Request ${currentRequestPlan.requestId} ended with ${outcome}.`,
 						evidence: { requestId: currentRequestPlan.requestId, intent: currentRequestPlan.intent, outcome, stopReason },
 					});
 				} catch (error) {
 					if (ctx.hasUI) ctx.ui.notify(`Dove task progress unavailable: ${error instanceof Error ? error.message : String(error)}`, "warning");
 				}
-				try {
-					const convergence = projectProvider.readTaskConvergence?.(currentRequestTaskId);
-					const activeAcceptanceId = convergence?.kind === "valid"
-						? convergence.snapshot.checkpoint?.nextAcceptanceId ?? convergence.snapshot.correctiveAction?.acceptanceId ?? convergence.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id
-						: undefined;
-					if (activeAcceptanceId && projectProvider.mutateTaskConvergence && convergence?.kind === "valid" && convergence.snapshot.state !== "ready_to_finish" && convergence.snapshot.state !== "checkpointed" && convergence.snapshot.state !== "blocked") {
-						await projectProvider.mutateTaskConvergence(currentRequestTaskId, {
-							action: "decide",
-							acceptanceId: activeAcceptanceId,
-							nextAction: outcome === "failed" ? `Resolve the recorded failure and rerun verification for ${activeAcceptanceId}.` : outcome === "completed" ? `Review evidence and decide the next action for ${activeAcceptanceId}.` : `Retry the interrupted step for ${activeAcceptanceId}.`,
-						});
-					}
-				} catch (error) {
-					if (ctx.hasUI) ctx.ui.notify(`Dove convergence decision unavailable: ${error instanceof Error ? error.message : String(error)}`, "warning");
-				}
 			}
-			if (currentRequestPlan.lane === "formal" && currentRequestTaskId) {
+			if (currentRequestPlan && currentRequestTaskId) {
 				try {
-					const currentTask = projectProvider.resolveTask(currentRequestTaskId);
-					const convergence = projectProvider.readTaskConvergence?.(currentRequestTaskId);
+					const currentTask = currentRequestPlan.lane === "formal" ? projectProvider.resolveTask(currentRequestTaskId) : undefined;
+					const convergence = currentRequestPlan.lane === "formal" ? projectProvider.readTaskConvergence?.(currentRequestTaskId) : undefined;
 					await ledger.appendTaskResourceObservation({
 						taskId: currentRequestTaskId,
 						stepId: `request:${currentRequestPlan.requestId}`,
@@ -1771,7 +1848,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		nextAttemptTrigger = undefined;
 		currentRequestResources = emptyRequestResourceSnapshot();
 		currentRequestProgressSinceRound = false;
-		currentRequestProviderGraceUsed = false;
+		currentRequestProviderRoundWarningIssued = false;
 		currentRequestStopReasons = [];
 		currentRequestHostAbortIssued = false;
 		currentRequestTerminalPersisted = false;
@@ -1817,7 +1894,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		nextAttemptTrigger = undefined;
 		currentRequestResources = emptyRequestResourceSnapshot();
 		currentRequestProgressSinceRound = false;
-		currentRequestProviderGraceUsed = false;
+		currentRequestProviderRoundWarningIssued = false;
 		currentRequestStopReasons = [];
 		currentRequestHostAbortIssued = false;
 		currentRequestTerminalPersisted = false;
@@ -1847,7 +1924,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			let blockedReason: string | undefined;
 			let blockedState = "missing";
 			let blockedAcceptanceId: string | undefined;
-			if (convergence.kind === "invalid") { blockedReason = `[Dove convergence] Formal task metadata is invalid: ${convergence.issue}`; blockedState = "invalid"; }
+			if (convergence.kind === "invalid") {
+				// A corrupt convergence snapshot must fail closed for convergence
+				// metadata mutations, but it must not become a second Pi tool
+				// permission firewall. Preserve ordinary tool availability and let
+				// the metadata tool surface the validation error when used.
+				if (ctx.hasUI) ctx.ui.notify(`[Dove convergence] Formal metadata is invalid; convergence updates are unavailable: ${convergence.issue}`, "warning");
+			}
 			else if (convergence.kind !== "valid") blockedReason = "[Dove convergence] Freeze stable acceptance criteria with agent_task_convergence before the first formal product mutation.";
 			else {
 				blockedState = convergence.snapshot.state;
@@ -1955,6 +2038,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const message = event.message;
 			if (message.role !== "assistant") return;
 			const observed = message as unknown as { stopReason?: unknown; usage?: Readonly<Record<string, number>> };
+			// Most providers pass through Pi-ai's `onPayload`, where the
+			// preflight hook accounts for the provider round. Custom providers may
+			// implement `streamSimple` directly and bypass that hook, so use the
+			// assistant response as an observation-only fallback. A live
+			// `currentProviderCall` means preflight already counted this response.
+			if (currentRequestPlan && !currentProviderCall) currentRequestProviderRounds += 1;
 			const stopReason = normalizeStopReason(observed.stopReason);
 			if (currentRequestPlan && currentRequestStopReasons.length < 64) currentRequestStopReasons.push(stopReason);
 			accumulateRequestUsage(currentRequestResources, observed.usage as Readonly<Record<string, unknown>> | undefined);
@@ -2036,28 +2125,24 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 
 	pi.on("before_provider_request", async (event, ctx) => {
 		const model = ctx.model as { contextWindow?: unknown; maxTokens?: unknown; provider?: unknown; id?: unknown } | undefined;
-		const contextWindow = typeof model?.contextWindow === "number" ? model.contextWindow : undefined;
-		if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return;
-		const validContextWindow: number = contextWindow;
 		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, interactionMode, projectAvailable: projectProvider.kind !== "lightweight" });
 		// A chat request that starts using project/read tools follows the lookup
 		// budget once that work is observable.
 		const providerRoundLimit = effectiveProviderRoundBudget(plan, currentRequestToolCalls);
 		const attemptTrigger = requestLifecycle.currentAttempt()?.trigger;
 		if (attemptTrigger !== "provider-retry" && attemptTrigger !== "compaction-retry") {
-			if (currentRequestProviderRounds >= providerRoundLimit) {
-				if (currentRequestProgressSinceRound && !currentRequestProviderGraceUsed) {
-					currentRequestProviderGraceUsed = true;
-					if (ctx.hasUI) ctx.ui.notify(`Dove provider-round budget reached (${providerRoundLimit}); one synthesis round is allowed because the last tool batch produced new progress.`, "warning");
-				} else {
-					pendingRequestTerminal = terminalForPolicy("provider-round", "provider-round-budget", `Dove stopped after ${providerRoundLimit} provider rounds without new progress.`, "Review /status full, then continue from the last evidence.");
-					await issueRequestHostAbort(ctx, pendingRequestTerminal);
-					return;
-				}
+			// Observation threshold only: provider rounds are never a transport or
+			// stop limit. Semantic repetition/error guards own loop termination.
+			if (currentRequestProviderRounds >= providerRoundLimit && !currentRequestProviderRoundWarningIssued) {
+				currentRequestProviderRoundWarningIssued = true;
+				if (ctx.hasUI) ctx.ui.notify(`Dove provider-round observation threshold reached (${providerRoundLimit}); continuing because provider rounds are not a hard limit.`, "warning");
 			}
 			currentRequestProviderRounds += 1;
 			currentRequestProgressSinceRound = false;
 		}
+		const contextWindow = typeof model?.contextWindow === "number" ? model.contextWindow : undefined;
+		if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return;
+		const validContextWindow: number = contextWindow;
 		const sessionManager = ctx.sessionManager as { getSessionId?: () => string };
 		const sessionId = sessionManager.getSessionId?.();
 		const taskId = currentRequestTaskId ?? (currentRequestPlan?.intent === "chat" ? "pi-session" : projectProvider.getCurrentTask()?.stableId ?? "pi-session");
@@ -2155,7 +2240,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const hookStartedAt = Date.now();
 		const intentStartedAt = Date.now();
 		const requestLease = requestLifecycle.beginRequest({ prompt: event.prompt });
-		const requestPlan = currentRequestPlan?.requestId === requestLease.logicalRequestId
+		let requestPlan = currentRequestPlan?.requestId === requestLease.logicalRequestId
 			? currentRequestPlan
 			: createRequestPlan({
 				message: event.prompt,
@@ -2173,7 +2258,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			currentRequestStartedAt = Date.now();
 			currentRequestResources = emptyRequestResourceSnapshot();
 			currentRequestProgressSinceRound = false;
-			currentRequestProviderGraceUsed = false;
+		currentRequestProviderRoundWarningIssued = false;
 			currentRequestStopReasons = [];
 			currentRequestHostAbortIssued = false;
 			currentRequestTerminalPersisted = false;
@@ -2208,6 +2293,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const continuationTask = continuationState?.projection.kind === "current" || continuationState?.projection.kind === "selected" || continuationState?.projection.kind === "single_candidate"
 			? continuationState.projection.task
 			: undefined;
+		if (continuationTask?.formal && requestPlan.lane !== "formal") {
+			requestPlan = Object.freeze({ ...requestPlan, lane: "formal", contextClasses: Object.freeze(["conversation", "project-task", "project-spec"]) });
+			currentRequestPlan = requestPlan;
+		}
 		const requestTaskId = requestPlan.workflowAction === "create-task"
 			? "pi-session"
 			: continuationState
@@ -2495,7 +2584,7 @@ export interface RequestProjectContinuation {
 
 /** Resolve the public continuation projection exactly once for this request. */
 export function readProjectContinuationForPlan(provider: ProjectProvider, plan: RequestPlan): RequestProjectContinuation | undefined {
-	if (plan.projectAction !== "continue") return undefined;
+	if (plan.projectAction !== "continue" && plan.continuationRequested !== true) return undefined;
 	const context = provider.getContext();
 	return { context, projection: summarizeProjectContinuation(context, plan.taskSelector) };
 }

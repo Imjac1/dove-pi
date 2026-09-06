@@ -69,7 +69,7 @@ describe("Pi adapter", () => {
 		} as unknown as ExtensionAPI;
 
 		extension(api);
-		assert.deepEqual([...commands.keys()], ["mode", "dove-mode", "status", "sysprompt", "reasoning-voice", "dove-thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
+		assert.deepEqual([...commands.keys()], ["mode", "dove-mode", "status", "subagent", "sysprompt", "reasoning-voice", "dove-thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
 		assert.equal(commands.has("thinking"), false, "Dove must not shadow Pi's built-in /thinking command");
 		assert.equal(shortcuts.size, 2);
 		assert.ok(shortcuts.has("ctrl+shift+l"));
@@ -85,6 +85,11 @@ describe("Pi adapter", () => {
 		assert.ok(tools.has("agent_workspace_verify"));
 		assert.ok(tools.has("agent_workspace_restore"));
 		assert.ok(tools.has("agent_workspace_patch"));
+		assert.ok(tools.has("agent_subagent"));
+		const subagentTool = tools.get("agent_subagent") as { execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }>; details?: { available?: boolean } }> };
+		const subagentResult = await subagentTool.execute("subagent-call", { name: "inspect", prompt: "Read the project" });
+		assert.equal(subagentResult.details?.available, false);
+		assert.match(subagentResult.content[0]?.text ?? "", /Subagent unavailable/);
 		const projectContextTool = tools.get("agent_project_context") as { execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }> }> };
 		const projectContextResult = await projectContextTool.execute("test-call", {});
 		const projectContextText = projectContextResult.content[0]?.text ?? "";
@@ -147,7 +152,7 @@ describe("Pi adapter", () => {
 			policyAbort: true,
 			terminal: { origin: "provider", code: "provider-authorization-denied", summary: "The provider rejected authentication or authorization.", retryable: false, nextAction: "Check provider credentials and retry." },
 		});
-		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { strategy: { schemaVersion: number; executionMode: string; toolProfile: string; activeToolCount: number; providerRound: { used: number } }; diagnostics: { lastTerminal?: { terminal?: { origin?: string; code?: string } } }; toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
+		const doctorTool = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { strategy: { schemaVersion: number; executionMode: string; toolProfile: string; activeToolCount: number; providerRound: { used: number } }; diagnostics: { lastTerminal?: { terminal?: { origin?: string; code?: string } } }; subagent: { provider: string; configured: boolean; available: boolean; reason?: string }; toolSchemaStability: { inSync: boolean; expectedCount: number; activeCount: number; missing: string[]; unexpected: string[] } } }> };
 		const doctorResult = await doctorTool.execute("doctor-call", {}, undefined, undefined, context);
 		assert.equal(doctorResult.details.strategy.schemaVersion, 1);
 		assert.equal(doctorResult.details.strategy.executionMode, "standard");
@@ -155,6 +160,10 @@ describe("Pi adapter", () => {
 		assert.equal(doctorResult.details.strategy.activeToolCount, piSessionBaseline.length);
 		assert.ok(Number.isInteger(doctorResult.details.strategy.providerRound.used));
 		assert.ok(doctorResult.details.strategy.providerRound.used >= 0);
+		assert.equal(doctorResult.details.subagent.provider, "pi-child");
+		assert.equal(doctorResult.details.subagent.configured, false);
+		assert.equal(doctorResult.details.subagent.available, false);
+		assert.match(doctorResult.details.subagent.reason ?? "", /not configured|invalid/i);
 		assert.deepEqual(doctorResult.details.toolSchemaStability, {
 			inSync: true,
 			expectedCount: piSessionBaseline.length,
@@ -518,9 +527,35 @@ describe("Pi adapter", () => {
 				() => convergenceTool!.execute("empty-finding-update", { operation: "update_finding", acceptanceId: "AC-001", findingId: "follow-up-1" }, undefined, undefined, context),
 				/update_finding requires evidenceRefs, summary, or nextAction/,
 			);
+			const beforeTransientRetry = await convergenceTool!.execute("status-before-transient", { operation: "status" }, undefined, undefined, context);
+			const decisionsBeforeTransientRetry = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { eventKind?: string } }).filter((record) => record.kind === "task.convergence.decision" && record.details?.eventKind === "decide").length;
+			await events.get("agent_start")?.({ type: "agent_start" }, context);
+			await events.get("before_provider_request")?.({ type: "before_provider_request", payload: { messages: [{ role: "user", content: "retry" }] } }, { ...context, model: { contextWindow: 100_000, maxTokens: 20 } });
+			await events.get("after_provider_response")?.({ type: "after_provider_response", status: 503 }, context);
+			const transientMessage = { role: "assistant", stopReason: "error", errorMessage: "503 Service Unavailable", content: [] };
+			await events.get("message_end")?.({ type: "message_end", message: transientMessage }, context);
+			await events.get("agent_end")?.({ type: "agent_end", messages: [transientMessage] }, context);
+			const afterTransientRetry = await convergenceTool!.execute("status-after-transient", { operation: "status" }, undefined, undefined, context);
+			assert.equal(afterTransientRetry.details.snapshot.consecutiveNoProgress, beforeTransientRetry.details.snapshot.consecutiveNoProgress);
+			assert.equal(afterTransientRetry.details.snapshot.meaningfulProgressSinceReview, beforeTransientRetry.details.snapshot.meaningfulProgressSinceReview, "a transient retry must not consume the semantic progress marker");
+			const decisionsAfterTransientRetry = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: { eventKind?: string } }).filter((record) => record.kind === "task.convergence.decision" && record.details?.eventKind === "decide").length;
+			assert.equal(decisionsAfterTransientRetry, decisionsBeforeTransientRetry, "an automatic provider retry must not emit a semantic convergence decision");
+			await events.get("agent_start")?.({ type: "agent_start" }, context);
+			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
+			const secondFormalPrompt = "继续当前项目任务";
+			await events.get("input")?.({ type: "input", text: secondFormalPrompt, source: "interactive", streamingBehavior: "immediate" }, context);
+			await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: secondFormalPrompt, systemPrompt: "" }, context);
 			await events.get("agent_start")?.({ type: "agent_start" }, context);
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
 			assert.match(readFileSync(join(root, ".dove", "tasks", formalTask!.providerTaskId, "evidence.jsonl"), "utf8"), /"outcome":"completed"/);
+			const progressedNativeTask = JSON.parse(readFileSync(join(root, ".dove", "state.json"), "utf8")) as { currentGoalId?: string; goals?: Array<{ id?: string; nextStep?: string }> };
+			assert.equal(progressedNativeTask.goals?.find((goal) => goal.id === progressedNativeTask.currentGoalId)?.nextStep, "Review evidence and decide the next action for AC-001.", "native continuation must preserve the reducer-owned AC-bound corrective action");
+			const convergencePath = join(root, ".dove", "tasks", formalTask!.providerTaskId, "convergence.json");
+			const validConvergence = readFileSync(convergencePath, "utf8");
+			writeFileSync(convergencePath, "{ malformed", "utf8");
+			const usableWithMalformedConvergence = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "malformed-convergence-write", toolName: "write", input: { path: "still-usable.txt", content: "Pi remains usable" } }, context);
+			assert.equal(usableWithMalformedConvergence, undefined, "malformed convergence metadata must not become a Pi tool firewall");
+			writeFileSync(convergencePath, validConvergence, "utf8");
 			await convergenceTool!.execute("pass-convergence", { operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["evidence:formal-pass"] }, undefined, undefined, context);
 			const blockedAfterFinish = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "formal-write-after-finish", toolName: "write", input: { path: "should-not-write.txt", content: "blocked" } }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
 			assert.equal(blockedAfterFinish?.block, true);
