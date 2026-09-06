@@ -2,12 +2,17 @@ import { randomUUID } from "node:crypto";
 import { decideDispatch } from "./dispatch-policy.ts";
 import type { AgentMode, DispatchActual, DispatchActualMetrics, DispatchDecision, DispatchEstimate } from "./contracts.ts";
 import type { ExecutionLedger } from "./execution-ledger.ts";
+import type { SubagentProvider, SubagentRequest } from "./subagent.ts";
 
 export interface DispatchWork<TResult> {
 	readonly estimate: DispatchEstimate;
 	readonly longRunningIsolation?: boolean;
 	readonly runInline: () => Promise<TResult>;
 	readonly runSubagent?: () => Promise<TResult>;
+	/** Optional host-neutral provider for a real isolated child run. */
+	readonly subagentProvider?: SubagentProvider<TResult>;
+	/** Builds the bounded child request after the dispatch id is assigned. */
+	readonly subagentRequest?: (dispatchId: string) => SubagentRequest;
 	readonly branches?: readonly (() => Promise<TResult>)[];
 	/** Optional provider for token, retry, and human-intervention observations. */
 	readonly reportActualMetrics?: () => DispatchActualMetrics | Promise<DispatchActualMetrics>;
@@ -33,11 +38,25 @@ export async function executeDispatch<TResult>(work: DispatchWork<TResult>): Pro
 			const result = await Promise.all(work.branches.map((branch) => branch()));
 			return { decision, result, actual: await appendActual(work, dispatchId, startedAt, started, decision, "success") };
 		}
-		if (decision.route === "subagent" && work.runSubagent) {
+		if (decision.route === "subagent" && work.subagentProvider && work.subagentRequest) {
+			const health = await work.subagentProvider.inspect();
+			if (health.available) {
+				const launch = await work.subagentProvider.launch(work.subagentRequest(dispatchId));
+				const terminal = await work.subagentProvider.collect(launch.runId);
+				if (terminal.state !== "succeeded" || terminal.value === undefined) {
+					throw new Error(terminal.error?.summary ?? `Subagent ended in ${terminal.state} state.`);
+				}
+				const result = terminal.value;
+				return { decision, result, actual: await appendActual(work, dispatchId, startedAt, started, decision, "success") };
+			}
+			effectiveDecision = { ...decision, route: "inline", reason: `${decision.reason}; provider unavailable: ${health.reason ?? health.provider}` };
+		} else if (decision.route === "subagent" && work.runSubagent) {
 			const result = await work.runSubagent();
 			return { decision, result, actual: await appendActual(work, dispatchId, startedAt, started, decision, "success") };
 		}
-		effectiveDecision = { ...decision, route: "inline", reason: `${decision.reason}; no compatible worker was supplied` };
+		if (effectiveDecision.route === "subagent") {
+			effectiveDecision = { ...decision, route: "inline", reason: `${decision.reason}; no compatible worker was supplied` };
+		}
 		const result = await work.runInline();
 		return { decision: effectiveDecision, result, actual: await appendActual(work, dispatchId, startedAt, started, effectiveDecision, "success") };
 	} catch (error) {

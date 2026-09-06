@@ -290,4 +290,41 @@ describe("dispatch policy", () => {
 		assert.equal(outcome.actual.status, "success");
 		assert.equal(outcome.actual.retries, 0);
 	});
+
+	it("runs an isolated child through a healthy host-neutral provider", async () => {
+		let launched = 0;
+		const outcome = await executeDispatch({
+			estimate: { inlineCost: 100, dispatchCost: 50, predictedWallTimeMs: 180_000, independentBranches: 1, hasSharedMutableState: false },
+			longRunningIsolation: true,
+			runInline: async () => "inline",
+			subagentRequest: (dispatchId) => ({ dispatchId, name: "inspect", prompt: "Read the project", cwd: process.cwd(), capabilities: ["read", "grep"] }),
+			subagentProvider: {
+				async inspect() { return { available: true, provider: "fake" }; },
+				async launch() { launched++; return { runId: "run-1", provider: "fake", state: "running", acceptedAt: new Date().toISOString() }; },
+				async collect(runId) { return { runId, dispatchId: "ignored-by-test", state: "succeeded", value: "isolated" }; },
+				async cancel(runId) { return { runId, dispatchId: "ignored-by-test", state: "cancelled", error: { code: "cancelled", summary: "cancelled", retryable: true } }; },
+			},
+		});
+		assert.equal(launched, 1);
+		assert.equal(outcome.decision.route, "subagent");
+		assert.equal(outcome.result, "isolated");
+	});
+
+	it("falls back inline when the provider is unavailable", async () => {
+		const outcome = await executeDispatch({
+			estimate: { inlineCost: 100, dispatchCost: 50, predictedWallTimeMs: 180_000, independentBranches: 1, hasSharedMutableState: false },
+			longRunningIsolation: true,
+			runInline: async () => "inline",
+			subagentRequest: (dispatchId) => ({ dispatchId, name: "inspect", prompt: "Read the project", cwd: process.cwd(), capabilities: ["read"] }),
+			subagentProvider: {
+				async inspect() { return { available: false, provider: "fake", reason: "tools missing" }; },
+				async launch() { throw new Error("must not launch"); },
+				async collect() { throw new Error("must not collect"); },
+				async cancel() { throw new Error("must not cancel"); },
+			},
+		});
+		assert.equal(outcome.decision.route, "inline");
+		assert.match(outcome.decision.reason, /provider unavailable: tools missing/);
+		assert.equal(outcome.result, "inline");
+	});
 });

@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/personal-agent-runtime.md","reason":"Runtime ownership router and context budget contract."}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"Dispatch calibration, Pi capability projection, and ledger contracts."}
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Request lifecycle and provider stop-reason boundaries."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"Pi extension authority, health, and tool discovery contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend validation and forbidden patterns."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Typed failure and recovery conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Core-to-Pi adapter data-flow review."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Avoid duplicate dispatch and capability logic."}
