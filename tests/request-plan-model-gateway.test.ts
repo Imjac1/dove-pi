@@ -54,6 +54,8 @@ describe("request planning", () => {
 		assert.equal(createRequestPlan({ message: "继续当前项目任务", projectAvailable: true }).lane, "fast");
 		assert.equal(createRequestPlan({ message: "解释一下架构设计", projectAvailable: true }).lane, "fast");
 		assert.equal(createRequestPlan({ message: "how does the architecture work?", projectAvailable: true }).lane, "fast");
+		assert.equal(createRequestPlan({ message: "查看架构设计方案", projectAvailable: true }).lane, "fast");
+		assert.equal(createRequestPlan({ message: "说明如何重构模块", projectAvailable: true }).lane, "fast");
 		assert.equal(createRequestPlan({ message: "请规划并设计一个缓存命中率优化方案，只回复完成", projectAvailable: true }).lane, "formal");
 		const responseOnlyFormal = createRequestPlan({ message: "请规划并设计一个缓存命中率优化方案，只回复完成", projectAvailable: true });
 		assert.deepEqual(responseOnlyFormal.contextClasses, ["conversation", "project-task", "project-spec"]);
@@ -69,6 +71,9 @@ describe("request planning", () => {
 		const multiFile = createRequestPlan({ message: "规划并实现缓存优化，修改多个文件", projectAvailable: true });
 		assert.equal(multiFile.intent, "execution");
 		assert.equal(multiFile.lane, "formal", "planning plus multi-file implementation must use formal lane");
+		const englishMultiFile = createRequestPlan({ message: "Please plan and implement changes across multiple files", projectAvailable: true });
+		assert.equal(englishMultiFile.intent, "execution");
+		assert.equal(englishMultiFile.lane, "formal", "English multi-file implementation must use formal lane");
 		const pendingFormal = createRequestPlan({ message: "规划并生成 PRD", projectAvailable: true, requestId: "formal-source" });
 		const affirmative = createRequestPlan({ message: "可以", projectAvailable: true, pendingPlan: pendingFormal });
 		assert.equal(affirmative.lane, "formal");
@@ -146,10 +151,13 @@ describe("request planning", () => {
 		const originalE2ePrompt = createRequestPlan({ message: "继续当前项目任务；如果没有活动任务，就告诉我下一步应该怎么开始，不要创建或完成任务。", projectAvailable: true });
 		assert.equal(originalE2ePrompt.intent, "project-work");
 		assert.equal(originalE2ePrompt.projectAction, "continue");
+		assert.equal(originalE2ePrompt.workflowAction, "continue");
 		assert.equal(createRequestPlan({ message: "查看如何继续当前任务", projectAvailable: true }).projectAction, undefined);
+		assert.equal(createRequestPlan({ message: "查看如何继续当前任务", projectAvailable: true }).workflowAction, undefined);
 		const executingContinuation = createRequestPlan({ message: "继续当前项目任务，然后修复登录问题", projectAvailable: true });
 		assert.equal(executingContinuation.intent, "execution");
 		assert.equal(executingContinuation.projectAction, undefined);
+		assert.equal(executingContinuation.continuationRequested, true);
 	});
 
 	it("does not enter lifecycle workflow for negated explanations", () => {

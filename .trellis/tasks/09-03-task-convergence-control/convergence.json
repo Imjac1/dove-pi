@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "taskId": "task-convergence-control",
+  "revision": 1,
+  "acceptanceRevision": "179b574aa9780a365b7c66f9aae725f76d98579abac1915072dd0b5a99d490fe",
+  "state": "working",
+  "criteria": [
+    {
+      "id": "AC-001",
+      "text": "Fast lane isolation: chat, lookup, and non-formal small edits produce no convergence files, prompts, mutation blocks, or extra questions.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-002",
+      "text": "Acceptance freeze: starting a formal task snapshots stable IDs and a deterministic revision; silent criterion drift is detected as `scope_change`.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-003",
+      "text": "Mutation attribution: every formal-task product mutation is associated with an existing acceptance ID, while an unknown ID is rejected before the mutation executes.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-004",
+      "text": "Finding discipline: blocking/regression findings stay in the current task; follow-ups are recorded but excluded from current remaining work; scope changes and serious risks checkpoint instead of auto-fixing.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-005",
+      "text": "Finish convergence: all accepted criteria passing with no open blocker deterministically yields `ready_to_finish` and prevents another implement/check product-mutation cycle.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-006",
+      "text": "Checkpoint recovery: semantic no-progress, interruption, and external blocking produce bounded checkpoints; resume restores the frozen acceptance vector and one criterion-bound next action.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-007",
+      "text": "Cross-plane parity: shared trace fixtures produce equivalent semantic decisions for Trellis/Codex and Dove/Pi, including the installer expansion scenario.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-008",
+      "text": "Observability only: tool-call, provider-round, elapsed-time, and available token metrics are recorded and queryable but never influence a convergence decision.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-009",
+      "text": "Backward compatibility: existing native/Trellis fixtures stay readable, malformed new state is preserved, and ordinary tool execution remains available.",
+      "status": "pending",
+      "evidenceRefs": []
+    },
+    {
+      "id": "AC-010",
+      "text": "Quality gate: focused convergence tests, full Node tests, typecheck, installer tests, doctor, and Pi smoke pass; Trellis workflow and agent instructions agree on the same terminal semantics.",
+      "status": "pending",
+      "evidenceRefs": []
+    }
+  ],
+  "findings": [],
+  "completedStepIds": [],
+  "consecutiveNoProgress": 0,
+  "meaningfulProgressSinceReview": false,
+  "observedResources": {
+    "toolCalls": 0,
+    "providerRounds": 0,
+    "elapsedMs": 0
+  }
+}

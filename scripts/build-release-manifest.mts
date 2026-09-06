@@ -66,7 +66,7 @@ const profiles = Object.fromEntries(
 	]),
 );
 function sourceDigest(root: string): string {
-	const includedRoots = ["src", "installer", ".pi", "scripts/build-release-manifest.mts", "dove_pi.py", "package.json", "package-lock.json"];
+	const includedRoots = ["bin", "src", "installer", ".pi", "scripts/build-release-manifest.mts", "dove_pi.py", "package.json", "package-lock.json"];
 	const files: string[] = [];
 	const collect = (relative: string): void => {
 		const absolute = resolve(root, relative);

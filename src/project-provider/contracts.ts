@@ -1,5 +1,6 @@
 import type { TrellisSnapshot, TrellisTaskRecord } from "../trellis-adapter/index.ts";
-import type { NativeTaskPhase } from "./native-state.ts";
+import type { AcceptanceCriterionDefinition, FindingKind, TaskConvergenceSnapshot } from "../core/task-convergence.ts";
+import type { NativeGoalConvergenceProjection, NativeTaskPhase } from "./native-state.ts";
 
 /** Contract version consumed by the Dove agent core. */
 export const PROJECT_PROVIDER_CONTRACT = "1.0" as const;
@@ -52,7 +53,37 @@ export interface ProjectTask extends ProjectTaskIdentity {
 	readonly files: readonly string[];
 	readonly formal?: boolean;
 	readonly phase?: NativeTaskPhase;
+	readonly convergence?: ProjectTaskConvergenceStatus;
 }
+
+export type ProjectTaskConvergenceStatus =
+	| { readonly health: "missing" }
+	| { readonly health: "invalid"; readonly issue: string }
+	| ({ readonly health: "valid" } & NativeGoalConvergenceProjection);
+
+export type ProjectTaskConvergenceRead =
+	| { readonly kind: "missing" }
+	| { readonly kind: "invalid"; readonly issue: string }
+	| { readonly kind: "valid"; readonly snapshot: TaskConvergenceSnapshot };
+
+export type ProjectTaskConvergenceProgress =
+	| { readonly kind: "started" }
+	| { readonly kind: "evidence"; readonly evidenceRef: string }
+	| { readonly kind: "passed"; readonly evidenceRefs?: readonly string[] }
+	| { readonly kind: "failed"; readonly evidenceRefs?: readonly string[] }
+	| { readonly kind: "waived"; readonly evidenceRef: string }
+	| { readonly kind: "step_completed"; readonly stepId: string }
+	| { readonly kind: "verification_started" };
+
+export type ProjectTaskConvergenceOperation =
+	| { readonly action: "freeze"; readonly criteria: readonly AcceptanceCriterionDefinition[]; readonly acceptanceId?: string }
+	| { readonly action: "progress"; readonly acceptanceId: string; readonly progress: ProjectTaskConvergenceProgress }
+	| { readonly action: "finding"; readonly acceptanceId: string; readonly finding: { readonly id: string; readonly kind: FindingKind; readonly summary: string; readonly evidenceRefs: readonly string[]; readonly nextAction?: string }; readonly nextAction?: string }
+	| { readonly action: "update_finding"; readonly acceptanceId: string; readonly findingId: string; readonly evidenceRefs?: readonly string[]; readonly summary?: string; readonly nextAction?: string }
+	| { readonly action: "resolve_finding"; readonly acceptanceId: string; readonly findingId: string; readonly evidenceRefs?: readonly string[] }
+	| { readonly action: "decide"; readonly acceptanceId: string; readonly nextAction: string }
+	| { readonly action: "checkpoint"; readonly acceptanceId: string; readonly nextAction: string; readonly unblockCondition?: string }
+	| { readonly action: "resume"; readonly acceptanceId: string; readonly acceptanceRevision: string };
 
 export interface ProjectTaskProgress {
 	readonly phase: NativeTaskPhase;
@@ -92,6 +123,8 @@ export interface ProjectProvider {
 	/** Silently establish a formal task and its durable planning artifacts. */
 	ensureFormalTask?(title: string, description?: string): Promise<ProjectTask>;
 	recordTaskProgress?(taskId: string, progress: ProjectTaskProgress): Promise<void>;
+	readTaskConvergence?(taskId: string): ProjectTaskConvergenceRead;
+	mutateTaskConvergence?(taskId: string, operation: ProjectTaskConvergenceOperation): Promise<TaskConvergenceSnapshot>;
 	runTaskOperation(operation: ProjectTaskOperation, args: readonly string[]): Promise<string>;
 	/** Read-only reconciliation of an interrupted mutation intent. */
 	reconcileTaskOperation?(operation: ProjectTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;

@@ -1,0 +1,28 @@
+{
+  "id": "task-convergence-control",
+  "name": "task-convergence-control",
+  "title": "Task convergence control",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": "Dove task convergence core, native provider, Pi lifecycle, project-local Trellis workflow/agents, shared replay tests; resource limits deferred",
+  "package": null,
+  "priority": "P2",
+  "creator": "aixi",
+  "assignee": "aixi",
+  "createdAt": "2026-09-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "resource_limits": "observation_only"
+  }
+}

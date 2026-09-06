@@ -29,6 +29,17 @@ Before reviewing, read in this order:
 5. **Run verification** — project lint and typecheck on the changed scope
 6. **Report** — concrete findings with `file:line` citations and what was fixed vs. what is open
 
+## Convergence Rules
+
+- Classify every finding against an existing `AC-*` criterion. Fix only
+  `blocking` / `regression` findings in the frozen boundary; record `follow_up`
+  findings outside the current work; checkpoint and return to planning for
+  `scope_change` / `serious_unexpected_risk`.
+- Once the state is `ready_to_finish`, do not start another product-mutation or
+  implement/check cycle. Only perform final verification, spec capture, commit,
+  and wrap-up.
+- Do not use an unbounded "until green" loop; convergence state is authoritative.
+
 ## Forbidden Operations
 
 - `git commit`

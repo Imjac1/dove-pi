@@ -133,6 +133,9 @@ Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影�
 /mode standard
 /mode ultra
 
+/dove-workspace development
+/dove-workspace pentest
+
 /dove-mode auto       自动选择上下文模式
 /dove-mode chat       独立对话，不加载项目任务上下文
 /dove-mode work       保留项目上下文，复杂工作才创建正式产物
@@ -144,6 +147,12 @@ Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影�
 - `ultra`：复杂项目、长链路分析和高强度执行。
 
 `Ultra` 是运行策略；`max` 是安装时的扩展组合，两者不是同一个概念。
+
+工作区模式与执行强度是两条独立设置：`development`（默认）用于普通开发，
+`pentest` 用于授权渗透测试并在下一次启动时关闭 Pi-lens。`fast`、`standard`、
+`ultra` 仍只控制任务强度，不会改变工具权限或工作区模式。切换工作区模式后重启
+`dove-pi` 才会应用 Pi-lens 状态；渗透测试会话如确有需要，仍可使用 Pi 原生
+`/lens-toggle` 临时开启。
 
 ### Subagent（实验性只读能力）
 

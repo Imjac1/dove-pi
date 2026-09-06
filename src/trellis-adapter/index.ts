@@ -63,7 +63,9 @@ export function isSensitiveProjectPath(path: string): boolean {
 
 function collectMarkdown(root: string, skippedDirectories: ReadonlySet<string> = new Set()): string[] {
 	const results: string[] = [];
-	for (const entry of readdirSync(root, { withFileTypes: true })) {
+	let entries;
+	try { entries = readdirSync(root, { withFileTypes: true }); } catch { return results; }
+	for (const entry of entries) {
 		if (entry.isDirectory() && skippedDirectories.has(entry.name.toLowerCase())) continue;
 		const path = join(root, entry.name);
 		if (isSensitiveProjectPath(path)) continue;

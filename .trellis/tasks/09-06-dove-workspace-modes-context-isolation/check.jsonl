@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Verify workspace policy persistence does not violate native provider ownership or cache rules."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"Verify launcher and Pi-lens profile behavior, compatibility, and managed-release boundaries."}
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Verify every provider-facing message path is bounded and cache behavior remains stable."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply cross-layer quality, secret handling, and required test gates."}

@@ -5,6 +5,7 @@ import type { RequestPlan } from "./request-plan.ts";
 import type { RequestAttemptOutcome, RequestAttemptTrigger, RequestDelivery, RequestInputSource, RequestTerminalEnvelope, RequestTerminalReason } from "./request-lifecycle.ts";
 import type { BudgetAccounting, BudgetDiagnostic } from "./model-gateway.ts";
 import type { CachePrefixEvidence, ProviderCacheAttribution } from "./cache-prefix.ts";
+import type { StrategySnapshot } from "./strategy-snapshot.ts";
 
 export interface ExecutionDiagnosticsFilter {
 	readonly sessionId?: string;
@@ -43,6 +44,7 @@ export interface ExecutionResourceDiagnostic {
 
 export interface ExecutionDiagnosticsProjection {
 	readonly schemaVersion: 1;
+	readonly strategy?: StrategySnapshot;
 	readonly lastTerminal?: ExecutionTerminalDiagnostic;
 	readonly lastResourceObservation?: ExecutionResourceDiagnostic;
 }
@@ -59,10 +61,36 @@ export function projectExecutionDiagnostics(
 	const matching = records.filter((record) => matchesDiagnosticsFilter(record, filter));
 	const terminalRecord = [...matching].reverse().find((record) => record.kind === "request.terminal");
 	const resourceRecord = [...matching].reverse().find((record) => record.kind === "task.convergence.observed" && isRecord(record.details) && record.details.observationOnly === true);
+	const strategyRecord = [...matching].reverse().find((record) => record.kind === "request.planned" && isRecord(record.details) && isRecord(record.details.strategy));
+	const resource = resourceRecord ? projectResourceDiagnostic(resourceRecord) : undefined;
+	const strategy = strategyRecord && isRecord(strategyRecord.details) && isRecord(strategyRecord.details.strategy)
+		? mergeStrategyResources(strategyRecord.details.strategy as unknown as StrategySnapshot, resource)
+		: undefined;
 	return {
 		schemaVersion: 1,
+		...(strategy ? { strategy } : {}),
 		...(terminalRecord ? { lastTerminal: projectTerminalDiagnostic(terminalRecord) } : {}),
-		...(resourceRecord ? { lastResourceObservation: projectResourceDiagnostic(resourceRecord) } : {}),
+		...(resource ? { lastResourceObservation: resource } : {}),
+	};
+}
+
+function mergeStrategyResources(strategy: StrategySnapshot, observation: ExecutionResourceDiagnostic | undefined): StrategySnapshot {
+	if (!observation) return strategy;
+	return {
+		...strategy,
+		resources: {
+			...strategy.resources,
+			...(observation.toolCalls === undefined ? {} : { toolCalls: observation.toolCalls }),
+			...(observation.providerRounds === undefined ? {} : { providerRounds: observation.providerRounds }),
+			...(observation.toolDurationMs === undefined ? {} : { toolDurationMs: observation.toolDurationMs }),
+			...(observation.elapsedMs === undefined ? {} : { elapsedMs: observation.elapsedMs }),
+			...(observation.inputTokens === undefined ? {} : { inputTokens: observation.inputTokens }),
+			...(observation.cacheReadTokens === undefined ? {} : { cacheReadTokens: observation.cacheReadTokens }),
+			...(observation.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: observation.cacheWriteTokens }),
+			...(observation.outputTokens === undefined ? {} : { outputTokens: observation.outputTokens }),
+			...(observation.reasoningTokens === undefined ? {} : { reasoningTokens: observation.reasoningTokens }),
+			...(observation.stopReasons === undefined ? {} : { stopReasons: observation.stopReasons }),
+		},
 	};
 }
 
@@ -229,7 +257,7 @@ export class ExecutionLedger {
 		});
 	}
 
-	public async appendRequestPlan(taskId: string, stepId: string, plan: RequestPlan, sessionId?: string): Promise<void> {
+	public async appendRequestPlan(taskId: string, stepId: string, plan: RequestPlan, sessionId?: string, strategy?: StrategySnapshot): Promise<void> {
 		await this.append({
 			taskId,
 			stepId,
@@ -248,6 +276,7 @@ export class ExecutionLedger {
 				projectAction: plan.projectAction,
 				contextClasses: plan.contextClasses,
 				projectAvailable: plan.projectAvailable,
+				...(strategy ? { strategy } : {}),
 			},
 		});
 	}

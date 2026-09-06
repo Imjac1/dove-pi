@@ -58,6 +58,7 @@ interface RecoveryOwnerOptions {
 - The Pi adapter bounds oversized built-in read/shell/search results before model re-entry, preserving full output in tool details and adding a narrowing marker.
 - The Pi adapter normalizes complete DeepSeek DSML text tool calls at `message_end` into standard Pi `toolCall` blocks. It accepts only complete wrapper/invocation/parameter tags, preserves non-DSML content, leaves malformed text unchanged, and uses Pi's normal policy/approval path.
 - Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
+- Pi resource samples are observation-only; never stop convergence.
 - Dispatches write correlated `dispatch.decided` and `dispatch.completed` records. Completion includes unique ID, route, duration, status, and optional token/retry/intervention metrics. Failed dispatches record completion before propagating the error.
 - Tool-loop fingerprints coalesce duplicate reads and stop unchanged repeats. The read-only budget is advisory metadata, not an unconditional terminal: changing reads continue past its historical threshold. Test changing and unchanged cases.
 - Structured `ask_user_question` calls are bounded separately from read caching. A logical user goal may execute one structured question; a second call is blocked and terminates regardless of wording, option shape, or intervening tool results. A new logical goal receives a fresh budget. Semantic fingerprints remain diagnostic evidence, not the enforcement boundary.
@@ -145,9 +146,9 @@ would add indirection without improving this boundary.
 
 **Decision**: Use option 3. Pi and the native project provider are replaceable boundaries, not
 Kernel dependencies. Pi owns lifecycle, shortcuts, active tools, streaming,
-and TUI behavior. Dove's shared runtime owns context budgeting, execution
-records, mutation recovery, and standalone transport validation, but never a
-second Pi tool-permission policy.
+and TUI behavior. Dove owns context accounting and records, never Pi tool
+policy. No fixed mode total/window share; use known usage and let
+`ModelGateway` validate. Unknown is unknown.
 
 ## V2 Request Planning and Provider Budgets
 
@@ -223,7 +224,7 @@ capability executor. In the Pi adapter, the accepted Pi tool call supplies that
 host decision without a second Dove confirmation. Standalone CLI/RPC/MCP hosts
 retain their transport-specific authorization boundary.
 
-Provider calls are runtime decisions rather than incidental transport details.
+Provider calls are runtime decisions, not incidental transport details.
 The Pi `before_provider_request` hook converts the final opaque payload into
 shared ModelGateway segments, reserves model output/tool/provider headroom,
 and rejects the request before HTTP dispatch when the complete payload cannot
@@ -235,11 +236,11 @@ outcome and usage projection. Pi records and swallows extension-hook exceptions,
 so a rejected `before_provider_request` must call the host `ctx.abort()` boundary;
 throwing alone is only the fallback for hosts that do not expose that boundary.
 
-Within one live attempt, provider rounds are bounded by intent/mode: Fast uses
+Provider-round thresholds are diagnostic observations by intent/mode: Fast uses
 `chat=1`, `lookup=3`, `project-work=4`, `execution=5`; Standard adds one and
-Ultra adds two. `RequestLifecycle` owns provider/network retries, so retry and
-compaction attempts do not consume this budget. On exhaustion, record failed
-detail `provider-round-budget:<limit>`, policy-abort, and call `ctx.abort()`.
+Ultra adds two. They never abort transport or stop a progressing request.
+`RequestLifecycle` owns provider/network retries; semantic repetition and error
+guards remain the only loop-stop decisions.
 
 Capability executions receive a unique `executionId` and optional request,
 session, and tool-call correlation. Standalone host integrations may persist an
@@ -373,7 +374,7 @@ policy/provider cause and use `startup-failed` only for queued preflight work.
   non-idempotent capability/recipe, and unknown-plugin fail-closed behavior.
 - Assert legacy ledger readers ignore additive lifecycle kinds.
 
-### 7. Wrong vs Correct
+### 7. Wrong
 
 #### Wrong
 

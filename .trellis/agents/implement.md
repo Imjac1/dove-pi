@@ -27,6 +27,15 @@ Before implementing, read in this order:
 3. **Implement features** — write code that follows specs and existing patterns
 4. **Self-check** — run lint and typecheck on the changed scope before reporting
 
+## Convergence Rules
+
+- Implement only within the frozen `AC-*` acceptance boundary. Treat unrelated
+  findings as `follow_up` and leave them for a later task.
+- A `scope_change` or `serious_unexpected_risk` must checkpoint and return to
+  planning rather than silently widening scope.
+- Once convergence is `ready_to_finish`, stop product mutation and leave only
+  final verification, spec capture, commit, and wrap-up.
+
 ## Forbidden Operations
 
 - `git commit`

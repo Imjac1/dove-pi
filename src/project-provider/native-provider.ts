@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { computeAcceptanceRevision, reduceTaskConvergence, type TaskConvergenceEvent, type TaskConvergenceSnapshot } from "../core/task-convergence.ts";
 import { readTrellisSnapshot, readTrellisText } from "../trellis-adapter/index.ts";
 import { withProjectMutationLock } from "./lock.ts";
-import { appendNativeTaskEvidence, ensureNativeFormalArtifacts, nativeTaskFiles, nativeTaskArtifactPaths, readNativeFormalDocuments, updateNativeAcceptanceProjection, writeNativeTaskManifest, type NativeFormalArtifact } from "./native-artifacts.ts";
-import { MAX_NATIVE_GOALS, nativeProjectStatePath, readNativeProjectState, writeNativeProjectState, type NativeGoal, type NativeProjectState } from "./native-state.ts";
-import { PROJECT_PROVIDER_CONTRACT, resolveProjectTask, toProjectTask, type ProjectContextSnapshot, type ProjectDocument, type ProjectProvider, type ProjectTask, type ProjectTaskOperation, type ProjectTaskProgress, type ProviderHealth } from "./contracts.ts";
+import { appendNativeTaskEvidence, ensureNativeFormalArtifacts, nativeTaskFiles, nativeTaskArtifactPaths, readNativeFormalDocuments, readNativeTaskConvergence, updateNativeAcceptanceProjection, writeNativeTaskConvergence, writeNativeTaskManifest, type NativeFormalArtifact } from "./native-artifacts.ts";
+import { MAX_NATIVE_GOALS, nativeProjectStatePath, projectNativeGoalConvergence, readNativeProjectState, writeNativeProjectState, type NativeGoal, type NativeProjectState } from "./native-state.ts";
+import { PROJECT_PROVIDER_CONTRACT, resolveProjectTask, toProjectTask, type ProjectContextSnapshot, type ProjectDocument, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskConvergenceRead, type ProjectTaskOperation, type ProjectTaskProgress, type ProviderHealth } from "./contracts.ts";
 import { nativeSessionPath, readNativeSessions } from "./native-sessions.ts";
 
 const ACTIVE_STATUSES = new Set(["active", "in_progress", "in-progress", "started", "working"]);
@@ -24,14 +25,20 @@ export class NativeProvider implements ProjectProvider {
 
 	public getHealth(): ProviderHealth {
 		const native = readNativeProjectState(this.projectRoot);
+		const currentGoal = native.kind === "valid" ? native.state.goals.find((goal) => goal.id === native.state.currentGoalId && goal.formal) : undefined;
+		const convergence = currentGoal ? this.readTaskConvergence(`native:${currentGoal.id}`) : undefined;
+		const issues = [
+			...(native.kind === "invalid" ? [native.issue] : []),
+			...(convergence?.kind === "invalid" ? [convergence.issue] : []),
+		];
 		return {
 			provider: this.kind,
-			status: native.kind === "invalid" ? "degraded" : "healthy",
+			status: issues.length > 0 ? "degraded" : "healthy",
 			projectRoot: this.projectRoot,
 			trellisCompatibility: existsSync(resolve(this.projectRoot, ".trellis")) ? "supported" : "unknown",
 			adapterContract: PROJECT_PROVIDER_CONTRACT,
 			capabilities: { readContext: true, readTasks: true, readMemory: true, taskLifecycle: true, mutations: true, atomicMutations: true },
-			issues: native.kind === "invalid" ? [native.issue] : [],
+			issues,
 		};
 	}
 
@@ -40,9 +47,10 @@ export class NativeProvider implements ProjectProvider {
 		const state = native.state;
 		const nativeTasks = state.goals.filter((goal) => goal.status !== "archived").map((goal) => nativeGoalTask(this.projectRoot, goal));
 		const legacy = readLegacyProjection(this.projectRoot);
-		const tasks = [...nativeTasks, ...legacy.tasks];
+		const importedRefs = new Set(state.goals.filter((goal) => goal.status !== "archived" && goal.source === "legacy-trellis" && goal.sourceRef).map((goal) => goal.sourceRef!));
+		const tasks = [...nativeTasks, ...legacy.tasks.filter((task) => !importedRefs.has(task.stableId))];
 		const nativeCurrent = nativeTasks.find((task) => task.providerTaskId === state.currentGoalId);
-		const legacyCurrent = nativeCurrent ? undefined : onlyContinuable(legacy.tasks);
+		const legacyCurrent = nativeCurrent ? undefined : onlyContinuable(legacy.tasks.filter((task) => !importedRefs.has(task.stableId)));
 		const statePath = nativeProjectStatePath(this.projectRoot);
 		const documents: ProjectDocument[] = [...legacy.documents];
 		if (native.kind === "valid") documents.unshift({ path: statePath, kind: "task", content: compactNativeState(this.projectRoot, state), sourceRef: statePath });
@@ -63,7 +71,16 @@ export class NativeProvider implements ProjectProvider {
 	}
 
 	public getCurrentTask(): ProjectTask | undefined { return this.getContext().currentTask; }
-	public resolveTask(selector: string): ProjectTask | undefined { return resolveProjectTask(this.getContext(), selector); }
+	public resolveTask(selector: string): ProjectTask | undefined {
+		const direct = resolveProjectTask(this.getContext(), selector);
+		if (direct) return direct;
+		const normalized = selector.trim();
+		const sourceRef = normalized.startsWith("trellis:") ? normalized : `trellis:${normalized}`;
+		const read = readNativeProjectState(this.projectRoot);
+		if (read.kind !== "valid") return undefined;
+		const imported = read.state.goals.find((goal) => goal.status !== "archived" && goal.source === "legacy-trellis" && goal.sourceRef === sourceRef);
+		return imported ? nativeGoalTask(this.projectRoot, imported) : undefined;
+	}
 	public readMemory(query?: string): readonly ProjectDocument[] {
 		const nativeSessions: ProjectDocument[] = readNativeSessions(this.projectRoot).map((session) => ({
 			path: nativeSessionPath(this.projectRoot),
@@ -138,6 +155,42 @@ export class NativeProvider implements ProjectProvider {
 		});
 	}
 
+	public readTaskConvergence(taskId: string): ProjectTaskConvergenceRead {
+		const read = readNativeProjectState(this.projectRoot);
+		if (read.kind === "invalid") return { kind: "invalid", issue: read.issue };
+		const goal = findNativeGoal(read.state, taskId);
+		if (!goal || !goal.formal) return { kind: "invalid", issue: "Task convergence requires an existing native formal task." };
+		const convergence = readNativeTaskConvergence(this.projectRoot, goal.id);
+		if (convergence.kind !== "valid") return convergence;
+		if (convergence.snapshot.taskId !== goal.id) return { kind: "invalid", issue: "Dove task convergence state belongs to a different task." };
+		return convergence;
+	}
+
+	public async mutateTaskConvergence(taskId: string, operation: ProjectTaskConvergenceOperation): Promise<TaskConvergenceSnapshot> {
+		return withProjectMutationLock(this.projectRoot, async () => {
+			const read = readNativeProjectState(this.projectRoot);
+			if (read.kind === "invalid") throw new Error(read.issue);
+			const goal = findNativeGoal(read.state, taskId);
+			if (!goal || !goal.formal) throw new Error("Task convergence requires an existing native formal task.");
+			const convergence = readNativeTaskConvergence(this.projectRoot, goal.id);
+			if (convergence.kind === "invalid") throw new Error(convergence.issue);
+			if (convergence.kind === "valid" && convergence.snapshot.taskId !== goal.id) throw new Error("Dove task convergence state belongs to a different task.");
+			if (convergence.kind === "missing" && operation.action !== "freeze") throw new Error("Freeze acceptance criteria before recording task convergence.");
+			const event = toConvergenceEvent(goal, operation);
+			const snapshot = reduceTaskConvergence(convergence.kind === "valid" ? convergence.snapshot : undefined, event);
+			const updatedGoal: NativeGoal = {
+				...goal,
+				updatedAt: new Date().toISOString(),
+				convergence: projectNativeGoalConvergence(snapshot),
+			};
+			await writeNativeTaskConvergence(this.projectRoot, goal.id, snapshot);
+			await writeNativeProjectState(this.projectRoot, nextState(read.state, read.state.goals.map((candidate) => candidate.id === goal.id ? updatedGoal : candidate), read.state.currentGoalId));
+			await writeNativeTaskManifest(this.projectRoot, updatedGoal);
+			await appendNativeTaskEvidence(this.projectRoot, goal.id, convergenceEvidence(event, snapshot));
+			return snapshot;
+		});
+	}
+
 	public async runTaskOperation(operation: ProjectTaskOperation, args: readonly string[]): Promise<string> {
 		return withProjectMutationLock(this.projectRoot, async () => {
 			const read = readNativeProjectState(this.projectRoot);
@@ -166,6 +219,14 @@ export class NativeProvider implements ProjectProvider {
 						manifestGoal = startedGoal;
 						if (startedGoal.formal) await ensureNativeFormalArtifacts(this.projectRoot, startedGoal);
 					} else {
+						const existingImported = state.goals.find((goal) => goal.status !== "archived" && goal.source === "legacy-trellis" && goal.sourceRef === task.stableId);
+						if (existingImported) {
+							const resumed: NativeGoal = { ...existingImported, status: "active", updatedAt: now };
+							state = nextState(state, state.goals.map((goal) => goal.id === resumed.id ? resumed : goal), resumed.id);
+							manifestGoal = resumed;
+							if (resumed.formal) await ensureNativeFormalArtifacts(this.projectRoot, resumed);
+							break;
+						}
 						const imported: NativeGoal = { id: `goal-${randomUUID()}`, title: task.title, description: `Imported read-only legacy task ${task.stableId}.`, status: "active", createdAt: now, updatedAt: now, decisions: [], verification: [], formal: true, phase: "intake", source: "legacy-trellis", sourceRef: task.stableId };
 						await ensureNativeFormalArtifacts(this.projectRoot, imported, readLegacyFormalArtifacts(task));
 						manifestGoal = imported;
@@ -177,7 +238,13 @@ export class NativeProvider implements ProjectProvider {
 					if (!state.currentGoalId) throw new Error("finish requires a current native goal.");
 					const finishedGoal = state.goals.find((goal) => goal.id === state.currentGoalId);
 					const completedGoal = finishedGoal ? { ...finishedGoal, status: "completed" as const, phase: "completed" as const, updatedAt: now } : undefined;
-					state = nextState(state, state.goals.map((goal) => goal.id === state.currentGoalId ? completedGoal! : goal), undefined);
+					const updatedGoals = state.goals.map((goal) => goal.id === state.currentGoalId ? completedGoal! : goal);
+					const remainingActive = updatedGoals.filter((goal) => goal.status === "active");
+					// Preserve a usable current task when completion leaves exactly one
+					// resumable goal; multiple remaining goals stay unselected so the
+					// continuation projection can ask the user to choose explicitly.
+					const nextCurrentGoalId = remainingActive.length === 1 ? remainingActive[0]!.id : undefined;
+					state = nextState(state, updatedGoals, nextCurrentGoalId);
 					manifestGoal = completedGoal;
 					break;
 				}
@@ -218,9 +285,68 @@ function nextState(previous: NativeProjectState, goals: readonly NativeGoal[], c
 	return { schemaVersion: 1, revision: previous.revision + 1, ...(currentGoalId ? { currentGoalId } : {}), goals: goals.slice(-MAX_NATIVE_GOALS) };
 }
 
+function findNativeGoal(state: NativeProjectState, taskId: string): NativeGoal | undefined {
+	const goalId = taskId.startsWith("native:") ? taskId.slice("native:".length) : taskId;
+	return state.goals.find((goal) => goal.id === goalId);
+}
+
+function toConvergenceEvent(goal: NativeGoal, operation: ProjectTaskConvergenceOperation): TaskConvergenceEvent {
+	const base = { schemaVersion: 1 as const };
+	switch (operation.action) {
+		case "freeze":
+			return { ...base, kind: "acceptance.frozen", taskId: goal.id, criteria: operation.criteria, acceptanceRevision: computeAcceptanceRevision(operation.criteria), ...(operation.acceptanceId ? { acceptanceId: operation.acceptanceId } : {}) };
+		case "progress":
+			switch (operation.progress.kind) {
+				case "started": return { ...base, kind: "acceptance.started", acceptanceId: operation.acceptanceId };
+				case "evidence": return { ...base, kind: "acceptance.evidence_attached", acceptanceId: operation.acceptanceId, evidenceRef: operation.progress.evidenceRef };
+				case "passed": return { ...base, kind: "acceptance.passed", acceptanceId: operation.acceptanceId, ...(operation.progress.evidenceRefs ? { evidenceRefs: operation.progress.evidenceRefs } : {}) };
+				case "failed": return { ...base, kind: "acceptance.failed", acceptanceId: operation.acceptanceId, ...(operation.progress.evidenceRefs ? { evidenceRefs: operation.progress.evidenceRefs } : {}) };
+				case "waived": return { ...base, kind: "acceptance.waived", acceptanceId: operation.acceptanceId, evidenceRef: operation.progress.evidenceRef };
+				case "step_completed": return { ...base, kind: "planned_step.completed", acceptanceId: operation.acceptanceId, stepId: operation.progress.stepId };
+				case "verification_started": return { ...base, kind: "task.verification_started", acceptanceId: operation.acceptanceId };
+			}
+		case "finding":
+			return { ...base, kind: "finding.recorded", acceptanceId: operation.acceptanceId, finding: operation.finding, ...(operation.nextAction ? { nextAction: operation.nextAction } : {}) };
+		case "update_finding":
+			return { ...base, kind: "finding.updated", acceptanceId: operation.acceptanceId, findingId: operation.findingId, ...(operation.evidenceRefs ? { evidenceRefs: operation.evidenceRefs } : {}), ...(operation.summary ? { summary: operation.summary } : {}), ...(operation.nextAction ? { nextAction: operation.nextAction } : {}) };
+		case "resolve_finding":
+			return { ...base, kind: "finding.resolved", acceptanceId: operation.acceptanceId, findingId: operation.findingId, ...(operation.evidenceRefs ? { evidenceRefs: operation.evidenceRefs } : {}) };
+		case "decide":
+			return { ...base, kind: "task.progress_reviewed", acceptanceId: operation.acceptanceId, nextAction: operation.nextAction };
+		case "checkpoint":
+			return operation.unblockCondition
+				? { ...base, kind: "task.blocked", acceptanceId: operation.acceptanceId, nextAction: operation.nextAction, unblockCondition: operation.unblockCondition }
+				: { ...base, kind: "task.checkpointed", acceptanceId: operation.acceptanceId, nextAction: operation.nextAction };
+		case "resume":
+			return { ...base, kind: "task.resumed", acceptanceId: operation.acceptanceId, acceptanceRevision: operation.acceptanceRevision };
+	}
+}
+
+function convergenceEvidence(event: TaskConvergenceEvent, snapshot: TaskConvergenceSnapshot): Readonly<Record<string, unknown>> {
+	const acceptanceId = "acceptanceId" in event ? event.acceptanceId : undefined;
+	const finding = event.kind === "finding.recorded" ? { id: event.finding.id, kind: event.finding.kind } : undefined;
+	return {
+		kind: "convergence.decision",
+		eventKind: event.kind,
+		...(acceptanceId ? { acceptanceId } : {}),
+		...(finding ? { finding } : {}),
+		acceptanceRevision: snapshot.acceptanceRevision,
+		snapshotRevision: snapshot.revision,
+		state: snapshot.state,
+	};
+}
+
 function nativeGoalTask(projectRoot: string, goal: NativeGoal): ProjectTask {
 	const path = nativeProjectStatePath(projectRoot);
-	return { stableId: `native:${goal.id}`, provider: "native", providerTaskId: goal.id, path, title: goal.title, status: goal.status, files: [path, ...(goal.formal ? nativeTaskFiles(projectRoot, goal) : [])], ...(goal.formal ? { formal: true } : {}), ...(goal.phase ? { phase: goal.phase } : {}) };
+	const convergence = goal.formal ? readNativeTaskConvergence(projectRoot, goal.id) : undefined;
+	const convergenceStatus = convergence?.kind === "valid" && convergence.snapshot.taskId !== goal.id
+		? { health: "invalid" as const, issue: "Dove task convergence state belongs to a different task." }
+		: convergence?.kind === "valid"
+		? { health: "valid" as const, ...projectNativeGoalConvergence(convergence.snapshot) }
+		: convergence?.kind === "invalid"
+			? { health: "invalid" as const, issue: convergence.issue }
+			: goal.formal ? { health: "missing" as const } : undefined;
+	return { stableId: `native:${goal.id}`, provider: "native", providerTaskId: goal.id, path, title: goal.title, status: goal.status, files: [path, ...(goal.formal ? nativeTaskFiles(projectRoot, goal) : [])], ...(goal.formal ? { formal: true } : {}), ...(goal.phase ? { phase: goal.phase } : {}), ...(convergenceStatus ? { convergence: convergenceStatus } : {}) };
 }
 
 function compactNativeState(projectRoot: string, state: NativeProjectState): string {

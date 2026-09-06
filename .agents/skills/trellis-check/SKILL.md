@@ -36,6 +36,18 @@ cat .trellis/spec/<package>/<layer>/index.md
 
 Read the specific guideline files referenced — the index is a pointer, not the goal.
 
+For a formal task, read its convergence status before reviewing or fixing code.
+Every finding must be classified against an existing `AC-*` criterion:
+
+- `blocking` / `regression`: fix only within the frozen acceptance boundary.
+- `follow_up`: record it and exclude it from current remaining work.
+- `scope_change` / `serious_unexpected_risk`: checkpoint and return to planning.
+
+When the state is `ready_to_finish`, do not begin another product-mutation or
+implement/check cycle. Perform only final verification, spec capture, commit,
+and wrap-up. The convergence state is authoritative over a generic "until
+green" loop.
+
 ## Step 3: Run Project Checks
 
 Run the project's lint, type-check, and test commands. Fix any failures before proceeding.

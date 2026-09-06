@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 from dataclasses import replace
+import importlib
 import ntpath
 import os
 from pathlib import Path
@@ -23,10 +24,34 @@ import subprocess
 import sys
 import json
 from datetime import datetime, timezone
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
-from installer import InstallState, MaintenanceResult, ManagedExtensionState, ManagedInstaller, ManagedLayout, ReleaseManifest, TransactionError, load_state
+if TYPE_CHECKING:
+    from installer import InstallState, MaintenanceResult, ManagedExtensionState, ManagedLayout, ReleaseManifest
 
+_INSTALLER_EXPORTS = frozenset({
+    "InstallState",
+    "MaintenanceResult",
+    "ManagedExtensionState",
+    "ManagedInstaller",
+    "ManagedLayout",
+    "ReleaseManifest",
+    "TransactionError",
+    "load_state",
+})
+
+
+def __getattr__(name: str):
+    if name not in _INSTALLER_EXPORTS:
+        raise AttributeError(name)
+    installer = importlib.import_module("installer")
+    value = getattr(installer, name)
+    globals()[name] = value
+    return value
+
+
+def _installer_symbol(name: str):
+    return globals().get(name) or __getattr__(name)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -40,7 +65,7 @@ PROFILES = ("minimal", "dev", "research", "security", "max")
 DEFAULT_PROFILE = "max"
 LOCAL_CLI_COMMANDS = frozenset({
     "doctor", "project", "task", "session", "skills", "web", "cache",
-    "token", "capability", "rpc", "mcp", "extensions",
+    "token", "capability", "rpc", "mcp", "extensions", "workspace",
 })
 LOCAL_CLI_PREFIX_FLAGS = frozenset({"--offline", "--skip-version-check"})
 PUBLIC_BOOTSTRAP = "irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex"
@@ -51,6 +76,53 @@ def executable(name: str) -> str:
     if not path:
         raise RuntimeError(f"{name} is required but was not found in PATH")
     return path
+
+
+def workspace_mode_from_file(cwd: Path) -> str:
+    current = cwd.resolve()
+    while True:
+        path = current / ".dove" / "workspace.json"
+        if path.is_file():
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+                if value.get("schemaVersion") == 1 and value.get("mode") in {"development", "pentest"}:
+                    return value["mode"]
+            except (OSError, json.JSONDecodeError, AttributeError):
+                pass
+            return "development"
+        if (current / ".dove" / "project.json").is_file() or (current / ".trellis").is_dir():
+            return "development"
+        parent = current.parent
+        if parent == current:
+            return "development"
+        current = parent
+
+
+def split_workspace_mode(arguments: Sequence[str]) -> tuple[str | None, list[str]]:
+    mode: str | None = None
+    remaining: list[str] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument == "--workspace-mode":
+            if index + 1 >= len(arguments):
+                raise RuntimeError("--workspace-mode requires development or pentest")
+            mode = arguments[index + 1]
+            index += 2
+            continue
+        if argument.startswith("--workspace-mode="):
+            mode = argument.split("=", 1)[1]
+            index += 1
+            continue
+        remaining.append(argument)
+        index += 1
+    if mode is not None and mode not in {"development", "pentest"}:
+        raise RuntimeError("--workspace-mode must be development or pentest")
+    return mode, remaining
+
+
+def validate_workspace_mode_arguments(arguments: Sequence[str]) -> None:
+    split_workspace_mode(arguments)
 
 
 def run(command: Sequence[str], *, cwd: Path = PROJECT_ROOT, label: str | None = None, show_command: bool = False) -> None:
@@ -348,13 +420,18 @@ def launch(arguments: Sequence[str]) -> int:
     node = executable("node")
     if not PI_ENTRY.exists():
         raise RuntimeError("Dove Pi dependencies are missing. Run 'python dove_pi.py install' first.")
-    pi_arguments: list[str] = []
+    workspace_override, launch_arguments = split_workspace_mode(arguments)
+    workspace_mode = workspace_override or workspace_mode_from_file(Path.cwd())
+    pi_arguments: list[str] = ["--no-lens"] if workspace_mode == "pentest" else []
     launch_env = os.environ.copy()
     # The managed Release/lockfile owns the Pi runtime version. Suppress Pi's
     # package-manager self-update prompt because it cannot preserve Dove's
     # manifest identity or atomic rollback; `dove-pi update` is authoritative.
     launch_env["PI_SKIP_VERSION_CHECK"] = "1"
-    for argument in arguments:
+    launch_env["DOVE_PI_WORKSPACE_MODE"] = workspace_mode
+    if workspace_override:
+        launch_env["DOVE_PI_WORKSPACE_MODE_OVERRIDE"] = workspace_override
+    for argument in launch_arguments:
         if argument == "--skip-version-check":
             launch_env["PI_SKIP_VERSION_CHECK"] = "1"
         elif argument == "--offline":
@@ -454,7 +531,7 @@ def npm_spec_identity(spec: str) -> str:
 def reconcile_managed_extensions(state: InstallState, *, update_extensions: bool = True) -> list[ManagedExtensionState]:
     if not state.current:
         raise RuntimeError("Managed install completed without a current release; run 'dove-pi repair'.")
-    manifest = ReleaseManifest.read(state.current.install_path / "release.json")
+    manifest = _installer_symbol("ReleaseManifest").read(state.current.install_path / "release.json")
     specs = manifest.profiles.get(state.profile, [])
     extension_args = ["extensions", "install", state.profile]
     if not update_extensions:
@@ -464,7 +541,7 @@ def reconcile_managed_extensions(state: InstallState, *, update_extensions: bool
     except RuntimeError as error:
         message = str(error)
         return [
-            ManagedExtensionState(
+            _installer_symbol("ManagedExtensionState")(
                 identity=f"npm:{npm_spec_identity(spec)}",
                 spec=spec,
                 status="degraded",
@@ -479,7 +556,7 @@ def reconcile_managed_extensions(state: InstallState, *, update_extensions: bool
         if isinstance(entry, dict) and isinstance(entry.get("installSpec"), str)
     } if isinstance(failed_values, list) else {}
     return [
-        ManagedExtensionState(
+        _installer_symbol("ManagedExtensionState")(
             identity=f"npm:{npm_spec_identity(spec)}",
             spec=spec,
             status="degraded" if spec in failed_by_spec else "healthy",
@@ -532,8 +609,8 @@ def emit_maintenance_result(result: MaintenanceResult, *, json_output: bool, lay
 
 def run_managed_install(options: argparse.Namespace) -> int:
     validate_managed_prerequisites()
-    layout = ManagedLayout.default()
-    result = ManagedInstaller(layout).install_source(
+    layout = _installer_symbol("ManagedLayout").default()
+    result = _installer_symbol("ManagedInstaller")(layout).install_source(
         PROJECT_ROOT,
         profile=options.profile,
         verify="none" if options.skip_checks else options.verify,
@@ -568,10 +645,10 @@ def parse_managed_update(arguments: Sequence[str]) -> argparse.Namespace:
 
 def run_managed_update(arguments: Sequence[str]) -> int:
     options = parse_managed_update(arguments)
-    layout = ManagedLayout.default()
+    layout = _installer_symbol("ManagedLayout").default()
     if not options.check:
         validate_managed_prerequisites()
-    result = ManagedInstaller(layout).update(
+    result = _installer_symbol("ManagedInstaller")(layout).update(
         check=options.check,
         verify=options.verify,
         reconcile_components=(lambda state: reconcile_managed_extensions(state))
@@ -594,7 +671,7 @@ def parse_managed_maintenance(command: str, arguments: Sequence[str]) -> argpars
 
 def run_managed_maintenance(command: str, arguments: Sequence[str]) -> int:
     options = parse_managed_maintenance(command, arguments)
-    installer = ManagedInstaller(ManagedLayout.default())
+    installer = _installer_symbol("ManagedInstaller")(_installer_symbol("ManagedLayout").default())
     if command == "repair":
         validate_managed_prerequisites()
         result = installer.repair(
@@ -675,6 +752,13 @@ Common controls:
   --clean                  rebuild the managed application release
   --no-extension-updates   install missing Dove extensions but keep configured versions
 
+Workspace mode:
+  dove-pi workspace status
+  dove-pi workspace set development|pentest
+  dove-pi --workspace-mode development|pentest
+  development is the default; pentest adds Pi's --no-lens on the next launch.
+  The one-launch override does not modify .dove/workspace.json.
+
 Advanced controls:
   python dove_pi.py install  install from a source checkout (compatibility)
   --profile PROFILE        max, or minimal/dev/research/security (default: stored profile, else max)
@@ -718,12 +802,22 @@ def main(arguments: Sequence[str]) -> int:
     if list(arguments) in (["version"], ["--version"]):
         print_version()
         return 0
+    validate_workspace_mode_arguments(arguments)
     # Startup flags are also accepted before a local CLI command. Strip only
     # the recognized prefix flags; ordinary Pi arguments remain untouched and
     # still fall through to the Pi host.
     local_cli_index = 0
-    while local_cli_index < len(arguments) and arguments[local_cli_index] in LOCAL_CLI_PREFIX_FLAGS:
-        local_cli_index += 1
+    while local_cli_index < len(arguments):
+        if arguments[local_cli_index] in LOCAL_CLI_PREFIX_FLAGS:
+            local_cli_index += 1
+            continue
+        if arguments[local_cli_index] == "--workspace-mode":
+            local_cli_index += 2
+            continue
+        if arguments[local_cli_index].startswith("--workspace-mode="):
+            local_cli_index += 1
+            continue
+        break
     if local_cli_index > 0 and local_cli_index < len(arguments) and arguments[local_cli_index] in LOCAL_CLI_COMMANDS:
         return run_local_cli(arguments[local_cli_index:])
     if arguments and arguments[0] in {"install", "setup"}:
@@ -735,7 +829,7 @@ def main(arguments: Sequence[str]) -> int:
         return run_managed_maintenance(arguments[0], arguments[1:])
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project", "task", "session", "skills", "web", "cache", "token", "capability", "rpc", "mcp"):
+    if arguments and arguments[0] in ("doctor", "project", "task", "session", "skills", "web", "cache", "token", "capability", "rpc", "mcp", "workspace"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])
@@ -751,8 +845,8 @@ if __name__ == "__main__":
         json_output = "--json" in arguments and command in {"update", "repair", "rollback", "uninstall"}
         print(f"dove-pi: {error}", file=sys.stderr)
         if json_output:
-            layout = ManagedLayout.default()
-            state = load_state(layout)
+            layout = _installer_symbol("ManagedLayout").default()
+            state = _installer_symbol("load_state")(layout)
             payload: dict[str, object] = {
                 "command": command,
                 "status": "error",
@@ -761,7 +855,7 @@ if __name__ == "__main__":
                 "currentRelease": state.current.release_id if state.current else None,
                 "fallbackRunnable": bool(state.previous),
             }
-            if isinstance(error, TransactionError):
+            if isinstance(error, _installer_symbol("TransactionError")):
                 payload["failedStep"] = error.step
             if not (command == "update" and "--check" in arguments) and command != "uninstall":
                 payload["logPath"] = str(write_maintenance_log(layout, command, "error", str(error)))

@@ -14,6 +14,14 @@
 - The catalog remains the single source of truth for extension package/profile metadata. Explicit `extensions install <profile>` and the source installer may install the selected profile by delegating each package to Pi's official `pi install` command; they must not implement package resolution or settings mutation themselves. Dove Pi core, dispatch, workspace recovery, and scope policy remain authoritative.
 - Profile installation is failure-tolerant by default: a failed optional package is recorded in a structured `failed` list, reported with an actionable warning, and does not prevent remaining profile entries or the Dove core from being installed. The Pi child process preserves npm optional dependencies so packages with platform-native helpers (for example `pi-lens`/`@ast-grep/cli`) can resolve their binaries. If a stale `pi-lens` install still fails, the installer removes the managed `@ast-grep/cli` and matching Windows `@ast-grep/cli-*` directories, force-reifies the native package and JS wrapper, and retries once. Callers that require all entries may opt into fail-fast behavior through the installer API.
 
+### Workspace Launch Policy
+
+- `.dove/workspace.json` is an optional workspace-local policy with schema version `1` and mode `development` or `pentest`. Missing or malformed policy falls back to `development` without blocking Pi.
+- `development` is the default and leaves Pi-lens enabled. `pentest` is a launch policy for authorized testing that adds Pi's `--no-lens` on the next launch; it is not a permission system or a dedicated pentest workflow.
+- `dove-pi workspace status|set development|pentest` persists and reports the policy. `--workspace-mode development|pentest` is a validated one-launch override and must not mutate `.dove/workspace.json`.
+- `/dove-workspace development|pentest` persists the same policy and reports that restart is required because an already-loaded Pi extension cannot be unloaded safely. `/lens-toggle` remains Pi's explicit session-level override.
+- Workspace mode is independent from Dove execution intensity (`fast`, `standard`, `ultra`), context preference (`auto`, `chat`, `work`), and Pi thinking level. It must not change tool authority or load a pentest-specific workflow.
+
 ### 2. Signatures
 
 ```typescript

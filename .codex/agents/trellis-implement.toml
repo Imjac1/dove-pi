@@ -29,6 +29,8 @@ Rules:
 - When touching platform registries or template lists, search first so you do not miss mirrored update paths.
 - If you modify `.trellis/scripts/`, keep `packages/cli/src/templates/trellis/scripts/` in sync.
 - Do not make destructive git changes unless explicitly asked.
+- Respect the frozen AC-* boundary and stop product mutation when convergence
+  reaches `ready_to_finish`; follow-up findings belong to a later task.
 
 Before finishing, summarize:
 - Files changed

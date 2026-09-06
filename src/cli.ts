@@ -36,6 +36,7 @@ import { runTaskCommand } from "./commands/task.ts";
 import { runSessionCommand } from "./commands/session.ts";
 import { ExecutionLedger, projectExecutionDiagnostics } from "./core/execution-ledger.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./pi-adapter/subagent-provider.ts";
+import { normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "./core/workspace-policy.ts";
 
 const args = process.argv.slice(2);
 let cliFailureEmitted = false;
@@ -78,6 +79,7 @@ if (args[0] === "doctor") {
 			{
 				node: process.version,
 				platform: process.platform,
+				workspace: (() => { const policy = readWorkspacePolicy(process.cwd()); return { root: policy.workspaceRoot, mode: policy.policy.mode, source: policy.source, malformed: policy.malformed, lensEnabledOnNextSession: policy.policy.mode === "development" }; })(),
 				powershell,
 				managedInstall,
 				diagnostics: managedInstallDiagnostics,
@@ -159,6 +161,8 @@ if (args[0] === "doctor") {
 	await runSessionCommand(args.slice(1));
 } else if (args[0] === "extensions") {
 	await runExtensionsCommand(args.slice(1));
+} else if (args[0] === "workspace") {
+	await runWorkspaceCommand(args.slice(1));
 } else if (args[0] === "capability") {
 	await runCapabilityCommand(args.slice(1));
 } else if (args[0] === "rpc") {
@@ -262,8 +266,23 @@ if (args[0] === "doctor") {
 	console.log(formatCacheAudit(audit));
 } else {
 	throw new Error(
-		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
+		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi workspace status|set development|pentest | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
 	);
+}
+
+async function runWorkspaceCommand(commandArgs: string[]): Promise<void> {
+	const command = commandArgs[0] ?? "status";
+	const current = readWorkspacePolicy(process.cwd());
+	if (command === "status") {
+		console.log(JSON.stringify({ workspaceRoot: current.workspaceRoot, path: current.path, mode: current.policy.mode, source: current.source, malformed: current.malformed, lens: { enabledOnNextSession: current.policy.mode === "development" }, restartRequired: false }, null, 2));
+		return;
+	}
+	if (command !== "set") throw new Error("Usage: dove-pi workspace status|set development|pentest");
+	const mode = normalizeWorkspaceMode(commandArgs[1]);
+	if (!mode || commandArgs.length !== 2) throw new Error("Usage: dove-pi workspace status|set development|pentest");
+	const workspaceRoot = resolveWorkspaceRoot(process.cwd());
+	const path = await writeWorkspacePolicy(workspaceRoot, mode);
+	console.log(JSON.stringify({ workspaceRoot, path, mode, lens: { enabledOnNextSession: mode === "development" }, restartRequired: false }, null, 2));
 }
 
 async function runExtensionsCommand(commandArgs: string[]): Promise<void> {

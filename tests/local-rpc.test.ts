@@ -118,6 +118,16 @@ describe("local CLI/RPC capability adapter", () => {
 					nextAction: "Review the last evidence.",
 				},
 			});
+			await ledger.appendRequestPlan("rpc:test", "request:req-diagnostics", {
+				requestId: "req-diagnostics", intent: "lookup", mode: "standard", interactionMode: "auto",
+				contextClasses: ["conversation"], outputBudget: 2048, projectAvailable: true, lane: "fast",
+			}, "rpc-session", {
+				schemaVersion: 1, logicalRequestId: "req-diagnostics", intent: "lookup", lane: "fast", interactionMode: "auto",
+				executionMode: "standard", executionModeSource: "user", thinkingPolicy: "auto", thinkingPolicySource: "auto",
+				toolProfile: "auto", toolProfileSource: "pi", activeToolCount: 2,
+				providerRound: { used: 1, limit: 3 }, readOnlyBudget: { used: 0, warning: 10, hardStop: 20 },
+				context: { omitted: false, compacted: false }, resources: { toolCalls: 0, toolDurationMs: 0, elapsedMs: 12, stopReasons: [] },
+			});
 			await ledger.appendTaskResourceObservation({
 				taskId: "rpc:test",
 				stepId: "request:req-diagnostics",
@@ -139,8 +149,9 @@ describe("local CLI/RPC capability adapter", () => {
 			const adapter = new LocalCapabilityAdapter(ledgerPath);
 			const response = await adapter.handleRpc({ jsonrpc: "2.0", id: "diagnostics", method: "diagnostics/status", params: { sessionId: "rpc-session" } });
 			assert.ok("result" in response);
-			const result = response.result as { schemaVersion: number; lastTerminal?: { terminal?: { origin?: string; code?: string }; policyAbort?: boolean }; lastResourceObservation?: { inputTokens?: number; toolDurationMs?: number; stopReasons?: readonly string[] } };
+			const result = response.result as { schemaVersion: number; strategy?: { intent?: string; lane?: string; executionMode?: string; resources?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number } }; lastTerminal?: { terminal?: { origin?: string; code?: string }; policyAbort?: boolean }; lastResourceObservation?: { inputTokens?: number; toolDurationMs?: number; stopReasons?: readonly string[] } };
 			assert.equal(result.schemaVersion, 1);
+			assert.deepEqual(result.strategy && { intent: result.strategy.intent, lane: result.strategy.lane, executionMode: result.strategy.executionMode }, { intent: "lookup", lane: "fast", executionMode: "standard" });
 			assert.deepEqual(result.lastTerminal?.terminal, {
 				origin: "provider-round",
 				code: "provider-round-budget",
@@ -152,6 +163,9 @@ describe("local CLI/RPC capability adapter", () => {
 			assert.equal(result.lastResourceObservation?.inputTokens, 100);
 			assert.equal(result.lastResourceObservation?.toolDurationMs, 800);
 			assert.deepEqual(result.lastResourceObservation?.stopReasons, ["tool_call", "length"]);
+			assert.equal(result.strategy?.resources?.toolCalls, 3);
+			assert.equal(result.strategy?.resources?.providerRounds, 2);
+			assert.equal(result.strategy?.resources?.elapsedMs, 1200);
 			const filtered = await adapter.handleRpc({ jsonrpc: "2.0", id: "filtered", method: "diagnostics/status", params: { requestId: "other-request" } });
 			assert.ok("result" in filtered);
 			assert.deepEqual((filtered.result as { lastTerminal?: unknown }).lastTerminal, undefined);

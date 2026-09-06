@@ -1,6 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { decodeTaskConvergenceSnapshot, type TaskConvergenceSnapshot } from "../core/task-convergence.ts";
+import type { ProjectTaskConvergenceRead } from "./contracts.ts";
 import type { NativeGoal, NativeTaskSource } from "./native-state.ts";
 
 export const NATIVE_FORMAL_ARTIFACTS = ["prd.md", "design.md", "implement.md", "acceptance.md"] as const;
@@ -16,14 +19,18 @@ export interface NativeTaskManifest {
 	readonly createdAt: string;
 	readonly updatedAt: string;
 	readonly artifacts: readonly NativeFormalArtifact[];
+	readonly convergence?: NativeGoal["convergence"];
 }
 
 const MAX_ARTIFACT_CHARS = 16_000;
 const MAX_EVIDENCE_RECORD_CHARS = 4_000;
 const MAX_EVIDENCE_FILE_CHARS = 32_000;
 const MAX_EVIDENCE_RECORDS = 100;
+const MAX_CONVERGENCE_FILE_CHARS = 2_000_000;
+const MAX_CONVERGENCE_FILE_BYTES = 6_000_000;
 
 export function nativeTaskDirectory(projectRoot: string, taskId: string): string {
+	if (!taskId.trim() || taskId === "." || taskId === ".." || /[\\/\0]/.test(taskId)) throw new Error("Native formal task ID cannot be used as a task directory name.");
 	return join(resolve(projectRoot), ".dove", "tasks", taskId);
 }
 
@@ -35,8 +42,41 @@ export function nativeTaskArtifactPaths(projectRoot: string, taskId: string): re
 	return NATIVE_FORMAL_ARTIFACTS.map((artifact) => nativeTaskArtifactPath(projectRoot, taskId, artifact));
 }
 
+export function nativeTaskConvergencePath(projectRoot: string, taskId: string): string {
+	return join(nativeTaskDirectory(projectRoot, taskId), "convergence.json");
+}
+
 export function nativeTaskFiles(projectRoot: string, goal: NativeGoal): readonly string[] {
-	return [join(nativeTaskDirectory(projectRoot, goal.id), "task.json"), nativeTaskArtifactPath(projectRoot, goal.id, "prd.md"), nativeTaskArtifactPath(projectRoot, goal.id, "design.md"), nativeTaskArtifactPath(projectRoot, goal.id, "implement.md"), nativeTaskArtifactPath(projectRoot, goal.id, "acceptance.md"), join(nativeTaskDirectory(projectRoot, goal.id), "evidence.jsonl")];
+	const convergencePath = nativeTaskConvergencePath(projectRoot, goal.id);
+	return [join(nativeTaskDirectory(projectRoot, goal.id), "task.json"), nativeTaskArtifactPath(projectRoot, goal.id, "prd.md"), nativeTaskArtifactPath(projectRoot, goal.id, "design.md"), nativeTaskArtifactPath(projectRoot, goal.id, "implement.md"), nativeTaskArtifactPath(projectRoot, goal.id, "acceptance.md"), join(nativeTaskDirectory(projectRoot, goal.id), "evidence.jsonl"), ...(existsSync(convergencePath) ? [convergencePath] : [])];
+}
+
+export function readNativeTaskConvergence(projectRoot: string, taskId: string): ProjectTaskConvergenceRead {
+	const path = nativeTaskConvergencePath(projectRoot, taskId);
+	if (!existsSync(path)) return { kind: "missing" };
+	try {
+		if (statSync(path).size > MAX_CONVERGENCE_FILE_BYTES) return { kind: "invalid", issue: "Dove task convergence state exceeds its size bound." };
+		const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+		return { kind: "valid", snapshot: decodeTaskConvergenceSnapshot(parsed) };
+	} catch (error) {
+		return { kind: "invalid", issue: `Dove task convergence state could not be read: ${error instanceof Error ? error.message : String(error)}` };
+	}
+}
+
+/** The provider owns the project mutation lock around this atomic file replacement. */
+export async function writeNativeTaskConvergence(projectRoot: string, taskId: string, snapshot: TaskConvergenceSnapshot): Promise<string> {
+	const path = nativeTaskConvergencePath(projectRoot, taskId);
+	const serialized = `${JSON.stringify(decodeTaskConvergenceSnapshot(snapshot), null, 2)}\n`;
+	if (serialized.length > MAX_CONVERGENCE_FILE_CHARS) throw new Error("Dove task convergence state exceeds its size bound.");
+	await mkdir(dirname(path), { recursive: true });
+	const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+	try {
+		await writeFile(temporary, serialized, "utf8");
+		await rename(temporary, path);
+	} finally {
+		await rm(temporary, { force: true });
+	}
+	return path;
 }
 
 export function readNativeFormalDocuments(projectRoot: string, goal: NativeGoal): readonly { path: string; content: string; sourceRef: string }[] {
@@ -68,7 +108,7 @@ export async function ensureNativeFormalArtifacts(projectRoot: string, goal: Nat
 }
 
 export async function writeNativeTaskManifest(projectRoot: string, goal: NativeGoal): Promise<void> {
-	const manifest: NativeTaskManifest = { schemaVersion: 1, id: goal.id, title: goal.title, status: goal.status, ...(goal.phase ? { phase: goal.phase } : {}), source: goal.source ?? "native", ...(goal.sourceRef ? { sourceRef: goal.sourceRef } : {}), createdAt: goal.createdAt, updatedAt: goal.updatedAt, artifacts: NATIVE_FORMAL_ARTIFACTS };
+	const manifest: NativeTaskManifest = { schemaVersion: 1, id: goal.id, title: goal.title, status: goal.status, ...(goal.phase ? { phase: goal.phase } : {}), source: goal.source ?? "native", ...(goal.sourceRef ? { sourceRef: goal.sourceRef } : {}), createdAt: goal.createdAt, updatedAt: goal.updatedAt, artifacts: NATIVE_FORMAL_ARTIFACTS, ...(goal.convergence ? { convergence: goal.convergence } : {}) };
 	await writeNativeArtifact(join(nativeTaskDirectory(projectRoot, goal.id), "task.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 

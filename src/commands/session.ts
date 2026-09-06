@@ -4,6 +4,7 @@ import { createProjectProvider } from "../project-provider/index.ts";
 export async function runSessionCommand(commandArgs: readonly string[]): Promise<void> {
 	const provider = createProjectProvider(process.cwd());
 	const command = commandArgs[0] ?? "list";
+	validateSessionArguments(command, commandArgs.slice(1));
 	if (command === "list") {
 		console.log(JSON.stringify({ projectRoot: provider.projectRoot, sessions: readNativeSessions(provider.projectRoot) }, null, 2));
 		return;
@@ -46,4 +47,25 @@ function readRepeatedFlags(args: readonly string[], name: string): readonly stri
 		else if (args[index] === name && args[index + 1] !== undefined) values.push(args[++index]);
 	}
 	return values;
+}
+
+function validateSessionArguments(command: string, args: readonly string[]): void {
+	if (command === "list") {
+		if (args.length > 0) throw new Error(`Unknown session option: ${args[0]}`);
+		return;
+	}
+	if (command !== "record") return;
+	const valueFlags = new Set(["--title", "--summary", "--change", "--test", "--next-step", "--task"]);
+	for (let index = 0; index < args.length; index++) {
+		const token = args[index]!;
+		if (!token.startsWith("--")) throw new Error(`Unexpected session argument: ${token}`);
+		const separator = token.indexOf("=");
+		const flag = separator >= 0 ? token.slice(0, separator) : token;
+		if (!valueFlags.has(flag)) throw new Error(`Unknown session option: ${flag}`);
+		if (separator < 0) {
+			const value = args[index + 1];
+			if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value.`);
+			index++;
+		}
+	}
 }

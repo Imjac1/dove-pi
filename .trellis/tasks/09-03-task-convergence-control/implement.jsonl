@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Preserve request lifecycle, provider-round, tool-loop, and ledger ownership while adding task-level convergence."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Extend native formal task state without coupling Dove runtime to writable Trellis state."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply typed boundaries, recovery behavior, compatibility, and the full quality gate."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Define one event contract and decoder across core, provider, adapter, CLI, and workflow consumers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Centralize reducers and shared trace contracts instead of duplicating transition logic."}
+{"file":".trellis/tasks/09-03-task-convergence-control/research/convergence-evidence.md","reason":"Use the observed failure, current architecture gaps, and external termination/checkpoint patterns."}

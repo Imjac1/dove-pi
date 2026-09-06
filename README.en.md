@@ -140,6 +140,9 @@ Inside Dove Pi:
 /mode standard
 /mode ultra
 
+/dove-workspace development
+/dove-workspace pentest
+
 /dove-mode auto       choose context mode automatically
 /dove-mode chat       isolated conversation without project-task context
 /dove-mode work       retain project context and formalize only complex work
@@ -151,6 +154,13 @@ Inside Dove Pi:
 - `ultra`: complex projects, long analysis, and intensive execution.
 
 `Ultra` is a runtime policy. `max` is an installed extension profile; they are unrelated names.
+
+Workspace mode and execution intensity are independent settings: `development` (the default)
+is for normal coding, while `pentest` is for authorized penetration testing and disables
+Pi-lens on the next launch. `fast`, `standard`, and `ultra` only control task intensity; they
+do not change tool authority or workspace mode. Restart `dove-pi` after changing workspace
+mode. When needed, Pi's native `/lens-toggle` can temporarily enable Pi-lens in a pentest
+session.
 
 ### Subagent (experimental, read-only)
 

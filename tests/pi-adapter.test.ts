@@ -69,7 +69,7 @@ describe("Pi adapter", () => {
 		} as unknown as ExtensionAPI;
 
 		extension(api);
-		assert.deepEqual([...commands.keys()], ["mode", "dove-mode", "status", "subagent", "sysprompt", "reasoning-voice", "dove-thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
+		assert.deepEqual([...commands.keys()], ["mode", "dove-mode", "dove-workspace", "status", "subagent", "sysprompt", "reasoning-voice", "dove-thinking", "dove-tools", "设置", "settings-zh", "capabilities", "web", "skills", "project", "task", "memory"]);
 		assert.equal(commands.has("thinking"), false, "Dove must not shadow Pi's built-in /thinking command");
 		assert.equal(shortcuts.size, 2);
 		assert.ok(shortcuts.has("ctrl+shift+l"));
@@ -179,7 +179,7 @@ describe("Pi adapter", () => {
 			retryable: false,
 			nextAction: "Check provider credentials and retry.",
 		});
-		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · Auto · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Dove ◆ Standard · development · Auto · Ready")));
 		assert.ok(statuses.some((value) => value.includes("Pi max")));
 		assert.ok(notifications.some((value) => value.includes("Ctrl+P 切换模型")));
 		await events.get("agent_start")?.({ type: "agent_start" }, context);
@@ -190,7 +190,7 @@ describe("Pi adapter", () => {
 		assert.match(guardedResult?.content?.map((part) => part.text ?? "").join("\n") ?? "", /Dove progress advisory/);
 		await events.get("agent_end")?.({ type: "agent_end", messages: [] }, context);
 		await shortcuts.get("ctrl+alt+m")?.handler(context);
-		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · Auto · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Dove ✦ Ultra · development · Auto · Ready")));
 		assert.ok(statusColors.includes("thinkingMax"));
 		providerAborted = false;
 		const unknownProviderPayload = { messages: [{ role: "user", content: "ok" }] };
@@ -223,9 +223,9 @@ describe("Pi adapter", () => {
 		assert.match(executionLog, /"cache":\{"classification":"cold"/);
 
 		await commands.get("mode")?.handler("fast", context);
-		assert.ok(statuses.some((value) => value.includes("Dove · Fast · Auto · Ready")));
+		assert.ok(statuses.some((value) => value.includes("Dove · Fast · development · Auto · Ready")));
 		await commands.get("mode")?.handler("ultra", context);
-		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · Auto · Ready")).length >= 2);
+		assert.ok(statuses.filter((value) => value.includes("Dove ✦ Ultra · development · Auto · Ready")).length >= 2);
 		await commands.get("dove-mode")?.handler("chat", context);
 		assert.equal(readFileSync(join(adapterStateDir, "interaction-mode"), "utf8"), "chat");
 		await commands.get("dove-mode")?.handler("status", context);

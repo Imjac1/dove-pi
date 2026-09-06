@@ -193,6 +193,18 @@ if (-not $targetRoot) {{
     if ($targetRoot) {{ Write-Warning 'Current Dove Pi release is unavailable; using previous. Run dove-pi repair.' }}
 }}
 if (-not $targetRoot) {{ Write-Error 'No runnable Dove Pi release is installed. Run dove-pi repair.'; exit 1 }}
+$doveArguments = @($args)
+$pythonCommands = @('doctor', 'project', 'task', 'session', 'skills', 'web', 'cache', 'token', 'capability', 'rpc', 'mcp', 'extensions', 'install', 'setup', 'update', 'repair', 'rollback', 'uninstall', 'icons', 'help', '-h', '--help', 'version', '--version')
+$argumentIndex = 0
+while ($argumentIndex -lt $doveArguments.Count -and @('--offline', '--skip-version-check') -contains [string]$doveArguments[$argumentIndex]) {{ $argumentIndex++ }}
+$usePiFastPath = $argumentIndex -ge $doveArguments.Count -or $pythonCommands -notcontains [string]$doveArguments[$argumentIndex]
+$nodeCommand = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
+$fastLauncher = Join-Path $targetRoot 'bin\dove-pi.cjs'
+if ($usePiFastPath -and $nodeCommand -and (Test-Path -LiteralPath $fastLauncher -PathType Leaf)) {{
+    $nodePath = if ($nodeCommand.Source) {{ [string]$nodeCommand.Source }} else {{ [string]$nodeCommand.Path }}
+    & $nodePath $fastLauncher @doveArguments
+    exit $LASTEXITCODE
+}}
 $script = Join-Path $targetRoot 'dove_pi.py'
 $python = $null
 $pythonArguments = @()

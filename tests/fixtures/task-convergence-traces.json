@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "resourcePolicy": "observation_only",
+  "frozenContract": {
+    "taskId": "task-convergence-control",
+    "acceptanceRevision": "179b574aa9780a365b7c66f9aae725f76d98579abac1915072dd0b5a99d490fe",
+    "criteria": [
+      { "id": "AC-001", "text": "Fast lane isolation: chat, lookup, and non-formal small edits produce no convergence files, prompts, mutation blocks, or extra questions." },
+      { "id": "AC-002", "text": "Acceptance freeze: starting a formal task snapshots stable IDs and a deterministic revision; silent criterion drift is detected as `scope_change`." },
+      { "id": "AC-003", "text": "Mutation attribution: every formal-task product mutation is associated with an existing acceptance ID, while an unknown ID is rejected before the mutation executes." },
+      { "id": "AC-004", "text": "Finding discipline: blocking/regression findings stay in the current task; follow-ups are recorded but excluded from current remaining work; scope changes and serious risks checkpoint instead of auto-fixing." },
+      { "id": "AC-005", "text": "Finish convergence: all accepted criteria passing with no open blocker deterministically yields `ready_to_finish` and prevents another implement/check product-mutation cycle." },
+      { "id": "AC-006", "text": "Checkpoint recovery: semantic no-progress, interruption, and external blocking produce bounded checkpoints; resume restores the frozen acceptance vector and one criterion-bound next action." },
+      { "id": "AC-007", "text": "Cross-plane parity: shared trace fixtures produce equivalent semantic decisions for Trellis/Codex and Dove/Pi, including the installer expansion scenario." },
+      { "id": "AC-008", "text": "Observability only: tool-call, provider-round, elapsed-time, and available token metrics are recorded and queryable but never influence a convergence decision." },
+      { "id": "AC-009", "text": "Backward compatibility: existing native/Trellis fixtures stay readable, malformed new state is preserved, and ordinary tool execution remains available." },
+      { "id": "AC-010", "text": "Quality gate: focused convergence tests, full Node tests, typecheck, installer tests, doctor, and Pi smoke pass; Trellis workflow and agent instructions agree on the same terminal semantics." }
+    ]
+  },
+  "traces": [
+    {
+      "name": "baseline-completion-with-blocker",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-baseline", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.started", "acceptanceId": "AC-001" },
+          "expected": { "revision": 2, "state": "working", "criteria": { "AC-001": "in_progress", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "finding.recorded", "acceptanceId": "AC-001", "finding": { "id": "finding-blocker", "kind": "blocking", "summary": "Accepted output is not yet correct.", "evidenceRefs": ["evidence:blocker"] } },
+          "expected": { "revision": 3, "state": "working", "criteria": { "AC-001": "in_progress", "AC-002": "pending" }, "openFindings": [{ "id": "finding-blocker", "kind": "blocking" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-001", "evidenceRefs": ["evidence:ac-001"] },
+          "expected": { "revision": 4, "state": "working", "criteria": { "AC-001": "passed", "AC-002": "pending" }, "openFindings": [{ "id": "finding-blocker", "kind": "blocking" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-002", "evidenceRefs": ["evidence:ac-002"] },
+          "expected": { "revision": 5, "state": "working", "criteria": { "AC-001": "passed", "AC-002": "passed" }, "openFindings": [{ "id": "finding-blocker", "kind": "blocking" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "finding.resolved", "acceptanceId": "AC-001", "findingId": "finding-blocker", "evidenceRefs": ["evidence:blocker-fixed"] },
+          "expected": { "revision": 6, "state": "ready_to_finish", "criteria": { "AC-001": "passed", "AC-002": "passed" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "request.observed", "acceptanceId": "AC-001", "resources": { "toolCalls": 50000, "providerRounds": 5000, "elapsedMs": 14411438, "inputTokens": 900000, "outputTokens": 100000 } },
+          "expected": { "revision": 7, "state": "ready_to_finish", "criteria": { "AC-001": "passed", "AC-002": "passed" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 50000, "providerRounds": 5000, "elapsedMs": 14411438, "inputTokens": 900000, "outputTokens": 100000 } }
+        }
+      ]
+    },
+    {
+      "name": "follow-up-does-not-expand-current-work",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-follow-up", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "finding.recorded", "acceptanceId": "AC-001", "finding": { "id": "finding-follow-up", "kind": "follow_up", "summary": "A neighboring component could be cleaned up later.", "evidenceRefs": ["evidence:follow-up"] } },
+          "expected": { "revision": 2, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [{ "id": "finding-follow-up", "kind": "follow_up" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "task.progress_reviewed", "acceptanceId": "AC-001", "nextAction": "Run the focused AC-001 assertion." },
+          "expected": { "revision": 3, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [{ "id": "finding-follow-up", "kind": "follow_up" }], "consecutiveNoProgress": 1, "meaningfulProgressSinceReview": false, "correctiveAction": { "acceptanceId": "AC-001", "nextAction": "Run the focused AC-001 assertion." }, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-001", "evidenceRefs": ["evidence:accepted"] },
+          "expected": { "revision": 4, "state": "working", "criteria": { "AC-001": "passed", "AC-002": "pending" }, "openFindings": [{ "id": "finding-follow-up", "kind": "follow_up" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-002", "evidenceRefs": ["evidence:scope-discipline"] },
+          "expected": { "revision": 5, "state": "ready_to_finish", "criteria": { "AC-001": "passed", "AC-002": "passed" }, "openFindings": [{ "id": "finding-follow-up", "kind": "follow_up" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        }
+      ]
+    },
+    {
+      "name": "acceptance-scope-drift",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-scope-drift", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-scope-drift", "acceptanceId": "AC-001", "acceptanceRevision": "5b022f5282edc40b866b65549f62d233b04d2bb3aeccc4cf66743dbb5776cc8f", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }, { "id": "AC-003", "text": "A newly requested outcome requires replanning." }] },
+          "expected": { "revision": 2, "state": "checkpointed", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [{ "id": "scope-change:5b022f5282ed", "kind": "scope_change" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "checkpoint": { "nextAcceptanceId": "AC-001", "nextAction": "Return to planning for AC-001", "openFindingIds": ["scope-change:5b022f5282ed"] }, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        }
+      ]
+    },
+    {
+      "name": "serious-risk-checkpoints",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-risk", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "finding.recorded", "acceptanceId": "AC-001", "finding": { "id": "finding-release-risk", "kind": "serious_unexpected_risk", "summary": "Continuing could overwrite release credentials.", "evidenceRefs": ["evidence:risk"] }, "nextAction": "Review the credential boundary before resuming AC-001." },
+          "expected": { "revision": 2, "state": "checkpointed", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [{ "id": "finding-release-risk", "kind": "serious_unexpected_risk" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "checkpoint": { "nextAcceptanceId": "AC-001", "nextAction": "Review the credential boundary before resuming AC-001.", "openFindingIds": ["finding-release-risk"] }, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        }
+      ]
+    },
+    {
+      "name": "semantic-no-progress-is-independent-of-resource-volume",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-no-progress", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "task.progress_reviewed", "acceptanceId": "AC-001", "nextAction": "Use the existing failure evidence to address AC-001." },
+          "expected": { "revision": 2, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 1, "meaningfulProgressSinceReview": false, "correctiveAction": { "acceptanceId": "AC-001", "nextAction": "Use the existing failure evidence to address AC-001." }, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "request.observed", "acceptanceId": "AC-001", "resources": { "toolCalls": 1000000, "providerRounds": 100000, "elapsedMs": 999999999, "inputTokens": 5000000, "cacheReadTokens": 4000000, "outputTokens": 750000, "reasoningTokens": 250000 } },
+          "expected": { "revision": 3, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 1, "meaningfulProgressSinceReview": false, "correctiveAction": { "acceptanceId": "AC-001", "nextAction": "Use the existing failure evidence to address AC-001." }, "observedResources": { "toolCalls": 1000000, "providerRounds": 100000, "elapsedMs": 999999999, "inputTokens": 5000000, "cacheReadTokens": 4000000, "outputTokens": 750000, "reasoningTokens": 250000 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "task.progress_reviewed", "acceptanceId": "AC-001", "nextAction": "Resume AC-001 from its last stable evidence." },
+          "expected": { "revision": 4, "state": "checkpointed", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 2, "meaningfulProgressSinceReview": false, "checkpoint": { "nextAcceptanceId": "AC-001", "nextAction": "Resume AC-001 from its last stable evidence.", "openFindingIds": [] }, "observedResources": { "toolCalls": 1000000, "providerRounds": 100000, "elapsedMs": 999999999, "inputTokens": 5000000, "cacheReadTokens": 4000000, "outputTokens": 750000, "reasoningTokens": 250000 } }
+        }
+      ]
+    },
+    {
+      "name": "interruption-checkpoint-and-resume",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-resume", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d", "criteria": [{ "id": "AC-001", "text": "Primary accepted outcome is verified." }, { "id": "AC-002", "text": "Unrelated findings remain outside current work." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.started", "acceptanceId": "AC-001" },
+          "expected": { "revision": 2, "state": "working", "criteria": { "AC-001": "in_progress", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "task.checkpointed", "acceptanceId": "AC-001", "nextAction": "Resume the focused AC-001 reducer test." },
+          "expected": { "revision": 3, "state": "checkpointed", "criteria": { "AC-001": "in_progress", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "checkpoint": { "nextAcceptanceId": "AC-001", "nextAction": "Resume the focused AC-001 reducer test.", "openFindingIds": [] }, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "request.observed", "acceptanceId": "AC-001", "resources": { "toolCalls": 3, "providerRounds": 1, "elapsedMs": 2500 } },
+          "expected": { "revision": 4, "state": "checkpointed", "criteria": { "AC-001": "in_progress", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "checkpoint": { "nextAcceptanceId": "AC-001", "nextAction": "Resume the focused AC-001 reducer test.", "openFindingIds": [] }, "observedResources": { "toolCalls": 3, "providerRounds": 1, "elapsedMs": 2500 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "task.resumed", "acceptanceId": "AC-001", "acceptanceRevision": "792e93473819f17f3de7f4d31b5c02585aa6f80ff89d4874441b4c9f0170ed6d" },
+          "expected": { "revision": 5, "state": "working", "criteria": { "AC-001": "in_progress", "AC-002": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 3, "providerRounds": 1, "elapsedMs": 2500 } }
+        }
+      ]
+    },
+    {
+      "name": "september-3-installer-expansion-stops-at-finish",
+      "steps": [
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.frozen", "taskId": "trace-installer-expansion", "acceptanceRevision": "1af9755c625fe5c3a3b2e3a399b59e75b8688392799a582f4cb60125e315edee", "criteria": [{ "id": "AC-001", "text": "Managed installation succeeds." }, { "id": "AC-002", "text": "Release verification passes." }, { "id": "AC-003", "text": "Unrelated audit findings remain follow-ups." }] },
+          "expected": { "revision": 1, "state": "working", "criteria": { "AC-001": "pending", "AC-002": "pending", "AC-003": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": false, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-001", "evidenceRefs": ["evidence:installer-pass"] },
+          "expected": { "revision": 2, "state": "working", "criteria": { "AC-001": "passed", "AC-002": "pending", "AC-003": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-002", "evidenceRefs": ["evidence:release-pass"] },
+          "expected": { "revision": 3, "state": "working", "criteria": { "AC-001": "passed", "AC-002": "passed", "AC-003": "pending" }, "openFindings": [], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "finding.recorded", "acceptanceId": "AC-002", "finding": { "id": "finding-neighboring-audit", "kind": "follow_up", "summary": "A neighboring installer audit is useful but outside the frozen task.", "evidenceRefs": ["evidence:audit-note"] } },
+          "expected": { "revision": 4, "state": "working", "criteria": { "AC-001": "passed", "AC-002": "passed", "AC-003": "pending" }, "openFindings": [{ "id": "finding-neighboring-audit", "kind": "follow_up" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        },
+        {
+          "event": { "schemaVersion": 1, "kind": "acceptance.passed", "acceptanceId": "AC-003", "evidenceRefs": ["evidence:scope-held"] },
+          "expected": { "revision": 5, "state": "ready_to_finish", "criteria": { "AC-001": "passed", "AC-002": "passed", "AC-003": "passed" }, "openFindings": [{ "id": "finding-neighboring-audit", "kind": "follow_up" }], "consecutiveNoProgress": 0, "meaningfulProgressSinceReview": true, "observedResources": { "toolCalls": 0, "providerRounds": 0, "elapsedMs": 0 } }
+        }
+      ]
+    }
+  ]
+}

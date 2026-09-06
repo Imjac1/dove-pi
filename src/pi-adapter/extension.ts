@@ -41,6 +41,8 @@ import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity
 import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
+import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, writeWorkspacePolicy } from "../core/workspace-policy.ts";
+import { projectModelMessages } from "./context-projection.ts";
 
 type DoveRegistrationClaim = { readonly identity: DoveExtensionIdentity; readonly owner: ExtensionAPI };
 const DOVE_REGISTRATION_SYMBOL = Symbol.for("dove.personal-agent.registration-claim");
@@ -483,6 +485,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const mode = new ModeController();
 	const { capabilities: registry, recipes } = createDoveRuntime();
 	const cwd = process.cwd();
+	const launchWorkspaceMode = normalizeWorkspaceMode(process.env.DOVE_PI_WORKSPACE_MODE) ?? "development";
+	let workspacePolicy = readWorkspacePolicy(cwd, process.env.DOVE_PI_WORKSPACE_MODE_OVERRIDE).policy;
 	const subagentProvider = createConfiguredPiSubagentProvider();
 	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
@@ -673,7 +677,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const policyTag = thinkingPolicy.kind === "lock" ? `· 🔒${thinkingPolicy.level}` : thinkingPolicy.kind === "off" ? "· manual" : "";
 		const progress = progressGuard.snapshot();
 		const progressHint = progress.active && (progress.longRun || progress.warning) ? ` · ${progress.longRun ? `长任务 ${formatProgressSnapshot(progress)}` : `检查 ${progress.warning}`}` : "";
-		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${displayInteractionMode(interactionMode)} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${policyTag}${progressHint}`);
+		ctx.ui.setStatus("dove-pi", `Dove ${coloredPolicy} · ${workspacePolicy.mode} · ${displayInteractionMode(interactionMode)} · ${state}${thinking ? ` · Pi ${thinking}` : ""}${policyTag}${progressHint}`);
 	}
 
 	function currentStrategySnapshot(ctx: ExtensionContext): StrategySnapshot {
@@ -839,6 +843,27 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		},
 	});
 
+	pi.registerCommand("dove-workspace", {
+		description: "Show or change workspace mode: development or pentest",
+		handler: async (args, ctx) => {
+			const requested = args.trim().toLowerCase();
+			if (!requested || requested === "status") {
+				const lens = lensEnabledForWorkspaceMode(workspacePolicy.mode);
+				ctx.ui.notify(`Workspace mode: ${workspacePolicy.mode}. Pi-lens is ${lens ? "enabled" : "disabled"} on the next session${workspacePolicy.mode === launchWorkspaceMode ? "." : "; restart required to apply the persisted mode."}`, "info");
+				return;
+			}
+			const next = normalizeWorkspaceMode(requested);
+			if (!next) {
+				ctx.ui.notify("Workspace mode must be development or pentest.", "warning");
+				return;
+			}
+			const persisted = await writeWorkspacePolicy(readWorkspacePolicy(cwd).workspaceRoot, next);
+			workspacePolicy = { schemaVersion: 1, mode: next };
+			updateStatus(ctx);
+			ctx.ui.notify(`Workspace mode saved as ${next} (${persisted}). Restart Dove Pi to apply Pi-lens ${lensEnabledForWorkspaceMode(next) ? "enablement" : "disablement"}.`, "info");
+		},
+	});
+
 	pi.registerCommand("status", {
 		description: "Show Dove mode, tool profile, and operation status; telemetry is provided by the TUI extension",
 		handler: async (args, ctx) => {
@@ -853,9 +878,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const cacheText = full ? ` Cache: ${formatCacheDiagnostics(cache)}. Goals: ${formatGoalEfficiency(goalEfficiency!)}.` : " Use /status full for cache diagnostics.";
 			const strategy = currentStrategySnapshot(ctx);
 			const strategyText = full
-				? ` Strategy roles: /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
+				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
 				: "";
-			ctx.ui.notify(`Dove Pi: mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText} ${detail}`, "info");
+			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText} ${detail}`, "info");
 		},
 	});
 
@@ -1423,6 +1448,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				platform: process.platform,
 				runtime: {
 					extensionIdentity,
+					workspace: { mode: workspacePolicy.mode, launchMode: launchWorkspaceMode, lensEnabledOnNextSession: lensEnabledForWorkspaceMode(workspacePolicy.mode), restartRequired: workspacePolicy.mode !== launchWorkspaceMode },
 					readOnly: runtimeReadOnly(),
 					readOnlyReason: runtimeReadOnly() ? "DOVE_PI_READ_ONLY=1" : undefined,
 					model: model ? { provider: model.provider, id: model.id, api: model.api, contextWindow: model.contextWindow, maxTokens: model.maxTokens } : undefined,
@@ -2466,7 +2492,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// entries and stale guidance, but preserve real snapshots and ordering.
 		doveContextPayloads.clear();
 		const latestGuidanceIndex = event.messages.reduce((latest, message, index) => isGuidanceOnlyContextMessage(message) ? index : latest, -1);
-		const messages = event.messages.filter((message, index) => {
+		const filteredMessages = event.messages.filter((message, index) => {
 			if (message.role !== "custom" || message.customType !== "personal-agent-context") return true;
 			if (isGuidanceOnlyContextMessage(message)) return index === latestGuidanceIndex;
 			const details = message.details;
@@ -2474,7 +2500,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			if (isCurrent && typeof message.timestamp === "number") doveContextPayloads.set(message.timestamp, payloadMessageText(message));
 			return isCurrent;
 		});
-		return messages.length === event.messages.length ? undefined : { messages };
+		const messages = projectModelMessages(filteredMessages);
+		const changed = messages.length !== event.messages.length || messages.some((message, index) => message !== event.messages[index]);
+		return changed ? { messages } : undefined;
 	});
 
 }

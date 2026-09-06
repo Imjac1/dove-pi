@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createProjectProvider, discoverProject, initializeNativeProject, nativeProjectStatePath, nativeTaskArtifactPath, readNativeProjectState, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
+import { createProjectProvider, discoverProject, initializeNativeProject, nativeProjectStatePath, nativeTaskArtifactPath, nativeTaskConvergencePath, readNativeProjectState, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../src/project-status.ts";
 
 describe("Dove native project provider", () => {
@@ -183,6 +183,94 @@ describe("Dove native project provider", () => {
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});
 
+	it("persists typed convergence operations under the native task boundary", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-convergence-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Convergence lifecycle");
+			const criteria = [
+				{ id: "AC-001", text: "The primary behavior passes." },
+				{ id: "AC-002", text: "Verification remains in scope." },
+			];
+			let snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "freeze", criteria });
+			const convergencePath = nativeTaskConvergencePath(root, task.providerTaskId);
+			assert.equal(existsSync(convergencePath), true);
+			const frozenBytes = await readFile(convergencePath, "utf8");
+			await assert.rejects(() => provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-999", progress: { kind: "started" } }), /Unknown acceptance ID/);
+			assert.equal(await readFile(convergencePath, "utf8"), frozenBytes);
+			await Promise.all([
+				provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "evidence", evidenceRef: "evidence:parallel-a" } }),
+				provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "evidence", evidenceRef: "evidence:parallel-b" } }),
+			]);
+			const concurrent = provider.readTaskConvergence!(task.stableId);
+			assert.equal(concurrent.kind, "valid");
+			assert.deepEqual([...(concurrent.kind === "valid" ? concurrent.snapshot.criteria[0]?.evidenceRefs ?? [] : [])].sort(), ["evidence:parallel-a", "evidence:parallel-b"]);
+
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "started" } });
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "finding", acceptanceId: "AC-001", finding: { id: "follow-up-1", kind: "follow_up", summary: "Neighboring cleanup is outside this acceptance set.", evidenceRefs: ["evidence:follow-up"] } });
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "decide", acceptanceId: "AC-001", nextAction: "Run the focused AC-001 check." });
+			assert.equal(snapshot.consecutiveNoProgress, 0);
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "decide", acceptanceId: "AC-001", nextAction: "Use the existing AC-001 evidence." });
+			assert.equal(snapshot.consecutiveNoProgress, 1);
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "checkpoint", acceptanceId: "AC-001", nextAction: "Resume the focused AC-001 check." });
+			assert.equal(snapshot.state, "checkpointed");
+			const checkpointRevision = snapshot.acceptanceRevision;
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "resume", acceptanceId: "AC-001", acceptanceRevision: checkpointRevision });
+			assert.equal(snapshot.state, "working");
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "passed", evidenceRefs: ["evidence:ac-001"] } });
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-002", progress: { kind: "failed", evidenceRefs: ["evidence:failure"] } });
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "finding", acceptanceId: "AC-002", finding: { id: "blocker-1", kind: "blocking", summary: "The accepted verification still fails.", evidenceRefs: ["evidence:blocker"] } });
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "update_finding", acceptanceId: "AC-002", findingId: "blocker-1", evidenceRefs: ["evidence:blocker-log"], nextAction: "Create a follow-up task." });
+			assert.deepEqual(snapshot.findings.find((finding) => finding.id === "blocker-1")?.evidenceRefs, ["evidence:blocker", "evidence:blocker-log"]);
+			assert.equal(snapshot.findings.find((finding) => finding.id === "blocker-1")?.open, true);
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-002", progress: { kind: "passed", evidenceRefs: ["evidence:ac-002"] } });
+			assert.equal(snapshot.state, "working");
+			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "resolve_finding", acceptanceId: "AC-002", findingId: "blocker-1", evidenceRefs: ["evidence:blocker-fixed"] });
+			assert.equal(snapshot.state, "ready_to_finish");
+
+			const projected = createProjectProvider(root).resolveTask(task.stableId)!;
+			assert.equal(projected.convergence?.health, "valid");
+			assert.equal(projected.convergence?.health === "valid" ? projected.convergence.state : undefined, "ready_to_finish");
+			const state = readNativeProjectState(root);
+			assert.equal(state.kind, "valid");
+			assert.equal(state.state.goals.find((goal) => goal.id === task.providerTaskId)?.convergence?.snapshotRevision, snapshot.revision);
+			assert.match(await readFile(join(root, ".dove", "tasks", task.providerTaskId, "evidence.jsonl"), "utf8"), /"kind":"convergence.decision"/);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("checkpoints instead of silently accepting a changed frozen contract", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-convergence-drift-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Acceptance drift");
+			const original = await provider.mutateTaskConvergence!(task.stableId, { action: "freeze", criteria: [{ id: "AC-001", text: "The original accepted outcome." }] });
+			const drifted = await provider.mutateTaskConvergence!(task.stableId, { action: "freeze", acceptanceId: "AC-001", criteria: [{ id: "AC-001", text: "The materially changed outcome." }] });
+			assert.equal(drifted.acceptanceRevision, original.acceptanceRevision);
+			assert.equal(drifted.state, "checkpointed");
+			assert.equal(drifted.findings[0]?.kind, "scope_change");
+			const projection = createProjectProvider(root).getCurrentTask()?.convergence;
+			assert.equal(projection?.health, "valid");
+			assert.equal(projection?.health === "valid" ? projection.openFindingIds.length : 0, 1);
+			assert.match(projection?.health === "valid" ? projection.stateReason ?? "" : "", /Acceptance revision changed/);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("preserves malformed convergence bytes and degrades only convergence metadata", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-convergence-invalid-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Malformed convergence");
+			const path = nativeTaskConvergencePath(root, task.providerTaskId);
+			await writeFile(path, "{broken-convergence", "utf8");
+			const fresh = createProjectProvider(root);
+			assert.equal(fresh.getHealth().status, "degraded");
+			assert.equal(fresh.getContext().currentTask?.convergence?.health, "invalid");
+			await assert.rejects(() => fresh.mutateTaskConvergence!(task.stableId, { action: "freeze", criteria: [{ id: "AC-001", text: "Must not overwrite malformed bytes." }] }), /could not be read/);
+			assert.equal(await readFile(path, "utf8"), "{broken-convergence");
+			assert.equal(readNativeProjectState(root).kind, "valid");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
 	it("imports the sole legacy continuation instead of creating a duplicate prompt goal", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-native-auto-import-"));
 		const taskDir = join(root, ".trellis", "tasks", "legacy");
@@ -222,6 +310,20 @@ describe("Dove native project provider", () => {
 			assert.equal(readNativeProjectState(root).kind, "invalid");
 			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals: [{ ...goal, phase: "unknown" }] }), "utf8");
 			assert.equal(readNativeProjectState(root).kind, "invalid");
+			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals: [{ ...goal, convergence: { schemaVersion: 1, state: "working" } }] }), "utf8");
+			assert.equal(readNativeProjectState(root).kind, "invalid");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("keeps legacy schema-1 goal IDs readable while rejecting unsafe formal task paths", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-legacy-goal-id-"));
+		try {
+			await mkdir(join(root, ".dove"), { recursive: true });
+			const legacyGoal = { id: "legacy goal", title: "Legacy goal", status: "active", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z", decisions: [], verification: [] };
+			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, currentGoalId: legacyGoal.id, goals: [legacyGoal] }), "utf8");
+			assert.equal(readNativeProjectState(root).kind, "valid");
+			assert.equal(createProjectProvider(root).getCurrentTask()?.providerTaskId, "legacy goal");
+			assert.throws(() => nativeTaskConvergencePath(root, "../outside"), /cannot be used as a task directory/);
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});
 

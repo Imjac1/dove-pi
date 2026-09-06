@@ -48,3 +48,15 @@ CLI integration fixtures that spawn child processes must pass temporary environm
 - Are paths bounded and secrets excluded?
 - Are failures and interrupted mutations visible and recoverable?
 - Are docs, contracts, tests, and compatibility ranges updated together?
+
+## Formal Convergence Quality Gate
+
+Formal task checks are bounded by the reducer-owned acceptance state. Findings
+must be classified and tied to an existing `AC-*`; only blocking/regression
+findings are fixed in the current scope. Follow-ups are recorded without
+expanding the task, while scope changes and serious risks checkpoint. After
+two semantic no-progress reviews, persist one criterion-bound checkpoint.
+When the reducer reports `ready_to_finish`, stop product mutation and perform
+only final verification and wrap-up. Tool calls, provider rounds, elapsed time,
+and token usage are observation-only until a separately approved threshold task
+defines calibrated limits.

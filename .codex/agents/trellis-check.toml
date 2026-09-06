@@ -30,12 +30,24 @@ Review checklist:
 - Look for missing template/update/detection touch points when platform config changes.
 - Check whether tests should be added or updated.
 - Check whether `.trellis/spec/` docs need sync after implementation.
-- Run lint and type-check; fix any failures.
+- Run lint and type-check for the current revision; fix failures only when they
+  are tied to the frozen acceptance boundary, then re-run the affected checks.
 - Prefer concrete findings over speculative warnings.
+
+Convergence rules:
+- Classify every finding against an existing AC-* criterion: blocking/regression
+  may be fixed in scope, follow_up is recorded and excluded from this task, and
+  scope_change/serious_unexpected_risk checkpoints and returns to planning.
+- When the convergence state is ready_to_finish, do not start another product
+  mutation or implement/check cycle. Perform only final verification, spec
+  capture, commit, and wrap-up.
+- Do not use an unbounded "until green" loop; the convergence decision and
+  checkpoint are authoritative when generic check results disagree.
 
 When you find a mechanical, local issue:
 1. Fix it directly using edit/write tools.
-2. Re-run lint and type-check until green.
+2. Re-run the affected lint/type-check once for the fix; if it remains
+   failing, classify the failure against convergence instead of looping.
 3. Record what you changed and why.
 
 Output format:

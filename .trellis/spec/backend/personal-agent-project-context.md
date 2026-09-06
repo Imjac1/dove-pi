@@ -55,6 +55,12 @@ interface NativeGoal {
   being silently repaired.
 - Malformed state degrades diagnostics and blocks metadata mutation without
   overwriting the file. It never blocks ordinary Pi tools.
+- Workspace launch policy is separate from native goal state and lives at
+  `.dove/workspace.json`. It defaults to `development`, is read from the
+  nearest resolved workspace root, and is atomically written under the
+  existing project mutation lock. The policy controls only the next-launch
+  Pi-lens setting; it does not create a goal, gate execution, or select a task
+  workflow.
 - Fast-lane execution and continuation do not create a formal task. Explicit
   planning, architecture, or multi-file/cross-layer requests may call
   `ensureFormalTask` silently to establish durable artifacts; this is
@@ -95,6 +101,13 @@ single-candidate continuation inject the next step and execute immediately with
 Pi's normal tools; ambiguous continuation asks one task-selection question,
 and none reports the missing resumable task. Continuation must not trigger shell
 archaeology, private runtime probing, or workflow-skill recommendations.
+- Public task CLI commands treat an explicit selector that resolves to zero or
+  multiple tasks as an error with a non-zero exit status; `status` and
+  `continue` must not silently return `none` for a bad selector. Task and session
+  commands reject unknown options instead of ignoring them. When finishing a
+  native current goal leaves exactly one active native goal, the provider promotes
+  that goal to `currentGoalId`; multiple remaining active goals stay unselected
+  and require an explicit selector.
 
 ## 4. Legacy Trellis Compatibility
 
@@ -188,3 +201,78 @@ component or instruct the user to initialize it.
   and remains unchanged after reads/import.
 - Context epoch and task inventory remain bounded and schema-stable.
 - Pi execution requests receive no initialization or workflow-skill guidance.
+
+### Formal Task Convergence State
+
+### 1. Scope / Trigger
+
+Trigger: a formal native task needs a frozen acceptance contract, bounded
+checkpoint recovery, and host-independent finish semantics. Fast-lane requests
+remain outside this state machine.
+
+### 2. Signatures
+
+```text
+python ./.trellis/scripts/task.py convergence replay [--fixture PATH] [--trace NAME]
+python ./.trellis/scripts/task.py convergence status --snapshot PATH
+python ./.trellis/scripts/task.py convergence apply --snapshot PATH --event JSON
+```
+
+The Dove equivalent is `dove-pi task convergence <operation>` and persists
+under `.dove/tasks/<goal-id>/convergence.json`.
+
+### 3. Contracts
+
+- `acceptance.frozen` establishes the ordered `AC-*` set and SHA-256 revision.
+- Every product-work event carries an existing `acceptanceId`; unknown IDs are
+  rejected before metadata or product mutation.
+- `follow_up` findings are retained but do not block current acceptance work.
+- `scope_change` and `serious_unexpected_risk` create one AC-bound checkpoint.
+- `ready_to_finish` is terminal for product mutation in the frozen revision.
+- `request.observed` records tool/provider/time/token observations only and
+  cannot change semantic state.
+- Trellis calls the shared TypeScript reducer through its narrow helper; Dove
+  never imports or executes Trellis scripts.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Duplicate or unknown `AC-*` | Reject the convergence event before mutation |
+| Malformed snapshot | Preserve bytes and block only convergence metadata writes |
+| Acceptance revision drift | Record `scope_change` and checkpoint |
+| Two semantic no-progress reviews | Checkpoint with one criterion-bound next action |
+| All criteria pass with no open blocker | Enter `ready_to_finish`; reject further product mutation |
+| Missing resource usage | Keep the field unknown; never infer a stop |
+
+### 5. Good/Base/Bad Cases
+
+- Good: replaying `tests/fixtures/task-convergence-traces.json` through both
+  hosts yields the same state, findings, checkpoint, and terminal decision.
+- Base: a long run emits large resource observations while semantic state is
+  unchanged and remains eligible to continue.
+- Bad: treat a follow-up as current remaining work, regenerate an open-ended
+  backlog after resume, or use tool/time/token totals as a hard stop.
+
+### 6. Tests Required
+
+- Replay every shared trace incrementally and from its complete event list.
+- Assert `task.py convergence apply/status` round-trips an atomic snapshot.
+- Assert fast-lane requests create no convergence file or mutation guard.
+- Assert `ready_to_finish`, checkpoint, scope drift, and malformed-state paths
+  fail closed at the Pi tool boundary.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+Check failed -> fix -> re-check until green, including newly discovered scope.
+```
+
+#### Correct
+
+```text
+Classify the finding against an existing AC; checkpoint scope/risk, and stop
+product mutation once the reducer reports ready_to_finish.
+```

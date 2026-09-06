@@ -9,7 +9,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-from dove_pi import format_version, launch, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json, without_user_path_entry
+import dove_pi
+from dove_pi import format_version, launch, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json, without_user_path_entry, workspace_mode_from_file
 from installer.manager import MaintenanceResult
 
 
@@ -95,6 +96,16 @@ class InstallerCliTests(unittest.TestCase):
             launch.assert_called_once_with(["--model", "provider/model"])
             local_cli.assert_not_called()
 
+    def test_python_module_does_not_load_installer_for_import_only(self):
+        completed = subprocess.run(
+            [sys.executable, "-c", "import sys; import dove_pi; print('installer.manager' in sys.modules)"],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(completed.stdout.strip(), "False")
+
     def test_launch_network_controls_use_official_pi_environment_flags(self):
         with TemporaryDirectory() as temporary:
             pi_entry = Path(temporary) / "cli.js"
@@ -113,6 +124,45 @@ class InstallerCliTests(unittest.TestCase):
             self.assertEqual(environment["PI_SKIP_VERSION_CHECK"], "1")
             self.assertEqual(environment["PI_OFFLINE"], "1")
 
+    def test_launch_workspace_mode_defaults_to_development_without_disabling_lens(self):
+        completed = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("dove_pi.executable", return_value="node"), \
+                patch("dove_pi.PI_ENTRY") as pi_entry, \
+                patch("dove_pi.subprocess.run", return_value=completed) as run:
+            pi_entry.exists.return_value = True
+            self.assertEqual(launch([]), 0)
+        command = run.call_args.args[0]
+        self.assertNotIn("--no-lens", command)
+        self.assertEqual(run.call_args.kwargs["env"]["DOVE_PI_WORKSPACE_MODE"], "development")
+
+    def test_launch_workspace_mode_override_disables_lens_without_forwarding_policy_flag(self):
+        completed = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("dove_pi.executable", return_value="node"), \
+                patch("dove_pi.PI_ENTRY") as pi_entry, \
+                patch("dove_pi.subprocess.run", return_value=completed) as run:
+            pi_entry.exists.return_value = True
+            self.assertEqual(launch(["--workspace-mode", "pentest", "--model", "provider/model"]), 0)
+        command = run.call_args.args[0]
+        self.assertIn("--no-lens", command)
+        self.assertNotIn("--workspace-mode", command)
+        self.assertNotIn("pentest", command)
+        self.assertEqual(command[-2:], ["--model", "provider/model"])
+        self.assertEqual(run.call_args.kwargs["env"]["DOVE_PI_WORKSPACE_MODE"], "pentest")
+
+    def test_workspace_policy_is_inherited_by_nested_launch_directory(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            policy_dir = root / ".dove"
+            policy_dir.mkdir()
+            (policy_dir / "workspace.json").write_text('{"schemaVersion": 1, "mode": "pentest"}\n', encoding="utf-8")
+            nested = root / "src" / "module"
+            nested.mkdir(parents=True)
+            self.assertEqual(workspace_mode_from_file(nested), "pentest")
+
+    def test_invalid_workspace_mode_is_rejected_before_local_cli_routing(self):
+        with self.assertRaisesRegex(RuntimeError, "--workspace-mode must be development or pentest"):
+            main(["--workspace-mode", "invalid", "workspace", "status"])
+
     def test_managed_launch_always_suppresses_pi_self_update(self):
         completed = subprocess.CompletedProcess(args=[], returncode=0)
         with patch("dove_pi.executable", return_value="node"), \
@@ -121,6 +171,12 @@ class InstallerCliTests(unittest.TestCase):
             pi_entry.exists.return_value = True
             self.assertEqual(launch([]), 0)
         self.assertEqual(run.call_args.kwargs["env"]["PI_SKIP_VERSION_CHECK"], "1")
+
+    def test_source_launcher_has_direct_pi_startup_path(self):
+        source = (Path(__file__).resolve().parents[1] / "bin" / "dove-pi.cjs").read_text(encoding="utf-8")
+        self.assertIn("shouldUsePiFastPath", source)
+        self.assertIn("process.execPath", source)
+        self.assertIn("pythonCommands", source)
 
     def test_windows_path_cleanup_removes_only_the_managed_launcher(self):
         current = r'C:\Tools;"C:\Users\Alice\AppData\Local\DovePi\bin\";C:\Other;'

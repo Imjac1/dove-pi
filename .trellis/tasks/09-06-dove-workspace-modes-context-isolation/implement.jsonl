@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Workspace-scoped state, atomic persistence, and context/cache ownership rules."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"Pi extension profile, launcher, and extension authority contracts."}
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Request/context projection, cache-prefix, and bounded model input contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Required typed boundaries, bounded diagnostics, and validation commands."}

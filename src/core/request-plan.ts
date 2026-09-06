@@ -39,6 +39,9 @@ export interface RequestPlan {
 	readonly projectAvailable: boolean;
 	readonly lane: RequestLane;
 	readonly taskSelector?: string;
+	/** True when the request explicitly targets continuation, even if an
+	 * actionable clause makes execution the primary intent. */
+	readonly continuationRequested?: boolean;
 	readonly continuedFromRequestId?: string;
 	readonly workflowAction?: WorkflowAction;
 	/** @deprecated Use workflowAction. */
@@ -66,7 +69,8 @@ const WORKFLOW_ACTION_PATTERNS: readonly [WorkflowAction, RegExp][] = [
 const FORMAL_TASK_PATTERN = /(?:正式(?:任务|流程|工作)|规划|制定|生成|编写|保留|落盘).{0,48}(?:任务|工作|方案|prd|设计|实现计划|验收|阶段产物|文档|产物)|(?:多文件|跨层|跨模块|系统性|重构).{0,32}(?:修改|改造|实现|优化|开发|迁移)|\b(?:prd|design document|implementation plan|acceptance criteria|formal task|multi[- ]file|cross[- ]layer|refactor)\b/i;
 const ARCHITECTURE_TASK_PATTERN = /(?:设计|规划|制定|重构|改造|实现|文档化).{0,48}(?:架构|方案|系统|模块)|(?:架构|系统|模块).{0,48}(?:设计|方案|重构)|\b(?:design|define|redesign|document|implement|plan)\b.{0,48}\b(?:architecture|system design|module)\b|\b(?:architecture|system design|module)\b.{0,48}\b(?:design|plan|refactor)\b/i;
 const FORMAL_ACTION_PATTERN = /(?:正式|规划|制定|生成|编写|保留|落盘|设计|重构|改造|文档化|plan|define|design|redesign|document|implement|refactor|formal|multi[- ]file|cross[- ]layer)/i;
-const MULTI_FILE_FORMAL_PATTERN = /(?:规划|设计|制定|重构|改造|实现|优化|开发|plan|design|refactor|implement|optimi[sz]e|develop).{0,96}(?:多个文件|多文件|跨层|跨模块|multi[- ]file|cross[- ]layer)|(?:多个文件|多文件|跨层|跨模块|multi[- ]file|cross[- ]layer).{0,96}(?:修改|改造|实现|优化|开发|modify|change|implement|refactor|optimi[sz]e|develop)/i;
+const MULTI_FILE_SCOPE = "(?:多个文件|多文件|跨层|跨模块|多个模块|multi[- ]file|multiple files?|several files?|across (?:multiple )?files?|cross[- ]layer|cross[- ]module|multiple modules?|several modules?)";
+const MULTI_FILE_FORMAL_PATTERN = new RegExp(`(?:规划|设计|制定|重构|改造|实现|优化|开发|plan|design|refactor|implement|optimi[sz]e|develop).{0,96}${MULTI_FILE_SCOPE}|${MULTI_FILE_SCOPE}.{0,96}(?:修改|改造|实现|优化|开发|modify|change|implement|refactor|optimi[sz]e|develop)`, "i");
 
 const NEGATED_WORKFLOW_ACTION_PATTERN = /(?:不要|别|无需|不需要|不必|无须|don't|do\s+not|without|no\s+need\s+to)[^，。！？；,;.!?\n]{0,24}(?:创建|新建|建立|开始|启动|完成|结束|归档|create|new|start|begin|finish|archive)/i;
 
@@ -107,7 +111,16 @@ function hasActionableExecution(message: string): boolean {
 }
 
 function classifyWorkflowAction(message: string): WorkflowAction | undefined {
-	if (NEGATED_WORKFLOW_ACTION_PATTERN.test(message)) return undefined;
+	// A continuation may legitimately explain what to do when no active task
+	// exists and explicitly negate creating/finishing a task. Preserve the
+	// leading continuation action; standalone negated lifecycle questions stay
+	// read-only below.
+	if (NEGATED_WORKFLOW_ACTION_PATTERN.test(message) && !PROJECT_CONTINUATION_PATTERN.test(message)) return undefined;
+	// Lifecycle words inside an explanatory/read-only question describe the
+	// workflow; they do not request a lifecycle mutation. Keeping this out of
+	// the plan prevents status/help questions from acquiring a continuation
+	// action that downstream surfaces could mistake for executable work.
+	if (EXPLANATORY_QUERY_PATTERN.test(message) && !hasActionableExecution(message) && !PROJECT_CONTINUATION_PATTERN.test(message)) return undefined;
 	for (const [action, pattern] of WORKFLOW_ACTION_PATTERNS) if (pattern.test(message)) return action;
 	return undefined;
 }
@@ -158,8 +171,12 @@ function classifyProjectAction(message: string, intent: RequestIntent): ProjectA
 
 export function isFormalTaskRequest(message: string, intent: RequestIntent, workflowAction?: WorkflowAction): boolean {
 	if (workflowAction === "create-task") return true;
+	// Lookup/explanation requests may mention architecture, refactors, or plans
+	// as the subject of the question. They must stay in the fast lane unless
+	// the user explicitly asks for a lifecycle action or an execution artifact.
+	if (intent === "lookup") return false;
 	if (EXPLANATORY_QUERY_PATTERN.test(message) && !/(?:规划|制定|生成|编写|保留|落盘|重构|实现|迁移|plan|generate|write|refactor|implement)/i.test(message)) return false;
-	if ((intent === "chat" || intent === "lookup") && !FORMAL_ACTION_PATTERN.test(message)) return false;
+	if (intent === "chat" && !FORMAL_ACTION_PATTERN.test(message)) return false;
 	return FORMAL_TASK_PATTERN.test(message) || ARCHITECTURE_TASK_PATTERN.test(message) || MULTI_FILE_FORMAL_PATTERN.test(message);
 }
 
@@ -226,6 +243,7 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlan {
 		projectAvailable,
 		lane,
 		...(taskSelector ? { taskSelector } : {}),
+		...(workflowAction === "continue" ? { continuationRequested: true } : {}),
 		...(inheritedIntent && input.pendingPlan ? { continuedFromRequestId: input.pendingPlan.requestId } : {}),
 		...(effectiveWorkflowAction ? { workflowAction: effectiveWorkflowAction } : {}),
 		...(projectAction ? { projectAction } : {}),

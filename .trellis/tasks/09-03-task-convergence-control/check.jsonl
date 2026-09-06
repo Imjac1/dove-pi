@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-agent-request-runtime.md","reason":"Verify the new task controller does not weaken or duplicate request/tool/provider safety guards."}
+{"file":".trellis/spec/backend/personal-agent-project-context.md","reason":"Verify native persistence, legacy read-only behavior, fast-lane isolation, and bounded context."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify compatibility, failure recovery, focused tests, and complete project checks."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify all consumers use the shared decoder/reducer and correlated identifiers."}
+{"file":".trellis/tasks/09-03-task-convergence-control/research/convergence-evidence.md","reason":"Check implementation decisions against the observed non-convergence case and researched patterns."}

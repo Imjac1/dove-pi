@@ -49,6 +49,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 ### 3. Contracts
 
 - The launcher reads `state/install.json` schema 2 and may execute only a path strictly below `app/versions` containing `dove_pi.py`, `release.json`, and `node_modules`.
+- Source and managed launchers resolve the optional ancestor `.dove/workspace.json` policy consistently. Missing or malformed policy means `development`; `pentest` adds `--no-lens`, while a validated `--workspace-mode` override applies only to that process and is never forwarded to Pi or persisted by launch.
 - The stable Python launcher is the public command router as well as the Pi entry point. Every documented local Dove command family (including `capability`, `rpc`, and `mcp`) must be classified explicitly and forwarded to the bundled TypeScript CLI; the startup prefixes `--offline` and `--skip-version-check` may appear before a known local family and must be stripped only for that routing decision. Unknown/interactive arguments alone may fall through to Pi. Adding a CLI command or prefix alias without updating and testing this router is an incomplete cross-layer change.
 - Exact `version` and `--version` requests are handled before Pi launch and read both release-locked identities from the packaged `package.json`, producing `Dove Pi <dove-version> (Pi <pi-version>)`.
 - Pi is an exact Release component, not an independently mutable global runtime. Managed launches suppress Pi's direct version/self-update path; `dove-pi update` installs the manifest/lockfile Pi version in staging, reads the actual installed Pi/TUI package versions back from `node_modules`, and activates only when both match. Check/update results project current, previous, and latest Pi versions and report whether Pi changes.
@@ -128,6 +129,7 @@ ManagedInstaller.uninstall(confirmed: bool) -> MaintenanceResult
 - Assert release readiness rejects dirty, mismatched, unsafe, checksum-invalid, or partial four-asset bundles before the publication action.
 - Assert offline doctor reports current/previous managed state and degraded managed extensions without network access.
 - Invoke each documented non-maintenance command family through `dove_pi.py` and assert it reaches the Dove CLI rather than Pi; keep this routing test isolated from the real user installation and Pi state.
+- Assert launcher mode parity: default development omits `--no-lens`, persisted and one-launch pentest add it, nested directories inherit the nearest valid policy, malformed policy falls back safely, and invalid mode flags fail before local CLI routing.
 - Assert `dove-pi --version` reports both packaged Dove and Pi versions without launching Pi, and exact-spec extension reconciliation remains serial with bounded progress on stderr and one JSON stdout result.
 - Assert update/check reports manifest-owned Pi versions and a Release update moves current/previous Pi identities together with the atomic Dove activation.
 - Assert an actual installed Pi package-version mismatch fails at the dependency gate before activation.

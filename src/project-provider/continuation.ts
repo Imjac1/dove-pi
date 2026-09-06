@@ -5,6 +5,8 @@ export interface ProjectContinuationTask extends ProjectTaskIdentity {
 	readonly title: string;
 	readonly status: string;
 	readonly priority?: string;
+	readonly formal?: boolean;
+	readonly convergence?: ProjectTask["convergence"];
 }
 
 export type ProjectContinuation =
@@ -17,6 +19,13 @@ export type ProjectContinuation =
 const CONTINUABLE_STATUSES = new Set(["active", "in_progress", "in-progress", "started", "working"]);
 
 function continuationStep(task: ProjectTask): string {
+	if (task.convergence?.health === "valid") {
+		if (task.convergence.state === "ready_to_finish") return "Complete final verification, spec capture, commit, and wrap-up; do not start another product-mutation cycle.";
+		if (task.convergence.state === "checkpointed" || task.convergence.state === "blocked") {
+			return task.convergence.nextAction ?? `Resume ${task.convergence.activeAcceptanceId ?? "the checkpointed acceptance criterion"}.`;
+		}
+		if (task.convergence.nextAction) return task.convergence.nextAction;
+	}
 	return `Continue ${task.stableId} from its public ProjectProvider task artifacts and current implementation plan.`;
 }
 
@@ -29,6 +38,8 @@ function summarizeTask(task: ProjectTask): ProjectContinuationTask {
 		title: task.title,
 		status: task.status,
 		...(task.priority ? { priority: task.priority } : {}),
+		...(task.formal ? { formal: true } : {}),
+		...(task.convergence ? { convergence: task.convergence } : {}),
 	};
 }
 
