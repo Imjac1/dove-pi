@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -53,6 +53,7 @@ describe("real Dove Pi black-box harness", () => {
 				sawSettled?: boolean;
 				terminalConsistency?: string;
 				providerEvidence?: Array<{ model?: string; systemPromptChars?: number; messageCount?: number; messageChars?: number; toolCount?: number }>;
+				providerIdentity?: Array<{ entryKind?: string; doveExtensionOrigin?: string; doveExtensionTrust?: string }>;
 			};
 			assert.equal(summary.providerMode, "faux");
 			assert.equal(summary.contextWindow, 200_000);
@@ -67,6 +68,9 @@ describe("real Dove Pi black-box harness", () => {
 			assert.equal(summary.providerEvidence?.[0]?.model, "blackbox");
 			assert.ok((summary.providerEvidence?.[0]?.messageChars ?? 0) > 0);
 			assert.ok((summary.providerEvidence?.[0]?.systemPromptChars ?? 0) > 0);
+			assert.equal(summary.providerIdentity?.[0]?.entryKind, "source-or-explicit");
+			assert.equal(summary.providerIdentity?.[0]?.doveExtensionOrigin, "managed");
+			assert.equal(summary.providerIdentity?.[0]?.doveExtensionTrust, "managed");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -96,6 +100,38 @@ describe("real Dove Pi black-box harness", () => {
 		}
 	});
 
+	it("runs an explicitly configured read-only child and reports unavailable configuration without aborting", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-subagent-"));
+		try {
+			const project = join(root, "project");
+			const delegatedOutput = join(root, "delegated.jsonl");
+			const unavailableOutput = join(root, "unavailable.jsonl");
+			await mkdir(project, { recursive: true });
+			const [delegated, unavailable] = await Promise.all([
+				runHarness(project, delegatedOutput, ["--provider", "faux", "--subagent-case", "delegated", "--prompt", "Delegate a read-only inventory."], 30_000, "subagent-delegated"),
+				runHarness(project, unavailableOutput, ["--provider", "faux", "--subagent-case", "unavailable", "--prompt", "Try a read-only inventory."], 30_000, "subagent-unavailable"),
+			]);
+			assert.equal(delegated.code, 0);
+			assert.equal(unavailable.code, 0);
+			const delegatedSummary = JSON.parse(await readFile(`${delegatedOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; toolName?: string; isError?: boolean }> }>; subagentEvidence?: Array<{ argv?: string[] }> };
+			const unavailableSummary = JSON.parse(await readFile(`${unavailableOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; subagentEvidence?: unknown[]; steps?: Array<{ events?: Array<{ type?: string; toolName?: string; isError?: boolean }> }> };
+			assert.equal(delegatedSummary.exitCode, 0);
+			assert.equal(delegatedSummary.signal, null);
+			assert.equal(delegatedSummary.sawSettled, true);
+			assert.deepEqual(delegatedSummary.steps?.[0]?.events?.filter((event) => event.type === "tool_execution_end").map((event) => event.isError), [false]);
+			assert.deepEqual(delegatedSummary.subagentEvidence?.[0]?.argv?.slice(-9), ["--mode", "text", "--print", "--no-session", "--no-extensions", "--tools", "read,grep,find,ls", "--", "Read the project and return a short inventory."]);
+			assert.equal(unavailableSummary.exitCode, 0);
+			assert.equal(unavailableSummary.signal, null);
+			assert.equal(unavailableSummary.sawSettled, true);
+			// Provider unavailability is an expected, structured tool response. It
+			// must not be promoted to an RPC failure or host abort.
+			assert.deepEqual(unavailableSummary.steps?.[0]?.events?.filter((event) => event.type === "tool_execution_end").map((event) => event.isError), [false]);
+			assert.equal(unavailableSummary.subagentEvidence?.length, 0);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("allows productive reads past the historical count and terminates unchanged reads semantically", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-progress-"));
 		try {
@@ -113,7 +149,7 @@ describe("real Dove Pi black-box harness", () => {
 			]);
 			assert.equal(changing.code, 0);
 			assert.equal(repeated.code, 0);
-			const changingSummary = JSON.parse(await readFile(`${changingOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; isError?: boolean }> }>; providerEvidence?: unknown[]; ledgerTerminal?: { terminal?: { code?: string } } };
+			const changingSummary = JSON.parse(await readFile(`${changingOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; isError?: boolean }> }>; providerEvidence?: unknown[]; ledgerTerminal?: { terminal?: { code?: string } }; resourceObservation?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number }; strategy?: { resources?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number } } };
 			const repeatedSummary = JSON.parse(await readFile(`${repeatedOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; isError?: boolean }> }>; providerEvidence?: unknown[]; ledgerTerminal?: { terminal?: { origin?: string; code?: string; nextAction?: string } } };
 			assert.equal(changingSummary.exitCode, 0);
 			assert.equal(changingSummary.signal, null);
@@ -124,6 +160,10 @@ describe("real Dove Pi black-box harness", () => {
 			assert.equal(changingToolResults.length, 20);
 			assert.ok(changingToolResults.every((event) => event.isError === false), "all productive reads must return successful tool results");
 			assert.ok((changingSummary.providerEvidence?.length ?? 0) >= 21, "the final provider summary must follow the 20 successful reads");
+			assert.equal(changingSummary.resourceObservation?.toolCalls, 20);
+			assert.ok((changingSummary.resourceObservation?.providerRounds ?? 0) >= 21);
+			assert.ok((changingSummary.resourceObservation?.elapsedMs ?? 0) > 0);
+			assert.equal(changingSummary.strategy?.resources?.toolCalls, 20);
 			assert.equal(repeatedSummary.exitCode, 0);
 			assert.equal(repeatedSummary.signal, null);
 			assert.equal(repeatedSummary.sawSettled, true);
@@ -228,6 +268,94 @@ describe("real Dove Pi black-box harness", () => {
 		}
 	});
 
+	it("injects steer and follow-up through RPC while a tool is running", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-queue-"));
+		try {
+			const project = join(root, "project");
+			const output = join(root, "queue.jsonl");
+			const scenario = join(root, "scenario.json");
+			await mkdir(project, { recursive: true });
+			await writeFile(scenario, JSON.stringify({ steps: [{ kind: "prompt", message: "Inspect the project while accepting live guidance.", queueDuringTools: true }] }), "utf8");
+			const result = await runHarness(project, output, ["--provider", "faux", "--progress-case", "midstream", "--scenario", scenario], 30_000, "midstream-queue");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as {
+				steps?: Array<{ settled?: boolean; events?: Array<{ type?: string; command?: string; success?: boolean }> }>;
+			};
+			const events = summary.steps?.[0]?.events ?? [];
+			const queueResponses = events.filter((event) => event.type === "response" && (event.command === "steer" || event.command === "follow_up"));
+			assert.equal(summary.steps?.[0]?.settled, true);
+			assert.ok(events.filter((event) => event.type === "queue_update").length >= 2);
+			assert.deepEqual(queueResponses.map((event) => event.command), ["steer", "follow_up"]);
+			assert.ok(queueResponses.every((event) => event.success === true));
+			const toolStart = events.findIndex((event) => event.type === "tool_execution_start");
+			const firstQueueResponse = events.findIndex((event) => event.type === "response" && event.command === "steer");
+			assert.ok(toolStart >= 0 && firstQueueResponse > toolStart);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("proves managed launcher uses the installed Dove release extension", async (t) => {
+		const probe = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["dove-pi"], { stdio: "ignore" });
+		if (probe.status !== 0) {
+			t.skip("managed dove-pi launcher is not installed in this environment");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-managed-"));
+		try {
+			const project = join(root, "project");
+			const output = join(root, "managed.jsonl");
+			await mkdir(project, { recursive: true });
+			const result = await runHarness(project, output, ["--provider", "faux", "--prompt", "Read the project."], 30_000, "managed-release", "managed");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as {
+				exitCode?: number | null;
+				signal?: string | null;
+				providerIdentity?: Array<{ entryKind?: string; doveExtensionOrigin?: string; doveExtensionTrust?: string }>;
+			};
+			assert.equal(summary.exitCode, 0);
+			assert.equal(summary.signal, null);
+			assert.equal(summary.providerIdentity?.[0]?.entryKind, "managed-release");
+			assert.equal(summary.providerIdentity?.[0]?.doveExtensionOrigin, "managed");
+			assert.equal(summary.providerIdentity?.[0]?.doveExtensionTrust, "managed");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("proves the managed launcher delegates read-only work and handles unavailable child providers", async (t) => {
+		const probe = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["dove-pi"], { stdio: "ignore" });
+		if (probe.status !== 0) {
+			t.skip("managed dove-pi launcher is not installed in this environment");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-managed-subagent-"));
+		try {
+			const project = join(root, "project");
+			const delegatedOutput = join(root, "delegated.jsonl");
+			const unavailableOutput = join(root, "unavailable.jsonl");
+			await mkdir(project, { recursive: true });
+			const [delegated, unavailable] = await Promise.all([
+				runHarness(project, delegatedOutput, ["--provider", "faux", "--subagent-case", "delegated", "--prompt", "Delegate a read-only inventory."], 30_000, "managed-subagent-delegated", "managed"),
+				runHarness(project, unavailableOutput, ["--provider", "faux", "--subagent-case", "unavailable", "--prompt", "Try a read-only inventory."], 30_000, "managed-subagent-unavailable", "managed"),
+			]);
+			assert.equal(delegated.code, 0);
+			assert.equal(unavailable.code, 0);
+			const delegatedSummary = JSON.parse(await readFile(`${delegatedOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; subagentEvidence?: Array<{ argv?: string[] }> };
+			const unavailableSummary = JSON.parse(await readFile(`${unavailableOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; subagentEvidence?: unknown[] };
+			assert.equal(delegatedSummary.exitCode, 0);
+			assert.equal(delegatedSummary.signal, null);
+			assert.equal(delegatedSummary.sawSettled, true);
+			assert.deepEqual(delegatedSummary.subagentEvidence?.[0]?.argv?.slice(-9), ["--mode", "text", "--print", "--no-session", "--no-extensions", "--tools", "read,grep,find,ls", "--", "Read the project and return a short inventory."]);
+			assert.equal(unavailableSummary.exitCode, 0);
+			assert.equal(unavailableSummary.signal, null);
+			assert.equal(unavailableSummary.sawSettled, true);
+			assert.equal(unavailableSummary.subagentEvidence?.length, 0);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("keeps an output path inside the source project from breaking workspace copy", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-nested-output-"));
 		try {
@@ -300,9 +428,9 @@ function digest(value: string): string {
 	return createHash("sha256").update(value.normalize("NFC")).digest("hex").slice(0, 24);
 }
 
-function runHarness(project: string, output: string, extraArgs: readonly string[] = [], timeoutMs = 10_000, caseId = "provider-auth"): Promise<{ code: number | null }> {
+function runHarness(project: string, output: string, extraArgs: readonly string[] = [], timeoutMs = 10_000, caseId = "provider-auth", launcher = "source"): Promise<{ code: number | null }> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, ["scripts/real-dove-blackbox.mjs", "--launcher", "source", "--cwd", project, "--output", output, "--case-id", caseId, "--timeout-ms", String(timeoutMs), ...extraArgs], {
+		const child = spawn(process.execPath, ["scripts/real-dove-blackbox.mjs", "--launcher", launcher, "--cwd", project, "--output", output, "--case-id", caseId, "--timeout-ms", String(timeoutMs), ...extraArgs], {
 			cwd: process.cwd(),
 			stdio: ["ignore", "pipe", "pipe"],
 			windowsHide: true,

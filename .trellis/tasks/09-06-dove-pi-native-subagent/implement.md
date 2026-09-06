@@ -62,7 +62,8 @@ exited cleanly (`exitCode=0`, `signal=null`) and captured the fixed read-only
 argv (`--no-extensions`, `--tools read,grep,find,ls`). A second replay with an
 unavailable child also exited cleanly, returned a structured unavailable tool
 result, and captured no child launch. Neither path produced an `Operation
-aborted` terminal.
+aborted` terminal. These managed cases are now covered by the opt-in black-box
+test alongside the source-launcher cases.
 
 ## Slice 5: Release Decision
 
