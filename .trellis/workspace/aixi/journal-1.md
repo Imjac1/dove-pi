@@ -482,3 +482,28 @@ Completed the Dove Pi full-workflow audit: fixed local launcher routing and CLI 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 18: Native read-only subagent dispatch
+<!-- trellis-session: v=2 fp=d01db70f7be0b61a -->
+
+**Date**: 2026-09-06
+**Task**: Native read-only subagent dispatch
+**Branch**: `master`
+
+### Summary
+
+Implemented and verified host-neutral read-only subagent dispatch for Dove Pi, including provider health diagnostics, /subagent UX, managed launcher black-box coverage, unavailable/cancelled/empty-output handling, and README/spec updates. Archived task 09-06-dove-pi-native-subagent; left unrelated parallel-task changes untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3c99f4d` | feat: add host-neutral read-only subagent provider |
+| `a58ccd7` | feat: expose subagent health in doctor |
+| `ab3c56b` | test: cover managed subagent black-box flows |
+| `866dc07` | feat: integrate read-only subagent UX and black-box coverage |
+
+### Status
+
+[OK] **Completed**
