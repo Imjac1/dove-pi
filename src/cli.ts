@@ -35,6 +35,7 @@ import { parseNonNegativeHours } from "./commands/cli-options.ts";
 import { runTaskCommand } from "./commands/task.ts";
 import { runSessionCommand } from "./commands/session.ts";
 import { ExecutionLedger, projectExecutionDiagnostics } from "./core/execution-ledger.ts";
+import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./pi-adapter/subagent-provider.ts";
 
 const args = process.argv.slice(2);
 let cliFailureEmitted = false;
@@ -67,6 +68,11 @@ if (args[0] === "doctor") {
 	const extensions = await inspectExtensionProfile("max", { cwd: process.cwd(), piVersion: getPiVersion(), checkExecutables: false });
 	const interoperableContext = readInteroperableContextProjection(provider);
 	const diagnostics = projectExecutionDiagnostics(await new ExecutionLedger(localLedgerPath()).read());
+	const subagentConfiguration = resolvePiChildCommand();
+	const configuredSubagent = createConfiguredPiSubagentProvider();
+	const subagentHealth = configuredSubagent
+		? await configuredSubagent.inspect()
+		: { available: false, provider: "pi-child", reason: subagentConfiguration ? "invalid child configuration" : "DOVE_PI_SUBAGENT_EXECUTABLE is not configured" };
 	console.log(
 		JSON.stringify(
 			{
@@ -84,6 +90,14 @@ if (args[0] === "doctor") {
 				hostCapabilities: extensions.capabilities,
 				contextAuthorities: { authorities: interoperableContext.authorities, conflicts: interoperableContext.conflicts },
 				requestDiagnostics: diagnostics,
+				subagent: {
+					provider: subagentHealth.provider,
+					configured: Boolean(subagentConfiguration),
+					available: subagentHealth.available,
+					reason: subagentHealth.reason,
+					activeRuns: 0,
+					lastTerminal: undefined,
+				},
 				project: {
 					...health,
 					currentTask: context.currentTask,
