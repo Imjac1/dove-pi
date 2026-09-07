@@ -37,6 +37,7 @@ import { runSessionCommand } from "./commands/session.ts";
 import { ExecutionLedger, projectExecutionDiagnostics } from "./core/execution-ledger.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./pi-adapter/subagent-provider.ts";
 import { normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "./core/workspace-policy.ts";
+import { inspectShellConfig, setShellPath, type ShellConfigScope } from "./pi-adapter/shell-config.ts";
 
 const args = process.argv.slice(2);
 let cliFailureEmitted = false;
@@ -79,6 +80,7 @@ if (args[0] === "doctor") {
 			{
 				node: process.version,
 				platform: process.platform,
+				shell: inspectShellConfig(process.cwd()),
 				workspace: (() => { const policy = readWorkspacePolicy(process.cwd()); return { root: policy.workspaceRoot, mode: policy.policy.mode, source: policy.source, malformed: policy.malformed, lensEnabledOnNextSession: policy.policy.mode === "development" }; })(),
 				powershell,
 				managedInstall,
@@ -163,6 +165,8 @@ if (args[0] === "doctor") {
 	await runExtensionsCommand(args.slice(1));
 } else if (args[0] === "workspace") {
 	await runWorkspaceCommand(args.slice(1));
+} else if (args[0] === "shell") {
+	await runShellCommand(args.slice(1));
 } else if (args[0] === "capability") {
 	await runCapabilityCommand(args.slice(1));
 } else if (args[0] === "rpc") {
@@ -266,7 +270,7 @@ if (args[0] === "doctor") {
 	console.log(formatCacheAudit(audit));
 } else {
 	throw new Error(
-		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi workspace status|set development|pentest | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
+		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi workspace status|set development|pentest | dove-pi shell status|set <path|auto> [--scope project|global] | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
 	);
 }
 
@@ -283,6 +287,26 @@ async function runWorkspaceCommand(commandArgs: string[]): Promise<void> {
 	const workspaceRoot = resolveWorkspaceRoot(process.cwd());
 	const path = await writeWorkspacePolicy(workspaceRoot, mode);
 	console.log(JSON.stringify({ workspaceRoot, path, mode, lens: { enabledOnNextSession: mode === "development" }, restartRequired: false }, null, 2));
+}
+
+async function runShellCommand(commandArgs: string[]): Promise<void> {
+	const command = commandArgs[0] ?? "status";
+	if (command === "status") {
+		console.log(JSON.stringify(inspectShellConfig(process.cwd()), null, 2));
+		return;
+	}
+	if (command !== "set" && command !== "reset") throw new Error("Usage: dove-pi shell status|set <path|auto> [--scope project|global]|reset [--scope project|global]");
+	const scope = parseShellScope(commandArgs);
+	const value = command === "reset" ? "auto" : commandArgs[1];
+	if (!value || value.startsWith("--")) throw new Error("Usage: dove-pi shell set <path|auto> [--scope project|global]");
+	console.log(JSON.stringify(setShellPath(value, scope, process.cwd()), null, 2));
+}
+
+function parseShellScope(args: readonly string[]): ShellConfigScope {
+	const index = args.findIndex((value) => value === "--scope" || value.startsWith("--scope="));
+	const value = index < 0 ? "project" : args[index].startsWith("--scope=") ? args[index].slice("--scope=".length) : args[index + 1];
+	if (value !== "project" && value !== "global") throw new Error("--scope must be project or global");
+	return value;
 }
 
 async function runExtensionsCommand(commandArgs: string[]): Promise<void> {

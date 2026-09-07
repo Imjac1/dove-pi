@@ -112,6 +112,27 @@ Dove 始终把启动命令时的当前目录当作目标项目。你的代码不
 
 这两个命令由 Pi 提供，凭据保存在 Pi 的用户目录，不会写进当前项目。
 
+### 配置 Bash（可选）
+
+默认使用 Pi 的系统自动检测：Windows 优先 Git Bash，再查找 `PATH` 中的 `bash.exe`；Unix
+优先 `/bin/bash`，再回退到 `bash` 或 `sh`。只有需要指定特定 Bash 时才设置路径：
+
+```powershell
+dove-pi shell status
+dove-pi shell set "C:\Program Files\Git\bin\bash.exe"
+dove-pi shell set auto
+```
+
+默认写入当前项目的 `.pi/settings.json`。使用 `--scope global` 可写入 Pi 的全局用户目录：
+
+```powershell
+dove-pi shell set "C:\Program Files\Git\bin\bash.exe" --scope global
+dove-pi shell reset --scope project
+```
+
+项目设置优先于全局设置；`auto`/`reset` 仅删除所选范围的 `shellPath`，保留其余 Pi 设置。
+这不会影响 Pi 的 `powershell` 工具；`dove-pi doctor` 会显示当前有效 shell 或自动检测失败原因。
+
 ### 2. 直接描述需求
 
 ```text
@@ -309,6 +330,29 @@ Pi 可能仍显示通用的 `Operation aborted`，但 Dove 会保留具体终止
 无 UI 时运行 `dove-pi doctor`，或通过 `diagnostics/status` 查看相同的结构化原因和下一步；
 资源/token/cache 数值仅用于观察和建议；只读请求数达到历史阈值也仅产生 advisory，不会因数量本身终止；重复且无进展的
 read-only guard 仍可能按上表策略结束停滞的请求。
+
+### `Error: This operation was aborted` 的排查
+
+这个文本通常是 Pi 宿主在等待工具结束时取消了整个操作，不等于 token/context 超限，也不等于
+Provider API key 失效。最常见的触发方式是把整个项目测试、子进程或 Git Bash 管道放进一次
+调用，例如 `go test ./... 2>&1 | tail -60`：即使前面已经打印失败，管道仍可能等待所有子进程
+和输出句柄关闭，宿主取消后只剩通用的 aborted 文本。
+
+Dove 对 `go test`、`npm test`、`pytest`、`cargo test` 等聚合验证命令默认设置 240 秒的 Pi
+工具超时。到时 Pi 会保留已有输出并返回 `Command timed out after 240 seconds`，而不是让宿主
+先产生无法归因的 `This operation was aborted`。普通命令不受影响，用户显式传入的 `timeout` 优先。
+需要更长时间时可以按项目实际耗时提高或关闭这个兜底（单位为秒）；但提高到超过 Pi 宿主的外层
+watchdog 并不能突破宿主期限，长任务仍应拆分：
+
+```powershell
+$env:DOVE_PI_SHELL_TIMEOUT_SECONDS = "900"  # 15 分钟
+$env:DOVE_PI_SHELL_TIMEOUT_SECONDS = "0"    # 关闭 Dove 兜底，交由 Pi/宿主管理
+```
+
+长测试仍建议拆分为可独立结束的包或测试目标，并先运行失败最快的单元测试；不要用 `tail` 把
+整个测试进程的生命周期隐藏起来。若已经出现 aborted：先查看工具输出末尾和
+`dove-pi doctor` / `/status full`，再用显式 `timeout` 重试或拆分命令。配置值写错时 Dove 会
+回退到 240 秒，而不会静默恢复无界等待。
 
 要复现隔离的真实 RPC 路径，可运行
 `node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`。

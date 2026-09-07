@@ -118,6 +118,30 @@ If this is your first run and no model is configured, enter these commands insid
 These are native Pi commands. Credentials stay in Pi's user directory and are not written to the
 current project.
 
+### Configure Bash (optional)
+
+Pi uses system detection by default: on Windows it prefers Git Bash and then `bash.exe` on `PATH`; on
+Unix it prefers `/bin/bash`, then falls back to `bash` or `sh`. Set a path only when a specific Bash is
+required:
+
+```powershell
+dove-pi shell status
+dove-pi shell set "C:\Program Files\Git\bin\bash.exe"
+dove-pi shell set auto
+```
+
+The default scope writes `.pi/settings.json` in the current project. Use `--scope global` for Pi's
+user-level settings:
+
+```powershell
+dove-pi shell set "C:\Program Files\Git\bin\bash.exe" --scope global
+dove-pi shell reset --scope project
+```
+
+Project settings override global settings. `auto`/`reset` only removes `shellPath` in the selected
+scope and preserves other Pi settings. This does not affect Pi's `powershell` tool; `dove-pi doctor`
+shows the effective shell or an automatic-resolution failure.
+
 ### 2. Describe the work
 
 ```text
@@ -336,6 +360,32 @@ Pi may still render the generic `Operation aborted`, but Dove preserves a specif
 Without a UI, run `dove-pi doctor` or query `diagnostics/status` for the same structured cause and
 next action. Resource, token, and cache values are observation-only; reaching the historical
 read-only request count and provider-round thresholds are advisory and do not abort by themselves. Repeated-read progress guards can still end a stalled loop as described above.
+
+### Troubleshooting `Error: This operation was aborted`
+
+This message usually means that the Pi host cancelled the whole operation while it was waiting for a
+tool. It is not, by itself, a token/context overflow or a bad Provider API key. A common trigger is a
+package-wide test behind a Git Bash pipeline, such as `go test ./... 2>&1 | tail -60`: output may show an
+early failure while the pipeline still waits for child processes and inherited handles to close. The
+host then cancels the request and only the generic aborted text survives.
+
+Dove gives aggregate verification commands such as `go test`, `npm test`, `pytest`, and `cargo test` a
+240-second Pi tool timeout by default. When it expires, Pi preserves the output and reports
+`Command timed out after 240 seconds`, rather than allowing the host to produce an un-attributed
+`This operation was aborted`. Ordinary commands are unchanged, and an explicit tool `timeout` wins.
+Raise or disable this safety net when a project genuinely needs longer, but a value above Pi's outer
+watchdog deadline cannot extend the host operation; split the command when it can exceed that deadline:
+
+```powershell
+$env:DOVE_PI_SHELL_TIMEOUT_SECONDS = "900"  # 15 minutes
+$env:DOVE_PI_SHELL_TIMEOUT_SECONDS = "0"    # disable Dove's fallback
+```
+
+Prefer splitting long test suites into independently terminating packages or targets, and run the
+fastest-failing tests first. Avoid hiding the lifetime of the entire test process behind `tail`. After
+an abort, inspect the final tool output and `dove-pi doctor` / `/status full`, then retry with an explicit
+timeout or a smaller command. A malformed timeout override falls back to 240 seconds instead of
+silently restoring an unbounded wait.
 
 To replay an isolated real RPC path, run
 `node scripts/real-dove-blackbox.mjs --launcher source --provider faux --cwd <temporary-project> --output <temporary-output>`.

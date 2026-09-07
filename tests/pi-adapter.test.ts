@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { accumulateRequestUsage, classifyAssistantProviderFailure, compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+import { createBashTool } from "@earendil-works/pi-coding-agent";
+import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
@@ -28,6 +29,39 @@ after(() => {
 });
 
 describe("Pi adapter", () => {
+	it("bounds aggregate shell verification without changing ordinary commands", () => {
+		const aggregate: Record<string, unknown> = { command: "go test -count=1 ./server/... 2>&1 | tail -60" };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", aggregate, {}), { applied: true, timeoutSeconds: 240, reason: "aggregate-verification" });
+		assert.equal(aggregate.timeout, 240);
+		const explicit: Record<string, unknown> = { command: "go test ./...", timeout: 900 };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", explicit, {}), { applied: false, reason: "explicit-timeout" });
+		assert.equal(explicit.timeout, 900);
+		const ordinary: Record<string, unknown> = { command: "git status --short" };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", ordinary, {}), { applied: false });
+		const disabled: Record<string, unknown> = { command: "npm test" };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", disabled, { DOVE_PI_SHELL_TIMEOUT_SECONDS: "0" }), { applied: false, reason: "disabled" });
+		assert.equal(disabled.timeout, undefined);
+		const invalid: Record<string, unknown> = { command: "npm test" };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", invalid, { DOVE_PI_SHELL_TIMEOUT_SECONDS: "not-a-number" }), { applied: true, timeoutSeconds: 240, reason: "invalid-configuration-defaulted" });
+		assert.equal(invalid.timeout, 240);
+	});
+
+	it("forwards the adaptive timeout through Pi and preserves a structured timeout", async () => {
+		let receivedTimeout: number | undefined;
+		const bash = createBashTool(process.cwd(), {
+			operations: {
+				exec: async (_command, _cwd, options) => {
+					receivedTimeout = options.timeout;
+					throw new Error(`timeout:${options.timeout}`);
+				},
+			},
+		});
+		const input = { command: "npm test" } as { command: string; timeout?: number };
+		applyAdaptiveShellTimeout("bash", input, { DOVE_PI_SHELL_TIMEOUT_SECONDS: "1" });
+		await assert.rejects(() => bash.execute("adaptive-timeout", input, undefined, undefined), /Command timed out after 1 seconds/);
+		assert.equal(receivedTimeout, 1);
+	});
+
 	it("allows only explicitly read-only shell checks before formal acceptance freeze", () => {
 		assert.equal(isReadOnlyShellCommand("bash", { command: "git -C /repo log --oneline -5; echo ---; git -C /repo status --porcelain" }), true);
 		assert.equal(isReadOnlyShellCommand("bash", { command: "cd /repo && go vet ./... 2>&1 | head -40" }), true);

@@ -65,7 +65,7 @@ PROFILES = ("minimal", "dev", "research", "security", "max")
 DEFAULT_PROFILE = "max"
 LOCAL_CLI_COMMANDS = frozenset({
     "doctor", "project", "task", "session", "skills", "web", "cache",
-    "token", "capability", "rpc", "mcp", "extensions", "workspace",
+    "token", "capability", "rpc", "mcp", "extensions", "workspace", "shell",
 })
 LOCAL_CLI_PREFIX_FLAGS = frozenset({"--offline", "--skip-version-check"})
 PUBLIC_BOOTSTRAP = "irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex"
@@ -829,7 +829,7 @@ def main(arguments: Sequence[str]) -> int:
         return run_managed_maintenance(arguments[0], arguments[1:])
     if arguments and arguments[0] == "extensions":
         return run_local_cli(arguments)
-    if arguments and arguments[0] in ("doctor", "project", "task", "session", "skills", "web", "cache", "token", "capability", "rpc", "mcp", "workspace"):
+    if arguments and arguments[0] in ("doctor", "project", "task", "session", "skills", "web", "cache", "token", "capability", "rpc", "mcp", "workspace", "shell"):
         return run_local_cli(arguments)
     if arguments and arguments[0] == "icons":
         return run_icons_command(arguments[1:])

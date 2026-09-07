@@ -182,6 +182,41 @@ function matchLeading(normalized: string, hintNorm: string): boolean {
 	return normalized === hintNorm || normalized.startsWith(`${hintNorm} `) || normalized.startsWith(`${hintNorm} 2>&1`) || normalized.startsWith(`${hintNorm}&&`) || normalized.startsWith(`${hintNorm};`);
 }
 
+/**
+ * Keep aggregate verification commands from being killed by the Pi host's
+ * outer operation watchdog.  Pi's bash tool intentionally has no default
+ * timeout; on Windows a package-wide test command can therefore sit behind a
+ * Git-Bash pipe until the host cancels the whole request and reports only
+ * "This operation was aborted".  This is an escape hatch, not a global tool
+ * limit: ordinary commands are untouched, an explicit timeout always wins,
+ * and users can raise/disable it with DOVE_PI_SHELL_TIMEOUT_SECONDS (0 = off).
+ */
+export function applyAdaptiveShellTimeout(
+	toolName: string,
+	input: Record<string, unknown>,
+	env: NodeJS.ProcessEnv = process.env,
+): { readonly applied: boolean; readonly timeoutSeconds?: number; readonly reason?: string } {
+	if (toolName !== "bash" && toolName !== "powershell") return { applied: false };
+	if (input.timeout !== undefined) return { applied: false, reason: "explicit-timeout" };
+	const command = typeof input.command === "string" ? input.command : typeof input.script === "string" ? input.script : "";
+	if (!command.trim()) return { applied: false };
+	// These commands commonly fan out to many packages/tests and, when piped,
+	// can hide an early failure until every child has released its stdio handle.
+	if (!/(?:\b(?:go\s+(?:test|vet)|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|yarn\s+test|pytest(?:\s|$)|cargo\s+test|dotnet\s+test|make\s+(?:test|check))\b)/i.test(command)) return { applied: false };
+	const raw = env.DOVE_PI_SHELL_TIMEOUT_SECONDS;
+	const configured = raw === undefined || raw.trim() === "" ? 240 : Number(raw);
+	// A malformed override must not silently restore the host-level abort. Keep
+	// the protective default and make the reason visible to diagnostics/UI.
+	if (!Number.isFinite(configured) || configured < 0) {
+		input.timeout = 240;
+		return { applied: true, timeoutSeconds: 240, reason: "invalid-configuration-defaulted" };
+	}
+	if (configured === 0) return { applied: false, reason: "disabled" };
+	const timeoutSeconds = Math.max(1, Math.floor(configured));
+	input.timeout = timeoutSeconds;
+	return { applied: true, timeoutSeconds, reason: "aggregate-verification" };
+}
+
 const READ_ONLY_SHELL_SEGMENT = /^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+))|(?:env\s+)?(?:git(?:\s+-C\s+(?:"[^"]*"|'[^']*'|\S+))?\s+(?:status|log|diff|show|ls-files|rev-parse|branch|describe|remote|tag|blame|shortlog|cat-file)\b|go\s+(?:test|vet|list|version|env)\b|(?:ls|dir|find|rg|grep|sed|awk|cat|head|tail|wc|pwd|echo|env|printenv)\b|(?:Get-ChildItem|Get-Content|Select-String|Test-Path)\b).*)$/i;
 const READ_ONLY_SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:\$\?|\d+)$/;
 
@@ -1977,6 +2012,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				}
 				return { block: true, terminate: blockedState === "ready_to_finish" || blockedState === "invalid" || blockedState === "missing", reason: blockedReason };
 			}
+		}
+		const adaptiveTimeout = applyAdaptiveShellTimeout(event.toolName, event.input);
+		if (adaptiveTimeout.applied && ctx.hasUI) {
+			ctx.ui.notify(`Dove 为聚合验证命令设置 ${adaptiveTimeout.timeoutSeconds}s 超时；可用 DOVE_PI_SHELL_TIMEOUT_SECONDS 调整，但仍受 Pi 宿主外层 watchdog 约束，设为 0 可关闭此兜底。`, "info");
 		}
 		if (event.toolName === "ask_user_question") {
 			if (currentRequestPlan?.continuedFromRequestId) {

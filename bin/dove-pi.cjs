@@ -30,6 +30,7 @@ const pythonCommands = new Set([
 	"mcp",
 	"extensions",
 	"workspace",
+	"shell",
 	"install",
 	"setup",
 	"update",
