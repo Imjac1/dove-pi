@@ -1,0 +1,65 @@
+version: 1
+engagement: example-engagement
+
+principals:
+  - { id: client, kind: grantor }
+  - { id: operator, kind: operator }
+  - { id: cloud-provider, kind: third-party }
+
+grants:
+  - id: g-client-scope
+    from: client
+    to: operator
+    authorizes:
+      actions: [net.scan, exploit.run]
+      outcomes: [findings-report, remediation-advice]
+    targets: [t-web, t-api]
+    window:
+      from: "2026-09-01T00:00:00.000Z"
+      to: "2026-10-01T00:00:00.000Z"
+    evidence:
+      - kind: signed-permission
+        ref: engagements/example-engagement/permission-to-test.pdf
+        sha256: "aaaa"
+        signed_by: client
+    constraints:
+      intensity:
+        discovery: 2
+        exploitation: 1
+      excluded_techniques: [dos, social-engineering]
+      max_requests_per_second: 5
+    risk_acceptance:
+      - risk: service-disruption
+        mitigation: outside-business-hours
+        accepted_by: client
+
+  - id: g-provider-approval
+    from: cloud-provider
+    to: operator
+    authorizes:
+      actions: [net.scan]
+    targets: [t-web]
+    external_state:
+      kind: provider-approval-form
+      ref: cloud-provider-request
+      state: approved
+      checked_at: "2026-09-25T06:00:00.000Z"
+
+targets:
+  - id: t-web
+    address: 10.0.0.5
+    owner: client
+    ownership_evidence:
+      kind: asset-inventory-attestation
+      ref: engagements/example-engagement/inventory.csv
+      sha256: "bbbb"
+    requires_grants: [g-client-scope, g-provider-approval]
+
+  - id: t-api
+    address: 10.0.0.6
+    owner: client
+    ownership_evidence:
+      kind: asset-inventory-attestation
+      ref: engagements/example-engagement/inventory.csv
+      sha256: "bbbb"
+    requires_grants: [g-client-scope]

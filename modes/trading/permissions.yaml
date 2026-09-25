@@ -1,0 +1,7 @@
+always_allow:
+  - market.read
+ask_before:
+  - order.submit
+never_allow:
+  - order.withdraw_funds
+  - production.*

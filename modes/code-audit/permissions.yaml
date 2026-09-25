@@ -1,0 +1,7 @@
+always_allow:
+  - read_*
+ask_before:
+  - report.write
+never_allow:
+  - shell.exec
+  - network.*

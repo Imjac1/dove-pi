@@ -1,0 +1,56 @@
+version: 1.0.0
+framework: ">=0.2.0 <0.3.0"
+
+scope:
+  targets: [sandbox-venue]
+  environment: non-production
+  exclusions: [production-venue]
+
+authority:
+  grant: local-paper-trading
+  capabilities: [market.read, order.submit]
+  expires: "2026-12-31T00:00:00.000Z"
+
+gate:
+  semantics: limit
+  limits:
+    notional:
+      argument: order.notional
+      max: 100000
+      unit: USD
+    quantity:
+      argument: order.quantity
+      min: 1
+      max: 10000
+  approval: none
+
+sandbox:
+  isolation: container
+  network: allowlist
+  filesystem: ephemeral
+
+session:
+  memory_scope: none
+  budget:
+    turns: 20
+    tokens: 200000
+    cost_multiplier: 1.0
+    exploration: 0
+
+evidence:
+  format: native
+  artifacts: [orders.jsonl]
+  retention: 2555d
+  isolation: per-engagement
+
+coordination:
+  aware_contact: trading-desk
+  incident_reporting: risk-desk
+  cadence:
+    plans: true
+    progress: true
+    problems: true
+
+stop:
+  on: [budget-exhausted, ambiguous-submission, emergency-stop]
+  emergency_stop: risk-desk

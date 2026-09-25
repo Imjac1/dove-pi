@@ -1,0 +1,47 @@
+version: 1.0.0
+framework: ">=0.2.0 <0.3.0"
+
+scope:
+  targets: [repository]
+  environment: non-production
+  exclusions: []
+
+authority:
+  grant: local-review
+  capabilities: [repo.read, report.write]
+  expires: "2027-01-01T00:00:00.000Z"
+
+gate:
+  semantics: conformance
+  approval: none
+
+sandbox:
+  isolation: worktree
+  network: none
+  filesystem: read-only-source
+
+session:
+  memory_scope: project
+  budget:
+    turns: 40
+    tokens: 400000
+    cost_multiplier: 1.0
+    exploration: 0
+
+evidence:
+  format: sarif
+  artifacts: [report.sarif]
+  retention: 90d
+  isolation: per-engagement
+
+coordination:
+  aware_contact: repo-owner
+  incident_reporting: none
+  cadence:
+    plans: true
+    progress: true
+    problems: true
+
+stop:
+  on: [budget-exhausted, findings-stable]
+  emergency_stop: operator
