@@ -507,3 +507,76 @@ Implemented and verified host-neutral read-only subagent dispatch for Dove Pi, i
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: dove-pi 工作区交接：2.2 检查失败 + 基座选型研究
+<!-- trellis-session: v=2 fp=77cab1bb6f13c6ec -->
+
+**Date**: 2026-09-25
+**Task**: dove-pi 工作区交接：2.2 检查失败 + 基座选型研究
+**Branch**: `master`
+
+### Summary
+
+对 dove-pi HEAD d7a6175 跑 2.2 质量检查：typecheck PASS，npm test fail 2/318（skill 发现路径依赖，blocking）；并完成基座选型研究（pi-agent-core 实测可独立跑通且 beforeToolCall 能真拦）。交接文档见 tasks/08-27-dove-interop-layer/research/。
+
+### Main Changes
+
+## dove-pi 工作区交接（来自 dsh-dove 会话）
+
+### 本会话做了什么
+
+- 查了基座选型的社区与一手资料（Pi/Armin 5 篇、Anthropic 官方《Effective context engineering》、Agent Skills 规范、SkillsBench arXiv 2602.12670、HumanLayer wsff/ACE、Manus、Mendral、calpaterson、Lilian Weng；dsh/Cordis 一手文档）
+- 对 dove-pi 跑了 **2.2 质量检查 → FAIL（1 个 blocking）**
+- 验证了 `pi-agent-core` 可独立跑通（含 `beforeToolCall` 真阻断）
+
+### 最重要的结论（直接可执行）
+
+**2.2 检查失败**：`npm run typecheck` PASS；`npm test` = tests 318 / pass 314 / **fail 2** / skipped 2。
+
+根因：`src/skills/discovery.ts` 的 `discoverSkills` 向上走到**文件系统根**，把 `~/.agents/skills` 的 5 个 skill 算成项目 skill。
+实测：**同一份项目内容，在 `C:\Users\Macfy\...` 下发现 6 个 skill，在 `D:\` 下只发现 1 个。**
+
+Pi 官方 `docs/skills.md` 的约定是：用户级 `~/.agents/skills/` 是**独立位置**；项目级向上走**遇仓库根即停**。dove-pi 两条都不符 → CI 绿、本机红。
+
+→ 详见 `tasks/08-27-dove-interop-layer/research/check-2026-09-25-skill-discovery.md`
+→ 复现：`node --import tsx .trellis/tasks/08-27-dove-interop-layer/research/probe-skill-discovery.mts`
+
+### 基座选型的核心判断
+
+- 问题不在「Pi 还是 dsh」，而在 dove 一直在 **harness 层**选基座；它需要的钩子在 **runtime 层**（`@earendil-works/pi-agent-core`）。
+- `pi-agent-core` 实测：`beforeToolCall` 返回 `{block:true}` 使工具执行 **1 → 0**；拦截原因可达模型；`transformContext` 每请求调用且注入生效；`pi-ai` 的 `faux` provider 可做**离线确定性**门禁测试。
+- 换基座成本有界：dove-pi 对 Pi 的耦合**只有 `src/pi-adapter/` 下 4 个文件**，其余 69 个源文件零 import。
+- dsh 的问题不是「不好用」而是「过早」（Cordis 官方 README 自认 API 不稳定）；但 dsh **原生带审批/沙箱/计划模式/目标/子代理**，安全域反而比 Pi 全（Pi 官方声明无权限系统）。
+
+→ 详见 `tasks/08-27-dove-interop-layer/research/base-selection-2026-09-25.md`
+→ 复现：`node .trellis/tasks/08-27-dove-interop-layer/research/probe-pi-agent-core.mjs`
+
+### 下一步（均未决）
+
+1. 修 skill 发现的路径依赖（项目级遇仓库根停 + 显式用户级位置），然后重跑 2.2 全量测试
+2. 定基座最终选型：Pi harness / `pi-agent-core` runtime / 在 dsh 上重写
+3. 定授权闸门档位（skill 文字 / capability 强闸门 / 再加 pi-security）
+4. 9 个安全 skill 超出 SkillsBench「≤3 模块」量级，需聚焦化
+
+### 环境与状态事实
+
+- 抓网页走代理 `socks5h://127.0.0.1:10808`；npm registry 可直连（无需代理）
+- dove-pi 是本次新建的完整克隆：150 commits、分支 `master`、HEAD `d7a6175`、工作树 clean
+- 已初始化开发者身份 `aixi`（`.trellis/.developer`，被 gitignore）
+- **本会话根在 dsh-dove**（不是 dove-pi），所有 dove-pi 操作均用绝对路径完成
+- `dsh\_ref\`（抓取的研究原文语料）与 `dsh\_pi-core-probe\`（探针工程）**已从磁盘删除**；结论已转写进上述两份文档
+- 本会话**未修改 dove-pi 任何受版本控制的文件**（新增的只有被 gitignore 的 `.developer` 与 `node_modules/`，以及本任务 research/ 下的 3 份文档 + 2 个探针）
+
+
+### Git Commits
+
+(No commits - planning session)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 修 src/skills/discovery.ts 的路径依赖后重跑 2.2；再定基座最终选型

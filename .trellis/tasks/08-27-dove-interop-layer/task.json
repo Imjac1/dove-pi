@@ -12,7 +12,7 @@
   "assignee": "aixi",
   "createdAt": "2026-08-27",
   "completedAt": null,
-  "branch": null,
+  "branch": "master",
   "base_branch": "master",
   "worktree_path": null,
   "commit": null,
