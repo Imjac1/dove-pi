@@ -19,7 +19,7 @@ import type { ContextSegment } from "../core/context-compiler.ts";
 import { getPiVersion } from "./host-version.ts";
 import { inspectWebAccessReadiness, writeWebSearchConfig } from "../web-access/config.ts";
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
-import { discoverSkills } from "../skills/discovery.ts";
+import { discoverAllSkills } from "../skills/discovery.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts";
 import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
 import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
@@ -1105,12 +1105,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("skills", {
-		description: "List project skills discovered by Pi",
+		description: "List project and user skills discovered by Pi",
 		handler: async (args, ctx) => {
 			const query = args.trim().toLowerCase();
-			const skills = discoverSkills(cwd).filter((skill) => !query || skill.name.toLowerCase().includes(query));
+			const skills = discoverAllSkills(cwd).filter((skill) => !query || skill.name.toLowerCase().includes(query));
 			if (skills.length === 0) {
-				ctx.ui.notify(query ? `没有找到匹配的 skill：${query}` : "当前项目未发现 .agents/skills/**/SKILL.md。", "info");
+				ctx.ui.notify(query ? `没有找到匹配的 skill：${query}` : "未发现 .agents/skills/**/SKILL.md（项目级或用户级）。", "info");
 				return;
 			}
 			const lines = skills.map((skill) => `${skill.name}${skill.description ? ` — ${skill.description}` : ""}\n  ${skill.path}`);

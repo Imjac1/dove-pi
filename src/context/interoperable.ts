@@ -3,7 +3,7 @@ import { basename, join, relative, resolve } from "node:path";
 import type { AgentMode } from "../core/contracts.ts";
 import type { CompiledContext, ContextCompileOptions, ContextDocument } from "../core/context-compiler.ts";
 import type { ProjectProvider } from "../project-provider/index.ts";
-import { discoverSkills } from "../skills/discovery.ts";
+import { discoverAllSkills } from "../skills/discovery.ts";
 import { isSensitiveProjectPath } from "../trellis-adapter/index.ts";
 import { buildProjectContext } from "../trellis-adapter/context.ts";
 
@@ -48,7 +48,7 @@ export function readInteroperableContextProjection(provider: ProjectProvider, mc
 	}
 	if (instructionSources.length > 1) conflicts.push(`Multiple project instruction authorities are present: ${instructionSources.join(", ")}. They remain separately labeled and are not silently merged.`);
 
-	for (const skill of discoverSkills(snapshot.projectRoot)) {
+	for (const skill of discoverAllSkills(snapshot.projectRoot)) {
 		const content = readBoundedText(skill.path);
 		if (content === undefined) continue;
 		const id = `skill/${skill.name}`;

@@ -20,7 +20,7 @@ import {
 } from "./web-access/config.ts";
 import { installExtensionProfile } from "./extensions/install.ts";
 import { getPiVersion } from "./pi-adapter/host-version.ts";
-import { discoverSkills } from "./skills/discovery.ts";
+import { discoverAllSkills } from "./skills/discovery.ts";
 import { inspectProjectStatus } from "./project-status.ts";
 import { runTokenAudit, formatTokenAudit } from "./commands/token-audit.ts";
 import { runCacheAudit, formatCacheAudit } from "./commands/cache-audit.ts";
@@ -175,7 +175,7 @@ if (args[0] === "doctor") {
 	await runDoveMcpStdio({ cwd: process.cwd(), ledgerPath: localLedgerPath(), ownerPid: process.pid });
 } else if (args[0] === "skills") {
 	const query = args.slice(1).join(" ").trim().toLowerCase();
-	const skills = discoverSkills(process.cwd()).filter(
+	const skills = discoverAllSkills(process.cwd()).filter(
 		(skill) => !query || skill.name.toLowerCase().includes(query),
 	);
 	console.log(JSON.stringify({ projectRoot: process.cwd(), skills }, null, 2));
