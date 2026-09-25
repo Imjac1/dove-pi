@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
-- **Last Active**: 2026-09-25
+- **Total Sessions**: 20
+- **Last Active**: 2026-09-26
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~582 | Active |
+| `journal-1.md` | ~679 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-09-26 | Dove base agent framework: research, design, and implementation | `fa5a268`, `004eb60`, `22817f0`, `7dcac57`, `a2affde` | `feat/dove-base-agent-framework` |
 | 19 | 2026-09-25 | dove-pi 工作区交接：2.2 检查失败 + 基座选型研究 | - | `master` |
 | 18 | 2026-09-06 | Native read-only subagent dispatch | `3c99f4d`, `a58ccd7`, `ab3c56b`, `866dc07` | `master` |
 | 17 | 2026-09-05 | Dove Pi 策略可观测性与上下文预算修复 | `3e32ac4` | `master` |

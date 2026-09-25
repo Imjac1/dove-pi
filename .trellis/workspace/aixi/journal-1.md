@@ -580,3 +580,100 @@ Pi 官方 `docs/skills.md` 的约定是：用户级 `~/.agents/skills/` 是**独
 ### Next Steps
 
 - 修 src/skills/discovery.ts 的路径依赖后重跑 2.2；再定基座最终选型
+
+
+## Session 20: Dove base agent framework: research, design, and implementation
+<!-- trellis-session: v=2 fp=783f8e4082c3e83a -->
+
+**Date**: 2026-09-26
+**Task**: Dove base agent framework: research, design, and implementation
+**Branch**: `feat/dove-base-agent-framework`
+
+### Summary
+
+Completed the three-wave research (official/community/GitHub, 26 files, all citations verified) and built plus verified a base agent framework: owned loop with a two-semantics gate, work-mode artifact, authority grant graph, effect identity, evidence plane, context admission, and capability scoping, hosting code-audit, pentest, and trading modes with no core changes. 425 tests, 0 failures.
+
+### Main Changes
+
+## 本会话做了什么
+
+按"先官方、后社区、用代理查"的要求完成研究，然后基于研究结论实现并验证了一个可承载量化交易 / 渗透测试 / 代码审计三类垂直领域的基本 agent 框架。
+
+### 研究（三波，8 个子代理，26 份文件）
+
+- **官方波 5/5**：Anthropic 2024 与 2026 两套分类法、Managed Agents 的 session/harness/sandbox 三分、Claude Agent SDK 的六步权限顺序、OpenAI Agents SDK、Google ADK、Microsoft、LangGraph、MCP 规范、Agent Skills 规范；以及 SEC 15c3-5、MiFID II RTS 6、NIST SP 800-115、PTES。
+- **社区波 2/2**：生产证据反驳官方分类法（agent 是 low-variance，投票只放大相关错误）；已发布的闸门/沙箱打穿研究。
+- **GitHub 波 3/3**：22 个框架仓库的源码级调查、可复用工作模式的实证字段收敛、17 个垂直实现的控制代码。
+
+**每一处载荷性引用都重新抓取核验过**，包括两篇 arXiv 论文、Anthropic 的架构声明、strands 与 OpenAI 的源码。
+
+### 实现（M0–M9，10/10 里程碑）
+
+```
+src/core/    loop · loop-runner · authority · gate-limit · gate-conformance
+             work-mode · effect-ledger · evidence-sarif · checkpoint
+             context-admission · capability-scope
+src/adapters/ loop-scripted · loop-pi-agent-core
+modes/       code-audit · pentest · trading（零核心改动）
+engagements/ example-engagement/authority.yaml
+.trellis/spec/backend/personal-agent-framework-core.md
+```
+
+### 关键设计结论（均有来源）
+
+1. **没有任何一层是边界** —— 拒绝清单、进程沙箱、内核强制、人工审批、闸门自身配置、生产监控器全部有已发布的打穿记录。最强**实测**杠杆是放在模型上下文之外的**能力作用域**（注入效果 33-47/75 → 3/75）。
+2. **三个垂直需要三种不同的控制形状** —— 代码审计靠发现身份、渗透靠符合性闸门、量化靠限额闸门。只提供一种的框架会逼另外两个绕过它。
+3. **exactly-once 属于工具契约**，不属于循环 —— "the harness barely matters, the contract explains 81%"。
+4. **"200 行的 loop + 真闸门"这个组合在调查里不存在**。
+5. **五个知名框架已失效/冻结/掏空/转型** —— "vendor the loop; depend on the protocol"。
+
+### 本会话中被纠正的五处（其中三处是自己的错）
+
+- "没找到重复副作用的证据" —— 是元数据贫瘠语料的假象；LIMBO 有实测证据（不可回读时重复 56%/74%）
+- "沙箱是最后一道控制" —— 沙箱同样被打穿，连被提出的内核修复方案本身也是
+- "幂等是框架责任" —— 重新框定为属于工具契约
+- "OpenAI guardrail 只有并行" —— 现在还提供进程内 `tool_guardrails`
+- 把 `AgentHarness` 当作可用选项 —— 它是**桩**，执行确认所有方法抛 `HarnessNotImplemented`
+
+### 验证
+
+```
+npm run typecheck  -> 0 errors
+npm test           -> tests 425 / pass 423 / fail 0 / skipped 2   (318 基线 + 107 新增)
+```
+
+全部离线可跑。关键验证：配对闸门测试（开/关闸门执行数 1→0）、8 个并发恢复者恰好执行 1 次、2,865,326 字符诊断的原文**缺席**（不是截断）、渗透五条验收判据、Pi adapter 与参考 loop 行为一致。
+
+### 过程中发现并修复的真实缺陷
+
+- 并发测试抓到 `dispatchOnce` 的**设计缺陷**：崩溃恢复要重试、并发安全要跳过，而账本无法区分"飞行中"与"已死在中途"。解决为**默认绝不重复、重试显式选择加入、由模式决定**。
+- 授权文档校验器抓到我自己写的夹具错误（把 `targets` 写进 `authorizes`），并把这一类"静默忽略未知键"变成守卫。
+- 三个测试缺陷被修正（其中两个是测试断言了代码不该做的事）。
+
+## 新增依赖
+
+- `yaml@^2.9.1` —— 拒绝手写 YAML 解析器（调查抓到的真实 adapter bug 就是 YAML block-scalar）
+- `@earendil-works/pi-agent-core@0.84.3` —— 钉在匹配已安装 `pi-coding-agent` 的版本，仅用于 adapter
+
+## 未处置 / 下一步
+
+1. **框架已完整，垂直尚未开始** —— 现有 11 个能力全是 `dev.*` / `web.*` / `windows.*` / `workspace.*`；代码审计、渗透、量化**各零个**能力实现。下一个任务应是第一个真实垂直（按爆炸半径我倾向代码审计）。
+2. **08-27-dove-interop-layer 的 3 条缺失断言** —— `discoverUserSkills` / `discoverAllSkills` 无测试覆盖。
+3. **两个 spec 文件属于 08-27 任务**，仍未提交：`.trellis/spec/backend/personal-agent-project-context.md`、`.trellis/spec/backend/quality-guidelines.md`。
+4. **13 个预先存在的 Trellis 框架更新文件**（0.6.16→0.6.17）仍未提交，不是本任务产物。注意它删掉过 `task.py` 的 `convergence` 接线，已按"0.6.17 + 接线"修复。
+5. **`pico3` 的 `Forbidden` 语义**仍是未验证项（Pi 里唯一可能已有拒绝路径的地方）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa5a268` | feat(framework): own the loop and add a two-semantics gate boundary |
+| `004eb60` | feat(framework): add work modes, the evidence plane, admission, and capability scoping |
+| `22817f0` | feat(modes): add code-audit, pentest, and trading work modes with no core changes |
+| `7dcac57` | docs(spec): record the framework core contracts |
+| `a2affde` | chore(task): record 09-25-dove-base-agent-framework planning and research |
+
+### Status
+
+[OK] **Completed**
