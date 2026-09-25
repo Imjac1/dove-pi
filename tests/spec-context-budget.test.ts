@@ -11,6 +11,7 @@ const routedSpecNames = [
 	"personal-agent-project-context.md",
 	"personal-agent-extension-runtime.md",
 	"personal-agent-managed-install.md",
+	"personal-agent-framework-core.md",
 ] as const;
 const expectedHeadingsBySpec = {
 	"personal-agent-request-runtime.md": [
@@ -46,6 +47,15 @@ const expectedHeadingsBySpec = {
 		"Scenario: Dove Extension Identity and Authority Synchronization",
 	],
 	"personal-agent-managed-install.md": ["Scenario: Managed Dove Pi Installation and Stable Updates"],
+	"personal-agent-framework-core.md": [
+		"Scenario: Loop Ownership and Gate Boundary",
+		"Scenario: Work-Mode Layout and Validation",
+		"Scenario: Authority Grant Graph",
+		"Scenario: Effect Identity and Exactly-Once",
+		"Scenario: Evidence Plane and Action Checkpoint",
+		"Scenario: Context Admission",
+		"Scenario: Capability Scoping",
+	],
 } as const satisfies Record<(typeof routedSpecNames)[number], readonly string[]>;
 
 const readSpec = (name: string): string => readFileSync(join(backendSpecDir, name), "utf8");

@@ -25,6 +25,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Personal Agent Project Context](./personal-agent-project-context.md) | Trellis context, project-provider, and skill-discovery contracts | Active |
 | [Personal Agent Extension Runtime](./personal-agent-extension-runtime.md) | Pi extension profiles, doctor, identity, and authority contracts | Active |
 | [Personal Agent Managed Installation](./personal-agent-managed-install.md) | Managed install, release, launcher, update, and repair contracts | Active |
+| [Personal Agent Framework Core](./personal-agent-framework-core.md) | Loop ownership, gate boundary, work modes, authority graph, effect identity, evidence, admission, capability scoping | Active |
 
 ---
 

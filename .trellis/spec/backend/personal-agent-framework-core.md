@@ -1,0 +1,389 @@
+# Personal Agent Framework Core
+
+> **Scope:** The framework's own execution loop, its gate boundary, the work-mode artifact, the
+> authority contract, effect identity, the evidence plane, context admission, and capability scoping.
+>
+> **Canonical router:** [Personal Agent Runtime Contract](./personal-agent-runtime.md)
+
+The framework owns its loop; hosts and providers sit behind interfaces. Every contract below fails
+closed: an unevaluable condition is a block, never a pass.
+
+## Scenario: Loop Ownership and Gate Boundary
+
+### 1. Scope / Trigger
+
+Trigger: adding or changing the execution loop, or any pre-execution policy check.
+
+### 2. Signatures
+
+```typescript
+// src/core/loop.ts
+interface LoopProvider { readonly id: string; stream(request: ProviderRequest, signal?: AbortSignal): AsyncIterable<ProviderEvent>; }
+interface ActionGate { readonly id: string; evaluate(i: GateInvocation): GateDecision | Promise<GateDecision>; }
+interface SynchronousActionGate extends ActionGate { evaluate(i: GateInvocation): GateDecision; }
+interface AgentLoop { run(input: string, signal?: AbortSignal): Promise<LoopOutcome>; }
+type GateDecision = { outcome: "allow"; reason?: string } | { outcome: "block"; reason: string; remediation: string };
+```
+
+### 3. Contracts
+
+- The loop owns the model-to-tool cycle; `LoopProvider` is caller-supplied, so no loop implementation
+  selects a provider.
+- `LoopOptions.mode` (id + version + governance version) is stamped on every gate invocation.
+- Three rules are enforced by the loop, not delegated to a gate: the gate is invoked for **every**
+  action including allowed ones; a throwing gate or an unrecognised decision shape is a **block**; a
+  `target`/`displayTarget` mismatch is blocked **before** the gate is consulted.
+- A block carries `remediation` as well as `reason`; both reach the tool result.
+- Two implementations exist and must agree on these rules: `src/core/loop-runner.ts` (reference) and
+  `src/adapters/loop-pi-agent-core.ts` (external). The provider abstraction differs per implementation;
+  the interface is `AgentLoop`, not the provider.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| No gate configured | Every action runs; allowed only for read-only modes |
+| Gate throws | Block, reason names the gate and the error |
+| Gate returns an unrecognised shape | Block |
+| `target` !== `displayTarget` | Block before the gate is consulted |
+| Action allowed | `onGateInvoked` still fires, so an off-path gate is detectable |
+
+### 5. Tests Required
+
+- Paired offline test: one scripted provider, gate off versus gate on; assert executed actions 1 -> 0
+  and that the reason and remediation reach the transcript.
+- Invocation log records allowed actions.
+- Throwing gate and unrecognised decision both fail closed.
+- Target/display mismatch blocks with the gate never consulted.
+- The external adapter satisfies the same cases.
+
+### 6. Wrong vs Correct
+
+Wrong: put a mandatory check in a callback the provider may skip, or treat "no decision" as allow.
+
+Correct: one pre-execution, parameter-level boundary the loop always calls, with the reason and the
+remediation written into the tool result.
+
+## Scenario: Work-Mode Layout and Validation
+
+### 1. Scope / Trigger
+
+Trigger: adding a vertical, or changing how a mode is declared or loaded.
+
+### 2. Signatures
+
+```typescript
+// src/core/work-mode.ts
+function loadWorkMode(files: { mode: string; governance: string; permissions: string }, options: { frameworkVersion: string }): WorkMode;
+function satisfiesFrameworkRange(range: string, version: string): boolean;
+function evaluatePermission(p: PermissionSet, tool: string): "allow" | "ask" | "deny";
+```
+
+### 3. Contracts
+
+- A mode is a directory of three files: `MODE.md` (frontmatter `name` + `description`, body =
+  instructions), `governance.yaml`, `permissions.yaml`. `MODE.md` stays Agent-Skills-compatible so the
+  portable part remains consumable elsewhere.
+- `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities`,
+  `gate.semantics`.
+- The framework range accepts only `>=X.Y.Z` and `<X.Y.Z` clauses, space separated; anything else is
+  refused rather than assumed satisfied.
+- `never_allow` wins over `always_allow`, over `ask_before`, and over any mode setting. An unlisted
+  tool defaults to `ask`.
+- **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
+  framework defect.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Unknown field, any level | Rejected with a named error; never ignored |
+| Missing fence, `name`, or `description` | Rejected |
+| Missing `scope`, `authority.capabilities`, or `gate.semantics` | Rejected |
+| Unrecognised `gate.semantics` | Rejected |
+| `framework` excludes the running version | Refused, naming the version |
+| Unparseable `framework` clause | Refused |
+
+### 5. Tests Required
+
+- A well-formed three-file mode loads; body and permission set are exposed.
+- Unknown fields rejected in frontmatter, governance, permissions, and the nested `scope` /
+  `authority` / `gate` mappings.
+- Each required field, when absent, is rejected.
+- A YAML block-scalar description parses correctly.
+- A vertical's mode id does not appear in executable code under `src/core`.
+
+### 6. Wrong vs Correct
+
+Wrong: ignore an unrecognised key, so a typo in `permissionMode` fails open and silent.
+
+Correct: reject it by name, and require the fields whose absence makes a mode unreviewable.
+
+## Scenario: Authority Grant Graph
+
+### 1. Scope / Trigger
+
+Trigger: any work that acts on a target belonging to someone else - penetration testing above all.
+
+### 2. Signatures
+
+```typescript
+// src/core/authority.ts
+function validateAuthorityDocument(d: AuthorityDocument): string | undefined;
+function preflightAuthority(d: AuthorityDocument, at: string, o?: { evidenceDigests?: Record<string,string> }): AuthorityDecision;
+function evaluateAuthority(d: AuthorityDocument, r: AuthorityRequest, o?: AuthorityOptions): AuthorityDecision;
+```
+
+### 3. Contracts
+
+- The document is `{ version, engagement, principals, grants, targets }`. A grant carries `from`
+  (never the operator), `authorizes` (`actions` **and** `outcomes`), `targets`, `window`,
+  `evidence`, `constraints` (`intensity` per phase, `excluded_techniques`), `external_state`, and
+  `risk_acceptance`.
+- A target carries `ownership_evidence` and `requires_grants`; **every** required grant must resolve.
+- A grant is evidenced by a signed document **or** an approved external authorization; a grant with
+  neither is an unauthorized grant.
+- Unknown keys are rejected at the document, grant, and `authorizes` levels. A silently ignored key is
+  a constraint that is silently absent.
+- **The agent must not be able to write its own authority.** Authority documents live outside every
+  capability granted to the agent.
+- `preflightAuthority` runs before the first action so a missing authorization stops the engagement
+  rather than surfacing on its first attempt.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Unknown target | Block; an unknown target is never in scope |
+| Ambiguous target (id and address both match) | Block |
+| Ownership evidence absent or digest mismatched | Block |
+| Required grant missing from the document | Block |
+| Grant issued by the operator | Block |
+| Action not authorized, or target not covered | Block |
+| Outside the window; excluded technique; over-ceiling intensity | Block |
+| `external_state` not `approved`, or `checked_at` stale | Block |
+| Unknown key anywhere in the document | Block, naming the key |
+
+### 5. Tests Required
+
+- Each row of the matrix above, with the reason naming the specific unsatisfied condition.
+- The example engagement pre-flights clean.
+- A document with a key nested in the wrong place is rejected by name.
+
+### 6. Wrong vs Correct
+
+Wrong: `in_scope` returning `true` for an empty scope, so a run without a scope has no gate.
+
+Correct: an absent or unresolvable boundary is a load-time failure, and every unsatisfied condition
+blocks with the reason and the remediation.
+
+## Scenario: Effect Identity and Exactly-Once
+
+### 1. Scope / Trigger
+
+Trigger: any action with a side effect that a retry or a resume could duplicate.
+
+### 2. Signatures
+
+```typescript
+// src/core/effect-ledger.ts
+function deriveEffectKey(i: DeriveEffectKeyInput): string;
+function toClientOrderId(effectKey: string, o?: ClientOrderIdOptions): string;
+function createEffectLedger(o: { engagement: string; store: EffectStore; now?: () => string }): EffectLedger;
+function dispatchOnce<T>(l: EffectLedger, r: Omit<EffectRecord,"startedAt">, execute: () => Promise<T>, o?: { retryPriorAttempt?: boolean }): Promise<{ executed: boolean; value?: T; existing?: EffectRecord }>;
+```
+
+### 3. Contracts
+
+- The effect key is derived from engagement + mode identity + tool + target + arguments digest, with an
+  optional explicit key (a client order id) taking precedence.
+- Consume-once is an **atomic `claim`** in the store, never a read-then-write: the window between a
+  check and a write is where a cross-host duplicate lands.
+- `dispatchOnce` **skips by default** when a prior attempt exists, completed or not. Re-dispatching an
+  ambiguous attempt requires `retryPriorAttempt`, and is only safe when the effect key is an
+  idempotency key **the backend honours**.
+- The durable guarantee lives in the tool/backend contract, not the loop: the harness barely affects
+  duplicate behaviour, while the contract explains most of it.
+- `toClientOrderId` maps the identity onto a venue-safe id so the venue, not only the framework, can
+  reject a duplicate.
+- A ledger refuses a record whose engagement differs from its own.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Effect already completed | Not re-dispatched |
+| Claimed but not completed | Not re-dispatched unless the caller opts in |
+| Prior attempt failed | Not retried unless the caller opts in; a failure may have landed |
+| Concurrent resumers of one effect | Exactly one executes; the claim is atomic in the store |
+| Record from another engagement | Refused |
+| Agents report success after duplicating | Self-reported success is not evidence; the ledger is |
+
+### 5. Tests Required
+
+- The same logical effect derives the same key; any component change derives a different one.
+- A completed effect is not re-dispatched; an ambiguous one is skipped by default and retried only on
+  opt-in.
+- Several concurrent resumers produce exactly one execution.
+- The venue rejects a duplicate the framework's own ledger did not see.
+- A record from another engagement is refused.
+
+### 6. Wrong vs Correct
+
+Wrong: `if (await store.has(key)) return; await store.record(key);` - the gap is the duplicate.
+
+Correct: one atomic claim, default to not duplicating, and make the identity an idempotency key the
+backend enforces.
+
+## Scenario: Evidence Plane and Action Checkpoint
+
+### 1. Scope / Trigger
+
+Trigger: emitting findings, recording what an agent did, or resuming a long run.
+
+### 2. Signatures
+
+```typescript
+// src/core/evidence-sarif.ts
+const FINGERPRINT_KEY = "doveFinding/v1";
+function fingerprintOf(f: Pick<Finding,"path"|"category"|"existingCode">): string;
+function toSarifLog(findings: readonly Finding[], o: SarifRunOptions): SarifLog;
+// src/core/checkpoint.ts
+function captureCheckpoint(i: CaptureCheckpointInput): ActionCheckpoint;
+function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResult;
+```
+
+### 3. Contracts
+
+- A finding's identity is derived from path, category, and matched code - **never from the message**,
+  which is prose and varies between runs. The key is versioned, so a changed derivation cannot be
+  compared against an old baseline.
+- The SARIF log is 2.1.0 and carries `partialFingerprints`, `baselineState`, `occurrenceCount`, and a
+  `rank` derived from severity.
+- The checkpoint unit is **an effect admitted and completed**, not a model turn. Only `completed`
+  effects are recorded: a blocked one never ran and a failed one is ambiguous.
+- A checkpoint carries a **graph signature** (mode + sorted tool names + gate) and **explicit
+  lineage**. Resuming under a changed shape is refused.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Message reworded between runs | Identity unchanged |
+| Same identity seen twice in one run | One result with `occurrenceCount` |
+| Finding in the baseline | `baselineState: unchanged`; otherwise `new` |
+| Checkpoint resumed under a different mode version | Refused |
+| Tool set or gate changed since the checkpoint | Refused |
+
+### 5. Tests Required
+
+- A reworded message keeps its identity; a changed path, category, or code does not.
+- Duplicates collapse with a count; baseline transitions are correct.
+- Only completed effects enter a checkpoint; the signature ignores tool registration order.
+- Restore refuses a mode-version, tool-set, or gate change.
+
+### 6. Wrong vs Correct
+
+Wrong: fingerprint the finding's message, so every re-run is a wall of spurious new findings.
+
+Correct: fingerprint the stable parts, version the key, and checkpoint the unit that has consequences.
+
+## Scenario: Context Admission
+
+### 1. Scope / Trigger
+
+Trigger: anything that puts tool output, extension text, or background notifications into model-visible
+content.
+
+### 2. Signatures
+
+```typescript
+// src/core/context-admission.ts
+type AdmissionChannel = "tool_result" | "extension_message" | "background_notification";
+function admit(request: AdmissionRequest, options?: ContextAdmissionOptions): Promise<AdmittedContent>;
+function isNonActionablePath(path: string): boolean;
+```
+
+### 3. Contracts
+
+- **One boundary, all three channels, no exemption.** A boundary that only guards `tool_result` has a
+  documented way around it.
+- Oversized content is replaced by source, channel, digest, omitted size, line count, and an artifact
+  reference. The raw payload is **absent** from model-visible content, not truncated-and-included.
+- Generated and dependency trees are not delivered as actionable context, even when small.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Content over the limit | Compacted; digest and omitted size retained; payload absent |
+| Any channel over the limit | Same treatment |
+| Path under a generated/dependency tree | Marked non-actionable regardless of size |
+| No artifact sink configured | Payload still absent; digest still retained |
+| Content under the limit and actionable | Passed through unchanged |
+
+### 5. Tests Required
+
+- A synthetic oversized background diagnostic is compacted, and a marker placed past the head window
+  is **absent** - "truncated" and "absent" are different guarantees.
+- All three channels are compacted by the same boundary.
+- A dependency-tree diagnostic is non-actionable even when short.
+- Path classification does not over-reach on authored paths.
+
+### 6. Wrong vs Correct
+
+Wrong: compact only `tool_result`, and include a truncated head of everything else.
+
+Correct: one boundary for every channel, with the payload omitted and reachable only by reference.
+
+## Scenario: Capability Scoping
+
+### 1. Scope / Trigger
+
+Trigger: granting or checking authority to act on a resource.
+
+### 2. Signatures
+
+```typescript
+// src/core/capability-scope.ts
+interface Capability { readonly id: string; readonly resource?: string; readonly expiresAt?: string; }
+function createCapabilityScope(o: { sets: readonly AgentCapabilitySet[]; now?: () => string }): CapabilityScope;
+// scope.authorize({ agentId, capability, resource? }): CapabilityDecision
+// scope.narrow(parentAgentId, child): AgentCapabilitySet
+```
+
+### 3. Contracts
+
+- The ceiling is derived from **trusted input**, before untrusted content is read.
+- Capability sets are stored **outside the model's context**; the exported surface is exactly
+  `{authorize, capabilitiesOf, narrow}`, so there is no path that renders them into prompt text.
+- Every check is against the capabilities of the **issuing** agent, so a delegated subagent cannot
+  borrow its parent's authority by existing.
+- A delegate may **narrow, never widen**. Anything the containment check cannot decide is refused.
+- The resource pattern language is two forms only: an exact string, or `P/**` meaning `P` and anything
+  beneath it. An unrecognised pattern is refused rather than interpreted.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Agent holds the capability for the resource | Allow |
+| Agent does not hold it | Deny, naming what is held instead |
+| Agent has no capability set | Deny; an unknown agent is never authorized |
+| Capability expired | Deny |
+| Delegate requests a capability or resource the parent lacks | Refused as widening |
+| Pattern not in the two supported forms | Refused |
+
+### 5. Tests Required
+
+- An injected instruction cannot invoke a capability the issuing agent lacks.
+- A capability granted to one agent is not available to another.
+- Narrowing succeeds; widening, including a broader resource claim, is refused.
+- An expired capability is denied.
+- The exported surface has no prompt-rendering path.
+
+### 6. Wrong vs Correct
+
+Wrong: treat naming a resource as authority, so injected text can name anything.
+
+Correct: a typed capability held outside the model's context and checked against the issuing agent.
