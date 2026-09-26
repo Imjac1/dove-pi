@@ -10,6 +10,7 @@ import type {
 	ToolCall,
 	ToolResult,
 } from "./loop.ts";
+import { normalizeGateDecision } from "./loop.ts";
 
 /**
  * The reference loop. It owns the model-to-tool cycle and enforces the single pre-execution boundary.
@@ -21,7 +22,9 @@ import type {
  *    only defence against a gate that exists but sits off the path - the most common failure found in
  *    real systems (design section 4.3).
  * 2. **Anything unevaluable is a block.** A gate that throws, returns an unknown shape, or resolves no
- *    authority produces a block with a reason. It never produces an allow (design section 4.3.1).
+ *    authority produces a block with a reason. It never produces an allow (design section 4.3.1). A
+ *    requirement this loop cannot meet is refused for the same reason: `ask` means the operator must
+ *    consent, this loop has no dialog to ask through, and a requirement that cannot be met is not waived.
  * 3. **Canonicalisation mismatch is a block.** When an invocation carries both a decision target and a
  *    human-visible target and they differ, the action is blocked before the gate is consulted. This is
  *    the GhostApproval failure, and it must not depend on the gate remembering to check (design 4.2).
@@ -45,16 +48,10 @@ export function createAgentLoop(options: LoopOptions): AgentLoop {
 			return { outcome: "allow", reason: "no gate configured" };
 		}
 		try {
-			const decision = await options.gate.evaluate(invocation);
-			// Rule 2: an unknown shape is not an allow.
-			if (decision === null || typeof decision !== "object" || (decision.outcome !== "allow" && decision.outcome !== "block")) {
-				return {
-					outcome: "block",
-					reason: `Gate '${options.gate.id}' returned an unrecognised decision.`,
-					remediation: "Fix the gate so it returns either {outcome:'allow'} or {outcome:'block', reason, remediation}.",
-				};
-			}
-			return decision;
+			// Rule 2, both halves, from the contract rather than reimplemented here: an untrusted shape is not an
+			// allow, and a requirement this loop cannot meet - `ask`, which needs a dialog it does not have - is
+			// refused rather than waived. The host that *can* ask resolves the decision before it reaches a loop.
+			return normalizeGateDecision(await options.gate.evaluate(invocation), options.gate.id);
 		} catch (error) {
 			// Rule 2: a throwing gate fails closed and says so.
 			return {

@@ -1980,15 +1980,16 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		if (modeRefusal !== undefined && ctx.hasUI) ctx.ui.notify(`[Dove mode] ${modeRefusal}`, "error");
 		if (activeWorkMode !== undefined && ctx.hasUI) {
-			// `ask_before` is not consumed yet. Saying so is the difference between a control that is absent and a
-			// control that reads as present: an unsaid gap is the defect this project keeps finding in configuration.
+			// Both permission lists are now enforced at the tool-call boundary - `never_allow` by a refusal, `ask_before`
+			// by a confirmation - so the operator is told the count of each rather than left to infer which controls are
+			// live from the mode file. An unstated gap is the defect this project keeps finding in configuration.
 			const bound =
 				activeAuthorityDocument === undefined
 					? "no authority document: this mode declares no conformance"
 					: `conformance against engagement '${activeAuthorityDocument.engagement}' with ${activeAuthorityDocument.grants.length} grant(s)`;
 			ctx.ui.notify(
-				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are enforced. ask_before is not consumed yet, so those ${activeWorkMode.permissions.ask_before.length} action(s) run without asking.`,
-				activeWorkMode.permissions.ask_before.length > 0 ? "warning" : "info",
+				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are refused, and ${activeWorkMode.permissions.ask_before.length} action(s) run only after you confirm them. A host without a dialog refuses those too.`,
+				"info",
 			);
 		}
 
@@ -2328,6 +2329,41 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
 				});
 				return { block: true, reason: `[Dove mode ${activeWorkMode.id}] ${decision.reason}\nDo this instead: ${decision.remediation}` };
+			}
+			if (decision.outcome === "ask") {
+				// The policy states the requirement; only the host can meet it, because only the host has a dialog. `ask`
+				// is the mode's declaration that this action runs with the operator's consent, and the consent is
+				// obtained here rather than assumed. Both answers are recorded, because an action that ran because
+				// someone agreed to it and one that ran unasked otherwise leave the same trace.
+				const canAsk = ctx.hasUI === true && typeof ctx.ui?.confirm === "function";
+				const approved =
+					canAsk &&
+					(await ctx.ui.confirm(
+						`[Dove ${activeWorkMode.id}] '${identity.action}' needs your approval`,
+						`${decision.reason}\n\nTool: ${event.toolName}\n\n${decision.remediation}`,
+					));
+				const record = {
+					taskId: currentRequestTaskId ?? "pi-session",
+					stepId: `gate:${event.toolCallId}`,
+					mode: mode.current,
+					tool: event.toolName,
+					action: identity.action,
+					viaCapability: identity.viaCapability,
+					gate: "ask",
+					reason: decision.reason,
+					toolCallId: event.toolCallId,
+					sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
+				};
+				if (!approved) {
+					// A host with no dialog cannot put the question, and a requirement that cannot be put is not waived:
+					// the host's own no-op context answers `false` for exactly this reason.
+					const unmet = canAsk
+						? `The operator declined '${identity.action}'.`
+						: `This host has no confirmation dialog, so the requirement cannot be put to the operator.`;
+					await ledger.appendGateRefused({ ...record, remediation: unmet });
+					return { block: true, reason: `[Dove mode ${activeWorkMode.id}] ${unmet} ${decision.reason}\nDo this instead: ${decision.remediation}` };
+				}
+				await ledger.appendGateApproved(record);
 			}
 		}
 		// The effect boundary, after the policy and on the final input, because the effect identity is derived from

@@ -6,7 +6,7 @@ import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
-import { evaluatePermission, type WorkMode } from "./work-mode.ts";
+import { evaluatePermission, matchesPermission, type WorkMode } from "./work-mode.ts";
 
 /**
  * The one action policy a mode's controls add up to.
@@ -21,6 +21,11 @@ import { evaluatePermission, type WorkMode } from "./work-mode.ts";
  * Order, and it is a requirement rather than a preference: **a denial is evaluated independently of everything
  * else and wins.** Then thresholds. Then the contract. Anything that cannot be evaluated is a block, never an
  * allow.
+ *
+ * **`ask` is consulted last, and the position is the point.** Consent is not a control that refuses an action for
+ * a reason of its own; it is the operator's answer about an action that everything else already permitted. Asking
+ * about an action that is over its limit, out of scope, or denied would spend the operator's attention on a
+ * question whose answer cannot change what happens - and it would teach them that a prompt is noise.
  */
 export interface ActionPolicyOptions {
 	readonly mode: WorkMode;
@@ -47,8 +52,8 @@ export interface ActionPolicy {
 }
 
 function labelled(decision: GateDecision, gate: string): GateDecision {
-	if (decision.outcome !== "block") return decision;
-	return { outcome: "block", reason: `[` + gate + `] ` + decision.reason, remediation: decision.remediation };
+	if (decision.outcome === "allow") return decision;
+	return { outcome: decision.outcome, reason: `[` + gate + `] ` + decision.reason, remediation: decision.remediation };
 }
 
 /**
@@ -146,7 +151,7 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 
 	return {
 		modeId: mode.id,
-		gates: ["deny", "scope", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id])],
+		gates: ["deny", "scope", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id]), "ask"],
 		denyDecision,
 		evaluate(invocation, source) {
 			// The denial is evaluated here as well, so a caller who runs only `evaluate` cannot silently skip it.
@@ -185,10 +190,27 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 				if (decision.outcome === "block") return labelled(decision, conformanceGate.id);
 			}
 			const permission = evaluatePermission(mode.permissions, invocation.tool);
+			// The mode *declares* this action needs consent. `evaluatePermission` returns "ask" for an unlisted
+			// action too, and that case is not a control: the mode has said nothing about it, and turning silence
+			// into a prompt would ask the operator about every ordinary tool.
+			if (permission === "ask" && matchesPermission(mode.permissions.ask_before, invocation.tool)) {
+				return labelled(
+					{
+						outcome: "ask",
+						reason: `Mode '` + mode.id + `' lists '` + invocation.tool + `' in ask_before, so it runs only with the operator's confirmation.`,
+						remediation:
+							"Confirm it when the host asks. A host with no dialog refuses it, so if no prompt appears the action has to be moved off ask_before deliberately rather than run unasked.",
+					},
+					"ask",
+				);
+			}
 			return {
 				outcome: "allow",
 				...(permission === "ask"
-					? { reason: `Mode '` + mode.id + `' neither allows nor denies '` + invocation.tool + `': it is 'ask', and approval is not consumed yet, so it ran without asking.` }
+					? {
+						reason:
+							`Mode '` + mode.id + `' neither allows nor denies '` + invocation.tool + `': it is on none of the mode's permission lists, so the mode says nothing about it and the host's own tool availability decides.`,
+					}
 					: {}),
 			};
 		},

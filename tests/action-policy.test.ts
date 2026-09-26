@@ -91,7 +91,11 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 	it("allows an action the grant covers, once the evidence digests verify", () => {
 		const files = workspace();
 		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
-		assert.deepEqual(policy.gates, ["deny", "scope", "conformance"], "denial, then the ceiling, then the contract - and no limit gate, because this mode declares no thresholds");
+		assert.deepEqual(
+			policy.gates,
+			["deny", "scope", "conformance", "ask"],
+			"denial, then the ceiling, then the contract, then consent - and no limit gate, because this mode declares no thresholds",
+		);
 		const decision = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
 		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
 	});
@@ -140,15 +144,29 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		assert.match((denied as { reason: string }).reason, /never_allow/);
 	});
 
-	it("states which actions ran without asking, rather than letting 'ask' pass silently", () => {
+	it("returns 'ask' for an action the mode declares needs consent, instead of deciding consent itself", () => {
 		const files = workspace();
 		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
-		// exploit.run is ask_before: it is not denied, and approval is not consumed yet, so the allow carries the fact.
-		const decision = policy.evaluate(invocation("exploit.run", { target: "t-web" }), asCapability);
-		assert.equal(decision.outcome, "block", "an action outside the grant is refused by conformance even though the permission list only asked");
+		// exploit.run is ask_before, but conformance refuses it here for a reason of its own - so the consent is never
+		// reached, which is the order the policy documents rather than an accident of this fixture.
+		const refused = policy.evaluate(invocation("exploit.run", { target: "t-web" }), asCapability);
+		assert.equal(refused.outcome, "block", "an action outside the grant is refused by conformance even though the permission list only asked");
+		// With nothing else refusing it, the action comes back as `ask`: the declaration is stated, not resolved, because
+		// whether consent exists is a fact about the host. The arm is distinct from `allow` on purpose.
 		const asked = createActionPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root }).evaluate(invocation("exploit.run", {}), asCapability);
-		assert.equal(asked.outcome, "allow");
-		assert.match((asked as { reason?: string }).reason ?? "", /not consumed yet/);
+		assert.equal(asked.outcome, "ask");
+		assert.match((asked as { reason: string }).reason, /^\[ask\]/, "the reason says which check is asking");
+		assert.match((asked as { reason: string }).reason, /ask_before/);
+	});
+
+	it("does not turn an unlisted action into a question, because the mode has said nothing about it", () => {
+		const files = workspace();
+		// `evaluatePermission` answers 'ask' for an unlisted action as well as for `ask_before`; only the second is a
+		// control. Treating the first as one would put a prompt in front of every ordinary tool.
+		const policy = createActionPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root });
+		const decision = policy.evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
+		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
+		assert.match((decision as { reason?: string }).reason ?? "", /none of the mode's permission lists/);
 	});
 	it("does not ask the conformance gate about a raw tool, because a document names actions and targets and a call has neither", () => {
 		const files = workspace();

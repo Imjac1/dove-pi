@@ -81,8 +81,13 @@ export interface CapabilityResult<TResult = unknown> {
  * refusal with capability-shaped details, while a gate refusal happens at the host's pre-tool-call boundary and
  * covers every tool. Folding them together would make "the gate stopped this" indistinguishable from "the
  * capability refused".
+ *
+ * `gate.approved` exists because a refusal is not the only outcome that has to leave a trace. When a mode lists
+ * an action in `ask_before`, the action runs *because an operator consented*, and without a record the run is
+ * indistinguishable from one that never asked. The refusal record was added for the same reason in the other
+ * direction.
  */
-export type ExecutionRecordKind = "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "runtime.phase.completed" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered" | "task.convergence.decision" | "task.convergence.observed" | "gate.refused" | "tool.observed";
+export type ExecutionRecordKind = "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "runtime.phase.completed" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered" | "task.convergence.decision" | "task.convergence.observed" | "gate.refused" | "gate.approved" | "tool.observed";
 
 export interface ExecutionRecord {
 	readonly taskId: string;

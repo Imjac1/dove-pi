@@ -1,6 +1,7 @@
 import { Agent, type AgentMessage, type AgentTool, type BeforeToolCallResult, type StreamFn } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ActionGate, AgentLoop, GateDecision, GateInvocation, LoopMessage, LoopOutcome, LoopStopReason } from "../core/loop.ts";
+import { normalizeGateDecision } from "../core/loop.ts";
 import type { ModeIdentity } from "../core/effect-ledger.ts";
 
 /**
@@ -75,11 +76,9 @@ export function createPiAgentLoop(options: PiAgentLoopOptions): AgentLoop {
 		}
 		if (options.gate === undefined) return { outcome: "allow", reason: "no gate configured" };
 		try {
-			const decision = await options.gate.evaluate(invocation);
-			if (decision === null || typeof decision !== "object" || (decision.outcome !== "allow" && decision.outcome !== "block")) {
-				return { outcome: "block", reason: `Gate '${options.gate.id}' returned an unrecognised decision.`, remediation: "Fix the gate so it returns allow or block." };
-			}
-			return decision;
+			// The contract's own guard, shared with the reference loop rather than reimplemented: an untrusted shape
+			// is not an allow, and `ask` - which needs a dialog this loop does not have - is refused, not waived.
+			return normalizeGateDecision(await options.gate.evaluate(invocation), options.gate.id);
 		} catch (error) {
 			return { outcome: "block", reason: `Gate '${options.gate.id}' threw: ${error instanceof Error ? error.message : String(error)}`, remediation: "Fix the gate. An unevaluable action is never allowed." };
 		}

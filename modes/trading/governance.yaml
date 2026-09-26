@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 1.1.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -14,14 +14,19 @@ authority:
 gate:
   semantics: limit
   limits:
+    # `tools` is not decoration: without it a limit is evaluated against *every* action, so the notional cap
+    # refused `bash`, `read` and `edit` for want of an `order.notional` field. A threshold belongs to the action
+    # that carries the value it checks, and the gate can only know which action that is if the mode says so.
     notional:
       argument: order.notional
       max: 100000
       unit: USD
+      tools: [order.submit]
     quantity:
       argument: order.quantity
       min: 1
       max: 10000
+      tools: [order.submit]
   approval: none
 
 sandbox:

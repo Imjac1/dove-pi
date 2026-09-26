@@ -103,14 +103,56 @@ export interface AuthorityView {
 }
 
 /**
- * A decision. Both arms are explicit so that "no decision" cannot be confused with "allow".
+ * A decision. Every arm is explicit so that "no decision" cannot be confused with "allow".
  *
  * A block carries `remediation`, not only a refusal: the survey found that a bare refusal causes the
  * model to retry the identical action.
+ *
+ * **`ask` is the arm that says the policy cannot decide alone.** A mode may declare an action as one that
+ * runs only with the operator's consent (`permissions.yaml`'s `ask_before`). Whether consent exists is a fact
+ * about the *host* - it owns the dialog - so the policy states the requirement and the host resolves it. A
+ * consumer with no way to ask must **refuse**: a requirement that cannot be met is not a requirement that is
+ * waived, and an `ask` silently treated as an allow is the defect this arm exists to make unrepresentable.
  */
 export type GateDecision =
 	| { readonly outcome: "allow"; readonly reason?: string }
+	| { readonly outcome: "ask"; readonly reason: string; readonly remediation: string }
 	| { readonly outcome: "block"; readonly reason: string; readonly remediation: string };
+
+/**
+ * The contract's own guard, applied by every loop that consumes a {@link GateDecision}.
+ *
+ * Two rules, in one place because more than one loop applies them and a second copy is a second thing to get
+ * wrong:
+ *
+ * 1. **An unrecognised shape is a block.** A gate is caller-supplied, so what it returns is not trusted.
+ * 2. **`ask` is refused.** The arm means the operator's consent is required, and a loop owns no dialog, so it
+ *    cannot put the question. The requirement is not waived by the loop's inability to ask - and this is the
+ *    only place that decides so, which is what stops `ask` decaying into an allow in one loop and not another.
+ *
+ * A host that *can* ask does not call this: it resolves the `ask` itself and then has an allow or a block.
+ */
+export function normalizeGateDecision(decision: unknown, gateId: string): GateDecision {
+	if (decision === null || typeof decision !== "object") {
+		return { outcome: "block", reason: `Gate '${gateId}' returned an unrecognised decision.`, remediation: "Fix the gate so it returns {outcome:'allow'}, {outcome:'ask', reason, remediation} or {outcome:'block', reason, remediation}." };
+	}
+	const candidate = decision as { outcome?: unknown; reason?: unknown; remediation?: unknown };
+	if (candidate.outcome === "allow") return { outcome: "allow", ...(typeof candidate.reason === "string" ? { reason: candidate.reason } : {}) };
+	// The outcome is checked before the fields, because an unrecognised arm is a different fault from a recognised
+	// one that is missing its reason - and the message has to say which, or the reader looks in the wrong place.
+	if (candidate.outcome !== "ask" && candidate.outcome !== "block") {
+		return { outcome: "block", reason: `Gate '${gateId}' returned an unrecognised decision.`, remediation: "Fix the gate so it returns {outcome:'allow'}, {outcome:'ask', reason, remediation} or {outcome:'block', reason, remediation}." };
+	}
+	if (typeof candidate.reason !== "string" || typeof candidate.remediation !== "string") {
+		return { outcome: "block", reason: `Gate '${gateId}' returned a '${candidate.outcome}' decision with no reason or no remediation.`, remediation: "Fix the gate so every refusal and every request for consent carries both." };
+	}
+	if (candidate.outcome === "block") return { outcome: "block", reason: candidate.reason, remediation: candidate.remediation };
+	return {
+		outcome: "block",
+		reason: `Gate '${gateId}' requires the operator's confirmation and this loop cannot ask for it: ${candidate.reason}`,
+		remediation: "Run the action under a host that can ask the operator, or move the action off the mode's ask_before list deliberately rather than around it.",
+	};
+}
 
 /**
  * The pre-execution gate.

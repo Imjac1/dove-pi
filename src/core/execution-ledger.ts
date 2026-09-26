@@ -329,6 +329,17 @@ export class ExecutionLedger {
 	}
 
 	/**
+	 * The operator consented to an action the mode listed in `ask_before`.
+	 *
+	 * Written for the same reason the refusal is: the ledger is what makes the claim checkable. "This action ran
+	 * because someone agreed to it" is otherwise a statement about code, and an action that ran unasked leaves the
+	 * same trace as one that was agreed to.
+	 */
+	public async appendGateApproved(input: { taskId: string; stepId: string; mode: AgentMode; tool: string; action: string; viaCapability: boolean; gate: string; reason: string; requestId?: string; sessionId?: string; toolCallId?: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "gate.approved", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { tool: input.tool, action: input.action, viaCapability: input.viaCapability, gate: input.gate, reason: input.reason } });
+	}
+
+	/**
 	 * A tool call the harness observed, recorded so a later acceptance pass can cite it.
 	 *
 	 * **This is the observable side of "a pass must be checkable".** The agent can write a file or a sentence saying a

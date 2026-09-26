@@ -79,6 +79,27 @@ describe("agent loop gate boundary", () => {
 		assert.match(outcome.blockedActions[0]?.reason ?? "", /unrecognised decision/);
 	});
 
+	it("refuses an action that needs consent, because this loop has no dialog to ask through", async () => {
+		const asking: ActionGate = {
+			id: "ask-gate",
+			evaluate: () => ({ outcome: "ask", reason: "this action is on the mode's ask_before list", remediation: "confirm it when the host asks" }),
+		};
+		const outcome = await createAgentLoop(options({ gate: asking })).run("go");
+		// `ask` is not `allow`. A loop that cannot put the question must not answer it on the operator's behalf, and
+		// the refusal has to say which of the two it was - a requirement, not a policy judgement.
+		assert.equal(outcome.executedActions, 0, "an action awaiting consent must not run");
+		assert.match(outcome.blockedActions[0]?.reason ?? "", /requires the operator's confirmation/);
+		assert.match(outcome.blockedActions[0]?.reason ?? "", /cannot ask for it/);
+		assert.match(outcome.blockedActions[0]?.reason ?? "", /ask_before list/, "the gate's own reason is carried, so the refusal names the requirement");
+	});
+
+	it("refuses an 'ask' that arrives without a reason or a remediation, like any other malformed decision", async () => {
+		const malformed = { id: "malformed", evaluate: (() => ({ outcome: "ask" })) as unknown as ActionGate["evaluate"] };
+		const outcome = await createAgentLoop(options({ gate: { id: "malformed", evaluate: malformed.evaluate } })).run("go");
+		assert.equal(outcome.executedActions, 0);
+		assert.match(outcome.blockedActions[0]?.reason ?? "", /no reason or no remediation/);
+	});
+
 	it("blocks a target/display mismatch before consulting the gate", async () => {
 		let consulted = 0;
 		const counting: ActionGate = { id: "counting", evaluate: () => { consulted += 1; return { outcome: "allow" }; } };

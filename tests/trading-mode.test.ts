@@ -67,6 +67,27 @@ describe("trading vertical (limit gate + venue-level idempotency)", () => {
 		assert.equal(venue.fills.length, 0, "a pre-trade block means the venue never sees the order");
 	});
 
+	it("leaves an action the limits do not name alone, instead of refusing it for want of an order field", async () => {
+		// This is the regression the host test found. A limit declared without `tools` is evaluated against **every**
+		// action, so trading mode refused `bash` and every other ordinary tool with "argument 'order.notional' is
+		// absent from the bash call" - a threshold check that had turned into a total tool block. The declaration is
+		// what scopes it, and this asserts the declaration is there.
+		const mode = await loadMode();
+		assert.deepEqual(
+			mode.limits.map((limit) => limit.tools),
+			[["order.submit"], ["order.submit"]],
+			"both thresholds name the action that carries the value they check",
+		);
+		const gate = createLimitGate(mode.limits);
+		const read = gate.evaluate({ tool: "market.read", arguments: {}, mode: MODE_IDENTITY, at: "2026-09-25T12:00:00.000Z", elapsedMs: 0, accumulatedIntensity: {} });
+		assert.equal(read.outcome, "allow", JSON.stringify(read));
+		const shell = gate.evaluate({ tool: "bash", arguments: { command: "ls" }, mode: MODE_IDENTITY, at: "2026-09-25T12:00:00.000Z", elapsedMs: 0, accumulatedIntensity: {} });
+		assert.equal(shell.outcome, "allow", "a shell command is not an order, so an order threshold has nothing to say about it");
+		// The order path still refuses what it always refused.
+		const over = gate.evaluate({ tool: "order.submit", arguments: { order: { notional: 250_000, quantity: 10 } }, mode: MODE_IDENTITY, at: "2026-09-25T12:00:00.000Z", elapsedMs: 0, accumulatedIntensity: {} });
+		assert.equal(over.outcome, "block");
+	});
+
 	it("blocks an order whose limit cannot be evaluated, rather than letting it through", async () => {
 		const gate = createLimitGate((await loadMode()).limits);
 		const decision = gate.evaluate({ tool: "order.submit", arguments: { order: { quantity: 10 } }, mode: MODE_IDENTITY, at: "2026-09-25T12:00:00.000Z", elapsedMs: 0, accumulatedIntensity: {} });

@@ -384,15 +384,27 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 }
 
 /**
+ * Whether a permission list names this action. The wildcard rule, in one place, because three lists are read
+ * with it and a second copy of it is a second thing to get wrong.
+ */
+export function matchesPermission(list: readonly string[], action: string): boolean {
+	return list.some((entry) => (entry === action ? true : entry.endsWith("*") && action.startsWith(entry.slice(0, -1))));
+}
+
+/**
  * Permission precedence. `never_allow` wins over `always_allow`, over `ask_before`, and over any mode
  * setting - a deny list that a mode can override is not a deny list.
+ *
+ * **`"ask"` has two causes and they are not the same control.** An action on `ask_before` is one the mode
+ * *declares* needs consent; an action on no list at all is simply outside the mode's permission list, and the
+ * mode has said nothing about it. Collapsing the two would either ask the operator about every ordinary tool
+ * or drop the declaration, so the distinction is kept here and drawn by the caller with
+ * {@link matchesPermission}. The bare precedence rule is unchanged: an unlisted action is still `"ask"`.
  */
 export function evaluatePermission(permissions: PermissionSet, tool: string): "allow" | "ask" | "deny" {
-	const matches = (list: readonly string[]): boolean =>
-		list.some((entry) => (entry === tool ? true : entry.endsWith("*") && tool.startsWith(entry.slice(0, -1))));
-	if (matches(permissions.never_allow)) return "deny";
-	if (matches(permissions.ask_before)) return "ask";
-	if (matches(permissions.always_allow)) return "allow";
+	if (matchesPermission(permissions.never_allow, tool)) return "deny";
+	if (matchesPermission(permissions.ask_before, tool)) return "ask";
+	if (matchesPermission(permissions.always_allow, tool)) return "allow";
 	return "ask";
 }
 

@@ -25,7 +25,13 @@ after(() => {
 
 interface FakeContext {
 	hasUI?: boolean;
-	ui: { theme: { fg: (color: string, value: string) => string }; setStatus: (key: string, value: string | undefined) => void; notify: (message: string, level?: string) => void };
+	ui: {
+		theme: { fg: (color: string, value: string) => string };
+		setStatus: (key: string, value: string | undefined) => void;
+		notify: (message: string, level?: string) => void;
+		/** The host's confirmation dialog. Optional, because a host without one is a case the harness must be able to be. */
+		confirm?: (title: string, message: string) => Promise<boolean>;
+	};
 	sessionManager: { getEntries: () => unknown[]; getBranch?: () => unknown[]; getSessionId?: () => string };
 }
 
@@ -49,12 +55,34 @@ function startHost(root: string) {
 		on(name: string, handler: (event: any, ctx: any) => Promise<any>) { events.set(name, handler); },
 	} as unknown as ExtensionAPI;
 	extension(api);
+	const confirmCalls: { title: string; message: string }[] = [];
+	let confirmAnswer = true;
+	let dialogAvailable = true;
 	const context: FakeContext = {
 		hasUI: true,
-		ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify: (message: string) => { notifications.push(message); } },
+		ui: {
+			theme: { fg: (_color, value) => value },
+			setStatus() {},
+			notify: (message: string) => { notifications.push(message); },
+			confirm: async (title: string, message: string) => {
+				if (!dialogAvailable) throw new Error("the harness called confirm on a host that has no dialog");
+				confirmCalls.push({ title, message });
+				return confirmAnswer;
+			},
+		},
 		sessionManager: { getEntries: () => [], getBranch: () => [], getSessionId: () => "work-mode-test" },
 	};
-	return { events, notifications, context, tools, restoreCwd: () => process.chdir(previousCwd) };
+	return {
+		events,
+		notifications,
+		context,
+		tools,
+		confirmCalls,
+		setConfirmAnswer: (value: boolean) => { confirmAnswer = value; },
+		/** A host with no dialog: `confirm` is gone and `hasUI` is false, the way the host's own no-op context is. */
+		removeDialog: () => { dialogAvailable = false; context.hasUI = false; delete context.ui.confirm; },
+		restoreCwd: () => process.chdir(previousCwd),
+	};
 }
 
 function freshRoot(): string {
@@ -152,8 +180,8 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 				"the operator is told which document bounds the run",
 			);
 			assert.ok(
-				host.notifications.some((message) => /ask_before is not consumed yet/.test(message)),
-				"the half that is not enforced is stated rather than implied",
+				host.notifications.some((message) => /1 action\(s\) run only after you confirm them/.test(message)),
+				"both live controls are counted out loud, rather than one being implied: " + host.notifications.join(" | "),
 			);
 
 			// pentest's never_allow names 'dos.*', a Dove action reached through the capability tool - which is exactly
@@ -265,6 +293,93 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("asks the operator before an action the mode lists in ask_before, and runs it only on consent", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "trading");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "submit one order", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "submit one order", systemPrompt: "" }, host.context);
+
+			// `order.submit` is on trading's ask_before list. Inside its declared limits nothing else refuses it, so the
+			// requirement is the only thing standing between the call and dispatch - which is exactly what makes it the
+			// case worth testing at the host boundary.
+			const input = { name: "order.submit", args: { order: { notional: 5_000, quantity: 10 } } };
+			const approved = await callTool(host, "agent_run_capability", input, "c-ask-1");
+			assert.notEqual(approved?.block, true, "a confirmed action is not refused");
+			assert.equal(host.confirmCalls.length, 1, "the operator is asked, exactly once");
+			assert.match(host.confirmCalls[0]?.title ?? "", /order\.submit/, "the question names the action, not the umbrella tool");
+			assert.match(host.confirmCalls[0]?.message ?? "", /ask_before/, "and says why it is being asked");
+
+			host.setConfirmAnswer(false);
+			const declined = await callTool(host, "agent_run_capability", input, "c-ask-2");
+			assert.equal(declined?.block, true, "declining must stop the action rather than be treated as consent");
+			assert.match(declined?.reason ?? "", /operator declined/);
+			assert.match(declined?.reason ?? "", /Do this instead:/, "a refusal carries the way out, like every other refusal here");
+
+			// Both answers are evidence. An action that ran because someone agreed to it and one that ran unasked
+			// otherwise leave the same trace, and the trace is the only thing a later reader can check.
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const records = existsSync(ledgerFile)
+				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { action?: string; gate?: string } })
+				: [];
+			const approvedRecord = records.find((record) => record.kind === "gate.approved" && record.details?.action === "order.submit");
+			assert.ok(approvedRecord !== undefined, "the consent is recorded, so the run is distinguishable from one that never asked");
+			assert.equal(approvedRecord?.details?.gate, "ask");
+			const declinedRecord = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "ask" && record.details?.action === "order.submit");
+			assert.ok(declinedRecord !== undefined, "and so is the refusal");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses an action needing consent when the host has no dialog, instead of running it unasked", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "trading");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		const host = startHost(root);
+		try {
+			// The host's own no-op UI context answers `false` for every confirmation, which is the same direction: a
+			// requirement that cannot be put to the operator is refused, not waived.
+			host.removeDialog();
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "submit one order", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "submit one order", systemPrompt: "" }, host.context);
+
+			const decision = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { notional: 5_000, quantity: 10 } } });
+			assert.equal(decision?.block, true, "an action awaiting consent must not run just because nobody could be asked");
+			assert.match(decision?.reason ?? "", /no confirmation dialog/);
+			assert.equal(host.confirmCalls.length, 0, "and the harness must not call a dialog the host does not have");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("does not ask about an action the mode says nothing about", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "trading");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "hi", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "hi", systemPrompt: "" }, host.context);
+
+			// `bash` is on none of trading's permission lists. The mode has said nothing about it, so it is not a
+			// question: `evaluatePermission` answers 'ask' for an unlisted action too, and only ask_before is a control.
+			const decision = await callTool(host, "bash", { command: "ls" });
+			assert.notEqual(decision?.block, true, "an unlisted tool is not the mode's business, so it is not refused: " + (decision?.reason ?? "(no reason)"));
+			assert.equal(host.confirmCalls.length, 0, "an ordinary tool must not put a prompt in front of the operator");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
 	it("refuses an action outside the authority document at the boundary, and records which check refused it", async () => {
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
