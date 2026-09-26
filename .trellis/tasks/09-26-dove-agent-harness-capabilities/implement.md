@@ -410,9 +410,10 @@ mapping in `src/pi-adapter/action-identity.ts` first. `bin/dove-pi.cjs` now expo
    took `gate-limit.ts`, `effect-ledger.ts` and `loop.ts` off the list with it - fifteen entries to eleven - and
    the reachability test is what noticed, by asserting in both directions.
 
-**Remaining in M3:** `capability-scope.ts` has no runtime consumer yet (item 1's "capabilities"), the
-`ask_before` half of item 3, and item 1's "authority document" - the mode declares `authority.grant`, and
-nothing loads that document yet, which is what M2's conformance gate needs.
+**Remaining in M3 (at the time):** `capability-scope.ts` has no runtime consumer yet (item 1's "capabilities"),
+the `ask_before` half of item 3, and item 1's "authority document" - the mode declares `authority.grant`, and
+nothing loads that document yet, which is what M2's conformance gate needs. **All three are now landed**; the
+records for them follow.
 
 **Validation (all run):**
 
@@ -453,6 +454,71 @@ node --import tsx --test tests/action-policy.test.ts -> tests 9 / pass 9 / fail 
 
 npm run typecheck -> 0 errors
 npm test          -> tests 560 / pass 558 / fail 0 / skipped 2   (558 before, +2)
+```
+
+### `ask_before` consumed at the host boundary  **[DONE - M3 complete]**
+
+**The decision, and how the implementation differed from the option put to the user.** The choice was a two-phase
+protocol: block with an instruction, catch `/dove-approve <action>` through the `input` hook, record a session grant,
+let the agent retry. Reading the host's own types first turned up something the option had assumed away - the host
+passes a full `ExtensionUIContext` to hook handlers, with `confirm(title, message): Promise<boolean>`, and answers
+`false` from its no-op context when no dialog exists (`types.d.ts:68-72`, `noOpUIContext.confirm = async () => false`).
+So the ask is **single-phase**: `tool_call` blocks, the host puts the question, the answer decides. No command syntax,
+no grant store, no retry, and the no-dialog case is fail-closed by the host's own construction rather than by a rule
+this project invented.
+
+**What carries it:**
+
+- `GateDecision` gains `{ outcome: "ask", reason, remediation }` (`src/core/loop.ts`). The arm is what makes "the policy
+  cannot decide alone" representable, and the doc says what a consumer without a dialog must do with it.
+- `normalizeGateDecision(decision, gateId)` - one guard, used by **both** loops. Before this, `loop-runner.ts` and
+  `loop-pi-agent-core.ts` each had their own shape check, and only one of them would have known about `ask`; the other
+  would have refused it as "unrecognised", which is fail-closed but for the wrong reason and with a message that sends
+  the reader to fix a gate that is not broken.
+- `createActionPolicy(...).evaluate` returns `ask` **last**, after deny, scope, limits and conformance. Consent is not a
+  control that refuses for a reason of its own; it is the operator's answer about an action everything else already
+  permitted, and asking about an action that is already refused spends attention on a question whose answer cannot
+  change what happens.
+- The extension resolves it: `ctx.hasUI === true && typeof ctx.ui.confirm === "function"`, then the question, then
+  `gate.approved` or `gate.refused` in the ledger with gate `ask`. Both answers are recorded, because an action that ran
+  because someone agreed to it and one that ran unasked otherwise leave the same trace.
+- The mode-load notice now counts both controls: "N denied action(s) are refused, and M action(s) run only after you
+  confirm them. A host without a dialog refuses those too."
+
+**Three findings, all of them the defect class this task exists for.**
+
+1. **`ask` had two causes and the code treated them as one.** `evaluatePermission` answers `"ask"` for an action on
+   `ask_before` *and* for an action on no list at all - the documented default. The policy reported both with the same
+   sentence, so wiring a confirmation to `"ask"` would have put a prompt in front of every ordinary tool. Only the
+   declared case is a control; `matchesPermission(p.ask_before, action)` is what separates them, and the unlisted case
+   now says what it is: the mode has said nothing about this action.
+2. **`modes/trading` refused every action that was not an order.** Its two limits are declared without `tools`, and an
+   unscoped limit is evaluated against every invocation - so `bash` was refused with "argument 'order.notional' is
+   absent from the bash call". `LimitSpec.tools` exists for exactly this and its docstring says so ("a notional cap
+   belongs to order entry and must not be evaluated against a read"); the mode file never used it. Both limits now name
+   `order.submit` and the governance version moves 1.0.0 -> 1.1.0, because narrowing a gate changes what the mode
+   authorizes. **Found by a host test, not by reading the mode file** - the test that found it was written to check that
+   an unlisted tool is left alone.
+3. **A control in one loop and not the other.** See `normalizeGateDecision` above. The reachability allow-list still
+   lists `loop-pi-agent-core.ts` as unreachable, and that is precisely why the shared guard matters: an unreachable
+   implementation of a shared rule is a copy that nobody runs until somebody does.
+
+**The boundary this does not verify.** Whether the real TUI renders a confirmation dialog while the agent is
+mid-stream is **not verified here** - the fake host records the call and answers it, which proves this side of the
+contract and nothing about the terminal. If the dialog cannot appear during streaming, the effect is a refusal, not a
+silent allow, and that is the direction the mode declared. Recorded rather than implied, because "we ask the operator"
+is otherwise a claim about code.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests 17 / pass 17 / fail 0   (14 before, +3)
+node --import tsx --test tests/action-policy.test.ts  -> tests 11 / pass 11 / fail 0   (10 before, +1)
+node --import tsx --test tests/loop-gate.test.ts      -> tests  9 / pass  9 / fail 0   (7 before, +2)
+node --import tsx --test tests/trading-mode.test.ts   -> tests  8 / pass  8 / fail 0   (7 before, +1)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 580 / pass 578 / fail 0 / skipped 2   (573 before, +7)
 ```
 
 ## M4. Admission: delegate, and supply the policy
