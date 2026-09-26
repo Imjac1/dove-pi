@@ -581,7 +581,7 @@ headroom. Worth recording as a fact about this repository: **a doc edit here is 
 ```text
 node --import tsx --test tests/host-work-mode.test.ts      -> tests 18 / pass 18 / fail 0   (17 before, +1)
 node --import tsx --test tests/code-audit-mode.test.ts     -> tests 15 / pass 15 / fail 0   (14 before, +1)
-node --import tsx --test tests/spec-context-budget.test.ts -> tests  2 / pass  2 / fail 0
+node --import tsx --test tests/spec-context-budget.test.ts -> tests  5 / pass  5 / fail 0
 
 npm run typecheck -> 0 errors
 npm test          -> tests 582 / pass 580 / fail 0 / skipped 2   (580 before, +2)
