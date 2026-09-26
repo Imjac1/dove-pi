@@ -133,6 +133,50 @@ validated and exposed by the mode loader, and the trading thresholds come from
 observed end to end until M3's load lands**, because the limits and the authority document are mode content and
 the host has neither today.
 
+### M2 record, 2026-09-26  **[IN PROGRESS - the limit half has landed at the host]**
+
+Landed: **the limit gate at the host's `tool_call` boundary**, built once at session start from the loaded
+mode's declared limits (a gate rebuilt per call is a gate whose thresholds can differ between two identical
+actions), and **a `gate.refused` record in the execution ledger** carrying the tool, the action, the gate, the
+reason and the remediation. The action mapping grew the other half of itself: a policy reads **a capability's
+own arguments**, not the envelope that carries them, because a mode declares a limit as a path into the
+action's payload (`order.notional`) and `{name, args}` is the transport's business.
+
+**Four findings.**
+
+1. **The gate is evaluated after every input mutation in the handler, and that placement is the requirement.**
+   The host re-validates nothing after a mutation (`types.d.ts:703-708`), and this handler mutates `event.input`
+   twice before dispatch (`applyAdaptiveShellTimeout`, `normalizeLsToolInput`). A gate placed at the top of the
+   handler would have permitted something other than what runs. The reason is now in the code at the call site,
+   not only in the research file.
+2. **The gate sits behind a pre-existing boundary: `tool_call` returns early without an active request lease.**
+   So the limit gate applies inside a Dove-managed request and not outside one. The mode's *refusal* and *deny*
+   checks are deliberately before that early return, so a broken mode still stops an unmanaged call. Stated
+   because it decides when the gate can fire at all - and because the host-level test had to establish a
+   request before the assertion meant anything.
+3. **\"Both refusals appear in the ledger\" needed a new ledger event, not a reuse.** `capability.blocked` is a
+   capability-invocation refusal with capability-shaped details; a gate refusal happens at the pre-tool-call
+   boundary and covers every tool. They are now separate kinds, and the `kind` union is a named type in
+   `contracts.ts` so the append methods and the projection cannot drift from it.
+4. **The conformance half is blocked on two things, and neither is code.** There is **no loader for an authority
+   document** (only `validateAuthorityDocument`), and *nothing in the design says how a tool call resolves to a
+   target* - `AuthorityRequest.target` must name a target the document declares (`t-web`), while a host tool call
+   carries a command or a path. code-audit makes it sharper: its `authority.grant` is a bare name
+   (`local-review`) with no document behind it at all, while its `gate.semantics` says `conformance`. Raised with
+   the user rather than invented.
+
+**Still open from M1:** the effect boundary's second adapter on `tool_call`/`tool_result`, which is the same seam
+as this milestone's and should share its change.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests  6 / pass  6 / fail 0   (5 before, +1: the limit refusal and its ledger record)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 540 / pass 538 / fail 0 / skipped 2   (539 after M3's load, +1)
+```
+
 ## M3. The mode, loaded by the host
 
 **Wiring point: the host's startup path.** `work-mode.ts` is unreachable today.
