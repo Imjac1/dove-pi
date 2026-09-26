@@ -11,6 +11,8 @@
  * provider might or might not honour.
  */
 
+import type { EffectLedger, EffectRecord } from "./effect-ledger.ts";
+
 /** A message as the loop carries it. Provider-specific shapes are produced by {@link LoopProvider}. */
 export type LoopMessage =
 	| { readonly role: "user"; readonly content: string }
@@ -139,6 +141,22 @@ export interface SynchronousActionGate extends ActionGate {
 // ---------------------------------------------------------------------------------------------
 
 export interface LoopOptions {
+	/**
+	 * The at-most-once boundary (design section 5.1). When supplied, every action is claimed at the dispatch
+	 * line before it runs and its outcome recorded after; a refused claim does not run and is reported.
+	 *
+	 * It belongs here, at the only place a tool runs, and **never at an approval boundary** - an approval gate
+	 * re-executes whatever sits before it, which is how a gate duplicates an effect.
+	 */
+	readonly effects?: {
+		readonly ledger: EffectLedger;
+		/**
+		 * The effect a call represents, or `undefined` for a call whose effect is not worth claiming. The caller
+		 * owns the identity because it owns the mode, the engagement and the arguments digest; the loop must not
+	 * invent an effect key from a tool name.
+		 */
+		readonly recordOf: (call: ToolCall) => Omit<EffectRecord, "startedAt"> | undefined;
+	};
 	readonly provider: LoopProvider;
 	readonly model: string;
 	/** Work-mode identity, stamped on every gate invocation and evidence record (design section 3.4). */
@@ -183,6 +201,14 @@ export interface LoopOutcome {
 	/** Count of actions that actually reached `executeTool`. The paired gate test asserts on this. */
 	readonly executedActions: number;
 	readonly blockedActions: readonly { readonly tool: string; readonly reason: string }[];
+	/**
+	 * Actions the effect boundary refused: already claimed, or claimed with a record that cannot be read.
+	 *
+	 * Kept apart from `blockedActions` on purpose - a gate refusal and an effect refusal are different
+	 * findings, and folding them together would make "the gate stopped this" and "this already ran"
+	 * indistinguishable in the evidence.
+	 */
+	readonly refusedEffects: readonly { readonly tool: string; readonly reason: string }[];
 }
 
 /** The loop contract. Implementations live behind this and are replaceable (design section 10.1). */

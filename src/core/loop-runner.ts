@@ -29,6 +29,7 @@ import type {
 export function createAgentLoop(options: LoopOptions): AgentLoop {
 	const messages: LoopMessage[] = [];
 	const blockedActions: { tool: string; reason: string }[] = [];
+	const refusedEffects: { tool: string; reason: string }[] = [];
 	let executedActions = 0;
 
 	const decide = async (invocation: GateInvocation): Promise<GateDecision> => {
@@ -131,10 +132,48 @@ export function createAgentLoop(options: LoopOptions): AgentLoop {
 					continue;
 				}
 
+				// The at-most-once claim, at the only line that runs a tool (design section 5.1). It is here and not
+				// at the gate: an approval boundary re-executes whatever sits before it, which duplicates the effect.
+				const boundary = options.effects;
+				const effect = boundary?.recordOf(call);
+				if (boundary !== undefined && effect !== undefined) {
+					const claim = await boundary.ledger.begin(effect);
+					const refusal =
+						claim.unreadable === true
+							? "an earlier attempt claimed this effect and its record cannot be read, so whether the effect landed is unknown"
+							: claim.claimed === false
+								? "this effect was already claimed by an earlier attempt"
+								: undefined;
+					if (refusal !== undefined) {
+						// Refused and reported, never silently skipped: the operator must be able to see that the work did
+						// not happen, and the model must not be told that it did. Re-running is the one answer that is wrong
+						// in both cases, so the instruction is to report rather than retry.
+						refusedEffects.push({ tool: call.name, reason: refusal });
+						const refused: ToolResult = {
+							content: `Effect refused: ${refusal}.\nDo this instead: report the ambiguity to the operator; do not re-run the action.`,
+							isError: true,
+						};
+						messages.push({ role: "toolResult", callId: call.callId, name: call.name, content: refused.content, isError: true });
+						continue;
+					}
+				}
+
 				executedActions += 1;
-				const raw = await options.executeTool(call, signal);
-				const result = options.afterToolCall ? options.afterToolCall(call, raw) : raw;
-				messages.push({ role: "toolResult", callId: call.callId, name: call.name, content: result.content, isError: result.isError === true });
+				try {
+					const raw = await options.executeTool(call, signal);
+					const result = options.afterToolCall ? options.afterToolCall(call, raw) : raw;
+					if (boundary !== undefined && effect !== undefined) {
+						await boundary.ledger.complete(effect.effectKey, { outcome: result.isError === true ? "failed" : "completed" });
+					}
+					messages.push({ role: "toolResult", callId: call.callId, name: call.name, content: result.content, isError: result.isError === true });
+				} catch (error) {
+					if (boundary !== undefined && effect !== undefined) {
+						// An abort is not a failure report: the process stopped between the effect and its record, so
+						// whether it landed is genuinely unknown. `failed` would assert it did not.
+						await boundary.ledger.complete(effect.effectKey, { outcome: signal?.aborted === true ? "unknown" : "failed" });
+					}
+					throw error;
+				}
 			}
 
 			if (options.shouldStop?.({ messages: [...messages], turn, mode: options.mode }) === true) {
@@ -143,7 +182,7 @@ export function createAgentLoop(options: LoopOptions): AgentLoop {
 			}
 		}
 
-		return { stopReason, messages: [...messages], executedActions, blockedActions: [...blockedActions] };
+		return { stopReason, messages: [...messages], executedActions, blockedActions: [...blockedActions], refusedEffects: [...refusedEffects] };
 	};
 
 	return { run };

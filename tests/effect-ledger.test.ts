@@ -110,7 +110,10 @@ describe("dispatchOnce (exactly-once at the effect boundary)", () => {
 		const rec = record();
 		await ledger.begin(rec);
 		let executions = 0;
-		const result = await dispatchOnce(ledger, rec, async () => { executions += 1; return "recovered"; }, { retryPriorAttempt: true });
+		// The class is now the thing that makes the opt-in safe, so the test states which class it asserts.
+		// Before M1 the opt-in alone was accepted, which meant the caller's belief stood in for the backend's
+		// enforcement - the exact substitution this contract exists to prevent.
+		const result = await dispatchOnce(ledger, rec, async () => { executions += 1; return "recovered"; }, { retryPriorAttempt: true, effectClass: "key-idempotent" });
 		assert.equal(result.executed, true, "work is not lost when a process dies mid-effect");
 		assert.equal(executions, 1);
 	});
@@ -122,7 +125,7 @@ describe("dispatchOnce (exactly-once at the effect boundary)", () => {
 		assert.equal(ledger.records()[0]?.outcome, "failed");
 		const retry = await dispatchOnce(ledger, rec, async () => "ok");
 		assert.equal(retry.executed, false, "a timeout that failed after the effect landed is indistinguishable from one that did not");
-		const optedIn = await dispatchOnce(ledger, rec, async () => "ok", { retryPriorAttempt: true });
-		assert.equal(optedIn.executed, true, "the mode opts an idempotent or key-idempotent effect into retry");
+		const optedIn = await dispatchOnce(ledger, rec, async () => "ok", { retryPriorAttempt: true, effectClass: "key-idempotent" });
+		assert.equal(optedIn.executed, true, "the mode declares this effect key-idempotent, which is what makes the retry safe");
 	});
 });

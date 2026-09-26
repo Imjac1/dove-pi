@@ -111,7 +111,10 @@ export function createPiAgentLoop(options: PiAgentLoopOptions): AgentLoop {
 			const state = agent.state;
 			const errorMessage = state.errorMessage;
 			const stopReason: LoopStopReason = errorMessage === undefined ? { kind: "completed" } : { kind: "providerError", error: errorMessage };
-			return { stopReason, messages: toLoopMessages(state.messages), executedActions, blockedActions: [...blockedActions] };
+			// This adapter drives the host's agent, which owns its own tool dispatch, so it has no dispatch line of
+			// its own to claim at. `refusedEffects` is empty because nothing is claimed here - not because nothing
+			// was refused - and this adapter is on the harness task's reachability allow-list for the same reason.
+			return { stopReason, messages: toLoopMessages(state.messages), executedActions, blockedActions: [...blockedActions], refusedEffects: [] };
 		},
 	};
 }

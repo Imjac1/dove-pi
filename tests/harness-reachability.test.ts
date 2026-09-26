@@ -32,19 +32,28 @@ const ENTRY_POINTS = [
 ];
 
 /**
- * Every entry carries the milestone that removes it, because an allow-list without a reason is a place to
- * hide. `wiredBy: null` means no milestone in this task claims it - stated rather than left blank.
+ * `wiredBy` names the milestone that will make the module **reachable** - not the one that edits it. The
+ * assertion is about reachability, so a milestone that edits an unreachable module removes nothing from this
+ * list, and saying otherwise would make the list a place to hide. `wiredBy: null` means no milestone in this
+ * task makes it reachable, stated rather than left blank.
  */
 const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
-	"src/core/loop.ts": { reason: "the loop and its reference implementation; nothing owns it while the host owns the loop", wiredBy: "M0 reachability only" },
-	"src/core/loop-runner.ts": { reason: "the runner the loop calls; M1 puts the effect claim at its dispatch line", wiredBy: "M1" },
-	"src/core/gate-limit.ts": { reason: "limit-gate semantics; M2 composes it behind the gate policy", wiredBy: "M2" },
-	"src/core/gate-conformance.ts": { reason: "conformance-gate semantics; M2 composes it behind the gate policy", wiredBy: "M2" },
+	// The reference loop, and everything only it reaches. **No milestone in this task makes these reachable.**
+	// M2, M3 and M4 wire the host's hooks and the host's startup path, and the host runs its own loop. M1 does
+	// place the effect claim inside loop-runner.ts - which means the claim is reachable from tests only, and
+	// adding a module there (effect-store-file.ts) turned this very test red. That is a finding about the plan,
+	// recorded in the M1 milestone record rather than absorbed here.
+	"src/core/loop.ts": { reason: "the loop contract and the reference loop; no milestone edits or reaches it, because the host owns the loop that runs", wiredBy: null },
+	"src/core/loop-runner.ts": { reason: "the reference runner; M1 places the effect claim at its dispatch line, but nothing reaches this module, so the claim is exercised by tests only", wiredBy: null },
+	"src/core/effect-store-file.ts": { reason: "the claim store M1 adds; reached only from loop-runner.ts, which is itself unreachable. Reachable from tests until the boundary also sits on the host's tool_call/tool_result hooks", wiredBy: null },
+	"src/core/effect-ledger.ts": { reason: "effect identity, the claim contract and the dispatch helper; M1 corrects its exactly-once claim and widens EffectOutcome, but it is reached only through the unreachable loop", wiredBy: null },
+	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; reached only through the unreachable loop", wiredBy: null },
+	// Each of these can be reached from the host, and names the milestone that does it.
+	"src/core/gate-limit.ts": { reason: "limit-gate semantics; M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
+	"src/core/gate-conformance.ts": { reason: "conformance-gate semantics; M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
 	"src/core/work-mode.ts": { reason: "the declarative mode loader; M3 loads it at host startup", wiredBy: "M3" },
 	"src/core/authority.ts": { reason: "the grant graph the mode declares; M3 gives it a runtime consumer", wiredBy: "M3" },
 	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode", wiredBy: "M3" },
-	"src/core/effect-ledger.ts": { reason: "effect identity; M1 corrects its exactly-once claim and wires it", wiredBy: "M1" },
-	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; M1 and M7 resume through them", wiredBy: "M1" },
 	"src/core/context-admission.ts": { reason: "the admission policy; M4 either delegates from it or removes it", wiredBy: "M4" },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
