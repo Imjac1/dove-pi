@@ -38,16 +38,13 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
   action including allowed ones; a throwing gate or an unrecognised decision shape is a **block**; a
   `target`/`displayTarget` mismatch is blocked **before** the gate is consulted.
 - A block carries `remediation` as well as `reason`; both reach the tool result.
-- **`ask` is a requirement, not a judgement.** A mode may declare an action as one that runs only with
-  the operator's consent, and whether consent exists is a fact about the *host*, which owns the dialog.
-  So the policy states the requirement and the host resolves it. A consumer with no way to ask must
-  **refuse**: a requirement that cannot be met is not waived, and an `ask` treated as an allow is the
-  defect the arm exists to make unrepresentable.
-- Two implementations exist and must agree on these rules: `src/core/loop-runner.ts` (reference) and
+- **`ask` is a requirement, not a judgement.** A mode may declare an action as needing the operator's
+  consent, and consent is a fact about the *host*, which owns the dialog. A consumer that cannot ask must
+  **refuse**.
+- Two implementations exist and must agree: `src/core/loop-runner.ts` (reference) and
   `src/adapters/loop-pi-agent-core.ts` (external). The provider abstraction differs per implementation;
-  the interface is `AgentLoop`, not the provider. **Both apply `normalizeGateDecision`, and neither
-  reimplements it** - the shape check and the refusal of an unaskable `ask` live in the contract, because
-  a rule copied into two loops is a rule that will differ in one of them.
+  the interface is `AgentLoop`, not the provider. **Both call `normalizeGateDecision`** rather than
+  reimplementing it: a rule copied into two loops differs in one of them.
 
 ### 4. Validation & Error Matrix
 
@@ -56,8 +53,7 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 | No gate configured | Every action runs, and the reason says so. **Omitting the gate is only safe where every action is read-only, and nothing enforces that today** - both gate-less paths return `allow` unconditionally. Enforcing it there would be enforcement in dead code: neither path is reachable from an entry point (see the reachability test). The host's own boundary refuses an unmappable or unevaluable action instead. |
 | Gate throws | Block, reason names the gate and the error |
 | Gate returns an unrecognised shape | Block |
-| Gate returns `ask` to a loop that owns no dialog | Block, reason naming the requirement it could not put |
-| `ask` or `block` with no `reason` or no `remediation` | Block; the message distinguishes this from an unrecognised shape |
+| `ask` to a loop with no dialog, or `ask`/`block` with no `reason`/`remediation` | Block; the message names which fault |
 | `target` !== `displayTarget` | Block before the gate is consulted |
 | Action allowed | `onGateInvoked` still fires, so an off-path gate is detectable |
 
@@ -66,9 +62,7 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 - Paired offline test: one scripted provider, gate off versus gate on; assert executed actions 1 -> 0
   and that the reason and remediation reach the transcript.
 - Invocation log records allowed actions.
-- Throwing gate and unrecognised decision both fail closed.
-- A gate returning `ask` executes nothing and says which requirement it could not meet; a malformed
-  `ask` (no reason or no remediation) is refused as malformed.
+- Throwing gate, unrecognised decision, and an `ask` the loop cannot put all fail closed.
 - Target/display mismatch blocks with the gate never consulted.
 - The external adapter satisfies the same cases.
 
@@ -106,16 +100,12 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   refused rather than assumed satisfied.
 - `never_allow` wins over `always_allow`, over `ask_before`, and over any mode setting. An unlisted
   tool defaults to `ask`.
-- **`ask` has two causes and only one of them is a control.** An action on `ask_before` is one the mode
-  *declares* needs consent; an action on no list at all is outside the mode's permission list, and the
-  mode has said nothing about it. `evaluatePermission` answers `ask` for both; the caller separates them
-  with `matchesPermission(p.ask_before, action)`. Collapsing the two either asks about every ordinary
-  tool or drops the declaration.
-- **`ask_before` is enforced at the host's tool-call boundary by a confirmation.** The policy returns
-  `outcome: "ask"`; the host puts the question through its dialog, records `gate.approved` or
-  `gate.refused` with gate `ask`, and proceeds only on consent. A host with no dialog refuses the
-  action rather than running it - the host's own no-op UI context answers `false` for every
-  confirmation, which is the same direction.
+- **`ask` has two causes and only one is a control.** `ask_before` is the mode *declaring* that an action
+  needs consent; an action on no list is outside the mode's permission list. `evaluatePermission` answers
+  `ask` for both - separate them with `matchesPermission(p.ask_before, action)`, or every ordinary tool
+  gets a prompt. The policy returns `outcome: "ask"`, the host asks through its dialog and records
+  `gate.approved`/`gate.refused` with gate `ask`; a host with no dialog refuses the action, because its
+  no-op UI answers `false` to every confirmation.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -138,12 +128,9 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - Each required field, when absent, is rejected.
 - A YAML block-scalar description parses correctly.
 - A vertical's mode id does not appear in executable code under `src/core`.
-- An `ask_before` action returns `ask` rather than `allow`, and an *unlisted* action returns `allow`
-  rather than a question.
-- A host with a dialog runs an `ask_before` action on consent and refuses it on refusal, recording which;
-  a host without one refuses it without calling a dialog it does not have.
-- A limit declared without `tools` is evaluated against every action; a mode that declares a threshold
-  for one action names that action, so an ordinary tool is not refused for want of an order field.
+- An `ask_before` action returns `ask` and an *unlisted* one returns `allow`; a host with a dialog runs
+  the first on consent and one without refuses it. A limit declared without `tools` is evaluated against
+  every action, so a mode names the action its threshold belongs to.
 
 ### 6. Wrong vs Correct
 
