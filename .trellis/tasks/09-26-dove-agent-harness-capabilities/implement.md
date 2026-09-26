@@ -951,6 +951,34 @@ npm run typecheck -> 0 errors
 npm test          -> tests 572 / pass 570 / fail 0 / skipped 2   (571 before, +1)
 ```
 
+### M8 done, 2026-09-26  **[the specs were the last surface, and one states a restriction the code does not have]**
+
+The routed specs were the last thing to sweep, and the sweep found a false claim rather than a stale one:
+
+**`personal-agent-framework-core.md`'s validation matrix said "No gate configured - Every action runs; allowed only
+for read-only modes".** Both gate-less paths return `allow` **unconditionally** (`loop-runner.ts:44`, and the adapter at
+`:76`), and nothing anywhere checks that a mutable mode has a gate. The row now states that, and says **why the
+restriction was not added instead**: both gate-less paths sit in modules nothing reaches, so enforcing it there would be
+enforcement in dead code - the host's own boundary refuses an unmappable or unevaluable action, which is where the real
+control lives.
+
+**Two rows added for precision the code already has:** concurrent resumers of one effect are **at most one**, and the
+guarantee is worded as the module words it (at-most-once from our own resumption paths, never exactly-once); and
+"claimed, then the process died" reads as `unknown`, a state rather than an error. A spec silent about a state the code
+has is not false, but it is the spec a future session writes code against.
+
+**What the sweep did not find is worth recording too.** No spec claims exactly-once; none claims the unwired modules
+are wired; and `personal-agent-audit-vertical.md`'s discipline statement - *"a capability that is never called is
+exactly as unenforced as a helper that is never called"* - is now **satisfied** by the pre-flight wiring rather than
+contradicted by it.
+
+**Validation:** the spec-context-budget test enforces the routed-set headings and byte budgets, and passes; typecheck 0
+errors; npm test 572 / 570 / 0 / 2.
+
+**M8 is complete.** Across three sweeps it corrected: a citation to a class that does not exist, a claim wider than its
+premise, two mode requirements asserted as behaviour the harness supplies, a mode described as loadable when it is not,
+a list formatted as if it had three members, and a spec's restriction that nothing enforces.
+
 ## Validation
 
 ```bash
