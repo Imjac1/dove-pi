@@ -661,6 +661,33 @@ npm run typecheck -> 0 errors
 npm test          -> tests 563 / pass 561 / fail 0 / skipped 2   (562 before, +1)
 ```
 
+
+### M5's other half, attempted and withdrawn 2026-09-26  **[the enforcement cannot precede the observable]**
+
+I implemented the stronger rule - a pass must cite evidence that **resolves to a record the harness wrote** - in two
+layers: a scheme rule in the tool's argument validation (`ledger:<stepId>`, `command:<stepId>`, `effect:<effectKey>`)
+and a resolution check against the execution ledger and the effect store. **Then withdrew it, because the host
+records no such thing for a tool call.** The ledger holds request lifecycle, gate refusals, budget events and
+convergence decisions; it does **not** record tool calls. So an agent that honestly ran `npm test` and watched it
+pass has nothing citable to pass the criterion with, and the rule would have refused **every honest pass** while
+looking like enforcement.
+
+**The signal was a pre-existing test**, and it is worth naming: `records an optional native goal directly without
+planning questions or legacy script execution` in `pi-adapter.test.ts` failed, because a real user flow can no
+longer complete. A rule that makes the product unable to finish a task is worse than the hole it closes.
+
+What stands, from the previous round: **a pass requires at least one evidence reference**, refused by the event
+decoder. That rule is satisfiable and closes the "nothing at all" hole. The stronger one is recorded at the call
+site as well as here, so the next reader does not re-derive it from a failing test.
+
+**What must come first, and it is the next step of this milestone:** the harness must **emit a citable observable**
+for the thing a criterion can be decided by - at minimum an execution-ledger record per tool call carrying a stable
+id, surfaced in the tool result so the agent can cite it. Then the resolution rule is both correct and useful, and
+the scheme has something to name.
+
+**Validation:** the tree is back to the previous round's state plus the call-site comment; typecheck 0 errors; npm
+test 563 / 561 / 0 / 2.
+
 ## M6. The verification ladder
 
 1. A cost-ordered ladder that **short-circuits** and records `decided_by`, returning **unscored** rather
