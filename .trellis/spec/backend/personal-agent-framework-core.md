@@ -42,7 +42,7 @@ type GateDecision = { outcome: "allow"; reason?: string } | { outcome: "block"; 
 
 | Condition | Required behavior |
 |---|---|
-| No gate configured | Every action runs; allowed only for read-only modes |
+| No gate configured | Every action runs, and the reason says so. **Omitting the gate is only safe where every action is read-only, and nothing enforces that today** - both gate-less paths return `allow` unconditionally. Enforcing it there would be enforcement in dead code: neither path is reachable from an entry point (see the reachability test). The host's own boundary refuses an unmappable or unevaluable action instead. |
 | Gate throws | Block, reason names the gate and the error |
 | Gate returns an unrecognised shape | Block |
 | `target` !== `displayTarget` | Block before the gate is consulted |
@@ -215,7 +215,8 @@ function dispatchOnce<T>(l: EffectLedger, r: Omit<EffectRecord,"startedAt">, exe
 | Effect already completed | Not re-dispatched |
 | Claimed but not completed | Not re-dispatched unless the caller opts in |
 | Prior attempt failed | Not retried unless the caller opts in; a failure may have landed |
-| Concurrent resumers of one effect | Exactly one executes; the claim is atomic in the store |
+| Concurrent resumers of one effect | **At most one executes**; the claim is atomic in the store. The guarantee is **at-most-once dispatch from our own resumption paths** - never exactly-once, which requires the backend to enforce the key the tool forwards |
+| Claimed, then the process died | Reads as `unknown`, which is a state rather than an error: an interrupted dispatch wrote no outcome, and the ledger must be able to say that instead of choosing between `completed` and `failed` |
 | Record from another engagement | Refused |
 | Agents report success after duplicating | Self-reported success is not evidence; the ledger is |
 
