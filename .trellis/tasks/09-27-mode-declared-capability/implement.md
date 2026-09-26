@@ -50,11 +50,14 @@
    the three behavioural cases are the detector, and this step is how we know they are load-bearing rather than
    decorative. Record the observation in the task notes rather than in the suite.
 
-7. **`.trellis/spec/backend/personal-agent-framework-core.md`** - the Work-Mode section states the rule: a mode's
-   grant may name capabilities the runtime does not provide, loading does not refuse them, and the boundary does.
-   **Budget-bound**: `tests/spec-context-budget.test.ts` holds the file to 24 KiB with ~206 bytes of headroom, and
-   `09-27-mode-gate-no-gate` also edits this file. Whichever lands second pays more; run the budget test as part of
-   the change.
+7. **`.trellis/spec/backend/personal-agent-capability-runtime.md`** - states the rule: a mode's grant may name
+   capabilities the runtime does not provide, loading does not refuse them, and the boundary does.
+   **Amended 2026-09-27, after approval and after the sibling task landed.** The approved plan named
+   `personal-agent-framework-core.md`. That file now has **56 bytes** of headroom against the 24 KiB budget
+   (`tests/spec-context-budget.test.ts`, which CRLF-normalises before counting), because `09-27-mode-gate-no-gate`
+   spent it; this file has ~6.7 KiB. The rule is the registry's contract as much as the mode format's, so the new
+   home is not a compromise - but the change of home is recorded here because the approved plan named the other file,
+   and the plan is what the approval was for.
 
 8. **Not touched, deliberately:** `modes/trading/*` (the mode keeps declaring what its deployment must provide - see
    *Not a rule* in `prd.md`), and `toClientOrderId` (recorded in the dropped task's PRD as a known dead export).
