@@ -916,6 +916,41 @@ npm run typecheck -> 0 errors
 npm test          -> tests 571 / pass 569 / fail 0 / skipped 2   (prose and fixtures only)
 ```
 
+### The pre-flight, wired 2026-09-26  **[the first of M8's two unwired claims is now true]**
+
+`modes/pentest/MODE.md` promised "The engagement must pre-flight clean ... If any of that fails, the run does not
+start", and **nothing called `preflightAuthority`**. It is now called **at the mode load**: a conformance run whose
+engagement cannot be verified **refuses to start** - before the first action rather than at it, which is what the
+sentence actually claims.
+
+**One implementation of "read the evidence and hash it", shared.** The computation lived inside the action policy's
+closure; it is now `evidenceDigestsFor(document, workspaceRoot)`, called by the policy (per action) and by the pre-flight
+(once). Two implementations of one reading is how a document's evidence comes to mean two things.
+
+**Two consequences, both intended and both recorded.**
+
+1. **The shipped example engagement now refuses to start a pentest run**, because its evidence digests are placeholders
+   (`"aaaa"`) that no file can match - which is *exactly* what the mode document promised would happen. A host test
+   asserts that refusal, and the engagement that does load in the other test is built from real files with matching
+   digests, so the "starts, then refuses an out-of-scope target" path stays covered.
+2. **That test's scenario changed for a real reason**: an out-of-scope **target** (`t-elsewhere`) rather than an
+   unverifiable grant, because with a pre-flighting engagement the per-action refusal is necessarily about scope. Its
+   old assertion expected the pre-flight's wording; it now expects "Target 't-elsewhere' is not present in authority
+   document 'example-engagement'".
+
+**Still unwired, and still named:** the trading client order id. Its wiring point is the submission capability's call
+to the effect boundary - and there is no submission capability yet, which is why that one is a larger piece than this
+was.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests 14 / pass 14 / fail 0   (+1: the refusal to start)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 572 / pass 570 / fail 0 / skipped 2   (571 before, +1)
+```
+
 ## Validation
 
 ```bash
