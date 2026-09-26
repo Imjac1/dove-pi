@@ -1175,3 +1175,25 @@ alone** - which is both why the work is needed and why it is safe to start.
 - Confirm whether the host offers any hook that could contain **its own subprocesses**. C1 is a stated
   limitation only while the answer is no.
 - Confirm `loop.ts` cannot be overridden once the gates are in it (C3).
+
+---
+
+## Post-archive audit, 2026-09-26
+
+After the archive, the sweep for claims the `ask_before` work invalidated found **two places that still said the
+harness adds no permission layer**, which the mode gate contradicts - and had already contradicted for `never_allow`:
+
+- `README.md` and `README.en.md` both stated, unqualified, that Dove adds no permission layer and that Dove adds no
+  second confirmation to a Pi tool call. Both are true *with no work mode declared* and false with one. Both now say
+  which case they describe, and what the mode's `permissions.yaml` does at the `tool_call` boundary in the other.
+- `src/pi-adapter/action-identity.ts` used `read_*` as its example of a Dove action name in a permission list. That is
+  the exact entry this milestone found to be a dead declaration in `modes/code-audit` - it matches neither the
+  `repo.read` capability nor the host's `read` tool - so the comment was teaching the pattern the milestone removed.
+  The examples are now names that resolve, and the comment says why an unresolvable entry is worse than none.
+
+**M8's record is therefore incomplete rather than wrong.** "Truth in the documentation" covered the mode files, the
+spec and the code comments; the two READMEs were not in that sweep, and they are the two documents a new operator
+reads first. Recorded here so the next documentation sweep starts from the operator-facing text rather than `src/`.
+
+**Validation:** `npm run typecheck` -> 0 errors; `npm test` -> tests 582 / pass 580 / fail 0 / skipped 2.
+
