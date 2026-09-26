@@ -65,17 +65,21 @@ All in `research/frontier-anatomy.md`, with sources. The load-bearing ones:
 
 ## Open questions (decisions, not facts)
 
-1. **Isolation.** Do we build an execution-isolation layer through the host's `Operations` seam? The paper names
-   the cheap route (reuse OS binaries; restricted tokens on Windows) and says the cost is tolerable that way.
-2. **The approval default.** Do we adopt a mode-shaped approval default (PLAN/DEFAULT/YOLO) rather than a constant?
-   Three independent sources agree the default is a mode. This is the decision `09-27-mode-permission-lists`
-   already holds, now with the frontier's evidence attached.
-3. **The outer verification loop.** Do we build the scaffold-level judge/guard that validates completion outside
-   the turn loop? It is a named pattern with two implementations, and our own earlier synthesis called it the one
-   capability with no implementation in either layer.
-4. **Cumulative enforcement.** Do we make the declared constraints real - a non-empty accumulator, consumers for
-   `gate.intensity`/`windows`/`excluded_techniques`, and a request that carries `phase`/`technique`? The
-   evasion benchmark says decomposition across calls is the primary tactic, and our gate cannot see it.
+**Consolidated in `decisions.md`, which is the artifact to act on.** Five decisions, each with the field's evidence,
+our local state with `file:line`, the options, the cost, the reversibility, a recommendation, and **the cheapest step
+that would falsify the recommendation**:
+
+1. **D1 - Isolation.** OS sandbox through the host's seam, content-borne defence, or policy-only? The seam is
+   `BashOperations { exec }`, one method, verified locally; the field offers all three strategies with the largest
+   system in the corpus choosing content-borne defence and the second-largest choosing policy-only.
+2. **D2 - The approval default.** A constant, or declared per mode? Every one of the eleven systems uses a mode, and
+   a read-only class is the universal floor. This is the decision `09-27-mode-permission-lists` holds.
+3. **D3 - The outer verification loop.** The one named pattern our own synthesis called missing in both layers, with
+   an execution oracle rather than a model judge.
+4. **D4 - Cumulative enforcement.** The accumulator is empty and three declared constraint fields have no consumer;
+   the evasion benchmark says decomposition across calls is the primary tactic.
+5. **D5 - The postmortem-to-precondition loop.** Self-Harness's three stages, and StateM's evidence that closing that
+   loop is worth ~9 benchmark points. Recommended as the detector half first.
 
 ## Out of scope
 
@@ -88,6 +92,7 @@ All in `research/frontier-anatomy.md`, with sources. The load-bearing ones:
 
 - The task is a research task: `prd.md` plus `research/`. No `design.md` or `implement.md` until a decision
   above is taken and a build task exists.
+- `decisions.md` is the second artifact: the five decisions in a form that can be answered one at a time.
 - The artifact supersedes nothing. `09-26-dove-agent-harness-capabilities/research/` was written before this
   paper was in hand and before the same-week papers existed; its own synthesis reached the outer-verification
   conclusion independently, which is corroboration rather than duplication.
