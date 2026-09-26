@@ -127,6 +127,12 @@ accepted, which is the substitution this contract exists to prevent.
 **Validate, end to end and not in a unit test**: an order above its declared limit is refused; a target
 outside the authority document is refused; both refusals appear in the ledger with their reasons.
 
+**Prerequisite, landed 2026-09-26:** the limits and effect classes this milestone gates against are now
+validated and exposed by the mode loader, and the trading thresholds come from
+`modes/trading/governance.yaml` rather than a test - see the M3 prerequisite record. **This milestone cannot be
+observed end to end until M3's load lands**, because the limits and the authority document are mode content and
+the host has neither today.
+
 ## M3. The mode, loaded by the host
 
 **Wiring point: the host's startup path.** `work-mode.ts` is unreachable today.
@@ -138,6 +144,57 @@ outside the authority document is refused; both refusals appear in the ledger wi
 
 **Validate**: delete a capability from the mode and observe the running agent lose it; corrupt the mode and
 observe a refusal to start.
+
+### M3 prerequisite, landed 2026-09-26  **[DONE]**
+
+M3 says the host loads "capabilities, an authority document, **limits**, and **effect classes**". The loader
+accepted `gate.limits` as a field and **never read it**, and had no effect-class concept at all, so neither was
+available to load. That is fixed ahead of M3 rather than inside it, because the mode files already write
+against this schema:
+
+- `WorkMode` carries `limits: readonly LimitSpec[]` and `effectClasses: Readonly<Record<string, EffectClass>>`,
+  both validated at load.
+- `gate.limits` is parsed in the shape the mode files **already declare**: a mapping keyed by limit id, which is
+  what `modes/trading/governance.yaml` contains. A limit with neither bound, a non-finite bound, an unknown
+  field inside a limit, an empty id, and an inner `id` are each a **load** error naming the mode.
+- `governance.effects.classes` is new: design 5.4 requires the map and nothing carried it. An unrecognised
+  class value is refused by name rather than defaulted, because the default is the dangerous direction.
+- `LimitSpec` gained `tools`, because `LimitGateOptions.tools` scopes the whole gate and cannot separate two
+  limits that belong to two different actions.
+- `modes/code-audit/governance.yaml` declares its effect classes and moves **1.3.0 -> 1.4.0**: the map changes
+  what the mode authorizes, which is the convention `code-audit-mode.test.ts` asserts.
+
+**Four findings.**
+
+1. **A declared field was never read, so the threshold lived in a test.** `trading-mode.test.ts` built its limit
+   gate from a hardcoded array while `modes/trading/governance.yaml` declared the same thresholds in the file a
+   reviewer reads. The test now builds the gate from the loaded mode's `limits` and asserts where they came from.
+   **That is this task's defect class, found inside a test fixture.**
+2. **The declared shape is a map keyed by id; the first parser assumed a list, and the data corrected it.** A
+   list is now refused with a message naming the expected shape, because an inner `id` would be a second name
+   for a limit its key already names.
+3. **M2 depends on M3, and the plan lists them the other way round.** M2's validation is "an order above its
+   declared limit is refused; a target outside the authority document is refused" - and both the limits and the
+   authority document **are mode content**. The host has neither today: `extension.ts` contains no reference to
+   `authority`, `limits` or `work-mode`. So M3's load lands first, and M2 is observed end to end after it.
+4. **Which mode the host loads is still open.** The workspace policy offers `development | pentest`; the mode
+   directories are `code-audit | pentest | trading`. M3 says "`modes/code-audit/` becomes the first real load",
+   which means either the workspace policy gains a mode, or `development` maps to one, or the mode is selected
+   another way. **Raised with the user rather than assumed**, because it decides what a mode *is* in this
+   product.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/work-mode.test.ts       -> tests 21 / pass 21 / fail 0   (13 before, +8)
+node --import tsx --test tests/code-audit-mode.test.ts -> tests 15 / pass 15 / fail 0   (14 before, +1 new test)
+node --import tsx --test tests/trading-mode.test.ts    -> tests  7 / pass  7 / fail 0   (same suite, limits now loaded)
+node --import tsx --test tests/gates.test.ts           -> tests 18 / pass 18 / fail 0   (17 before, +1)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 525 / pass 523 / fail 0 / skipped 2   (515 after M1, +10)
+```
+
 
 ## M4. Admission: delegate, and supply the policy
 
