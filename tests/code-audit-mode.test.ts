@@ -357,20 +357,21 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 	it("bumped the mode version when its authority changed", async () => {
 		const mode = await loadMode();
 		const governance = mode.governance as { version: string; evidence: { artifacts: readonly string[] } };
-		// 1.5.0 because the mode's gate semantics changed from conformance to limit and its `always_allow` list
-		// went from a wildcard that matched nothing to the capability it names - both changes to what it
-		// authorizes, the same reason 1.2.0, 1.3.0 and 1.4.0 were bumped. A version that does not move when the
+		// 1.6.0 because the mode's gate semantics changed again - from `limit`, which claims containment by
+		// thresholds it does not declare, to `none`, which claims nothing - and that is a change to what the mode
+		// authorizes, the same reason 1.2.0 through 1.5.0 were bumped. A version that does not move when the
 		// authority set does cannot attribute a run to one authority set.
-		assert.equal(governance.version, "1.5.0", "an authority change increments the version, so a run can be attributed to one");
+		assert.equal(governance.version, "1.6.0", "an authority change increments the version, so a run can be attributed to one");
 		assert.ok(governance.evidence.artifacts.includes("coverage.json"), "the receipt is an artifact of the run, not an aside");
 	});
 
-	it("declares limit semantics and names its read capability, so the mode loads and its permission list means something", async () => {
+	it("declares no gate and names its read capability, so the mode loads and its permission list means something", async () => {
 		const mode = await loadMode();
-		// Two declarations that used to read as controls and were not. `conformance` with a bare-name grant made the
-		// whole mode refuse to load; `always_allow: [read_*]` matched no action at all, because the list is matched
-		// against action names and this mode's read capability is `repo.read`.
-		assert.equal(mode.gateSemantics, "limit", "a conformance mode with no resolvable document must not declare conformance");
+		// Three declarations that used to read as controls and were not. `conformance` with a bare-name grant made the
+		// whole mode refuse to load; `limit` with no thresholds claimed a threshold gate that did not exist; and
+		// `always_allow: [read_*]` matched no action at all, because the list is matched against action names and this
+		// mode's read capability is `repo.read`.
+		assert.equal(mode.gateSemantics, "none", "a mode with no document and no thresholds has no gate to declare");
 		assert.deepEqual(mode.limits, [], "and it declares no thresholds, which is why the containment is the permission list");
 		assert.equal(mode.authorityGrant, "local-review", "the grant stays as the name of the review that authorizes it, as trading's does");
 		assert.equal(evaluatePermission(mode.permissions, "repo.read"), "allow", "the read capability is allowed by declaration, not by the unlisted default");

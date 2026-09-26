@@ -100,13 +100,15 @@ function copyMode(root: string, name: string): void {
 }
 
 /**
- * Rewrite a copied mode's `gate.semantics` to `conformance`, so a case that pins the conformance rules has a mode
- * that declares them. Done by editing the copy rather than by shipping a mode with the shape, because a shipped mode
- * that refuses to load is not a fixture - it is a broken vertical.
+ * Rewrite a copied mode's `gate.semantics`, so a case that pins a rule has a mode that declares the shape the rule is
+ * about. Done by editing the copy rather than by shipping a mode with the shape, because a shipped mode that refuses
+ * to load is not a fixture - it is a broken vertical.
  */
-function forceConformance(root: string, name: string): void {
+function forceSemantics(root: string, name: string, value: string): void {
 	const path = join(root, "modes", name, "governance.yaml");
-	const rewritten = readFileSync(path, "utf8").replace("  semantics: limit", "  semantics: conformance");
+	const source = readFileSync(path, "utf8");
+	const rewritten = source.replace(/^(\s+)semantics:\s*\S+\s*$/m, "$1semantics: " + value);
+	if (rewritten === source) throw new Error("no 'semantics:' line was rewritten in " + path + ", so this test would prove nothing");
 	writeFileSync(path, rewritten);
 }
 
@@ -211,14 +213,14 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 
 	it("refuses a conformance mode whose grant is not a document, and names both ways out", async () => {
 		// The consequence of requiring a document, pinned as behaviour rather than discovered later. The shipped
-		// code-audit no longer has this shape - it declares `limit`, because an internal review has no third-party
-		// grantor to write an ownership document with - so the declaration is forced back here. A mode that declares
-		// conformance and cannot check anything must not start, and that rule needs a case even when no shipped mode
-		// exercises it today.
+		// code-audit no longer has this shape - it declares `none`, because an internal review has no third-party
+		// grantor to write an ownership document with and declares no thresholds either - so the declaration is forced
+		// back here. A mode that declares conformance and cannot check anything must not start, and that rule needs a
+		// case even when no shipped mode exercises it today.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "code-audit");
-		forceConformance(root, "code-audit");
+		forceSemantics(root, "code-audit", "conformance");
 		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
 		const host = startHost(root);
 		try {
@@ -227,6 +229,29 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			assert.ok(refusal !== undefined, "the refusal names the grant that could not be resolved: " + host.notifications.join(" | "));
 			assert.match(refusal, /authority\.grant/, "and the field to fix");
 			assert.match(refusal, /gate\.semantics: limit/, "and the alternative, so the operator is not left guessing");
+			assert.match(refusal, /none if it has no gate at all/, "including the one for a mode with neither a grantor nor thresholds");
+			const decision = await callTool(host, "bash", { command: "ls" });
+			assert.equal(decision?.block, true, "and no action runs while the mode is unresolved");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses a mode that declares a threshold gate and no thresholds, and names both ways out", async () => {
+		// The declaration that reads as a control and decides nothing. `none` is the value for a mode with no gate, so
+		// the refusal has to offer it - otherwise the author is sent back to the value that caused the problem.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-audit");
+		forceSemantics(root, "code-audit", "limit");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const refusal = host.notifications.find((message) => /gate\.limits/.test(message));
+			assert.ok(refusal !== undefined, "the refusal names the field that is missing: " + host.notifications.join(" | "));
+			assert.match(refusal, /gate\.semantics: none/, "and the value that would fit a mode with no gate");
+			assert.match(refusal, /Declare the limits/, "and the other way out");
 			const decision = await callTool(host, "bash", { command: "ls" });
 			assert.equal(decision?.block, true, "and no action runs while the mode is unresolved");
 		} finally {

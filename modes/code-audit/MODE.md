@@ -2,7 +2,7 @@
 name: code-audit
 description: Audit a repository for exploitable defects, seeding candidates deterministically and emitting findings as SARIF with a diffable baseline.
 license: MIT
-compatibility: "Requires the code-audit capabilities and a deterministic sink catalog. This mode declares gate.semantics limit with no thresholds, so what contains it is the permission list and the scope block rather than an authority document - an internal review has no third-party grantor, and a conformance mode whose grant does not resolve refuses to load."
+compatibility: "Requires the code-audit capabilities and a deterministic sink catalog. This mode declares gate.semantics none, so what contains it is the permission list and the scope block rather than a gate: an internal review has no third-party grantor to write an authority document with, and it declares no thresholds either. A mode whose gate declaration and content disagree refuses to load."
 ---
 
 Audit the repository in scope for defects that a reviewer would act on. Report findings; do not patch.

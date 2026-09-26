@@ -100,6 +100,14 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
 	});
 
+	it("builds neither a threshold nor a contract gate for a mode that declares no gate", () => {
+		// `gate.semantics: none` is a mode saying it has no gate. The policy is where that becomes visible: `gates` is
+		// the list a reader uses to see the policy instead of inferring it, so it must not name a check nobody built.
+		const files = workspace();
+		const policy = createActionPolicy({ mode: mode({ gateSemantics: "none" }), workspaceRoot: files.root });
+		assert.deepEqual(policy.gates, ["deny", "scope", "ask"], "denial, the ceiling, then consent - and no gate the mode does not have");
+	});
+
 	it("refuses a target the grant does not cover, naming the authority", () => {
 		const files = workspace();
 		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });

@@ -74,7 +74,7 @@ export interface WorkMode {
 	 * constructed first. A mode that fails validation refuses to start (design section 5.4).
 	 */
 	/** Which gate semantics this mode declares. A consumer must not dig into `governance` for it. */
-	readonly gateSemantics: "limit" | "conformance" | "both";
+	readonly gateSemantics: "none" | "limit" | "conformance" | "both";
 	/**
 	 * The dotted path into an action's arguments that names the authority target, for a conformance mode.
 	 *
@@ -110,7 +110,7 @@ const PERMISSION_FIELDS = new Set(["always_allow", "ask_before", "never_allow"])
 const SCOPE_FIELDS = new Set(["targets", "environment", "exclusions", "ownership_evidence"]);
 const AUTHORITY_FIELDS = new Set(["grant", "grant_graph", "capabilities", "expires"]);
 const GATE_FIELDS = new Set(["semantics", "limits", "target_argument", "intensity", "excluded_techniques", "windows", "approval"]);
-const GATE_SEMANTICS = new Set(["limit", "conformance", "both"]);
+const GATE_SEMANTICS = new Set(["none", "limit", "conformance", "both"]);
 const LIMIT_FIELDS = new Set(["argument", "max", "min", "unit", "required", "tools"]);
 const EFFECTS_FIELDS = new Set(["classes"]);
 const EFFECT_CLASSES = new Set(["idempotent", "key-idempotent", "non-idempotent"]);
@@ -366,6 +366,27 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	const limits = parseLimits("governance.gate.limits", gate.limits);
 	const effectClasses = parseEffectClasses("governance.effects", governance.effects);
 
+	// **A declaration that cannot decide anything is refused, at the level it is declared.** The rule one level down
+	// already exists: a limit with neither `max` nor `min` is rejected because it "can never decide anything". The
+	// same argument applies to the field that says *which* gate the mode has, and there was no rule - so a mode could
+	// declare `limit`, declare no thresholds, and read as threshold-bounded while nothing bounded it. `none` is the
+	// value for a mode that genuinely has no gate, which is why the refusal can offer it as a way out.
+	if ((gate.semantics === "limit" || gate.semantics === "both") && limits.length === 0) {
+		throw new WorkModeError(
+			"missing-field",
+			`Mode '${frontmatter.name}' declares gate.semantics '${gate.semantics}' and no 'gate.limits', so the threshold gate it declares would never decide anything. Declare the limits, or declare gate.semantics: none if this mode has no gate.`,
+		);
+	}
+	// The converse: thresholds nothing would ever consult, because the mode has said it has no gate. The code names the
+	// shape of the failure (a combination the format does not allow) rather than a TypeScript type, which is how
+	// `invalid-type` is already used for the `target_argument` value constraint above.
+	if (gate.semantics === "none" && limits.length > 0) {
+		throw new WorkModeError(
+			"invalid-type",
+			`Mode '${frontmatter.name}' declares gate.semantics 'none' and ${limits.length} limit(s), so the thresholds would never be consulted. Remove 'gate.limits', or declare gate.semantics: limit if this mode is bounded by them.`,
+		);
+	}
+
 	return {
 		id: frontmatter.name,
 		description: frontmatter.description,
@@ -374,7 +395,7 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		frameworkRange: governance.framework,
 		governance: { ...governance, scope, authority: { ...authority, capabilities }, gate },
 		capabilities,
-		gateSemantics: gate.semantics as "limit" | "conformance" | "both",
+		gateSemantics: gate.semantics as "none" | "limit" | "conformance" | "both",
 		...(targetArgument === undefined ? {} : { targetArgument: targetArgument as string }),
 		...(grant === undefined ? {} : { authorityGrant: grant as string }),
 		permissions,
@@ -539,20 +560,23 @@ export interface LoadedWorkMode {
 export function loadWorkModeFromDirectory(root: string, name: string, options: LoadWorkModeOptions): LoadedWorkMode {
 	const workspaceRoot = resolve(root);
 	const mode = loadWorkMode(readWorkModeFiles(workModeDirectory(workspaceRoot, name)), options);
-	if (mode.gateSemantics === "limit") return { mode };
+	// **Both no-contract values return here, and this line is why `none` had to extend it.** A value that fell through
+	// would be sent to the conformance path and refused with a message about grant documents - the value would look
+	// implemented and not be.
+	if (mode.gateSemantics === "limit" || mode.gateSemantics === "none") return { mode };
 
 	const grant = mode.authorityGrant;
 	if (grant === undefined) {
 		throw new WorkModeError(
 			"authority-unresolved",
-			`Mode '${mode.id}' declares gate.semantics '${mode.gateSemantics}' and names no 'authority.grant', so there is nothing an action could be checked against. Declare the grant document, or declare gate.semantics: limit if this mode has no external grantor.`,
+			`Mode '${mode.id}' declares gate.semantics '${mode.gateSemantics}' and names no 'authority.grant', so there is nothing an action could be checked against. Declare the grant document, or declare gate.semantics: limit if this mode is bounded by thresholds, or none if it has no gate at all.`,
 		);
 	}
 	const path = resolve(workspaceRoot, grant);
 	if (!existsSync(path)) {
 		throw new WorkModeError(
 			"authority-unresolved",
-			`Mode '${mode.id}' declares gate.semantics '${mode.gateSemantics}' but its grant '${grant}' is not a document at '${path}'. A conformance mode with no document would run gated by nothing while declaring that it is gated. Point 'authority.grant' at a grant document, or declare gate.semantics: limit.`,
+			`Mode '${mode.id}' declares gate.semantics '${mode.gateSemantics}' but its grant '${grant}' is not a document at '${path}'. A conformance mode with no document would run gated by nothing while declaring that it is gated. Point 'authority.grant' at a grant document, or declare gate.semantics: limit if this mode is bounded by thresholds, or none if it has no gate at all.`,
 		);
 	}
 	let source: string;

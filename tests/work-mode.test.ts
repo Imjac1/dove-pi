@@ -102,6 +102,8 @@ describe("work-mode loader", () => {
 		const bad = files({ governance: files().governance.replace("semantics: conformance", "semantics: whatever") });
 		const error = expectError(() => loadWorkMode(bad, { frameworkVersion: FRAMEWORK }), "missing-field");
 		assert.match(error.detail, /gate.semantics/);
+		// The message lists the values, so a fourth one has to appear in it rather than only in the constant.
+		for (const value of ["none", "limit", "conformance", "both"]) assert.match(error.detail, new RegExp(value));
 	});
 
 	it("refuses a mode whose framework range excludes the running version", () => {
@@ -197,6 +199,47 @@ describe("mode-declared effect classes", () => {
 			() => loadWorkMode(withPolicy(["effects:", "  classez:", "    read: idempotent", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
 			"unknown-field",
 		);
+	});
+});
+
+/**
+ * `gate.semantics` says *which* gate the mode has. A value that declares a gate the mode does not supply is refused,
+ * because the field would otherwise read as a control while the run had none - the shape this project keeps finding.
+ */
+describe("gate semantics vocabulary", () => {
+	/** The fixture with its `gate.semantics` replaced, plus anything the caller appends under `gate:`. */
+	function withSemantics(value: string, extra = ""): WorkModeFiles {
+		return files({ governance: files().governance.replace("semantics: conformance", "semantics: " + value) + extra });
+	}
+	const limits = ["  limits:", "    notional:", "      argument: order.notional", "      max: 100000", ""].join("\n");
+
+	it("accepts 'none' and exposes it, for a mode that has no gate at all", () => {
+		const mode = loadWorkMode(withSemantics("none"), { frameworkVersion: FRAMEWORK });
+		assert.equal(mode.gateSemantics, "none");
+		assert.deepEqual(mode.limits, []);
+	});
+
+	it("refuses 'limit' with no limits, naming the field and both ways out", () => {
+		const error = expectError(() => loadWorkMode(withSemantics("limit"), { frameworkVersion: FRAMEWORK }), "missing-field");
+		assert.match(error.detail, /gate\.limits/, "the field that is missing");
+		assert.match(error.detail, /gate\.semantics: none/, "and the value that fits a mode with no gate, so the author is not sent back to the one that failed");
+	});
+
+	it("refuses 'both' with no limits, because both halves have to hold", () => {
+		const error = expectError(() => loadWorkMode(withSemantics("both"), { frameworkVersion: FRAMEWORK }), "missing-field");
+		assert.match(error.detail, /both/);
+	});
+
+	it("still accepts 'limit' with limits, which is the case the rule must not break", () => {
+		const mode = loadWorkMode(withSemantics("limit", limits), { frameworkVersion: FRAMEWORK });
+		assert.equal(mode.gateSemantics, "limit");
+		assert.equal(mode.limits.length, 1);
+	});
+
+	it("refuses 'none' with limits, because the thresholds would never be consulted", () => {
+		const error = expectError(() => loadWorkMode(withSemantics("none", limits), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.detail, /never be consulted/);
+		assert.match(error.detail, /gate\.semantics: limit/, "and it names the value that would fit");
 	});
 });
 
