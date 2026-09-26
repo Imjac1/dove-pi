@@ -153,7 +153,7 @@ Continue the current project task.
 Dove does not prune tools per request in Auto mode. Pi and installed Pi extensions decide which
 tools the model can use; Dove only observes the final schema for cache and conflict diagnostics.
 Request classification affects context, goal continuation, and budgets, not
-tool permission.
+tool permission - that comes from the work mode's `permissions.yaml`.
 
 ### 3. Choose a mode when needed
 
@@ -244,12 +244,16 @@ legacy directory. Continuing a legacy task imports only the useful goal metadata
 | Component | Responsibility |
 | --- | --- |
 | Pi | Models, sessions, TUI, and native tool hosting |
-| Dove | Request context, goal continuation, loop control, diagnostics, and execution records |
+| Dove | Request context, goal continuation, loop control, diagnostics, and execution records; no permission layer by default, and a declared work mode's `permissions.yaml` once one is declared |
 | Dove Native Workflow | Compact state plus formal PRD, design, implementation, acceptance, and evidence artifacts under `.dove/` |
 | Legacy reader | Read-only projection of existing `.trellis` tasks, specs, and journals |
 
-Pi is the only tool and execution authority. Dove adds no permission layer; it manages context,
-goal continuity, no-progress loops, and efficiency diagnostics.
+Pi is the only tool and execution authority. **With no work mode declared**, Dove adds no permission
+layer; it manages context, goal continuity, no-progress loops, and efficiency diagnostics. **With one
+declared**, that mode's `permissions.yaml` takes effect at Pi's `tool_call` boundary: `never_allow`
+refuses, `ask_before` asks the operator first (a host with no confirmation dialog refuses rather than
+letting it through), and `always_allow` names the actions that need no question. An action on none of the
+lists is not the mode's business and is still decided by Pi and the installed extensions.
 
 ## Full workflow and a real-user smoke check
 
@@ -328,8 +332,8 @@ switches only to previous; `uninstall --yes` removes only Dove-managed files and
 
 The controls have separate roles: `/mode` changes execution intensity, `/dove-mode` changes
 project-context organization, `/dove-thinking` changes thinking policy, and `/dove-tools` changes
-only an explicit compatibility profile. In Auto mode, Pi and installed extensions still own tool
-authority. Use `/status full` or `agent_doctor` to inspect one effective snapshot containing intent/
+only an explicit compatibility profile. In Auto mode none of these settings changes tool authority -
+that comes from the work mode's `permissions.yaml`, and only then from Pi and the installed extensions. Use `/status full` or `agent_doctor` to inspect one effective snapshot containing intent/
 lane, policy sources, active tool count, provider/read-only budgets, context and cache observations,
 and the latest terminal cause. The snapshot is diagnostic evidence; it does not add permissions or
 change existing ceilings. The `hardStop` field in the read-only budget is retained for compatibility
@@ -531,9 +535,11 @@ MCP stdio configuration:
 {"command":"dove-pi","args":["mcp"]}
 ```
 
-Inside a Pi session, the Pi tool call is the host execution decision and Dove adds no second
-confirmation. Local CLI calls still require `--approve`, and RPC/MCP requests cannot grant
-themselves permission.
+Inside a Pi session, the Pi tool call is the host execution decision, and with no work mode
+declared Dove adds no second confirmation. With one declared and the action on its `ask_before`
+list, Dove asks the operator once at the `tool_call` boundary - and treats a refusal, or a host
+that cannot ask, as a refusal. Local CLI calls still require `--approve`, and RPC/MCP requests
+cannot grant themselves permission.
 
 ## Development and verification
 

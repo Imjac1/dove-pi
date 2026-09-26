@@ -2,10 +2,14 @@
  * What action a host tool call *is*, in the vocabulary a mode's permission list and its authority document use.
  *
  * **Why this exists, as a finding rather than a design preference.** A mode's `never_allow` names Dove actions
- * (`shell.exec`, `network.*`, `read_*`), while Pi names tools (`bash`, `read`, `edit`), and the umbrella
+ * (`shell.exec`, `network.*`, `report.write`), while Pi names tools (`bash`, `read`, `edit`), and the umbrella
  * capability tool carries its real action in `args.name`. So evaluating the permission list against the *tool*
- * name matches nothing: `never_allow: [shell.exec]` never fires for `bash`, and every tool resolves to the
- * `ask` default - a control that reads as present and is inert.
+ * name matches nothing: `never_allow: [shell.exec]` never fires for `bash`, no tool resolves to the action the
+ * list names, and the control reads as present while being inert.
+ *
+ * The examples are names that resolve. A permission list is matched against action names, so an entry that is
+ * not one - `read_*`, which matches neither the `repo.read` capability nor the host's `read` tool - is a
+ * declaration that grants or denies nothing while looking like both.
  *
  * **One mapping, one place.** M2's conformance gate needs the same action to build its authority request from,
  * and two mappings of one concept is the failure this task exists to fix.

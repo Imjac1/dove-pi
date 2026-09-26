@@ -143,7 +143,7 @@ dove-pi shell reset --scope project
 
 Dove 的 Auto 模式不会按请求裁剪工具。Pi 以及你安装的 Pi 扩展决定模型可以使用哪些工具；
 Dove 只观察最终 schema，用于缓存和冲突诊断。请求分类只影响上下文、目标续接和预算，
-不决定工具权限。
+不决定工具权限 —— 工具权限来自工作模式的 `permissions.yaml`。
 
 ### 3. 按需要选择模式
 
@@ -242,11 +242,11 @@ Dove 会直接读取当前原生目标。已有 `.trellis` 的项目仍可读取
 | 组件 | 负责什么 |
 | --- | --- |
 | Pi | 模型、会话、TUI 和原生工具宿主 |
-| Dove | 请求上下文、目标续接、循环控制、诊断和执行记录；不取代 Pi 的工具权限 |
+| Dove | 请求上下文、目标续接、循环控制、诊断和执行记录；默认不增加权限层，声明工作模式后按该 mode 的 `permissions.yaml` 执行 |
 | Dove Native Workflow | `.dove/` 中的紧凑状态，以及正式 PRD、设计、实现、验收和证据产物 |
 | Legacy reader | 只读投影已有 `.trellis` 任务、spec 和 journal |
 
-Pi 是唯一工具和执行权威。Dove 不增加权限层，只管理上下文、目标连续性、无进展循环和效率诊断。
+Pi 是唯一工具和执行权威。**没有声明工作模式时**，Dove 不增加权限层，只管理上下文、目标连续性、无进展循环和效率诊断。**声明工作模式后**，该 mode 的 `permissions.yaml` 会在 Pi 的 `tool_call` 边界上生效：`never_allow` 直接拒绝，`ask_before` 先向操作者确认（宿主没有确认对话框时按拒绝处理，不会静默放行），`always_allow` 声明哪些动作无需询问；**未列出的动作不归 mode 管**，仍由 Pi 和已安装扩展决定。
 
 ## 完整工作流与真实验证
 
@@ -304,8 +304,8 @@ dove-pi web status
 ### 策略如何生效
 
 这些设置分工不同：`/mode` 只控制执行强度，`/dove-mode` 只控制项目上下文，
-`/dove-thinking` 只控制思考策略，`/dove-tools` 只改变显式兼容工具档案；Auto 模式下
-工具权限仍由 Pi 和已安装扩展决定。用 `/status full` 或 `agent_doctor` 查看同一份实际生效
+`/dove-thinking` 只控制思考策略，`/dove-tools` 只改变显式兼容工具档案；Auto 模式下这些设置都不改变工具权限 ——
+工具权限来自工作模式的 `permissions.yaml`，其次才是 Pi 和已安装扩展。用 `/status full` 或 `agent_doctor` 查看同一份实际生效
 快照，包括请求 intent/lane、策略来源、活动工具数、provider/read-only 预算、上下文与缓存
 观察，以及最近的终止原因。快照是诊断投影，不会新增权限或改变现有上限。只读预算中的 `hardStop` 字段保留用于兼容和观测；它是历史请求数提示，不会单独终止产生新观察的读取。只有重复且未变化的观察、重复失败或确认循环等语义上的无进展保护会终止工具调用。
 
@@ -485,8 +485,10 @@ MCP stdio 配置：
 {"command":"dove-pi","args":["mcp"]}
 ```
 
-在 Pi 会话内，Pi 工具调用本身就是宿主执行决定，Dove 不再追加确认。独立 CLI 仍需本地
-`--approve`；RPC/MCP 传输不能在请求内容中自行声明授权。
+在 Pi 会话内，Pi 工具调用本身就是宿主执行决定；没有声明工作模式时 Dove 不再追加确认。
+声明了工作模式且该动作在 `ask_before` 上时，Dove 会在 `tool_call` 边界向操作者确认一次，
+拒绝或无法询问都按拒绝处理。独立 CLI 仍需本地 `--approve`；RPC/MCP 传输不能在请求内容中
+自行声明授权。
 
 ## 开发与验证
 
