@@ -1,6 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { EffectClass } from "./effect-ledger.ts";
 import type { LimitSpec } from "./gate-limit.ts";
+import type { WorkspaceMode } from "./workspace-policy.ts";
 
 /**
  * The work-mode loader (design section 3.4).
@@ -356,3 +359,124 @@ export function evaluatePermission(permissions: PermissionSet, tool: string): "a
 	if (matches(permissions.always_allow)) return "allow";
 	return "ask";
 }
+
+// ---------------------------------------------------------------------------------------------
+// Selection: which mode the host should load, and whether anything is declared at all
+// ---------------------------------------------------------------------------------------------
+
+/** The project-level declaration. Optional, one concern per file, mirroring `.dove/workspace.json`. */
+export const WORK_MODE_DECLARATION = join(".dove", "mode.json");
+
+export type WorkModeSelectionSource = "none" | "declared" | "workspace-pentest" | "override";
+
+export interface WorkModeSelection {
+	readonly workspaceRoot: string;
+	readonly path: string;
+	/** The mode directory name to load, or `undefined` when nothing is selected. */
+	readonly name: string | undefined;
+	readonly source: WorkModeSelectionSource;
+	/**
+	 * A declaration exists and could not be read.
+	 *
+	 * This is **not** the same fact as "nothing is declared", and the two must not be collapsed: a malformed
+	 * declaration that degrades to `none` would run the agent with no mode-scoped controls while the project
+	 * believed it had declared them. {@link workModeRefusal} is the single rule that tells them apart.
+	 */
+	readonly malformed: boolean;
+}
+
+/** A mode name is a directory name: no separators, no traversal, no surprises. */
+const WORK_MODE_NAME = /^[a-z0-9][a-z0-9-]*$/;
+
+export function workModeDeclarationPath(workspaceRoot: string): string {
+	return join(resolve(workspaceRoot), WORK_MODE_DECLARATION);
+}
+
+/**
+ * Resolve the mode selection.
+ *
+ * Precedence, highest first: an explicit override (a CLI flag), the project's declaration, and then **one
+ * implication** - a `pentest` workspace mode selects `modes/pentest`, because authorized security testing is
+ * what that workspace mode means and the rules-of-engagement gate is part of it rather than an extra step.
+ * Nothing else is implied: `development` is ordinary work and selects no mode, which is why it is not
+ * written as a default here.
+ */
+export function resolveWorkModeSelection(options: { readonly workspaceRoot: string; readonly override?: unknown; readonly workspaceMode?: WorkspaceMode }): WorkModeSelection {
+	const workspaceRoot = resolve(options.workspaceRoot);
+	const path = workModeDeclarationPath(workspaceRoot);
+
+	if (options.override !== undefined) {
+		if (typeof options.override === "string" && WORK_MODE_NAME.test(options.override)) {
+			return { workspaceRoot, path, name: options.override, source: "override", malformed: false };
+		}
+		return { workspaceRoot, path, name: undefined, source: "override", malformed: true };
+	}
+
+	if (existsSync(path)) {
+		try {
+			const value = JSON.parse(readFileSync(path, "utf8")) as { schemaVersion?: unknown; mode?: unknown };
+			if (value.schemaVersion === 1 && typeof value.mode === "string" && WORK_MODE_NAME.test(value.mode)) {
+				return { workspaceRoot, path, name: value.mode, source: "declared", malformed: false };
+			}
+			return { workspaceRoot, path, name: undefined, source: "declared", malformed: true };
+		} catch {
+			return { workspaceRoot, path, name: undefined, source: "declared", malformed: true };
+		}
+	}
+
+	if (options.workspaceMode === "pentest") {
+		return { workspaceRoot, path, name: "pentest", source: "workspace-pentest", malformed: false };
+	}
+
+	return { workspaceRoot, path, name: undefined, source: "none", malformed: false };
+}
+
+/**
+ * The one rule that decides whether a selection (or a load failure) stops the run, used by the host and by the
+ * tests so that the two cannot disagree about it.
+ *
+ * Returns a reason when the run must not proceed, and `undefined` when it may.
+ */
+export function workModeRefusal(selection: WorkModeSelection, failure?: WorkModeError | Error): string | undefined {
+	if (failure !== undefined) {
+		return `Work mode '${selection.name ?? "?"}' could not be loaded: ${failure instanceof Error ? failure.message : String(failure)}. A mode that fails validation refuses to start rather than starting unconstrained.`;
+	}
+	if (selection.malformed) {
+		return `The work-mode declaration at '${selection.path}' exists but could not be read. This is not "no mode declared": a project that declares a mode and gets none would run without the controls it asked for. Fix the declaration, or remove it to run with no mode.`;
+	}
+	return undefined;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Loading from a directory: the three files a mode is made of
+// ---------------------------------------------------------------------------------------------
+
+export function workModeDirectory(root: string, name: string): string {
+	if (!WORK_MODE_NAME.test(name)) {
+		throw new WorkModeError("missing-file", `Refusing mode name '${name}': a mode name is a single directory name under modes/.`);
+	}
+	return join(resolve(root), "modes", name);
+}
+
+/**
+ * Read the three files. **A missing file is an error, never an empty string**: an absent `permissions.yaml`
+ * defaulting to empty would be a mode with no deny list, which is the one thing it must never be.
+ */
+export function readWorkModeFiles(directory: string): WorkModeFiles {
+	const read = (file: string): string => {
+		const path = join(directory, file);
+		try {
+			return readFileSync(path, "utf8");
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : String(error);
+			throw new WorkModeError("missing-file", `mode file '${path}' could not be read: ${detail}. A mode is three files, and a missing one must not become an empty default.`);
+		}
+	};
+	return { mode: read("MODE.md"), governance: read("governance.yaml"), permissions: read("permissions.yaml") };
+}
+
+/** Load a mode by name from `<root>/modes/<name>/`. */
+export function loadWorkModeFromDirectory(root: string, name: string, options: LoadWorkModeOptions): WorkMode {
+	return loadWorkMode(readWorkModeFiles(workModeDirectory(root, name)), options);
+}
+
