@@ -597,4 +597,231 @@ So the ordering the survey implies is not the ordering I proposed: **Execute bef
 evaluation harness is the thing that would make the rest measurable. That is a sixth decision, and it is recorded in
 `decisions.md` as D6 rather than folded into D3, because it compares harness variants while D3 verifies one run.
 
+## 14. The practitioner's guide in full (§16), and the two numbers that set our expectations **[FETCHED]**
+
+Section 5 covered only §16.6 (safety) and §16.9 (anti-patterns). The rest of §16 is the paper's prescriptive half -
+18 recommendations, each citing the observations behind it - and reading it whole changes two things: it tells us
+which parts of our scaffold are already at the frontier, and it tells us what the frontier thinks the scaffold is
+*for*.
+
+### 14.1 The recommendations, sorted by whether they are already true here
+
+**Already true (do not touch).**
+
+- **Rec 1, start linear; graduate to a middleware pipeline only when orthogonal turn policies emerge.** Our loop is
+  the host's; our turn policies (`action-policy`, `dispatch-policy`, the mode gates) are separate modules, which is
+  the middleware shape reached without a pipeline class.
+- **Rec 6, auto-discover hierarchical Markdown context.** "all eleven systems that manage repo context converged on the
+  pattern, and the newest ones read multiple conventions" - Hermes reads its own file then `AGENTS.md`, `CLAUDE.md`,
+  `.cursorrules`. Ours is `AGENTS.md` plus `.trellis/`.
+- **Rec 7, threshold compaction below the window with a verbatim recent tail and incremental merging.** The host owns
+  compaction; Pi passes the previous summary back for merging, which the paper singles out as the pattern that
+  "preserves early decisions that from-scratch re-summarization loses".
+- **Rec 8, do not build RAG over code.** "0/11 systems use vector embeddings for code retrieval"; use ripgrep, glob,
+  tree-sitter, traversal.
+- **Rec 11, codify safety rules as data or dedicated policy files rather than imperative code - and keep a floor
+  beneath YOLO.** Codex's Starlark `execpolicy` "with parse-time-validated inline examples", Gemini CLI's per-mode
+  TOML, OpenCode's rulesets; and Hermes's "twelve hardline patterns survive `--yolo`, with the bypass flag frozen at
+  module import so injected content cannot flip it at runtime". **This is the recommendation our mode files are already
+  shaped for and currently fail to satisfy** - see 14.3.
+- **Rec 15-18, the anti-patterns.** No agentic framework ("0/11 production harnesses in the corpus use these
+  frameworks - Gemini CLI skips Google's own"); no vector layer for code; no 1-to-1 SaaS tool wrappers; do not
+  over-engineer stuck detection but "do ship the cheap caps, which cost a dozen lines".
+
+**Not applicable, with the reason.**
+
+- **Rec 2, provider coupling.** A multi-provider substrate can reach the whole optimisation menu "by paying the
+  per-provider conditional-code cost deliberately and centrally"; what it cannot reach is the vendor's server-side
+  update loop. That is the host's position and ours.
+- **Rec 12/13, multi-agent and ACP.** "Keep your own sub-agents in-process"; our `agent_subagent` already is. ACP is
+  a host decision.
+- **Rec 14, Skills over MCP.** The paper's own resolution: skills lead MCP 9/11 vs 8/11, and "Pi demonstrates the
+  defensible minimal position (skills plus CLI tools with READMEs, no MCP)".
+
+**Applicable and not yet done - and this is a local measurement, not a quote.**
+
+- **Rec 4, deferred tool loading above ~15 tools.** "Claude Code's shouldDefer flag + ToolSearchTool reduces the
+  initial prompt by ~40%; Codex independently converged with `defer_loading` flags plus a BM25-ranked `tool_search`;
+  Hermes collapses overflowing MCP catalogs into three BM25-searched bridge tools once schemas would exceed 10% of the
+  context window. Below ~15 tools the indirection is not worth the added complexity."
+
+  **[LOCAL, measured 2026-09-27]** Two numbers, both taken by running the code rather than reading it.
+
+  *Count.* `src/pi-adapter/extension.ts` calls `pi.registerTool` **13 times**, all unconditional and at the top level
+  of the extension body: `agent_project_task`, `agent_subagent`, `agent_run_capability`, `agent_task_convergence`,
+  `agent_list_capabilities`, `agent_run_recipe`, `agent_doctor`, `agent_project_status`, `agent_project_context`,
+  `agent_workspace_snapshot`, `agent_workspace_verify`, `agent_workspace_restore`, `agent_workspace_patch`. And
+  `tests/fixtures/representative-tool-catalog.ts` - "Representative installed Pi catalog captured by the middleware
+  E2E probe" - holds **57 unique tool names**, asserted by `tests/tool-profile.test.ts:8`. Verified independently:
+  `node --import tsx -e "import('./tests/fixtures/representative-tool-catalog.ts').then(m => console.log(m.representativeTools.length, new Set(m.representativeTools).size))"`
+  -> `57 57`. So the model's tool surface is **57 schemas**, four times the paper's threshold - not the ~21 I first
+  wrote, which counted only our 13 plus the host's eight-name core union and missed every other installed extension.
+  **Withdrawal:** the ~21 figure was an arithmetic claim I published without running the fixture. Corrected above.
+
+  *Bytes.* Registering the extension against a mock host and serializing what it registers gives
+  **5,476 bytes** across the 13 schemas (the estimator in `model-gateway.ts:262` charges 0.25 per ASCII char, so
+  ~1,370 tokens). The distribution is the interesting part: **`agent_task_convergence` alone is 1,753 bytes - 32% of
+  our whole tool-schema budget** - and the rest are 341-486 bytes each.
+
+  **What the two numbers say together.** The count criterion fires (57 > ~15), but our own share of the prompt cost is
+  small, and one tool carries a third of it. So the cheapest action is **not** deferred loading for our thirteen tools;
+  if anything it is a look at why one schema is five times the size of its siblings. And the count that matters for
+  Rec 4 is the whole 57-tool payload, which this measurement does not cover - that number is already recorded per
+  request as `providerToolSchemaBytes` in the ledger (`execution-ledger.ts:292`), so it is readable from any real
+  session. **This is the first recommendation in the whole study that applies to us, is not already satisfied, and
+  needed a measurement rather than a design** - and it is not on the D1-D6 list.
+- **Rec 3, start with bash and add tools only in response to observed failure modes.** The corollary of the above: our
+  thirteen tools are capability entry points, not failure-mode responses. Whether that is a defect depends on whether
+  each one earned its place, which is a question about the ledger, not about the literature.
+
+### 14.2 What the scaffold is for - the two numbers that bound our expectations
+
+Axis 5: "Mini-SWE-Agent's competitive benchmark performance demonstrates that current models are capable enough to
+succeed with minimal scaffolding. **Production systems invest in scaffolding not because models need it for task
+completion, but because users need it for safety, reliability, and workflow integration.**"
+
+Observation 13 sharpens it: the 90-line scaffold in Listing 3 "implements 10 of the 18 recommendations directly and is
+compatible with the remaining eight... with no framework dependencies, no RAG, no vector store, no multi-agent
+orchestration, and no sandbox", and the authors "conjecture, without proof, that this scaffold running on a frontier
+model would match Mini-SWE-Agent's SWE-Bench numbers, and that moving beyond those numbers is primarily a
+**model-capability question (Observation 5) rather than a scaffold question**". §15.5's curve says the same: the
+scaffold plateau is where "work pays off in operational concerns".
+
+**What this means for us.** Every item on the D-list is an *operational* item - enforcement, governance,
+verification, measurement. Not one of them is expected to raise task-completion quality. That is not a weakness of
+the list; it is the paper's own account of what the scaffold layer is for, and it is the strongest available
+justification for spending the next stretch of work on enforcement rather than on loop cleverness. **[LOCAL]**
+
+### 14.3 The finding that names our defect better than we did
+
+§14.5, "Policy migrated out of prose": "Codex's newest model prompts dropped the no-commit and anti-gold-plating rules
+in favor of feature flags; Mistral Vibe deleted its 'Never Commit' hard rule and re-founded its prompt on a
+seven-level precedence contract, A/B-tested server-side; OpenHands teaches commit mechanics. As models internalize
+norms and harnesses grow governance surfaces, **behavioral policy is moving from the prompt (where the model reads
+it) to configuration (where the platform enforces it)**."
+
+**Ours, exactly.** Our three modes carry `permissions.yaml`, `governance.yaml`, `scope.exclusions`,
+`authority.expires`, `gate.*` and a `sandbox` block - policy in configuration - and the inventory shows the runtime
+reads almost none of it. So we are not behind the field's direction; we are **halfway through the move it names, in the
+direction it names, with the enforcement half missing**. That is a better description of the defect than "inert
+declarations": the declarations are the *arrival* of policy into configuration, and what is missing is the platform
+that enforces it. It also predicts what happens if we do nothing: the field's models are internalising the norms, so a
+prose-level rule we do not enforce is a rule we will progressively stop being able to rely on. **[LOCAL]**
+
+## 15. The platform turn's economics, the meta-harness policy plane, and the paper's own limits **[FETCHED]**
+
+### 15.1 The turn is a thesis now, not a hypothesis
+
+§14.1: "The standard reading of the absence of LangChain, AutoGen, and the rest (Observation 13.2) is that production
+harnesses do not need frameworks. But there is a second reading: **they do not need frameworks because the harness is
+itself the framework**." Four signals: skills as declarative programs ("a program written for an LLM runtime rather
+than for a CPU runtime... the programming language is English plus YAML frontmatter"); hooks and event buses as the
+extension substrate (9/11 systems; "Pi is an event bus, with ~33 typed events spanning tool interception to raw
+provider I/O"); the disappearing boundary between tool and workflow ("the agent loop is the workflow engine"); and
+the harness as a service surface ("a runtime with clients, SDKs, and hosted tiers is not a tool with an ecosystem; it
+is a platform with distribution").
+
+§14.2 is the part we had not read, and it is the part that says what happens to a project like ours: **the two artifact
+categories merged, from both directions.** Harness → framework: Claude Agent SDK ("Claude Code as a library"),
+`openai-codex`, the OpenHands agent SDK, "Pi packages / OpenCode SDK - `pi-agent-core` importable + RPC mode". Framework
+→ harness: LangChain's Deep Agents, Pydantic AI Harness, Strands `harness-sdk`. The paper's conclusion: "harnesses did
+not adopt the frameworks; they replaced them, became importable themselves, and turned the question 'which agentic
+framework should I use?' into 'which harness do you already run?'" And the validation: "when LangChain, the framework
+whose absence from every harness runtime Observation 13.2 documents, finally built a harness, it independently adopted
+the corpus's conventions (SKILL.md progressive disclosure, AGENTS.md memory, sub-agent spawning, todo planning)".
+
+**What this means for us.** Our host's extension bus *is* the framework seam, and our `.trellis/` tree *is* the
+conventions the merger converged on. So the correct reading of "be the synthesis of the frontier" is not "adopt a
+framework" - the field's answer is the opposite - it is "be a well-formed program for the runtime", which is what a
+mode file plus a task tree already is. **[LOCAL]**
+
+### 15.2 The meta-harness, and the one concrete design it hands us
+
+§14.4 describes Omnigent, and two of its features bear directly on our decisions.
+
+**Its cross-harness policy plane.** "one three-level policy plane (session → agent → admin; **six phases**; CEL,
+Python, or LLM-classifier evaluators; cross-session per-user budgets) enforced on foreign harnesses through each
+vendor's own extension mechanism - Claude Code hooks, Cursor hooks, Hermes hooks, ACP permission requests - **with
+fail-closed semantics**".
+
+**Its uniform sandbox and egress stack.** "bubblewrap-plus-seccomp on Linux, generated Seatbelt profiles on macOS,
+**Job Objects on Windows** - the same architecture the corpus documents inside Codex, re-implemented at the meta-layer,
+plus an L7 MITM egress proxy (own CA, per-host rules, default-deny) hosting a secretless credential proxy, where real
+tokens never enter the sandbox and synthetic placeholders are swapped for credentials in flight."
+
+And the restraint is as informative: "sandboxing is applied inconsistently by design (it exec-wraps the Claude CLI in
+its own sandbox but delegates to Codex's native sandbox modes), evidence that **OS-level isolation resists being
+factored out as a shared service**."
+
+**What this means for us.** Two things. (1) **`fail-closed` is the field's stated semantics for a policy plane, and
+our loader already refuses rather than defaults** - so the mode-loader refusals are the right shape, and D2's
+"`unlisted` must be declared" is the same rule applied to the one field that currently defaults. (2) A policy plane is
+described as having **levels and phases**, which is a vocabulary our `gateSemantics`/`permissions` pair does not have;
+if D2 wants to be the frontier's shape rather than a local invention, levels (who is asking: session / agent / admin)
+and phases (when in the turn the check runs) are the two axes to name. (3) **Windows isolation is Job Objects**, which
+is the concrete answer to D1's cheapest-step question if D1 ever moves past "delete the claim". **[LOCAL]**
+
+### 15.3 §15.3 falsified a correlation we might have leaned on
+
+"The April edition observed that the corpus's two largest systems... were also its two cross-platform sandboxers, and
+read the correlation as structural. **The expanded corpus falsifies the structural reading while preserving the cost
+claim**: Hermes and OpenCode are comparably large with zero OS-level isolation, spending their safety budgets on
+content-borne threats and permission granularity respectively."
+
+**Why it matters here.** It removes the argument "we are small, so of course we have no isolation" and replaces it
+with the one the paper actually makes: isolation is "a choice rather than a consequence of scale", and the honest
+alternatives are content-borne defence (Hermes) or permission granularity (OpenCode). Our mode files already claim the
+Codex/Gemini shape (`isolation: container`, `network: allowlist`) while implementing neither, which is the one
+position the corpus does not contain. **[LOCAL]**
+
+### 15.4 D6 is the field's open problem, not the field's practice
+
+§17.2 lists as **future work**: "**Unified evaluation frameworks that assess safety, user experience, cost efficiency,
+and extensibility alongside correctness**, addressing the gap between benchmark performance and production
+readiness"; "**Formal verification of safety policies for policy-as-code systems, establishing guarantees about what
+agent actions are permitted under given policy configurations**"; "**Cross-system benchmark suite** that runs
+identical tasks across all eleven systems under controlled conditions"; and "Longitudinal continuation".
+
+**This is a correction to D6's framing.** I wrote that the AHE ablation numbers prove the instrument exists; they prove
+it exists *for task quality*. The instrument D6 actually wants - safety, cost, extensibility, and the gap between
+benchmark and production readiness - is listed by the paper that studied all eleven systems as work it did not do and
+does not know how to do. So D6's honest status is: **the frontier's top open problem, not the frontier's practice.**
+That does not weaken the recommendation ("do not build it now" was already the answer); it changes the reason, and it
+means D6's first version should be scoped to something measurable rather than to "harness quality". The cheapest such
+thing is the one already identified: the flipped gap tests. **[LOCAL]**
+
+### 15.5 The paper's own limits, recorded so we do not over-claim
+
+§15.6, in its own words: "The analysis rests on **source-code reading, not runtime measurement**. We do not claim to
+know how fast any of these systems are; we claim to know how they are structured." "The qualitative scoring underlying
+the architectural comparisons **involves judgment calls**." "The Claude Code analysis is **the weakest link on
+reproducibility**" - a March 2026 public snapshot, not an official release. "The framework-absence finding... is strong
+but **structurally conservative**" - manifests and import greps, twice, but no dynamic-import or transpiled-distribution
+tracing. And: "We also compared each system independently rather than running all eleven on a shared task set."
+
+**How this constrains our citations.** Every quantitative claim we have taken from this paper is either the systems'
+self-reported benchmark numbers or the authors' own architectural scoring - and the AHE ablation numbers in §15.5 come
+from a *different* paper (Lin et al., `2603.03329`), which is why they are the strongest evidence we hold and the
+corpus study is the weakest on numbers. So: the anatomy, the permission models, the absences and the merger are safe
+to build on; the percentages are illustrative. **Nothing in D1-D6 rests on a percentage**, which is the check that
+matters. **[LOCAL]**
+
+### 15.6 Two catalog entries we should recognise ourselves in
+
+§13.1's 29-pattern catalog, the twelve new to the July corpus, includes **Outer Verification Loop** ("scaffold-level
+judge/guard validating completion, outside the turn loop" - OpenHands's `/goal` judge + critics, Hermes's
+verify-on-stop), **Policy-as-Code**, **Syntax-Aware Command Permissioning** ("commands parsed (tree-sitter) and grants
+scoped by argument arity" - OpenCode; Mistral Vibe parse-validation; Hermes deobfuscated matching), **Untrusted-Content
+Delimiting** ("tool/web results wrapped in taint markers with delimiter defanging"), and **Minimal-Core /
+Extension-Host** ("safety, sandbox, sub-agents, plan mode relocated to a runtime event bus" - Pi).
+
+Two consequences. **Outer Verification Loop is the name for what our convergence criteria are trying to be**, and it is
+a *pattern* in the catalog rather than an invention - which means D3's work is to complete a known pattern, not to
+design one. And **Syntax-Aware Command Permissioning is the answer to the objection that permission lists cannot be
+enforced**: OpenCode parses commands with tree-sitter and scopes grants by argument arity, with a ~130-entry arity
+dictionary; Hermes deobfuscates 47 patterns; Mistral Vibe parse-validates. So "we cannot enforce `never_allow:
+[shell.exec]` without a shell parser" is false in the corpus's terms - three systems do exactly that. **[LOCAL]**
+
+
+
 

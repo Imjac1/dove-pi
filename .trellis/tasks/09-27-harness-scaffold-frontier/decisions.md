@@ -417,6 +417,89 @@ the gap tests flipped, so (b) is cheaper than the cost column says - and (b) is 
 a flipped test is only a measurement once the criterion records which check decided it.
 ---
 
+## Round 10: what the full practitioner's guide and the platform turn change
+
+Source: `2609.00006v1` §14.2-14.5, §15.3, §15.6, §16 (all 18 recommendations, previously only §16.6/§16.9), §17 -
+recorded in `research/frontier-anatomy.md` §14-15. Four deltas, and one candidate that the measurement closed.
+
+### D2 gains the field's own name for our defect, and its shape
+
+§14.5 "Policy migrated out of prose": "**behavioral policy is moving from the prompt (where the model reads it) to
+configuration (where the platform enforces it)**" - Codex dropped its no-commit and anti-gold-plating prompt rules for
+feature flags; Mistral Vibe deleted its "Never Commit" hard rule and re-founded on a seven-level precedence contract.
+Rec 11 makes it a recommendation: "codify safety rules as data or dedicated policy files rather than as imperative
+code - and if you support a YOLO mode, keep a floor beneath it".
+
+So our mode files are not a local oddity with a local fix: they are policy that has **already arrived in
+configuration**, in the direction the field names, with the enforcement half missing. That reframes the deliverable -
+not "make the lists work" but "finish the move" - and it predicts the failure mode of doing nothing: as the field's
+models internalise the norms, a prose-level rule we do not enforce is one we progressively stop being able to rely on.
+
+**Shape, from Omnigent's policy plane (§14.4).** A cross-harness policy plane is described as "three-level (session →
+agent → admin; **six phases**; CEL, Python, or LLM-classifier evaluators; cross-session per-user budgets)... **with
+fail-closed semantics**". Two things to take: **fail-closed** is already our loader's behaviour (it refuses rather than
+defaults), which is why D2's "`unlisted` must be declared" is the right rule and not an invented one; and **levels +
+phases** are the two axes our `gateSemantics`/`permissions` pair does not name, so if D2 wants the frontier's shape
+rather than a local invention, those are the axes to name. **Not to be adopted wholesale** - six phases and three
+levels are a meta-harness's requirement, not a mode file's.
+
+**The objection this removes.** "A permission list cannot be enforced without a shell parser" is false in the corpus's
+terms: §13.1's **Syntax-Aware Command Permissioning** pattern - "commands parsed (tree-sitter) and grants scoped by
+argument arity" - is shipped by OpenCode (~130-entry arity dictionary), Mistral Vibe (parse-validation) and Hermes
+(47 deobfuscated patterns). So D2's "entries must name host tools or capability names" is a choice among
+implementations, not a retreat from enforcement.
+
+### D6 is the field's open problem, not the field's practice
+
+§17.2 lists as **future work**: "Unified evaluation frameworks that assess safety, user experience, cost efficiency, and
+extensibility alongside correctness"; "Formal verification of safety policies for policy-as-code systems"; "Cross-system
+benchmark suite". The AHE ablation numbers I cited as proof the instrument exists prove it exists **for task quality**.
+The instrument D6 wants is what the paper that studied all eleven systems says it did not build and does not know how to
+build. **Recommendation unchanged ("not now, and after D3")**; the reason changes from "adopt what the frontier has" to
+"the frontier does not have it either", which is a stronger argument for scoping the first version to something
+measurable - and the flipped gap tests remain the cheapest such thing.
+
+### D1 gains a concrete Windows answer, and loses a bad argument
+
+§14.4: Omnigent's uniform sandbox stack is "bubblewrap-plus-seccomp on Linux, generated Seatbelt profiles on macOS,
+**Job Objects on Windows**" - and its restraint is evidence "that **OS-level isolation resists being factored out as a
+shared service**". So the cheapest-step question for D1 has a named answer (Windows Job Objects, i.e. the same
+`child_process`-reuse route Rec 10 recommends) rather than "write namespace plumbing". **The bad argument to drop:**
+§15.3 records that the April edition's "large systems are the sandboxers" correlation was **falsified** - Hermes and
+OpenCode are comparably large with zero OS isolation. So "we are too small for isolation" is not available as a reason;
+the available reasons are the ones the paper gives, and none of them is size.
+
+### D3 and D4 are named patterns, not inventions
+
+§13.1's catalog includes **Outer Verification Loop** - "scaffold-level judge/guard validating completion, outside the
+turn loop" (OpenHands's `/goal` judge plus critics; Hermes's verify-on-stop). That is what the convergence criteria are
+trying to be, so D3 completes a known pattern rather than designing one. It also settles D3's shape question: the
+pattern is a **guard outside the turn loop**, which is where our criteria already live.
+
+### New candidate: D7, our tool surface is above the deferred-loading threshold - **measured, and mostly closed**
+
+**The claim under test.** Rec 4: "When your tool count exceeds ~15, adopt deferred tool loading... Below ~15 tools the
+indirection is not worth the added complexity"; Claude Code's version "reduces the initial prompt by ~40%"; Hermes
+collapses its catalog "once schemas would exceed 10% of the context window".
+
+**Measured 2026-09-27, by running the code.** `src/pi-adapter/extension.ts` registers **13** tools unconditionally
+(verified by calling the extension against a mock host). `tests/fixtures/representative-tool-catalog.ts` - the
+captured installed Pi catalog - holds **57 unique names** (verified independently, and asserted by
+`tests/tool-profile.test.ts:8`). Serializing the 13 registered schemas gives **5,476 bytes**, i.e. ~1,370 tokens by
+`model-gateway.ts`'s estimator; **`agent_task_convergence` alone is 1,753 bytes, 32% of that**. **Withdrawal:** an
+earlier draft of this section said "the model sees ~21 schemas". That was wrong - it counted our 13 plus the host's
+eight-name core union and missed every other installed extension. Corrected here and in `frontier-anatomy.md` §14.1.
+
+**The answer.** The count criterion fires (57 > ~15), but our own share of the prompt cost is ~1.4 K tokens, an order
+of magnitude below Hermes's 10%-of-window trigger. So **D7 is closed for our thirteen tools**: deferred loading them
+would add an indirection to save a fraction of a percent of the window. Two things survive the closure. (1) The
+count that Rec 4 actually targets is the whole 57-tool payload, which this measurement does not cover - and that number
+is already recorded per request as `providerToolSchemaBytes` (`execution-ledger.ts:292`), so it is readable from a real
+session whenever we want it. (2) One of our thirteen schemas is five times the size of its siblings, which is a
+prompt-economics observation about a single tool rather than a decision. **D7 does not enter the decision list**; it
+is recorded as a measured non-finding, which is what the cheapest step was for.
+---
+
 ## What is not on this list, and why
 
 - **A framework** (Rec 15): 0/11 harnesses use one; we are a hand-rolled extension of a hand-rolled runtime.
