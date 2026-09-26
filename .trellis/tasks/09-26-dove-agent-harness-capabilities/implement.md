@@ -165,6 +165,45 @@ action's payload (`order.notional`) and `{name, args}` is the transport's busine
    (`local-review`) with no document behind it at all, while its `gate.semantics` says `conformance`. Raised with
    the user rather than invented.
 
+### M2's conformance prerequisite, landed 2026-09-26  **[DONE]**
+
+Landed: **a mode declares its authority target argument** (`gate.target_argument`, option 1 of the three put to
+the user) and **a conformance mode must resolve its grant document or refuse to load**. The document is parsed
+with **both** checks (structural and unknown-field) and resolved relative to the workspace, and the host holds
+the loaded document for the run rather than re-reading it per action.
+
+**Four findings.**
+
+1. **There was no loader for an authority document - only a validator over an object someone had already
+   parsed.** So the structural checks were done nowhere: a document missing `grant.targets` parses, validates
+   (unknown fields are all fine), and then `undefined` comparisons quietly fail at evaluation time. That is the
+   same defect the unknown-field check exists for, approached from the other side, so `parseAuthorityDocument`
+   names both a missing key and an unknown one, with the file it came from.
+2. **The fail-closed rule has teeth, and the consequence is pinned rather than surprising.** Requiring a
+   document means **`modes/code-audit` now refuses to load**: it declares `gate.semantics: conformance` and its
+   `authority.grant` is the bare name `local-review`, so there is nothing an action could be checked against.
+   The refusal names both ways out (point the grant at a document, or declare `gate.semantics: limit`), and a
+   test pins it. **The mode was not silently changed and no document was fabricated for it**: an honest
+   code-audit document needs `ownership_evidence` with a real `sha256`, and inventing a digest is exactly the
+   false-evidence defect this project refuses. That is a content decision for the user.
+3. **`authority.ts` left the reachability allow-list**, the second time the list has shrunk, and again the
+   assertion is what noticed - the mode loader now resolves the document, so the module is reachable from the
+   host.
+4. **`targetArgument` is declared and validated, and nothing reads it yet.** Stated as a pending consumer
+   rather than as a wired control: the conformance gate that reads it is the next step, and until then the
+   mode's target argument is a declaration with no runtime effect.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests  7 / pass  7 / fail 0   (+1: the pinned code-audit refusal)
+node --import tsx --test tests/work-mode.test.ts      -> tests 30 / pass 30 / fail 0   (the real pentest mode loads with its document)
+node --import tsx --test tests/harness-reachability.test.ts -> tests 6 / pass 6 / fail 0   (allow-list 11 -> 10)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 541 / pass 539 / fail 0 / skipped 2   (540 before, +1)
+```
+
 **Still open from M1:** the effect boundary's second adapter on `tool_call`/`tool_result`, which is the same seam
 as this milestone's and should share its change.
 
