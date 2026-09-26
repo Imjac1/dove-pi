@@ -76,7 +76,7 @@ function mode(overrides: Partial<WorkMode> = {}): WorkMode {
 		gateSemantics: "conformance",
 		targetArgument: "target",
 		authorityGrant: "engagements/authority.yaml",
-		permissions: { always_allow: ["net.scan"], ask_before: ["exploit.run"], never_allow: ["dos.*"] },
+		permissions: { unlisted: "ask", always_allow: ["net.scan"], ask_before: ["exploit.run"], never_allow: ["dos.*"] },
 		limits: [],
 		effectClasses: {},
 		...overrides,
@@ -154,10 +154,13 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 	it("leaves a raw tool alone, because the registry is not what governs it", () => {
 		const files = workspace();
 		// A raw host tool's action is a tool name, and whether the host offers `bash` is the host's business. Gating it
-		// on the capability registry would refuse every tool the moment a mode was loaded.
+		// on the capability registry would refuse every tool the moment a mode was loaded. What decides it is the
+		// mode's own stance, which is the distinction this case exists for.
 		const under = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root, registeredCapabilities: [] });
 		const decision = under.evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
-		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
+		assert.notEqual(decision.outcome, "block", "an empty registry does not refuse a raw tool: " + JSON.stringify(decision));
+		assert.equal(decision.outcome, "ask", "the stance is what decides it, and this fixture declares 'unlisted: ask'");
+		assert.match((decision as { reason?: string }).reason ?? "", /unlisted: ask/);
 	});
 
 	it("refuses a target the grant does not cover, naming the authority", () => {
@@ -219,22 +222,30 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		assert.match((asked as { reason: string }).reason, /ask_before/);
 	});
 
-	it("does not turn an unlisted action into a question, because the mode has said nothing about it", () => {
+	it("answers an unlisted action with the mode's declared stance, so silence is never read as consent", () => {
 		const files = workspace();
-		// `evaluatePermission` answers 'ask' for an unlisted action as well as for `ask_before`; only the second is a
-		// control. Treating the first as one would put a prompt in front of every ordinary tool.
-		const policy = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root });
-		const decision = policy.evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
-		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
-		assert.match((decision as { reason?: string }).reason ?? "", /none of the mode's permission lists/);
+		// One action, two modes, two answers, and the only difference is the line the mode wrote. The stance is the
+		// mode's because a constant would have made one of these two modes impossible to express - and the one that
+		// cannot be expressed by a constant is the safe one.
+		const asked = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root }).evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
+		assert.equal(asked.outcome, "ask", JSON.stringify(asked));
+		assert.match((asked as { reason?: string }).reason ?? "", /unlisted: ask/, "the reason names the line that decided, not a default this code chose");
+
+		const permissive = { unlisted: "allow" as const, always_allow: [], ask_before: ["exploit.run"], never_allow: ["dos.*"] };
+		const allowed = createPolicy({ mode: mode({ gateSemantics: "limit", permissions: permissive }), workspaceRoot: files.root }).evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
+		assert.equal(allowed.outcome, "allow", JSON.stringify(allowed));
+		assert.equal((allowed as { reason?: string }).reason, undefined, "and there is nothing to say: no list decided it, the stance did");
 	});
 	it("does not ask the conformance gate about a raw tool, because a document names actions and targets and a call has neither", () => {
 		const files = workspace();
 		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		// Asking conformance about a shell command maps nothing and blocks everything, which is what made an
-		// authorized engagement unusable. Raw tools are governed by the permission list and the limits.
+		// authorized engagement unusable. Raw tools are governed by the permission list and the limits, so the answer
+		// here comes from the mode's stance - and the reason says that rather than naming a gate that never looked.
 		const shell = policy.evaluate(invocation("bash", { command: "nmap -sV t-web" }), { viaCapability: false });
-		assert.equal(shell.outcome, "allow", JSON.stringify(shell));
+		assert.equal(shell.outcome, "ask", JSON.stringify(shell));
+		assert.match((shell as { reason?: string }).reason ?? "", /^\[ask\]/, "the permission list is what answered");
+		assert.doesNotMatch((shell as { reason?: string }).reason ?? "", /conformance/, "and the contract did not look at it");
 		// The same policy still checks a capability invocation, and still refuses an out-of-scope target.
 		assert.equal(policy.evaluate(invocation("net.scan", { target: "t-elsewhere" }), { viaCapability: true }).outcome, "block");
 		assert.equal(policy.evaluate(invocation("net.scan", { target: "t-web" }), { viaCapability: true }).outcome, "allow");

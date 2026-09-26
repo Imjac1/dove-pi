@@ -52,7 +52,19 @@ export interface WorkModeFiles {
 	readonly permissions: string;
 }
 
+/**
+ * A mode's permission list, and the one thing it must state: what an action on none of the three lists gets.
+ *
+ * `unlisted` is **required** rather than defaulted, because a default here is a policy nobody chose. Every one of
+ * the eleven systems the frontier study reads takes a position on this question and takes it *per mode* - Gemini
+ * CLI's PLAN/DEFAULT/AUTO_EDIT/YOLO, Mistral Vibe's SAFE/NEUTRAL/DESTRUCTIVE/YOLO, Codex's collaboration modes -
+ * so the stance belongs in the mode file where a reviewer can read it.
+ *
+ * `always_allow` is the list that answers `unlisted: ask` for named actions. With `unlisted: allow` it could
+ * only restate the default, so the loader refuses that combination rather than accepting a list that decides nothing.
+ */
 export interface PermissionSet {
+	readonly unlisted: "allow" | "ask";
 	readonly always_allow: readonly string[];
 	readonly ask_before: readonly string[];
 	readonly never_allow: readonly string[];
@@ -106,7 +118,8 @@ export interface WorkMode {
 
 const MODE_FIELDS = new Set(["name", "description", "license", "compatibility", "metadata"]);
 const GOVERNANCE_FIELDS = new Set(["version", "framework", "scope", "authority", "gate", "effects", "sandbox", "session", "evidence", "coordination", "stop"]);
-const PERMISSION_FIELDS = new Set(["always_allow", "ask_before", "never_allow"]);
+const PERMISSION_FIELDS = new Set(["unlisted", "always_allow", "ask_before", "never_allow"]);
+const UNLISTED_STANCES = new Set(["allow", "ask"]);
 const SCOPE_FIELDS = new Set(["targets", "environment", "exclusions", "ownership_evidence"]);
 const AUTHORITY_FIELDS = new Set(["grant", "grant_graph", "capabilities", "expires"]);
 const GATE_FIELDS = new Set(["semantics", "limits", "target_argument", "intensity", "excluded_techniques", "windows", "approval"]);
@@ -258,7 +271,23 @@ function parsePermissions(source: string): PermissionSet {
 	}
 	const record = requireRecord("permissions.yaml", parsed);
 	rejectUnknown("permissions.yaml", record, PERMISSION_FIELDS);
+	// Required, and refused by name rather than defaulted: an approval default that the mode did not state is a
+	// policy the operator never agreed to, and this is the one place in the format where an unstated value would
+	// decide whether an action runs.
+	if (record.unlisted === undefined) {
+		throw new WorkModeError(
+			"missing-field",
+			"permissions.unlisted is required: it is what an action on none of the mode's three lists gets, and a mode that does not state it has an approval default nobody chose. Declare 'allow' or 'ask'.",
+		);
+	}
+	if (typeof record.unlisted !== "string" || !UNLISTED_STANCES.has(record.unlisted)) {
+		throw new WorkModeError(
+			"invalid-type",
+			`permissions.unlisted must be one of: ${[...UNLISTED_STANCES].join(", ")} (got ${JSON.stringify(record.unlisted)}).`,
+		);
+	}
 	return {
+		unlisted: record.unlisted as "allow" | "ask",
 		always_allow: record.always_allow === undefined ? [] : requireStringArray("permissions.always_allow", record.always_allow),
 		ask_before: record.ask_before === undefined ? [] : requireStringArray("permissions.ask_before", record.ask_before),
 		never_allow: record.never_allow === undefined ? [] : requireStringArray("permissions.never_allow", record.never_allow),
@@ -363,6 +392,16 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	}
 
 	const permissions = parsePermissions(files.permissions);
+	// The same "a declaration that cannot decide anything is refused" rule the gate obeys below, applied to the pair
+	// the approval stance creates. With `unlisted: allow` an action on no list already runs, so an `always_allow`
+	// entry beside it could only restate that default - and a list that reads as a permission while granting none is
+	// the defect this rule exists to stop. As with the gate, the refusal names both ways out.
+	if (permissions.unlisted === "allow" && permissions.always_allow.length > 0) {
+		throw new WorkModeError(
+			"invalid-type",
+			`Mode '${frontmatter.name}' declares permissions.unlisted 'allow' with ${permissions.always_allow.length} always_allow entr${permissions.always_allow.length === 1 ? "y" : "ies"}, so the list would never decide anything: an action on no list already runs. Remove 'permissions.always_allow', or declare permissions.unlisted: ask if this mode wants to be asked about the actions it did not list.`,
+		);
+	}
 	const limits = parseLimits("governance.gate.limits", gate.limits);
 	const effectClasses = parseEffectClasses("governance.effects", governance.effects);
 
@@ -413,20 +452,24 @@ export function matchesPermission(list: readonly string[], action: string): bool
 }
 
 /**
- * Permission precedence. `never_allow` wins over `always_allow`, over `ask_before`, and over any mode
- * setting - a deny list that a mode can override is not a deny list.
+ * Permission precedence, and the mode's own answer for everything the lists do not mention. `never_allow` wins
+ * over `always_allow`, over `ask_before`, and over any mode setting - a deny list that a mode can override is not
+ * a deny list.
  *
- * **`"ask"` has two causes and they are not the same control.** An action on `ask_before` is one the mode
- * *declares* needs consent; an action on no list at all is simply outside the mode's permission list, and the
- * mode has said nothing about it. Collapsing the two would either ask the operator about every ordinary tool
- * or drop the declaration, so the distinction is kept here and drawn by the caller with
- * {@link matchesPermission}. The bare precedence rule is unchanged: an unlisted action is still `"ask"`.
+ * **The unlisted answer is the mode's, not this function's.** It returns `permissions.unlisted`, so a mode that
+ * wants to be asked about what it did not list says so, and a mode that does not says that instead. Nothing here
+ * invents a default, and nothing here can: a mode with no stance never reaches this function, because the loader
+ * refuses to load it.
+ *
+ * **`"ask"` still has two causes.** An action on `ask_before` is one the mode named; an action on no list is one
+ * the mode's stance covers. Both ask, and they differ only in what the reason should say, so the caller draws that
+ * distinction with {@link matchesPermission}.
  */
 export function evaluatePermission(permissions: PermissionSet, tool: string): "allow" | "ask" | "deny" {
 	if (matchesPermission(permissions.never_allow, tool)) return "deny";
 	if (matchesPermission(permissions.ask_before, tool)) return "ask";
 	if (matchesPermission(permissions.always_allow, tool)) return "allow";
-	return "ask";
+	return permissions.unlisted;
 }
 
 // ---------------------------------------------------------------------------------------------

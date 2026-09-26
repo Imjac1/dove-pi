@@ -20,7 +20,7 @@ function mode(effectClasses: WorkMode["effectClasses"]): WorkMode {
 		governance: {},
 		capabilities: ["read", "edit", "code-audit.diff"],
 		gateSemantics: "conformance",
-		permissions: { always_allow: [], ask_before: [], never_allow: ["shell.exec"] },
+		permissions: { unlisted: "allow", always_allow: [], ask_before: [], never_allow: ["bash", "powershell"] },
 		limits: [],
 		effectClasses,
 	};

@@ -219,26 +219,32 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 				if (decision.outcome === "block") return labelled(decision, conformanceGate.id);
 			}
 			const permission = evaluatePermission(mode.permissions, invocation.tool);
-			// The mode *declares* this action needs consent. `evaluatePermission` returns "ask" for an unlisted
-			// action too, and that case is not a control: the mode has said nothing about it, and turning silence
-			// into a prompt would ask the operator about every ordinary tool.
-			if (permission === "ask" && matchesPermission(mode.permissions.ask_before, invocation.tool)) {
+			// Both causes of "ask" are the mode's own: `ask_before` names an action it wants to be asked about, and
+			// `unlisted: ask` says the same for everything it did not name. They differ only in what the reason should
+			// say, which is why the distinction is drawn here and not inside the matcher.
+			if (permission === "ask") {
+				const declared = matchesPermission(mode.permissions.ask_before, invocation.tool);
 				return labelled(
 					{
 						outcome: "ask",
-						reason: `Mode '` + mode.id + `' lists '` + invocation.tool + `' in ask_before, so it runs only with the operator's confirmation.`,
+						reason: declared
+							? `Mode '` + mode.id + `' lists '` + invocation.tool + `' in ask_before, so it runs only with the operator's confirmation.`
+							: `Mode '` + mode.id + `' declares 'unlisted: ask', and '` + invocation.tool + `' is on none of its permission lists, so it runs only with the operator's confirmation.`,
 						remediation:
 							"Confirm it when the host asks. A host with no dialog refuses it, so if no prompt appears the action has to be moved off ask_before deliberately rather than run unasked.",
 					},
 					"ask",
 				);
 			}
+			// Reached with `permission === "allow"` from either the mode's stance or its `always_allow` list, and the
+			// second one is worth naming: it is the only case where a listed action and an unlisted one differ, and it
+			// can only occur under `unlisted: ask` because the loader refuses the other combination.
 			return {
 				outcome: "allow",
-				...(permission === "ask"
+				...(permission === "allow" && matchesPermission(mode.permissions.always_allow, invocation.tool)
 					? {
 						reason:
-							`Mode '` + mode.id + `' neither allows nor denies '` + invocation.tool + `': it is on none of the mode's permission lists, so the mode says nothing about it and the host's own tool availability decides.`,
+							`Mode '` + mode.id + `' lists '` + invocation.tool + `' in always_allow, so it runs without the confirmation the mode's 'unlisted: ask' stance would otherwise require.`,
 					}
 					: {}),
 			};

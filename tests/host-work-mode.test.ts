@@ -128,6 +128,10 @@ interface FixtureSpec {
 	readonly capability: string;
 	/** Listed in `ask_before`, so consent is what stands between the call and dispatch. */
 	readonly askBefore?: boolean;
+	/** The mode's stance for an action on none of the three lists. Defaults to `allow`, which is what these fixtures were written against. */
+	readonly unlisted?: "allow" | "ask";
+	/** Listed in `always_allow`, which can only decide under `unlisted: ask` - the loader refuses the other combination. */
+	readonly alwaysAllow?: readonly string[];
 	readonly limit?: { readonly argument: string; readonly max: number };
 	readonly conformance?: { readonly targetArgument: string; readonly document: string };
 	/** A technique the mode forbids. Declared so a case can show whether anything reads it. */
@@ -169,11 +173,17 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			"",
 		].join("\n"),
 	);
-	// `ask_before` and `always_allow` are kept disjoint: precedence makes `ask_before` win, and listing the same action in
-	// both would leave a reader unable to tell which control the case is about.
-	const permissions = spec.askBefore === true
-		? ["always_allow: []", "ask_before: [" + spec.capability + "]", "never_allow: []", ""]
-		: ["always_allow: [" + spec.capability + "]", "ask_before: []", "never_allow: []", ""];
+	// The stance is a spec field because it is the mode's own declaration, and `always_allow` can only decide under
+	// `unlisted: ask` - the loader refuses the combination where it could not. `ask_before` and `always_allow` are kept
+	// disjoint: precedence makes `ask_before` win, and listing the same action in both would leave a reader unable to
+	// tell which control the case is about.
+	const permissions = [
+		"unlisted: " + (spec.unlisted ?? "allow"),
+		"always_allow: [" + (spec.alwaysAllow ?? []).join(", ") + "]",
+		"ask_before: [" + (spec.askBefore === true ? spec.capability : "") + "]",
+		"never_allow: []",
+		"",
+	];
 	writeFileSync(join(directory, "permissions.yaml"), permissions.join("\n"));
 }
 
@@ -411,9 +421,13 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			assert.equal(denied?.block, true);
 			assert.match(denied?.reason ?? "", /never_allow/, "a denial is a policy decision and comes first");
 
-			// A raw tool is not the registry's business, so the permission list still decides it.
+			// A raw tool is not the registry's business, so the permission list still decides it - and this is the
+			// assertion the whole task exists for. `bash` is what a shell call resolves to, so the mode's "no shell"
+			// rule fires here, where the action-shaped name the file used to carry never could.
 			const shell = await callTool(host, "bash", { command: "ls" }, "c-shell");
-			assert.notEqual(shell?.block, true, "an unlisted host tool is not refused: " + (shell?.reason ?? "(no reason)"));
+			assert.equal(shell?.block, true, "the mode forbids the shell, and the prohibition is now enforced");
+			assert.match(shell?.reason ?? "", /never_allow/, "and the refusal names the list that decided it");
+			assert.match(shell?.reason ?? "", /bash/, "and the action it decided about");
 		} finally {
 			host.restoreCwd();
 		}
@@ -586,6 +600,37 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 
+	it("asks about an action the mode did not list, and does not ask about the ones it did", async () => {
+		// The stance and the list are one control seen from two sides: `unlisted: ask` is what makes the question
+		// happen, and `always_allow` is what suppresses it for the actions the mode expects to use. Neither is
+		// observable without the other, which is why the loader refuses the combination where `always_allow` could not
+		// decide - and this is the host-level evidence that the pair works, not just the matcher's.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "strict", { capability: "workspace.inspect", unlisted: "ask", alwaysAllow: ["read"] });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "strict" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			assert.ok(host.notifications.some((message) => /strict loaded from modes\/strict/.test(message)), host.notifications.join(" | "));
+			await host.events.get("input")?.({ type: "input", text: "look around", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "look around", systemPrompt: "" }, host.context);
+
+			// Listed, so the stance never reaches it: it runs and the operator is not asked. That is what the list is for.
+			const listed = await callTool(host, "read", { file_path: "AGENTS.md" }, "c-listed");
+			assert.notEqual(listed?.block, true, "an always_allow action is not refused: " + (listed?.reason ?? "(no reason)"));
+			assert.equal(host.confirmCalls.length, 0, "and it is not put to the operator");
+
+			// Not listed, so the stance is the only thing that could stop it, and it asks.
+			const unlisted = await callTool(host, "grep", { pattern: "x", path: "." }, "c-unlisted");
+			assert.equal(host.confirmCalls.length, 1, "an action off every list is put to the operator under 'unlisted: ask'");
+			assert.match(host.confirmCalls[0]?.message ?? "", /unlisted: ask/, "and the question names the line that decided");
+			assert.notEqual(unlisted?.block, true, "while a confirmed action is not refused");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
 	it("refuses an action needing consent when the host has no dialog, instead of running it unasked", async () => {
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
@@ -620,8 +665,9 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			await host.events.get("input")?.({ type: "input", text: "hi", source: "interactive" }, host.context);
 			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "hi", systemPrompt: "" }, host.context);
 
-			// `bash` is on none of trading's permission lists. The mode has said nothing about it, so it is not a
-			// question: `evaluatePermission` answers 'ask' for an unlisted action too, and only ask_before is a control.
+			// `bash` is on none of trading's permission lists, and trading declares `unlisted: allow`, so the stance is
+			// the answer: it runs. The stance is the mode's own line rather than a constant in the policy, so a mode that
+			// wanted to be asked would say so instead of being overruled by a default.
 			const decision = await callTool(host, "bash", { command: "ls" });
 			assert.notEqual(decision?.block, true, "an unlisted tool is not the mode's business, so it is not refused: " + (decision?.reason ?? "(no reason)"));
 			assert.equal(host.confirmCalls.length, 0, "an ordinary tool must not put a prompt in front of the operator");

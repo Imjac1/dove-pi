@@ -9,7 +9,7 @@ import { GAP_UNREADABLE, RECEIPT_SCHEMA_VERSION, type CoverageReceipt, type Exec
  *
  * Offline, in-process, model-free, shell-free. It reads text and hashes files; it never executes the
  * audited code and never touches the network, which is why it needs no capability beyond read access
- * and does not disturb the mode's `never_allow: [shell.exec]` rule.
+ * and does not disturb the mode's `never_allow: [bash, powershell]` rule.
  *
  * What it produces is **candidates, not findings**. A regex hit is a place worth looking, and every
  * seed is `PENDING` until something else classifies it. The bias is deliberate and stated: the cost of

@@ -1,5 +1,8 @@
-always_allow:
-  - market.read
+# Every entry names an action that can occur: a raw host tool name, or a capability name (dotted, optionally
+# with a trailing namespace wildcard). Reading the market is ordinary work and the host's own tool availability
+# bounds it, so the stance is `allow`; the two lists carry the actions that must be asked about and the ones that
+# are refused outright.
+unlisted: allow
 ask_before:
   - order.submit
 never_allow:

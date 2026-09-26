@@ -49,7 +49,7 @@ function files(overrides: Partial<WorkModeFiles> = {}): WorkModeFiles {
 			"  semantics: conformance",
 			"",
 		].join("\n"),
-		permissions: ["always_allow: [read_*]", "ask_before: [write_report]", "never_allow: [shell.exec]"].join("\n"),
+		permissions: ["unlisted: ask", "always_allow: [read_*]", "ask_before: [write_report]", "never_allow: [shell.exec]"].join("\n"),
 		...overrides,
 	};
 }
@@ -350,15 +350,99 @@ describe("framework range", () => {
 });
 
 describe("permission precedence", () => {
-	const permissions = { always_allow: ["read_*"], ask_before: ["write_report"], never_allow: ["shell.exec"] };
+	const permissions = { unlisted: "ask" as const, always_allow: ["read_*"], ask_before: ["write_report"], never_allow: ["shell.exec"] };
 	it("lets never_allow win over every other list", () => {
-		assert.equal(evaluatePermission({ always_allow: ["shell.exec"], ask_before: [], never_allow: ["shell.exec"] }, "shell.exec"), "deny");
+		assert.equal(evaluatePermission({ unlisted: "ask", always_allow: ["shell.exec"], ask_before: [], never_allow: ["shell.exec"] }, "shell.exec"), "deny");
 	});
 	it("matches wildcards", () => {
 		assert.equal(evaluatePermission(permissions, "read_repo"), "allow");
 		assert.equal(evaluatePermission(permissions, "write_report"), "ask");
 	});
-	it("defaults to ask rather than allow for an unlisted tool", () => {
+	it("answers an unlisted action with the stance the mode declared, and with nothing else", () => {
+		// The two answers differ only in the line the mode wrote. A constant here would have made one of these modes
+		// impossible to express, which is why the stance is a field rather than a default inside this function.
 		assert.equal(evaluatePermission(permissions, "something_new"), "ask");
+		assert.equal(evaluatePermission({ ...permissions, unlisted: "allow" }, "something_new"), "allow");
 	});
+	it("lets always_allow outrank the stance, which is the only case where that list decides anything", () => {
+		assert.equal(evaluatePermission({ ...permissions, always_allow: ["something_new"] }, "something_new"), "allow");
+	});
+});
+describe("the approval stance a mode has to state", () => {
+	/** The shared fixture with its permission file replaced, so a case can write the stance it is about. */
+	const stance = (unlisted: string | undefined, alwaysAllow = ""): WorkModeFiles =>
+		files({
+			permissions: [
+				...(unlisted === undefined ? [] : ["unlisted: " + unlisted]),
+				"always_allow: [" + alwaysAllow + "]",
+				"ask_before: [write_report]",
+				"never_allow: [shell.exec]",
+			].join("\n"),
+		});
+
+	it("accepts both stances the format defines, and exposes the one the mode wrote", () => {
+		assert.equal(loadWorkMode(stance("allow"), { frameworkVersion: FRAMEWORK }).permissions.unlisted, "allow");
+		assert.equal(loadWorkMode(stance("ask"), { frameworkVersion: FRAMEWORK }).permissions.unlisted, "ask");
+	});
+
+	it("refuses a mode that does not state the stance, naming the field and both ways out", () => {
+		const error = expectError(() => loadWorkMode(stance(undefined), { frameworkVersion: FRAMEWORK }), "missing-field");
+		assert.match(error.detail, /permissions\.unlisted is required/);
+		assert.match(error.detail, /'allow' or 'ask'/, "the refusal names the values rather than only the field");
+	});
+
+	it("refuses a stance outside the two the format defines, rather than coercing it", () => {
+		const error = expectError(() => loadWorkMode(stance("yolo"), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.detail, /must be one of: allow, ask/, "the refusal lists the values the format defines");
+	});
+
+	it("refuses always_allow beside 'allow', because the list could not decide anything", () => {
+		const error = expectError(() => loadWorkMode(stance("allow", "read_*"), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.detail, /always_allow/, "the refusal names the list that would not decide");
+		assert.match(error.detail, /unlisted: ask/, "and the stance that would make it mean something");
+	});
+
+	it("accepts always_allow beside 'ask', which is the only combination it exists for", () => {
+		const mode = loadWorkMode(stance("ask", "read_*"), { frameworkVersion: FRAMEWORK });
+		assert.deepEqual(mode.permissions.always_allow, ["read_*"]);
+		assert.equal(evaluatePermission(mode.permissions, "read_repo"), "allow", "the list decides what the stance would have asked about");
+		assert.equal(evaluatePermission(mode.permissions, "something_else"), "ask", "and everything it does not name still asks");
+	});
+});
+
+describe("every entry in a shipped mode's permission list names an action that can occur", () => {
+	// A permission list is matched against **action** names, and there are exactly two kinds: a raw host tool's name,
+	// and a capability's name (when the call goes through `agent_run_capability`). An entry that is neither matches
+	// nothing while reading as a control - which is what every literal entry in these three files used to be, and what
+	// made "no shell" a claim two other files reasoned from.
+	//
+	// The host's half of the vocabulary is written out rather than imported, because the host's tool names are the
+	// thing being checked against: a list that agreed with a copy of itself would prove nothing.
+	const HOST_TOOLS = new Set(["bash", "powershell", "read", "edit", "write", "grep", "find", "ls"]);
+	// A dotted name, with `*` allowed as the last segment: the namespace wildcard is the shape a mode uses to refuse
+	// a whole family of capabilities it has not enumerated.
+	const isCapabilityShaped = (entry: string): boolean => /^[a-z][a-z0-9-]*\.([a-z0-9_-]+|\*)$/.test(entry);
+
+	for (const name of ["code-audit", "pentest", "trading"]) {
+		it(name + " lists only host tools and capability names", () => {
+			const directory = join(process.cwd(), "modes", name);
+			const mode = loadWorkMode(
+				{
+					mode: readFileSync(join(directory, "MODE.md"), "utf8"),
+					governance: readFileSync(join(directory, "governance.yaml"), "utf8"),
+					permissions: readFileSync(join(directory, "permissions.yaml"), "utf8"),
+				},
+				{ frameworkVersion: "0.2.0" },
+			);
+			const entries = [...mode.permissions.always_allow, ...mode.permissions.ask_before, ...mode.permissions.never_allow];
+			assert.ok(entries.length > 0, name + " declares at least one entry, so this check is not vacuous");
+			for (const entry of entries) {
+				assert.ok(
+					HOST_TOOLS.has(entry) || isCapabilityShaped(entry),
+					name + " lists '" + entry + "', which is neither a host tool name nor a capability name, so it would match no action",
+				);
+			}
+			assert.equal(typeof mode.permissions.unlisted, "string", name + " states what an action on no list gets");
+		});
+	}
 });

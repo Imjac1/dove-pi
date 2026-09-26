@@ -1,10 +1,22 @@
-# `read_*` was here and matched nothing: the list is matched against **action** names, this mode's read
-# capability is `repo.read` (no `read_` prefix) and the host's read tool is `read` (no underscore). A
-# wildcard that matches nothing reads as a permission while granting none.
-always_allow:
-  - repo.read
+# The list decides what the agent may do, so every entry has to name an action that can occur: a raw host tool
+# name, or a capability name (dotted, optionally with a trailing namespace wildcard).
+#
+# `read_*` was here and matched nothing: the list is matched against **action** names, this mode's read capability
+# is `repo.read` (no `read_` prefix) and the host's read tool is `read` (no underscore). A wildcard that matches
+# nothing reads as a permission while granting none.
+#
+# `unlisted: allow` is the stance, stated rather than defaulted: an action on none of the lists runs. Reads are
+# ordinary work for an audit and the host's own tool availability already bounds them.
+unlisted: allow
+# "Ask before writing the report" is the intent, and the list is name-based while the condition is about the
+# argument, so the finer rule is not expressible. Asking on every write is stricter than intended, which is the
+# safe direction, and it is live rather than inert.
 ask_before:
-  - report.write
+  - write
+  - edit
+# "No shell" is the mode's load-bearing rule: the scanner is in-process, so this is enforceable rather than
+# aspirational. It names the host's shell tools, because those are the actions a shell call actually resolves to.
 never_allow:
-  - shell.exec
+  - bash
+  - powershell
   - network.*

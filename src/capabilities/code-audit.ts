@@ -16,9 +16,10 @@ import type { CapabilityDefinition } from "../core/contracts.ts";
  *
  * Two properties are the reason this is a capability rather than a shell command:
  *
- * - **No shell.** The scanner is in-process, so the mode rule `never_allow: [shell.exec]` stays
- *   intact. Wrapping a CLI engine would have required relaxing it, and the engine research showed
- *   that would have bought rules and a SARIF container and nothing else - no engine surveyed supplies
+ * - **No shell.** The scanner is in-process, so the mode rule `never_allow: [bash, powershell]` stays
+ *   intact - and it is a rule the host enforces, because those are the tool names a shell call resolves
+ *   to. Wrapping a CLI engine would have required relaxing it, and the engine research showed that
+ *   would have bought rules and a SARIF container and nothing else - no engine surveyed supplies
  *   finding identity, and none documents deterministic output.
  * - **`read_only` for the scan.** It reads text and hashes files. It never executes the audited
  *   repository, which is what makes it safe to point at code nobody has vetted.

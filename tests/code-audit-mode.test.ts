@@ -99,15 +99,16 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 		const mode = await loadMode();
 		assert.equal(mode.id, "code-audit");
 		assert.equal(mode.governance.gate !== undefined, true);
-		// The list is matched against **action** names, so it names the capability. This assertion used to read
-		// `read_file`, a tool name no host here has, which is what made `always_allow: [read_*]` look live: the
-		// wildcard matched the test's invented name and none of the real ones.
-		assert.equal(evaluatePermission(mode.permissions, "repo.read"), "allow");
-		assert.equal(evaluatePermission(mode.permissions, "report.write"), "ask");
-		assert.equal(evaluatePermission(mode.permissions, "shell.exec"), "deny", "the deny list must survive the mode's own settings");
-		// An unlisted action is `ask` by the precedence rule and is *not* a control: the mode has said nothing about
-		// it, and the action policy is what distinguishes the two causes rather than treating both as a question.
-		assert.equal(evaluatePermission(mode.permissions, "read"), "ask", "the host's own read tool is outside this mode's permission list");
+		// The list is matched against **action** names, and every entry now names one that can occur. The assertion
+		// used to read `shell.exec`, an action no host here produces, which is what made the mode's "no shell" claim
+		// inert while two comments in the code reasoned from it.
+		assert.equal(evaluatePermission(mode.permissions, "bash"), "deny", "the deny list fires on the action a shell call actually resolves to");
+		assert.equal(evaluatePermission(mode.permissions, "powershell"), "deny", "and on the other shell the host ships");
+		assert.equal(evaluatePermission(mode.permissions, "write"), "ask", "writing needs the operator's consent");
+		// An unlisted action gets the stance the mode declared, and `allow` is that stance: an audit's ordinary work is
+		// reading, and the mode spends its two lists on the actions that are not ordinary.
+		assert.equal(evaluatePermission(mode.permissions, "read"), "allow", "the stance, not a default this function invented");
+		assert.equal(evaluatePermission(mode.permissions, "repo.read"), "allow", "and a capability nothing registers is not refused by this list either");
 	});
 
 	it("requires no per-vertical branch in the core", async () => {
@@ -357,25 +358,26 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 	it("bumped the mode version when its authority changed", async () => {
 		const mode = await loadMode();
 		const governance = mode.governance as { version: string; evidence: { artifacts: readonly string[] } };
-		// 1.6.0 because the mode's gate semantics changed again - from `limit`, which claims containment by
-		// thresholds it does not declare, to `none`, which claims nothing - and that is a change to what the mode
-		// authorizes, the same reason 1.2.0 through 1.5.0 were bumped. A version that does not move when the
-		// authority set does cannot attribute a run to one authority set.
-		assert.equal(governance.version, "1.6.0", "an authority change increments the version, so a run can be attributed to one");
+		// 1.7.0 because the mode's permission list changed - every entry was rewritten to name an action that can
+		// occur, and the mode now states its approval stance - which is a change to what the mode authorizes, the same
+		// reason 1.2.0 through 1.6.0 were bumped. A version that does not move when the authority set does cannot
+		// attribute a run to one authority set.
+		assert.equal(governance.version, "1.7.0", "an authority change increments the version, so a run can be attributed to one");
 		assert.ok(governance.evidence.artifacts.includes("coverage.json"), "the receipt is an artifact of the run, not an aside");
 	});
 
-	it("declares no gate and names its read capability, so the mode loads and its permission list means something", async () => {
+	it("declares no gate, states its approval stance, and names only actions that can occur", async () => {
 		const mode = await loadMode();
-		// Three declarations that used to read as controls and were not. `conformance` with a bare-name grant made the
-		// whole mode refuse to load; `limit` with no thresholds claimed a threshold gate that did not exist; and
-		// `always_allow: [read_*]` matched no action at all, because the list is matched against action names and this
-		// mode's read capability is `repo.read`.
+		// Four declarations that used to read as controls and were not. `conformance` with a bare-name grant made the
+		// whole mode refuse to load; `limit` with no thresholds claimed a threshold gate that did not exist;
+		// `always_allow: [read_*]` matched no action at all; and `never_allow: [shell.exec]` named an action no host
+		// produces, so "no shell" was a claim nothing enforced.
 		assert.equal(mode.gateSemantics, "none", "a mode with no document and no thresholds has no gate to declare");
 		assert.deepEqual(mode.limits, [], "and it declares no thresholds, which is why the containment is the permission list");
 		assert.equal(mode.authorityGrant, "local-review", "the grant stays as the name of the review that authorizes it, as trading's does");
-		assert.equal(evaluatePermission(mode.permissions, "repo.read"), "allow", "the read capability is allowed by declaration, not by the unlisted default");
-		assert.equal(evaluatePermission(mode.permissions, "report.write"), "ask", "and writing the report still needs the operator's consent");
+		assert.equal(mode.permissions.unlisted, "allow", "the mode states what an action on no list gets, rather than inheriting a constant");
+		assert.equal(evaluatePermission(mode.permissions, "bash"), "deny", "and its one hard prohibition is enforceable, because it names the host's shell tool");
+		assert.equal(evaluatePermission(mode.permissions, "write"), "ask", "while writing the report still needs the operator's consent");
 	});
 
 	it("declares which of its effects a retry may repeat, and defaults the rest to non-idempotent", async () => {
