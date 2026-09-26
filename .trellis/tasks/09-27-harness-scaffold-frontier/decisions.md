@@ -132,9 +132,49 @@ structural - and RHO's counter-result uses *self-consistency across re-solves*, 
 **Recommendation.** **(a).** It is the one capability the field names and our own synthesis called missing, and the
 oracle must be an execution signal, which we already know how to read.
 
-**Cheapest falsifying step.** Take one existing acceptance criterion that is currently prose, express its check as a
-command with an exit status, and see whether the loop can refuse a fabricated pass. If the criterion cannot be
-expressed that way, it was never observable and the finding is about the criterion, not the loop.
+**Cheapest falsifying step - executed 2026-09-27, and it produced a withdrawal.** The experiment was to take a real
+acceptance contract, ask whether each criterion can be an executable check, and see whether the loop refuses a
+fabricated pass. It was run against the only real convergence snapshot in the repository:
+`.trellis/tasks/archive/2026-09/09-03-task-convergence-control/convergence.json` - ten criteria, `revision: 1`,
+`state: working`, `completedStepIds: []`, `observedResources: {toolCalls: 0, ...}`, and **`evidenceRefs: []` on all
+ten**.
+
+**Result 1 - the criteria are expressible, and are expressed.** `tests/task-convergence.test.ts` holds ten cases
+that map onto the ten criteria about one-for-one by subject: the freeze, the trace replay, unknown acceptance IDs,
+"keeps resource observations outside semantic decisions" (AC-008, the invariance criterion I expected to be
+inexpressible), regression findings as blockers reaching finish, the evidence requirement, finding amendment, the
+unblock condition, malformed revisions, and evidence URIs bound to an acceptance ID. **So AC-008's "never influence a
+decision" is testable** - by asserting invariance, which is exactly how it is written.
+
+**Result 2 - my first pass at this was wrong, and the way it was wrong is the finding.** I first audited coverage by
+grepping the suite for each criterion's distinctive vocabulary. Three criteria looked uncovered - AC-001 ("fast lane"
+- 0 hits), AC-003 ("attribution" - 1 hit, in a *fixture*), and AC-008 ("influence" - 1 hit, in a fixture) - and
+**all three are covered**, under different words. A vocabulary proxy produced three false negatives and looked
+confident doing it. That is the same failure this project already named for `read_*`: a check that agrees with itself.
+
+**Result 3 - the link from criterion to check is recorded nowhere.** The snapshot's `evidenceRefs` are empty for all
+ten; no `AC-00x` in the suite refers to that task's criteria (the ones that appear are test-local fixtures, e.g.
+`{ id: "AC-001", text: "The primary behavior passes." }`); and nothing binds a criterion to a test id. So "is this
+criterion verified?" is answered by a human matching vocabulary - which Result 2 shows is unreliable.
+
+**Result 4 - and a hypothesis I had to withdraw.** Reading `task-convergence.ts` alone, the evidence rule looks like a
+shape check: `decodeEvidenceRefs` validates length, string shape and uniqueness, and the reducer refuses a pass with
+**no** refs. I concluded that any invented string would satisfy it, and that this was the gap. **That is false, and the
+check is in the extension rather than the reducer**: `src/pi-adapter/extension.ts:1548-1556` resolves every ref of a
+`passed` operation through `unresolvedAcceptanceEvidence(...)`, reading the **ledger** and the effects directory, and
+throws "names evidence the harness has no record of" for anything unresolved. The comment above it states the intent
+better than my draft did: "a well-shaped ref to a record the harness never wrote is the same assertion in the right
+costume." So the loop **can** refuse a fabricated pass, and the earlier withdrawal of this rule was correctly
+reinstated once the host began writing citable observables. Recorded because the hypothesis was wrong and the
+evidence for its wrongness is a line of code I would otherwise have skipped.
+
+**What this changes for the recommendation.** The outer loop's *refusal* machinery already exists in two layers
+(shape in the reducer, resolvability at the host boundary) - so (a) is smaller than the pattern's name suggests. What
+is missing is **(i) the recorded link from criterion to check**, which would make "is this verified?" answerable
+mechanically, and **(ii) anything that drives the criteria**: the only real snapshot in the repository was frozen at
+revision 1 with all ten pending and was archived in that state. The cheapest step is therefore not a new loop but
+**populating `evidenceRefs` with the check that decided each criterion, and adding a test that fails when a criterion
+has none** - which is the same shape as the reachability test, applied to acceptance.
 
 ---
 
