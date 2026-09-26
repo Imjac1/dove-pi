@@ -50,7 +50,7 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 
 | Condition | Required behavior |
 |---|---|
-| No gate configured | Every action runs, and the reason says so. **Omitting the gate is only safe where every action is read-only, and nothing enforces that today** - both gate-less paths return `allow` unconditionally. Enforcing it there would be enforcement in dead code: neither path is reachable from an entry point (see the reachability test). The host's own boundary refuses an unmappable or unevaluable action instead. |
+| No gate configured | Every action runs, and the reason says so. **Omitting the gate is only safe where every action is read-only, and nothing enforces that today** - both gate-less paths return `allow` unconditionally, and neither is reachable from an entry point (see the reachability test), so a rule there would be dead code. The host's own boundary refuses an unmappable or unevaluable action instead. |
 | Gate throws | Block, reason names the gate and the error |
 | Gate returns an unrecognised shape | Block |
 | `ask` to a loop with no dialog, or `ask`/`block` with no `reason`/`remediation` | Block; the message names which fault |
@@ -94,18 +94,17 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - A mode is a directory of three files: `MODE.md` (frontmatter `name` + `description`, body =
   instructions), `governance.yaml`, `permissions.yaml`. `MODE.md` stays Agent-Skills-compatible so the
   portable part remains consumable elsewhere.
-- `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities`,
-  `gate.semantics`.
-- The framework range accepts only `>=X.Y.Z` and `<X.Y.Z` clauses, space separated; anything else is
-  refused rather than assumed satisfied.
+- `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities` and
+  `gate.semantics` (`none`/`limit`/`conformance`/`both`).
+- The framework range accepts only `>=X.Y.Z` and `<X.Y.Z` clauses; anything else is refused rather than
+  assumed satisfied.
 - `never_allow` wins over `always_allow`, over `ask_before`, and over any mode setting. An unlisted
   tool defaults to `ask`.
 - **`ask` has two causes and only one is a control.** `ask_before` is the mode *declaring* that an action
   needs consent; an action on no list is outside the mode's permission list. `evaluatePermission` answers
   `ask` for both - separate them with `matchesPermission(p.ask_before, action)`, or every ordinary tool
-  gets a prompt. The policy returns `outcome: "ask"`, the host asks through its dialog and records
-  `gate.approved`/`gate.refused` with gate `ask`; a host with no dialog refuses the action, because its
-  no-op UI answers `false` to every confirmation.
+  gets a prompt. The policy returns `outcome: "ask"`; the host asks through its dialog and records
+  `gate.approved`/`gate.refused`; a host with no dialog refuses, since its no-op UI answers `false`.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -116,7 +115,8 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | Unknown field, any level | Rejected with a named error; never ignored |
 | Missing fence, `name`, or `description` | Rejected |
 | Missing `scope`, `authority.capabilities`, or `gate.semantics` | Rejected |
-| Unrecognised `gate.semantics` | Rejected |
+| Unrecognised `gate.semantics` | Rejected, naming the four values |
+| `limit`/`both` with no limits, or `none` with any | Refused at load, naming both ways out |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |
 
@@ -128,6 +128,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - Each required field, when absent, is rejected.
 - A YAML block-scalar description parses correctly.
 - A vertical's mode id does not appear in executable code under `src/core`.
+- A mode declaring a gate it does not supply is refused; `none` builds no gate.
 - An `ask_before` action returns `ask` and an *unlisted* one returns `allow`; a host with a dialog runs
   the first on consent and one without refuses it. A limit declared without `tools` is evaluated against
   every action, so a mode names the action its threshold belongs to.
