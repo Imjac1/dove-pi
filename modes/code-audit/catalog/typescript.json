@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "language": "typescript",
+  "categories": {
+    "SQL_INJECTION": {
+      "prefix": "SQL",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "raw_query",
+          "patterns": [
+            "\\.query\\s*\\(",
+            "\\.execute\\s*\\(",
+            "\\.raw\\s*\\(",
+            "\\.unsafe\\s*\\("
+          ]
+        },
+        {
+          "id": "orm_raw",
+          "patterns": [
+            "\\.whereRaw\\s*\\(",
+            "\\.orderByRaw\\s*\\(",
+            "\\.havingRaw\\s*\\(",
+            "\\.queryRawUnsafe\\s*\\(",
+            "\\$queryRawUnsafe\\s*\\("
+          ]
+        },
+        {
+          "id": "string_composition",
+          "patterns": [
+            "(?:SELECT|INSERT|UPDATE|DELETE|REPLACE)\\b[^;\\n]{0,200}\\+\\s*[A-Za-z_$]"
+          ]
+        },
+        {
+          "id": "template_composition",
+          "patterns": [
+            "(?:SELECT|INSERT|UPDATE|DELETE|REPLACE)\\b[^;\\n]{0,200}\\$\\{"
+          ]
+        }
+      ]
+    },
+    "COMMAND_EXEC": {
+      "prefix": "CMD",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "child_process",
+          "patterns": [
+            "child_process",
+            "\\bexec\\s*\\(",
+            "\\bexecSync\\s*\\(",
+            "\\bspawn(?:Sync)?\\s*\\("
+          ]
+        },
+        {
+          "id": "shell_option",
+          "patterns": [
+            "shell\\s*:\\s*true"
+          ]
+        },
+        {
+          "id": "cross_spawn",
+          "patterns": [
+            "cross-spawn",
+            "execaShell",
+            "shelljs"
+          ]
+        }
+      ]
+    },
+    "CODE_EXEC": {
+      "prefix": "CODE",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "eval",
+          "patterns": [
+            "\\beval\\s*\\(",
+            "\\bnew\\s+Function\\s*\\(",
+            "\\bFunction\\s*\\(\\s*[\"'`]"
+          ]
+        },
+        {
+          "id": "vm_module",
+          "patterns": [
+            "require\\s*\\(\\s*[\"']vm[\"']\\s*\\)",
+            "from\\s+[\"']node:vm[\"']",
+            "runInNewContext",
+            "runInThisContext",
+            "compileFunction"
+          ]
+        },
+        {
+          "id": "dynamic_call",
+          "patterns": [
+            "setTimeout\\s*\\(\\s*[\"'`]",
+            "setInterval\\s*\\(\\s*[\"'`]"
+          ]
+        }
+      ]
+    },
+    "FILE_INCLUSION": {
+      "prefix": "FINC",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "dynamic_import",
+          "patterns": [
+            "import\\s*\\(",
+            "await\\s+import\\s*\\("
+          ]
+        },
+        {
+          "id": "dynamic_require",
+          "patterns": [
+            "require\\s*\\(\\s*[A-Za-z_$][\\w.$]*\\s*(?:\\+|,|\\))"
+          ]
+        },
+        {
+          "id": "module_path_join",
+          "patterns": [
+            "(?:require|import)\\s*\\(\\s*(?:path\\.join|`|\\w+\\s*\\+)"
+          ]
+        }
+      ]
+    },
+    "FILE_UPLOAD": {
+      "prefix": "FUP",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "multipart",
+          "patterns": [
+            "\\bmulter\\b",
+            "\\bformidable\\b",
+            "\\bbusboy\\b",
+            "multipart/form-data"
+          ]
+        },
+        {
+          "id": "write_from_request",
+          "patterns": [
+            "writeFile(?:Sync)?\\s*\\([^)]*(?:req\\.|request\\.|ctx\\.|file\\.|files\\.)",
+            "createWriteStream\\s*\\([^)]*(?:req\\.|request\\.|file\\.)"
+          ]
+        },
+        {
+          "id": "filename_from_request",
+          "patterns": [
+            "(?:filename|fileName|originalname|name)\\s*[:=][^;\\n]*(?:req\\.|file\\.|files\\.)",
+            "(?:file|files|req|request|ctx)\\.(?:originalname|filename|fileName|name)\\b"
+          ]
+        },
+        {
+          "id": "extension_from_request",
+          "patterns": [
+            "path\\.extname\\s*\\(\\s*[^)]*(?:req\\.|file\\.)"
+          ]
+        }
+      ]
+    },
+    "FILE_READ": {
+      "prefix": "FRD",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "read_variable",
+          "patterns": [
+            "readFile(?:Sync)?\\s*\\(\\s*[A-Za-z_$]",
+            "createReadStream\\s*\\(\\s*[A-Za-z_$]"
+          ]
+        },
+        {
+          "id": "send_file",
+          "patterns": [
+            "sendFile\\s*\\(\\s*[A-Za-z_$]",
+            "res\\.download\\s*\\(",
+            "res\\.sendFile\\s*\\("
+          ]
+        },
+        {
+          "id": "join_from_request",
+          "patterns": [
+            "(?:readFile|sendFile|download)[^;\\n]{0,80}path\\.join\\s*\\([^)]*(?:req\\.|ctx\\.)"
+          ]
+        }
+      ]
+    },
+    "SSRF": {
+      "prefix": "SSRF",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "fetch_variable",
+          "patterns": [
+            "\\bfetch\\s*\\(\\s*[A-Za-z_$`]",
+            "\\baxios\\s*\\.\\s*(?:get|post|request|put|delete)\\s*\\(\\s*[A-Za-z_$`]"
+          ]
+        },
+        {
+          "id": "http_module",
+          "patterns": [
+            "https?\\.(?:get|request)\\s*\\(",
+            "\\bgot\\s*\\(\\s*[A-Za-z_$`]",
+            "\\bsuperagent\\b"
+          ]
+        },
+        {
+          "id": "url_from_request",
+          "patterns": [
+            "(?:url|uri|endpoint|target|host)\\s*[:=][^;\\n]*(?:req\\.|ctx\\.|params\\.|query\\.|body\\.)"
+          ]
+        }
+      ]
+    },
+    "XXE": {
+      "prefix": "XXE",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "xml_parser",
+          "patterns": [
+            "\\bxml2js\\b",
+            "\\bfast-xml-parser\\b",
+            "\\blibxmljs\\b",
+            "\\bxmldom\\b",
+            "DOMParser"
+          ]
+        },
+        {
+          "id": "external_entities",
+          "patterns": [
+            "resolveExternalEntities",
+            "noent\\s*:\\s*true",
+            "loadExternalDtd",
+            "externalEntities"
+          ]
+        },
+        {
+          "id": "sax_parser",
+          "patterns": [
+            "sax\\.parser",
+            "new\\s+SAXParser"
+          ]
+        }
+      ]
+    },
+    "DESERIALIZATION": {
+      "prefix": "DES",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "node_serialize",
+          "patterns": [
+            "node-serialize",
+            "\\bunserialize\\s*\\("
+          ]
+        },
+        {
+          "id": "yaml_load",
+          "patterns": [
+            "yaml\\.load\\s*\\(",
+            "safeLoad\\s*\\(",
+            "loadAll\\s*\\("
+          ]
+        },
+        {
+          "id": "json_revive",
+          "patterns": [
+            "JSON\\.parse\\s*\\([^)]*,\\s*[A-Za-z_$]"
+          ]
+        },
+        {
+          "id": "prototype_payload",
+          "patterns": [
+            "__proto__",
+            "constructor\\s*:\\s*\\{"
+          ]
+        }
+      ]
+    },
+    "TEMPLATE_INJECTION": {
+      "prefix": "TMPL",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "compile_from_string",
+          "patterns": [
+            "handlebars\\.compile\\s*\\(",
+            "Handlebars\\.compile\\s*\\(",
+            "ejs\\.render\\s*\\(\\s*[A-Za-z_$`]",
+            "_.template\\s*\\("
+          ]
+        },
+        {
+          "id": "new_function_template",
+          "patterns": [
+            "new\\s+Function\\s*\\([^)]*(?:template|source|body)"
+          ]
+        },
+        {
+          "id": "pug_from_string",
+          "patterns": [
+            "pug\\.compile\\s*\\(",
+            "pug\\.render\\s*\\(\\s*[A-Za-z_$`]"
+          ]
+        }
+      ]
+    },
+    "ZIP_EXTRACT": {
+      "prefix": "ZIP",
+      "suffixes": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "families": [
+        {
+          "id": "extract_all",
+          "patterns": [
+            "\\.extractAllTo\\s*\\(",
+            "\\.extract\\s*\\(\\s*[A-Za-z_$`]",
+            "unzip\\s*\\(",
+            "unzipper"
+          ]
+        },
+        {
+          "id": "tar_extract",
+          "patterns": [
+            "tar\\.x\\s*\\(",
+            "tar\\.extract\\s*\\(",
+            "new\\s+tar\\.Parse"
+          ]
+        },
+        {
+          "id": "destination_from_request",
+          "patterns": [
+            "(?:extract|unzip|extractAllTo)[^;\\n]{0,120}(?:req\\.|ctx\\.|params\\.|query\\.|body\\.)"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -9,5 +9,10 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", ".pi/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", ".pi/**/*.ts"],
+  // Fixtures under tests/fixtures are audit input, not project source: some of them are deliberately
+  // incomplete (a missing import, an undeclared global) because a scanner has to cope with real code
+  // that does not compile. Type-checking them would make a fixture unable to represent what it exists
+  // to represent.
+  "exclude": ["tests/fixtures"]
 }
