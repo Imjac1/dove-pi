@@ -425,6 +425,36 @@ npm run typecheck -> 0 errors
 npm test          -> tests 539 / pass 537 / fail 0 / skipped 2   (525 after the M3 prerequisite, +14)
 ```
 
+### The conformance/raw-tool fork, resolved 2026-09-26  **[DONE]**
+
+Option A, taken as the default because the alternative makes the pentest vertical unusable: **the authority document
+authorizes actions and names targets, and a raw host tool call carries neither**, so conformance decides about
+capability invocations and raw tools are governed by the permission list and the limits.
+
+Two things changed to make that safe rather than convenient:
+
+- **`evaluate` now evaluates the denial itself.** The two entry points exist so the host can run the name-only half
+  *early* (where the arguments are not yet final); a caller that ran only `evaluate` would otherwise have silently
+  skipped the deny list. A control a caller can forget is a control that will be forgotten, so the denial is now
+  inside both.
+- `ActionPolicy.evaluate` takes the source explicitly (`{ viaCapability }`) rather than reading it off the
+  invocation: whether an action came from a capability or from a raw tool is a fact about the **host's** call path,
+  and putting it into `GateInvocation` would move a host concept into the loop's own contract.
+
+**The stated limit of option A**, recorded rather than implied by the gate's presence: a conformance mode's scope
+containment covers its **capabilities**, not its shell. `bash` under a conformance mode is governed by the
+permission list - which matches names and cannot see a target. A mode that needs more must declare how its tools
+map to actions and targets; that per-tool table is **not built**.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/action-policy.test.ts -> tests 9 / pass 9 / fail 0   (8 before, +2)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 560 / pass 558 / fail 0 / skipped 2   (558 before, +2)
+```
+
 ## M4. Admission: delegate, and supply the policy
 
 1. **Do not build a compressor.** The host has spill/retention/pruning. This resolves the
