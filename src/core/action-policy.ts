@@ -50,6 +50,49 @@ function labelled(decision: GateDecision, gate: string): GateDecision {
 	return { outcome: "block", reason: `[` + gate + `] ` + decision.reason, remediation: decision.remediation };
 }
 
+/**
+ * The actual digest of every evidence reference a document names, read from the workspace.
+ *
+ * The document carries the digest it *expects*; supplying the one the file *has* is what makes the check a check. A
+ * reference whose file cannot be read is left **unsupplied** rather than given a placeholder, and the authority then
+ * blocks it by name - which keeps the authority, not this function, the only decider of whether a grant resolves.
+ *
+ * Shared by the action policy (per action) and the pre-flight (once, before a run starts) so the two cannot disagree
+ * about what a document's evidence is.
+ */
+export function evidenceDigestsFor(document: AuthorityDocument, workspaceRoot: string): Readonly<Record<string, string>> {
+	const cache = new Map<string, string | undefined>();
+	const digestOf = (ref: string): string | undefined => {
+		if (cache.has(ref)) return cache.get(ref);
+		let value: string | undefined;
+		if (!isAbsolute(ref)) {
+			const path = resolve(workspaceRoot, ref);
+			const inside = !relative(workspaceRoot, path).startsWith("..");
+			if (inside && existsSync(path)) {
+				try {
+					value = createHash("sha256").update(readFileSync(path)).digest("hex");
+				} catch {
+					value = undefined;
+				}
+			}
+		}
+		cache.set(ref, value);
+		return value;
+	};
+	const digests: Record<string, string> = {};
+	for (const target of document.targets) {
+		const value = digestOf(target.ownership_evidence.ref);
+		if (value !== undefined) digests[target.ownership_evidence.ref] = value;
+	}
+	for (const grant of document.grants) {
+		for (const evidence of grant.evidence ?? []) {
+			const value = digestOf(evidence.ref);
+			if (value !== undefined) digests[evidence.ref] = value;
+		}
+	}
+	return digests;
+}
+
 export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	const { mode } = options;
 	const limitGate = mode.limits.length > 0 ? createLimitGate(mode.limits) : undefined;
@@ -63,40 +106,13 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	 * authority then blocks it by name - which keeps the authority, not this function, the only decider of whether
 	 * a grant resolves.
 	 */
-	const digestCache = new Map<string, string | undefined>();
-	const digestOf = (ref: string): string | undefined => {
-		if (digestCache.has(ref)) return digestCache.get(ref);
-		let value: string | undefined;
-		if (!isAbsolute(ref)) {
-			const path = resolve(options.workspaceRoot, ref);
-			const inside = !relative(options.workspaceRoot, path).startsWith("..");
-			if (inside && existsSync(path)) {
-				try {
-					value = createHash("sha256").update(readFileSync(path)).digest("hex");
-				} catch {
-					value = undefined;
-				}
-			}
-		}
-		digestCache.set(ref, value);
-		return value;
-	};
-
+	// One implementation of "read the evidence the document names and hash it", shared with the pre-flight: the
+	// authority's own verifier decides whether a grant resolves, so both callers must hand it the same digests.
+	let computedDigests: Readonly<Record<string, string>> | undefined;
 	const evidenceDigests = (): Readonly<Record<string, string>> => {
 		const document = options.authorityDocument;
 		if (document === undefined) return {};
-		const digests: Record<string, string> = {};
-		for (const target of document.targets) {
-			const value = digestOf(target.ownership_evidence.ref);
-			if (value !== undefined) digests[target.ownership_evidence.ref] = value;
-		}
-		for (const grant of document.grants) {
-			for (const evidence of grant.evidence ?? []) {
-				const value = digestOf(evidence.ref);
-				if (value !== undefined) digests[evidence.ref] = value;
-			}
-		}
-		return digests;
+		return (computedDigests ??= evidenceDigestsFor(document, options.workspaceRoot));
 	};
 
 	const toRequest = (invocation: GateInvocation): AuthorityRequest | undefined => {

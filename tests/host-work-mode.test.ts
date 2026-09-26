@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -75,6 +76,26 @@ function copyEngagements(root: string): void {
 	cpSync(join(repoRoot, "engagements"), join(root, "engagements"), { recursive: true });
 }
 
+/**
+ * Make the copied engagement pre-flightable: write the evidence files it names, match the document's digests to them,
+ * and refresh its external approval. The shipped example carries placeholder digests (`"aaaa"`), so it can never
+ * pre-flight - which is what the refusal test below asserts.
+ */
+function preflightableEngagement(root: string): void {
+	const directory = join(root, "engagements", "example-engagement");
+	writeFileSync(join(directory, "permission-to-test.pdf"), "signed permission to test");
+	writeFileSync(join(directory, "inventory.csv"), "asset,owner\n10.0.0.5,client\n10.0.0.6,client\n");
+	const digest = (file: string) => createHash("sha256").update(readFileSync(join(directory, file))).digest("hex");
+	const path = join(directory, "authority.yaml");
+	writeFileSync(
+		path,
+		readFileSync(path, "utf8")
+			.replace('sha256: "aaaa"', 'sha256: "' + digest("permission-to-test.pdf") + '"')
+			.replace(/sha256: "bbbb"/g, 'sha256: "' + digest("inventory.csv") + '"')
+			.replace('checked_at: "2026-09-25T06:00:00.000Z"', 'checked_at: "' + new Date().toISOString() + '"'),
+	);
+}
+
 async function callTool(host: ReturnType<typeof startHost>, toolName: string, input: unknown, toolCallId = "c-1"): Promise<{ block?: boolean; terminate?: boolean; reason?: string } | undefined> {
 	const handler = host.events.get("tool_call");
 	if (handler === undefined) throw new Error("the extension registered no tool_call handler, so this test would prove nothing");
@@ -120,6 +141,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "pentest");
 		copyEngagements(root);
+		preflightableEngagement(root);
 		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "pentest" }));
 		const host = startHost(root);
 		try {
@@ -248,6 +270,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "pentest");
 		copyEngagements(root);
+		preflightableEngagement(root);
 		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "pentest" }));
 		const host = startHost(root);
 		try {
@@ -255,11 +278,11 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			await host.events.get("input")?.({ type: "input", text: "scan the target", source: "interactive" }, host.context);
 			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "scan the target", systemPrompt: "" }, host.context);
 
-			// The shipped example engagement names evidence digests ("aaaa"/"bbbb") that are placeholders, so no
-			// grant in it can resolve. That is the honest end-to-end demonstration: conformance refuses, and the
-			// refusal says which check it was rather than only that something went wrong.
-			const scanned = await callTool(host, "agent_run_capability", { name: "net.scan", args: { target: "t-web" } });
-			assert.equal(scanned?.block, true, "a conformance mode must refuse an action whose grant cannot resolve");
+			// The engagement pre-flights clean, so the run starts - and an action against a target the document does not
+			// name is still refused, at the boundary, by name. The refusal that used to happen here was the *pre-flight*
+			// refusing to start at all, which is a different (and earlier) fact.
+			const scanned = await callTool(host, "agent_run_capability", { name: "net.scan", args: { target: "t-elsewhere" } });
+			assert.equal(scanned?.block, true, "a conformance mode must refuse an action against a target it does not cover");
 			assert.match(scanned?.reason ?? "", /\[conformance\]/, "the reason names the check, not only the outcome");
 
 			const ledgerFile = join(stateDir, "execution.jsonl");
@@ -268,7 +291,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 				: [];
 			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "conformance" && record.details?.action === "net.scan");
 			assert.ok(recorded !== undefined, "the conformance refusal is in the ledger with its gate and its action");
-			assert.match(recorded?.details?.reason ?? "", /evidence|digest/, "and its reason names what could not be verified");
+			assert.match(recorded?.details?.reason ?? "", /is not present in authority document/, "and its reason names the target and the document, which is what a reader needs in order to check it");
 		} finally {
 			host.restoreCwd();
 		}
@@ -432,7 +455,29 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("refuses to start a conformance run whose engagement does not pre-flight clean", async () => {
+		// The shipped example engagement names evidence digests no file can match ("aaaa"), which is exactly the state a
+		// reader of modes/pentest/MODE.md is promised the harness refuses. Before this, the promise was prose with no
+		// caller behind it.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "pentest");
+		copyEngagements(root);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "pentest" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const refusal = host.notifications.find((message) => /does not pre-flight clean/.test(message));
+			assert.ok(refusal !== undefined, "the run must not start: " + host.notifications.join(" | "));
+			assert.match(refusal, /cannot start/, "and the reason says what could not be established");
+			const decision = await callTool(host, "bash", { command: "ls" });
+			assert.equal(decision?.block, true, "and no action runs under an engagement that did not pre-flight");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 });
+
 
 
 

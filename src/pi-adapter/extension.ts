@@ -42,11 +42,11 @@ import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
-import { createActionPolicy, type ActionPolicy } from "../core/action-policy.ts";
+import { createActionPolicy, evidenceDigestsFor, type ActionPolicy } from "../core/action-policy.ts";
 import { createEffectBoundary, type EffectBoundary } from "../core/effect-boundary.ts";
 import { admit } from "../core/context-admission.ts";
 import { createFileEffectStore } from "../core/effect-store-file.ts";
-import type { AuthorityDocument } from "../core/authority.ts";
+import { preflightAuthority, type AuthorityDocument } from "../core/authority.ts";
 import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
 import { projectModelMessages } from "./context-projection.ts";
@@ -1933,6 +1933,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					const loaded = loadWorkModeFromDirectory(modeRoot, selection.name, { frameworkVersion });
 					activeWorkMode = loaded.mode;
 					activeAuthorityDocument = loaded.authorityDocument;
+					// The mode's own document says the run does not start until the engagement pre-flights clean. This is that
+					// check, and it happens **before the first action rather than at it**: an engagement whose authority cannot
+					// be verified must not be acted under even once. It used to be prose in `modes/pentest/MODE.md` with no
+					// caller behind it.
+					if (loaded.authorityDocument !== undefined) {
+						const preflight = preflightAuthority(loaded.authorityDocument, new Date().toISOString(), {
+							evidenceDigests: evidenceDigestsFor(loaded.authorityDocument, modeRoot),
+						});
+						if (preflight.outcome === "block") {
+							modeRefusal = `Work mode '${loaded.mode.id}' declares '${loaded.mode.gateSemantics}' and its engagement '${loaded.authorityDocument.engagement}' does not pre-flight clean: ${preflight.reason} ${preflight.remediation}`;
+							activeWorkMode = undefined;
+							activeAuthorityDocument = undefined;
+						}
+					}
 				} catch (error) {
 					modeRefusal = workModeRefusal(selection, error as Error);
 				}
