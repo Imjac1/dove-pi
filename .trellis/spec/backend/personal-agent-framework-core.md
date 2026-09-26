@@ -91,20 +91,19 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 
 ### 3. Contracts
 
-- A mode is a directory of three files: `MODE.md` (frontmatter `name` + `description`, body =
-  instructions), `governance.yaml`, `permissions.yaml`. `MODE.md` stays Agent-Skills-compatible so the
-  portable part remains consumable elsewhere.
+- A mode is three files: `MODE.md` (frontmatter `name` + `description`, body = instructions),
+  `governance.yaml`, `permissions.yaml`. `MODE.md` stays Agent-Skills-compatible, so the portable part
+  remains consumable elsewhere.
 - `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities` and
   `gate.semantics` (`none`/`limit`/`conformance`/`both`).
 - The framework range accepts only `>=X.Y.Z` and `<X.Y.Z` clauses; anything else is refused rather than
   assumed satisfied.
 - `never_allow` wins over `always_allow`, over `ask_before`, and over any mode setting. An unlisted
-  tool defaults to `ask`.
-- **`ask` has two causes and only one is a control.** `ask_before` is the mode *declaring* that an action
-  needs consent; an action on no list is outside the mode's permission list. `evaluatePermission` answers
-  `ask` for both - separate them with `matchesPermission(p.ask_before, action)`, or every ordinary tool
-  gets a prompt. The policy returns `outcome: "ask"`; the host asks through its dialog and records
-  `gate.approved`/`gate.refused`; a host with no dialog refuses, since its no-op UI answers `false`.
+  action gets the declared `unlisted` stance; `always_allow` outranks it.
+- **`ask` has two causes, and the mode declares both.** `ask_before` names an action that needs consent;
+  `unlisted: ask` says the same for everything unnamed. Separate them with
+  `matchesPermission(p.ask_before, action)` when the reason must be exact. The host asks through its
+  dialog and records `gate.approved`/`gate.refused`; a host with no dialog refuses.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -117,6 +116,8 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | Missing `scope`, `authority.capabilities`, or `gate.semantics` | Rejected |
 | Unrecognised `gate.semantics` | Rejected, naming the four values |
 | `limit`/`both` with no limits, or `none` with any | Refused at load, naming both ways out |
+| `unlisted` absent or unrecognised | Refused, naming `allow` and `ask` |
+| `unlisted: allow` with a non-empty `always_allow` | Refused, naming both ways out |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |
 
@@ -129,8 +130,8 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - A YAML block-scalar description parses correctly.
 - A vertical's mode id does not appear in executable code under `src/core`.
 - A mode declaring a gate it does not supply is refused; `none` builds no gate.
-- An `ask_before` action returns `ask` and an *unlisted* one returns `allow`; a host with a dialog runs
-  the first on consent and one without refuses it. A limit declared without `tools` is evaluated against
+- An `ask_before` action returns `ask` and an unlisted one returns the declared stance; a host with a
+  dialog runs it on consent and one without refuses it. A limit declared without `tools` is evaluated against
   every action, so a mode names the action its threshold belongs to.
 
 ### 6. Wrong vs Correct
