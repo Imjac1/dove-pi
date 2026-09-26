@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 23
+- **Total Sessions**: 24
 - **Last Active**: 2026-09-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~846 | Active |
+| `journal-1.md` | ~887 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 24 | 2026-09-27 | The harness-scaffold frontier: research to the point of decision | `af5145f`, `1333cad`, `54107da`, `f5201e1` | `master` |
 | 23 | 2026-09-27 | Two mode-declaration fixes: a gate that declares no gate, and a grant nothing implements | `8d651b6`, `d0244fd`, `7c32cc3`, `965cbe0`, `c8ac74a`, `48fea4a`, `e1b0097`, `7bc8f91`, `dc4f6d7`, `1123e96`, `8c59e7c`, `39263da` | `feat/mode-declared-capability` |
 | 22 | 2026-09-27 | Harness capabilities: M3 complete, mode files made honest | `7312367`, `d82cc40`, `18a17e4`, `ed4a560`, `279caa0`, `d444cd4`, `0fb044f`, `1c97a89` | `feat/agent-harness-capabilities` |
 | 21 | 2026-09-26 | Code audit vertical: commit, closure, and five-task wrap-up | `20276d5`, `f7d94e0`, `f17e03e`, `a24c4ca`, `9cef15d`, `fd39cba`, `4e5b6f1`, `4ed2384` | `feat/code-audit-vertical` |

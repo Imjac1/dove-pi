@@ -844,3 +844,44 @@ one; limit/both with no limits and none with limits now refuse to load, naming b
 ### Status
 
 [OK] **Completed**
+
+
+## Session 24: The harness-scaffold frontier: research to the point of decision
+<!-- trellis-session: v=2 fp=77734a36ff7ef910 -->
+
+**Date**: 2026-09-27
+**Task**: The harness-scaffold frontier: research to the point of decision
+**Branch**: `master`
+
+### Summary
+
+Read the source-code anatomy of eleven production harnesses to the point where every remaining question is a decision rather than a gap. Recorded the canonical seven subsystems and our position (subsystem 5, for a host that deliberately omits it); all eleven permission models and the design space they define; the scaffold-capability frontier and the AHE ablation; the self-improvement cluster; the PEV frame that groups the decisions; the platform turn and the harness-framework merger; and the full practitioner's guide. Produced decisions.md with six decisions, each carrying evidence, cost, reversibility, a recommendation and an executed falsifying step, plus inventory.md listing every declaration the runtime does not read.
+
+### Main Changes
+
+- Recorded the canonical anatomy, our position in it, and the fourteen inert declarations we already carry
+- Recorded all eleven permission models, the PEV frame, and the platform turn
+- Read the practitioner guide in full: 18 recommendations sorted into already-true, not-applicable and applicable-not-done
+- Measured the tool surface instead of arguing about it: 13 registered tools, 57-name host catalog, 5476 schema bytes
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `af5145f` | docs(research): run the field-level reader scan, and record the five inert declarations it found |
+| `1333cad` | test(host): pin the expiry and exclusion gaps, and inventory every declaration that does not decide |
+| `54107da` | docs(research): frame the six decisions as Plan/Execute/Verify, and add the evaluation-harness decision |
+| `f5201e1` | docs(research): read the practitioner's guide and the platform turn, and correct a tool-count claim with a measurement |
+
+### Testing
+
+- [OK] npm test: 597 tests / 595 pass / 0 fail / 2 skipped (round 9 baseline, unchanged - documentation only)
+- [OK] Counted the representative tool catalog by importing it: 57 tools, 57 unique
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Settle D2 (permissions.unlisted must be declared) - the Execute layer foundation and D4 prerequisite
