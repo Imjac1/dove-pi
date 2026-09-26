@@ -75,10 +75,10 @@ function copyEngagements(root: string): void {
 	cpSync(join(repoRoot, "engagements"), join(root, "engagements"), { recursive: true });
 }
 
-async function callTool(host: ReturnType<typeof startHost>, toolName: string, input: unknown): Promise<{ block?: boolean; reason?: string } | undefined> {
+async function callTool(host: ReturnType<typeof startHost>, toolName: string, input: unknown, toolCallId = "c-1"): Promise<{ block?: boolean; terminate?: boolean; reason?: string } | undefined> {
 	const handler = host.events.get("tool_call");
 	if (handler === undefined) throw new Error("the extension registered no tool_call handler, so this test would prove nothing");
-	return handler({ type: "tool_call", toolCallId: "c-1", toolName, input }, host.context);
+	return handler({ type: "tool_call", toolCallId, toolName, input }, host.context);
 }
 
 describe("the host loads the work mode (design 5.4: 'loaded by the host' is the point)", () => {
@@ -369,5 +369,70 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			"a well-shaped ref is not a record",
 		);
 	});
+	it("stops a run that cannot make progress, and says so with a typed reason", async () => {
+		// The most-reported production failure in this repository's own history: one request issued 63 shell calls,
+		// including fourteen identical ones in a single assistant message, and kept going. A guard that only warns
+		// leaves the loop running; what M7 asks for is a run that **stops and says why**.
+		const root = freshRoot();
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
+
+			let terminated: { block?: boolean; terminate?: boolean; reason?: string } | undefined;
+			for (let attempt = 1; attempt <= 8 && terminated === undefined; attempt += 1) {
+				const callId = "ls-" + attempt;
+				const input = { path: "." };
+				// A turn boundary per attempt, because that is what separates the two answers the guard gives: identical
+				// reads inside one batch are **coalesced** (the duplicate is answered with the first one's call id), and
+				// identical reads across batches are what eventually **terminates** the run. Driving eight calls in one
+				// batch tests coalescing and never reaches the stop.
+				await host.events.get("turn_start")?.({ type: "turn_start" }, host.context);
+				const decision = await callTool(host, "ls", input, callId);
+				if (decision?.terminate === true) terminated = decision;
+				// The same observation every time: a read that returns what the last one returned is not progress, which
+				// is exactly the shape the recorded failure had.
+				await host.events.get("tool_result")?.({ type: "tool_result", toolCallId: callId, toolName: "ls", input, content: [{ type: "text", text: "unchanged listing" }], isError: false }, host.context);
+			}
+			assert.ok(terminated !== undefined, "a loop that cannot progress must stop, not run to the turn limit");
+			assert.equal(terminated?.block, true, "and the action that would continue it is refused");
+			assert.match(terminated?.reason ?? "", /\[Dove progress guard\]/, "the refusal names the guard, not only the outcome");
+			assert.match(terminated?.reason ?? "", /stop and change/i, "and tells the operator what to do instead");
+
+			// Visible to the operator means recorded, not merely returned: a typed reason that leaves no trace is
+			// indistinguishable later from a run that simply ended.
+			await host.events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, host.context);
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const records = existsSync(ledgerFile) ? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "") : [];
+			const terminal = records.find((line) => line.includes("\"request.terminal\"") && line.includes("progress-guard"));
+			assert.ok(terminal !== undefined, "the typed reason reaches the ledger, where a later reader can find it");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+	it("coalesces an identical read inside one turn instead of stopping the run", async () => {
+		// The distinction that made the test above wrong on its first attempt, pinned so it is not re-learned: a
+		// duplicate read-only call **inside one batch** is answered with the first call's id, because repeating yourself
+		// within a turn is not the same failure as a run that cannot progress across turns. Only the latter stops.
+		const root = freshRoot();
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect", systemPrompt: "" }, host.context);
+			await host.events.get("turn_start")?.({ type: "turn_start" }, host.context);
+			const first = await callTool(host, "ls", { path: "." }, "ls-a");
+			assert.notEqual(first?.block, true, "the first read runs");
+			const duplicate = await callTool(host, "ls", { path: "." }, "ls-b");
+			assert.equal(duplicate?.block, true, "the duplicate is refused");
+			assert.notEqual(duplicate?.terminate, true, "but it does not stop the run: it is a repeat, not stagnation");
+			assert.match(duplicate?.reason ?? "", /coalesced/, "and the reason says which of the two happened");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 });
+
+
 
