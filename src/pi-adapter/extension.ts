@@ -378,6 +378,11 @@ function convergenceOperationFromPiInput(input: {
 			case "started": return { action: "progress", acceptanceId, progress: { kind: "started" } };
 			case "verification_started": return { action: "progress", acceptanceId, progress: { kind: "verification_started" } };
 			case "evidence": return { action: "progress", acceptanceId, progress: { kind: "evidence", evidenceRef: required(input.evidenceRef, "evidenceRef") } };
+			// The evidence a pass carries is passed through, and the **requirement** for it lives one layer down, where
+			// every producer converges: `acceptance.passed` is refused by the event decoder without a reference. That is
+			// the rule this layer can state truthfully; a stronger one - that the reference must resolve to a record the
+			// harness wrote - was written here and then withdrawn, because the harness records no such thing for a tool
+			// call, so it would have refused every honest pass. See the M5 record.
 			case "passed": return { action: "progress", acceptanceId, progress: { kind: "passed", ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) } };
 			case "failed": return { action: "progress", acceptanceId, progress: { kind: "failed", ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) } };
 			case "waived": return { action: "progress", acceptanceId, progress: { kind: "waived", evidenceRef: required(input.evidenceRef, "evidenceRef") } };

@@ -327,7 +327,3 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		assert.equal(result.leftAlone, 0, "nothing was skipped in silence");
 	});
 });
-
-
-
-
