@@ -91,6 +91,27 @@ no database. `EffectStore` is already `Promise`-returning, so a transactional st
 without touching callers. SQLite is the **named** alternative for the day multi-writer transactional semantics are
 needed, with the caveat attached: never on a network mount.
 
+## Addendum, written after implementing it (2026-09-26)
+
+**The two-step window is real, and it is now a named state rather than a hope.** `open('wx')` makes the claim
+visible and the record lands a moment later, so a crash between the two leaves a claim whose content cannot be
+read. The implementation reports that as `ClaimResult.unreadable` and every caller must refuse on it: reading
+it as unclaimed re-runs the effect, and reading it as completed invents a result for work that may not have
+happened. **`linkSync` of a pre-written temp file would close the window** - it is atomic *and*
+content-complete - and it was deliberately not chosen: hard links are not universal, so that store would fail
+outright on a filesystem like exFAT instead of degrading into a stated refusal. Recorded because that is the
+kind of trade-off that gets silently reversed later by someone who only sees the window.
+
+**The claim is `fsync`ed before it is returned.** A claim that is visible but not durable is worse than no
+claim: the process dies, the effect ran, and the record is gone - the late-commit window that makes
+exactly-once impossible at this layer.
+
+**Implementing this turned M0's reachability test red, and that is the milestone working.** Adding
+`src/core/effect-store-file.ts` failed `tests/harness-reachability.test.ts`, which named exactly that module,
+because no milestone in this task makes the reference loop reachable from an entry point. The finding is
+recorded in `implement.md` under M1 rather than here: it is a statement about the plan, and the plan is where
+a reader has to meet it.
+
 ## What this does not settle
 
 - **Whether real Dove projects put their state on a network share.** If they do, point 5 is load-bearing and needs a

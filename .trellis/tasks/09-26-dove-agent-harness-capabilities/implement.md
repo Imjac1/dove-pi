@@ -66,6 +66,51 @@ boundary** - an approval gate re-executes whatever sits before it.
 **Validate**: a test that dispatches the same effect twice within one process **and once in a second
 process** reaches the tool once, refuses the others, and records `unknown` for an interrupted run.
 
+### M1 record, 2026-09-26  **[DONE]**
+
+Implemented: `EffectOutcome` gains `unknown` and the module stops calling itself an exactly-once primitive;
+`EffectClass` with `effectClassOf` failing safe to `non-idempotent` and reporting `declared: false`;
+`isAutomaticallyRetryable`; `ClaimResult.unreadable`; `EffectKeyConflictError` for one key carrying two
+payloads; `EffectRetryRefusedError` for a retry opted into without a retryable class; `EffectLedger.outcomeOf`
+so an interrupted run reads `unknown` rather than absent or failed; `createFileEffectStore` (exclusive create,
+`fsync` before the claim is returned, write-then-rename on completion, and a dead owner's claim never
+reclaimed); and the claim wired at `loop-runner.ts:135` with refusals reported through the new
+`LoopOutcome.refusedEffects`.
+
+**Two findings, and both are about the plan rather than the code.**
+
+1. **No milestone in this task makes the reference loop reachable, so M1's wiring point is exercised by tests
+   only.** M2, M3 and M4 wire the host's hooks and the host's own startup path, and the host runs its own
+   loop. This was not inferred: adding `src/core/effect-store-file.ts` turned M0's reachability test red and
+   the test named exactly that module - M0 working as intended, and the plan's gap stated by it.
+   **AC8 says every module the harness relies on must be reachable from an entry point**, so the effect
+   boundary needs a second adapter on the host's `tool_call` / `tool_result` hook pair - claim before, refuse
+   when already claimed, complete after - which `research/host-hook-surface-verified.md` establishes both
+   hooks can carry. That is the same "one policy, two adapters" shape M2 already uses for the gate. It is
+   **not in this milestone's scope as planned**, and it is raised with the user rather than absorbed.
+
+2. **This layer cannot promise cross-host exclusion, and the code now says so instead of implying it.** The
+   store's docstring states the bound (one host, a local filesystem) and cites why every candidate primitive
+   fails across a mount; `effect-ledger.ts` no longer calls itself an exactly-once primitive. AC5 is the
+   reason that is a finding and not a footnote.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/harness-effect-claim.test.ts  -> tests 13 / pass 13 / fail 0
+node --import tsx --test tests/harness-reachability.test.ts  -> tests  6 / pass  6 / fail 0
+node --import tsx --test tests/effect-ledger.test.ts         -> tests 10 / pass 10 / fail 0
+
+npm run typecheck -> 0 errors
+npm test          -> tests 515 / pass 513 / fail 0 / skipped 2   (502 after M0, +13)
+```
+
+**One test change, with its reason.** The two opt-in retry tests in `effect-ledger.test.ts` now pass
+`effectClass: "key-idempotent"`. Their assertions are unchanged; what changed is that the declared class,
+rather than the caller's belief, is what makes the retry safe - which is what those tests were always
+asserting in their own names ("because the backend's key makes it safe"). Before this, the opt-in alone was
+accepted, which is the substitution this contract exists to prevent.
+
 ## M2. The gate, behind the callback the host already calls
 
 **Seam: `src/pi-adapter/extension.ts:1333`**, already fail-closed, already receives `args`.
