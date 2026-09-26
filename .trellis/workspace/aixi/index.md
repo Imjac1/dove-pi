@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
+- **Total Sessions**: 25
 - **Last Active**: 2026-09-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~887 | Active |
+| `journal-1.md` | ~929 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-09-27 | Make a mode's permission list govern what the agent does | `15ac234`, `8758d48`, `af2ace5` | `master` |
 | 24 | 2026-09-27 | The harness-scaffold frontier: research to the point of decision | `af5145f`, `1333cad`, `54107da`, `f5201e1` | `master` |
 | 23 | 2026-09-27 | Two mode-declaration fixes: a gate that declares no gate, and a grant nothing implements | `8d651b6`, `d0244fd`, `7c32cc3`, `965cbe0`, `c8ac74a`, `48fea4a`, `e1b0097`, `7bc8f91`, `dc4f6d7`, `1123e96`, `8c59e7c`, `39263da` | `feat/mode-declared-capability` |
 | 22 | 2026-09-27 | Harness capabilities: M3 complete, mode files made honest | `7312367`, `d82cc40`, `18a17e4`, `ed4a560`, `279caa0`, `d444cd4`, `0fb044f`, `1c97a89` | `feat/agent-harness-capabilities` |

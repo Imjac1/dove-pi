@@ -885,3 +885,45 @@ Read the source-code anatomy of eleven production harnesses to the point where e
 ### Next Steps
 
 - Settle D2 (permissions.unlisted must be declared) - the Execute layer foundation and D4 prerequisite
+
+
+## Session 25: Make a mode's permission list govern what the agent does
+<!-- trellis-session: v=2 fp=f8d2f7852c09a9c1 -->
+
+**Date**: 2026-09-27
+**Task**: Make a mode's permission list govern what the agent does
+**Branch**: `master`
+
+### Summary
+
+Built the fix for the last of the three inert-declaration defects: a mode's permissions.yaml decided nothing. Every literal entry in all three shipped modes named an action that could not occur, always_allow could not change any decision, and code-audit's never_allow: [shell.exec] - which two comments in the code reasoned from - never fired for a bash call. Shipped option (c): permissions.unlisted is required and states what an action on no list gets; always_allow answers unlisted: ask and is refused beside unlisted: allow, where it could not decide anything; evaluatePermission's last line returns the mode's stance instead of a constant ask; the policy tail returns that verdict as the outcome instead of re-deriving it. All three modes now declare unlisted: allow, which is the behaviour the user approved as option A - (c) contains (a). code-audit's shell prohibition names bash and powershell and is enforced.
+
+### Main Changes
+
+- Added the required unlisted stance to the mode format, with two load refusals that name both ways out
+- Made always_allow decide, by refusing the combination in which it could not
+- Rewrote the three modes' permission lists to name actions that can occur, and bumped each governance version
+- Corrected the two comments that reasoned from never_allow: [shell.exec]
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15ac234` | feat(mode): require the approval stance, and make every permission entry name an action that can occur |
+| `8758d48` | docs(spec): state the required approval stance and the two refusals it adds |
+| `af2ace5` | chore(task): archive 09-27-mode-permission-lists |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors
+- [OK] npm test: 607 tests / 605 pass / 0 fail / 2 skipped
+- [OK] tests/spec-context-budget.test.ts: 5/5, 9 bytes of headroom left
+- [OK] The code-audit host case now asserts the opposite of what it asserted before: bash is refused
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- D4: make gate.intensity, gate.windows and gate.excluded_techniques real or delete them
