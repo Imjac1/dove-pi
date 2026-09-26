@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"The validation matrix must gain both new refusals, and the file is held to 24 KiB by tests/spec-context-budget.test.ts, so the edit has to be paid for by trimming."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"The host's mode-load path: the three shipped modes must still load or refuse exactly as their declarations say after the vocabulary grows."}

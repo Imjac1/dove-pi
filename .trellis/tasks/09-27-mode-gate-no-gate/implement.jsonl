@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"Work modes and the gate boundary: the `gate.semantics` vocabulary, the Work-Mode layout and validation scenario, and the validation matrix are the contract this change edits."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Code standards and forbidden patterns for the two new load rules and the mode file they change."}

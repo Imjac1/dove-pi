@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"The check order and the validation matrix: a deployment problem must not be reported as a denial, and an undeclared capability must not be reported as a missing registration."}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"Registry behaviour the refusal depends on: `list()` as the registered set, and `require()` as the throw that currently happens after the operator has already confirmed."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"The host `tool_call` path where the check must run before the ask, and where the effect claim is taken."}

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"The gate boundary and the order its checks run in: the new check is inserted between the capability scope and the limit gate, and `ActionPolicy.gates` is what makes that order readable."}
+{"file":".trellis/spec/backend/personal-agent-capability-runtime.md","reason":"The capability registry the check consults: what a registered capability is, and how a mode's grant relates to it."}
