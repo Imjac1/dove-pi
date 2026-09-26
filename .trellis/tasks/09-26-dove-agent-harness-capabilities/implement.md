@@ -521,6 +521,72 @@ npm run typecheck -> 0 errors
 npm test          -> tests 580 / pass 578 / fail 0 / skipped 2   (573 before, +7)
 ```
 
+### The two remaining mode-content decisions, taken 2026-09-26  **[DONE]**
+
+Both were put to the user as choices with a recommendation, and both recommendations were taken. Together with the
+trading limit scope fixed above, these are the three places where a shipped mode file said one thing and did another.
+
+1. **`modes/code-audit`: `gate.semantics` conformance -> `limit`.** A conformance mode is checked against an authority
+   *document*, and this mode's `authority.grant` is the bare name `local-review`. The consequence was not subtle: the
+   mode **refused to load at all**, so the first vertical was unusable while declaring controls it could not build.
+   `limit` is the honest declaration - an internal review has no third-party grantor, and `ownership_evidence` exists
+   to record a third party's permission to test their asset, so the document could only have been written with a
+   fictional owner. The loader's own refusal message already named this field as the way out, which is what makes it
+   the loader's answer rather than ours. `authority.grant` stays as the name of the review that authorizes the run,
+   the way `modes/trading` keeps `local-paper-trading`.
+
+   **No thresholds are declared, so there is no limit gate either**, and that is stated in the mode file rather than
+   left to be inferred: what contains this mode is the permission list and the `scope` block. `gate.semantics: limit`
+   with zero limits is a declaration that reads as a threshold control and is not one - the same defect shape as the
+   other two. Recorded here rather than turned into a new loader rule, because "a mode declaring `limit` must declare
+   a limit" is a rule with its own consequences and its own milestone.
+
+2. **`modes/code-audit`: `always_allow: [read_*]` -> `[repo.read]`.** The list is matched against **action** names.
+   This mode's read capability is `repo.read` (no `read_` prefix) and the host's read tool is `read` (no underscore),
+   so the wildcard matched neither and the declaration granted nothing. `repo.read` ran only because the *default* for
+   an unlisted action is allow - a permission list that reads as a permission and is not one.
+
+   **How the dead wildcard stayed invisible, which is the part worth keeping.** `tests/code-audit-mode.test.ts`
+   asserted `evaluatePermission(mode.permissions, "read_file") === "allow"`. `read_file` is not a tool any host here
+   has - the real one is `read` - so the test supplied the single name that made `read_*` look live. The test was
+   written against the wildcard rather than against the mode, and it is the same failure as a fixture that agrees with
+   the code because the same author wrote both.
+
+3. **`modes/code-audit` version 1.4.0 -> 1.5.0**, and the two claims in `MODE.md` that pointed at a document: the
+   `compatibility` line (which said the mode refuses to load) and a stop instruction to "request a wider scope through
+   the authority document instead" (there is no such document).
+
+**Three tests changed to say what is true, and one case had to be manufactured.**
+
+- `code-audit-mode.test.ts` now asserts the capability name and adds the distinction: `repo.read` is `allow` **by
+  declaration**, `read` is `ask` **by default**, and only the first is a control.
+- `"runs the mode's conformance gate end to end"` is renamed: the mode declares `limit`, so that gate is not the
+  mode's. It stays, because the gate a document-bearing mode gets still needs a case, but the name was a claim the
+  mode stopped making.
+- The host test `"refuses a conformance mode whose grant is not a document"` relied on code-audit having that shape.
+  It now **forces the declaration back** in the throwaway copy (`forceConformance`), so the rule keeps a case even
+  though no shipped mode exercises it - and the helper says why: a shipped mode that refuses to load is not a fixture,
+  it is a broken vertical.
+- New host case, which is AC1 for the mode that had to change to be loadable: code-audit loads through the host,
+  `repo.read` runs without a question, `report.write` is asked and runs on consent, `network.fetch` is refused by
+  `never_allow` and is **not** put to the operator - a denied action is not a question.
+
+**A budget the spec enforces caught the spec edit.** `tests/spec-context-budget.test.ts` holds every routed spec to
+24 KiB, because a spec is injected into the model's context. The additions here pushed
+`personal-agent-framework-core.md` to 25,512 bytes and the test failed; the prose is now 24,370 with 206 bytes of
+headroom. Worth recording as a fact about this repository: **a doc edit here is a code change with a test.**
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts      -> tests 18 / pass 18 / fail 0   (17 before, +1)
+node --import tsx --test tests/code-audit-mode.test.ts     -> tests 15 / pass 15 / fail 0   (14 before, +1)
+node --import tsx --test tests/spec-context-budget.test.ts -> tests  2 / pass  2 / fail 0
+
+npm run typecheck -> 0 errors
+npm test          -> tests 582 / pass 580 / fail 0 / skipped 2   (580 before, +2)
+```
+
 ## M4. Admission: delegate, and supply the policy
 
 1. **Do not build a compressor.** The host has spill/retention/pruning. This resolves the
