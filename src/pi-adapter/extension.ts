@@ -43,6 +43,8 @@ import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
 import { createActionPolicy, type ActionPolicy } from "../core/action-policy.ts";
+import { createEffectBoundary, type EffectBoundary } from "../core/effect-boundary.ts";
+import { createFileEffectStore } from "../core/effect-store-file.ts";
 import type { AuthorityDocument } from "../core/authority.ts";
 import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
@@ -537,6 +539,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// Built once from the loaded mode, because a policy rebuilt per call is a policy whose thresholds and
 	// authority can differ between two identical actions.
 	let activeActionPolicy: ActionPolicy | undefined;
+	// The effect boundary, and the claims still awaiting an outcome. A claim that never completes reads as
+	// `unknown` from the store, which is the fact rather than a guess about whether the effect landed.
+	let activeEffectBoundary: EffectBoundary | undefined;
+	const pendingEffects = new Map<string, string>();
 	const subagentProvider = createConfiguredPiSubagentProvider();
 	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
@@ -1809,6 +1815,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				activeWorkMode = undefined;
 			}
 		}
+		activeEffectBoundary = undefined;
+		pendingEffects.clear();
+		if (activeWorkMode !== undefined) {
+			activeEffectBoundary = createEffectBoundary({
+				// The engagement is the authority container. With no document there is no engagement, so the mode's local
+				// scope is the container - named as such rather than left blank.
+				engagement: activeAuthorityDocument?.engagement ?? `local:${activeWorkMode.id}`,
+				mode: activeWorkMode,
+				store: createFileEffectStore({ directory: join(modeRoot, ".dove", "effects") }),
+			});
+		}
 		if (modeRefusal !== undefined && ctx.hasUI) ctx.ui.notify(`[Dove mode] ${modeRefusal}`, "error");
 		if (activeWorkMode !== undefined && ctx.hasUI) {
 			// `ask_before` is not consumed yet. Saying so is the difference between a control that is absent and a
@@ -2161,6 +2178,34 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return { block: true, reason: `[Dove mode ${activeWorkMode.id}] ${decision.reason}\nDo this instead: ${decision.remediation}` };
 			}
 		}
+		// The effect boundary, after the policy and on the final input, because the effect identity is derived from
+		// the arguments that will actually be dispatched.
+		if (activeEffectBoundary !== undefined) {
+			const identity = resolveActionIdentity(event.toolName, event.input);
+			// A dispatch on a later attempt of the same request is the case the claim guards: an earlier attempt may
+			// already have performed this work. A first attempt cannot duplicate one, so it never refuses.
+			const replayed = (requestLifecycle.activeLease()?.attemptCount ?? 0) > 0;
+			const effect = await activeEffectBoundary.prepare({ action: identity.action, arguments: identity.arguments, replayed });
+			if (!effect.dispatch) {
+				await ledger.appendGateRefused({
+					taskId: currentRequestTaskId ?? "pi-session",
+					stepId: `effect:${event.toolCallId}`,
+					mode: mode.current,
+					tool: event.toolName,
+					action: identity.action,
+					viaCapability: identity.viaCapability,
+					// `gate` names which check refused it; the effect boundary is one of them, and its own details below
+					// carry the class, so a reader can tell an at-most-once refusal from a scope refusal.
+					gate: "effect-claim",
+					reason: effect.refusal ?? `effect '${identity.action}' was already claimed`,
+					remediation: "Report the ambiguity to the operator. Re-running the action is the one answer that is wrong both when the effect landed and when it did not.",
+					toolCallId: event.toolCallId,
+					sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
+				});
+				return { block: true, reason: `[Dove mode ${activeWorkMode?.id ?? "?"}] Effect refused: ${effect.refusal}\nDo this instead: report the ambiguity rather than re-running the action.` };
+			}
+			pendingEffects.set(event.toolCallId, effect.effectKey);
+		}
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
 		const progressDecision = progressGuard.beforeToolCall(event.toolCallId, event.toolName, event.input, idempotent);
 		if (progressDecision.action !== "allow") {
@@ -2183,6 +2228,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
+		// The claim's outcome, recorded where the result arrives. A claim with no result stays in flight and reads as
+		// `unknown`, which is what an interrupted dispatch actually is.
+		const claimedEffect = pendingEffects.get(event.toolCallId);
+		if (claimedEffect !== undefined && activeEffectBoundary !== undefined) {
+			pendingEffects.delete(event.toolCallId);
+			await activeEffectBoundary.complete(claimedEffect, event.isError === true ? "failed" : "completed");
+		}
 		const toolTiming = toolTimings.get(event.toolCallId);
 		toolTimings.delete(event.toolCallId);
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);

@@ -43,7 +43,9 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// `loop.ts` came with it (work-mode imports the first two, and gate-limit imports the loop's gate types).
 	// The assertion below is what noticed, which is the reason it asserts in both directions.
 	"src/core/loop-runner.ts": { reason: "the reference runner; M1 places the effect claim at its dispatch line, but nothing reaches this module, so the claim is exercised by tests only", wiredBy: null },
-	"src/core/effect-store-file.ts": { reason: "the claim store M1 adds; reached only from loop-runner.ts, which is itself unreachable. Reachable from tests until the boundary also sits on the host's tool_call/tool_result hooks", wiredBy: null },
+	// `src/core/effect-store-file.ts` left this list when the host began composing the effect boundary at session
+	// start - the fourth shrink. That is M1's reachability gap closed for the store; `loop-runner.ts` still holds
+	// the claim for the reference loop, which nothing reaches.
 	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; reached only through the unreachable loop", wiredBy: null },
 	// `src/core/gate-conformance.ts` left this list when the action policy composed it behind the host's
 	// tool_call boundary - the third shrink, and the assertion is what noticed.

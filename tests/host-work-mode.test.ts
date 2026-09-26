@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -272,6 +272,39 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("claims an effect at the boundary and records its outcome when the result arrives", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "trading");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "submit one order", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "submit one order", systemPrompt: "" }, host.context);
+
+			const input = { name: "order.submit", args: { order: { notional: 100, quantity: 1 } } };
+			const decision = await callTool(host, "agent_run_capability", input);
+			assert.notEqual(decision?.block, true, "an order inside the declared limits is not refused");
+
+			// The claim is the file's existence, taken before dispatch, and it reads as in flight until a result
+			// arrives - which is what an interrupted dispatch actually is.
+			const effectsDir = join(root, ".dove", "effects");
+			const claimed = existsSync(effectsDir) ? readdirSync(effectsDir).filter((name) => name.endsWith(".json")) : [];
+			assert.equal(claimed.length, 1, "one claim, taken at the boundary");
+			const inFlight = JSON.parse(readFileSync(join(effectsDir, claimed[0] as string), "utf8")) as { tool?: string; outcome?: string };
+			assert.equal(inFlight.tool, "order.submit", "the record names the action, not the umbrella tool that carried it");
+			assert.equal(inFlight.outcome, undefined, "and it has no outcome yet");
+
+			await host.events.get("tool_result")?.({ type: "tool_result", toolCallId: "c-1", toolName: "agent_run_capability", input, content: [], isError: false }, host.context);
+			const completed = JSON.parse(readFileSync(join(effectsDir, claimed[0] as string), "utf8")) as { outcome?: string; completedAt?: string };
+			assert.equal(completed.outcome, "completed", "the result completes the claim");
+			assert.ok(completed.completedAt !== undefined, "with the time it completed");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 });
+
 
 
