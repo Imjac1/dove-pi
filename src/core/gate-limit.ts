@@ -46,7 +46,13 @@ export class LimitSpecError extends Error {
 	}
 }
 
-function readPath(value: unknown, path: string): unknown {
+/**
+ * Read a dotted path into an action's arguments.
+ *
+ * Exported because the action policy resolves a mode's declared `target_argument` the same way a limit resolves
+ * its `argument`: one implementation of "read the field this mode named", not two that can disagree.
+ */
+export function readArgumentPath(value: unknown, path: string): unknown {
 	let current: unknown = value;
 	for (const segment of path.split(".")) {
 		if (current === null || typeof current !== "object") return undefined;
@@ -81,7 +87,7 @@ export function createLimitGate(limits: readonly LimitSpec[], options: LimitGate
 
 			for (const { limit, scope: limitScope } of prepared) {
 				if (limitScope !== undefined && !limitScope.has(invocation.tool)) continue;
-				const raw = readPath(invocation.arguments, limit.argument);
+				const raw = readArgumentPath(invocation.arguments, limit.argument);
 				const required = limit.required !== false;
 				const unit = limit.unit === undefined ? "" : ` ${limit.unit}`;
 

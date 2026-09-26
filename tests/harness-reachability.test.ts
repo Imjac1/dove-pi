@@ -45,7 +45,8 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	"src/core/loop-runner.ts": { reason: "the reference runner; M1 places the effect claim at its dispatch line, but nothing reaches this module, so the claim is exercised by tests only", wiredBy: null },
 	"src/core/effect-store-file.ts": { reason: "the claim store M1 adds; reached only from loop-runner.ts, which is itself unreachable. Reachable from tests until the boundary also sits on the host's tool_call/tool_result hooks", wiredBy: null },
 	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; reached only through the unreachable loop", wiredBy: null },
-	"src/core/gate-conformance.ts": { reason: "conformance-gate semantics; reached only from loop-runner, and M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
+	// `src/core/gate-conformance.ts` left this list when the action policy composed it behind the host's
+	// tool_call boundary - the third shrink, and the assertion is what noticed.
 	// `src/core/authority.ts` left this list when the mode loader began resolving a conformance mode's grant
 	// document - the second time the list has shrunk, and again the assertion is what noticed.
 	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode, which has not landed yet", wiredBy: "M3" },

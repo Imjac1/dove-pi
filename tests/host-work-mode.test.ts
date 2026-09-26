@@ -242,5 +242,36 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("refuses an action outside the authority document at the boundary, and records which check refused it", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "pentest");
+		copyEngagements(root);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "pentest" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "scan the target", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "scan the target", systemPrompt: "" }, host.context);
+
+			// The shipped example engagement names evidence digests ("aaaa"/"bbbb") that are placeholders, so no
+			// grant in it can resolve. That is the honest end-to-end demonstration: conformance refuses, and the
+			// refusal says which check it was rather than only that something went wrong.
+			const scanned = await callTool(host, "agent_run_capability", { name: "net.scan", args: { target: "t-web" } });
+			assert.equal(scanned?.block, true, "a conformance mode must refuse an action whose grant cannot resolve");
+			assert.match(scanned?.reason ?? "", /\[conformance\]/, "the reason names the check, not only the outcome");
+
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const records = existsSync(ledgerFile)
+				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { gate?: string; action?: string; reason?: string } })
+				: [];
+			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "conformance" && record.details?.action === "net.scan");
+			assert.ok(recorded !== undefined, "the conformance refusal is in the ledger with its gate and its action");
+			assert.match(recorded?.details?.reason ?? "", /evidence|digest/, "and its reason names what could not be verified");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 });
+
 

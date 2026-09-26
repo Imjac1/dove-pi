@@ -42,10 +42,9 @@ import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
+import { createActionPolicy, type ActionPolicy } from "../core/action-policy.ts";
 import type { AuthorityDocument } from "../core/authority.ts";
-import { createLimitGate } from "../core/gate-limit.ts";
-import type { SynchronousActionGate } from "../core/loop.ts";
-import { evaluatePermission, loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
+import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
 import { projectModelMessages } from "./context-projection.ts";
 
@@ -535,9 +534,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// The document a conformance mode is checked against. Held from the load so the run's authority is the one
 	// that was validated, rather than read again per action from a file that may have changed under it.
 	let activeAuthorityDocument: AuthorityDocument | undefined;
-	// Built once from the loaded mode's declared limits, because a limit gate that is rebuilt per call is a gate
-	// whose thresholds can differ between two identical actions.
-	let activeLimitGate: SynchronousActionGate | undefined;
+	// Built once from the loaded mode, because a policy rebuilt per call is a policy whose thresholds and
+	// authority can differ between two identical actions.
+	let activeActionPolicy: ActionPolicy | undefined;
 	const subagentProvider = createConfiguredPiSubagentProvider();
 	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
@@ -1795,14 +1794,18 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				}
 			}
 		}
-		activeLimitGate = undefined;
-		if (activeWorkMode !== undefined && activeWorkMode.limits.length > 0) {
+		activeActionPolicy = undefined;
+		if (activeWorkMode !== undefined) {
 			try {
-				activeLimitGate = createLimitGate(activeWorkMode.limits);
+				activeActionPolicy = createActionPolicy({
+					mode: activeWorkMode,
+					workspaceRoot: modeRoot,
+					...(activeAuthorityDocument === undefined ? {} : { authorityDocument: activeAuthorityDocument }),
+				});
 			} catch (error) {
-				// The loader validates the shapes, so this should be unreachable; if it ever fires, it must not leave the
-				// run with no gate while the mode says it has limits.
-				modeRefusal = `Work mode '${activeWorkMode.id}' declares limits that could not be built into a gate: ${error instanceof Error ? error.message : String(error)}`;
+				// The loader validates the shapes, so this should be unreachable; if it ever fires, it must not leave the run
+				// with no policy while the mode says it has controls.
+				modeRefusal = `Work mode '${activeWorkMode.id}' declares controls that could not be built into a policy: ${error instanceof Error ? error.message : String(error)}`;
 				activeWorkMode = undefined;
 			}
 		}
@@ -2047,13 +2050,26 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (modeRefusal !== undefined) {
 			return { block: true, reason: `[Dove mode] ${modeRefusal}` };
 		}
-		if (activeWorkMode !== undefined) {
+		if (activeActionPolicy !== undefined) {
+			// The name-only half: it reads no arguments, so it can run before the lease check and before the handler
+			// finishes shaping the call. The half that reads arguments runs later, where the input is final.
 			const identity = resolveActionIdentity(event.toolName, event.input);
-			if (evaluatePermission(activeWorkMode.permissions, identity.action) === "deny") {
-				return {
-					block: true,
-					reason: `[Dove mode ${activeWorkMode.id}] '${identity.action}' is on this mode's never_allow list, so it does not run in this workspace${identity.viaCapability ? ` (invoked through ${event.toolName})` : ""}.`,
-				};
+			const denial = activeActionPolicy.denyDecision(identity.action);
+			if (denial.outcome === "block") {
+				await ledger.appendGateRefused({
+					taskId: currentRequestTaskId ?? "pi-session",
+					stepId: `gate:${event.toolCallId}`,
+					mode: mode.current,
+					tool: event.toolName,
+					action: identity.action,
+					viaCapability: identity.viaCapability,
+					gate: "deny",
+					reason: denial.reason,
+					remediation: denial.remediation,
+					toolCallId: event.toolCallId,
+					sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
+				});
+				return { block: true, reason: `[Dove mode ${activeActionPolicy.modeId}] ${denial.reason}\nDo this instead: ${denial.remediation}` };
 			}
 		}
 		if (!requestLifecycle.activeLease()) return;
@@ -2113,9 +2129,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// The gate is evaluated here, **after** every mutation of `event.input` in this handler and not before.
 		// The host does not re-validate after a mutation (types.d.ts:703-708), so a gate that validated the input it
 		// saw at the top of the handler would have permitted something other than what runs.
-		if (activeLimitGate !== undefined && activeWorkMode !== undefined) {
+		if (activeActionPolicy !== undefined && activeWorkMode !== undefined) {
 			const identity = resolveActionIdentity(event.toolName, event.input);
-			const decision = activeLimitGate.evaluate({
+			const decision = activeActionPolicy.evaluate({
 				tool: identity.action,
 				arguments: identity.arguments,
 				// A work mode carries one version today (its governance version). Inventing a second here would be a
@@ -2126,6 +2142,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				accumulatedIntensity: {},
 			});
 			if (decision.outcome === "block") {
+				// The gate is named in the reason by the policy itself (`[limit]`/`[conformance]`), so the ledger and the
+				// refusal text agree about which check refused the action without a second mapping here.
+				const gate = /^\[([a-z-]+)\]/.exec(decision.reason)?.[1] ?? activeActionPolicy.gates.join("+");
 				await ledger.appendGateRefused({
 					taskId: currentRequestTaskId ?? "pi-session",
 					stepId: `gate:${event.toolCallId}`,
@@ -2133,13 +2152,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					tool: event.toolName,
 					action: identity.action,
 					viaCapability: identity.viaCapability,
-					gate: activeLimitGate.id,
+					gate,
 					reason: decision.reason,
 					remediation: decision.remediation,
 					toolCallId: event.toolCallId,
 					sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
 				});
-				return { block: true, reason: `[Dove mode ${activeWorkMode.id} / ${activeLimitGate.id}] ${decision.reason}\nDo this instead: ${decision.remediation}` };
+				return { block: true, reason: `[Dove mode ${activeWorkMode.id}] ${decision.reason}\nDo this instead: ${decision.remediation}` };
 			}
 		}
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
