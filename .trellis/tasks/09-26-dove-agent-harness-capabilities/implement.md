@@ -554,6 +554,44 @@ npm run typecheck -> 0 errors
 npm test          -> tests 561 / pass 559 / fail 0 / skipped 2   (560 before, +1)
 ```
 
+### M4's incident channel, landed 2026-09-26  **[DONE]**
+
+The guard is at the **payload**, not at each producer: `admitNonConversationalMessages` walks the provider request
+(whatever shape it takes - an array, `{messages}`, or `{input:{messages}}`, following the walker already in the
+file) and admits every message that is **not** the conversation. What it leaves alone is an allow-list of
+conversational roles (`user`, `assistant`, `toolResult`, `system`), so a channel nobody listed - including one Pi
+adds later - is covered by default rather than exempt by default. That is the admission module's own rule ("one
+boundary, every channel") applied where the channels actually converge.
+
+**Two facts about ordering and identity, and the tests are what surfaced them.**
+
+1. **It runs before the budget is accounted.** A payload that admission would have made fit must not be rejected
+   for being too large: the reverse order turns a compaction into a rejection. `preparePayload` now takes the
+   admitted payload, and so does the budget-fallback path - otherwise the huge message comes straight back.
+2. **It preserves payload identity when it changes nothing**, and the pre-existing `registers modes, shortcuts,
+   ...` test found this by failing: the handler decides whether to hand a modified payload back by comparing it to
+   the original, so an equal-but-new object tells the host the request was rewritten when it was not. **A pass that
+   claims to have changed something it did not is the same defect as a gate that claims to have checked something
+   it did not** - introduced by this change and caught by a test written before it.
+
+**A shape it refuses to guess at.** A message whose content cannot be replaced in a shape the host still
+understands is left alone **and counted**, and the count is reported to the operator. Silently skipping it would be
+an exemption of the kind this boundary exists to remove; silently rewriting an unknown shape would be worse.
+
+**M4's channels are delegated. What is left of M4's list is the design's "belief invalidation":** the extension's
+`doveContextPayloads` is a cache of its own injected context, and whether it is a belief *about dropped content*
+(the thing Claude Code invalidates, and this design says to copy) remains unverified.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests 10 / pass 10 / fail 0   (+1: the incident channel)
+node --import tsx --test tests/pi-adapter.test.ts      -> tests 32 / pass 32 / fail 0   (the identity regression it caught)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 562 / pass 560 / fail 0 / skipped 2   (561 before, +1)
+```
+
 ## M5. Acceptance: observables, not assertions
 
 Wiring point: `task-convergence.ts` is already reachable from the host.
