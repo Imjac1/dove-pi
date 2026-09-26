@@ -470,6 +470,41 @@ npm test          -> tests 560 / pass 558 / fail 0 / skipped 2   (558 before, +2
 **Validate**: an oversized tool result reaches the model as a digest plus a resolvable reference; the full
 payload is retrievable; and a dropped result does not leave a cached belief behind.
 
+### M4 scoping, 2026-09-26  **[IN PROGRESS - coordinates and the decision, before any edit]**
+
+**`context-admission.ts` is not a stub.** It already has the thresholds, the generated/dependency path
+classification, the digest-plus-artifact-reference marker, and - the point - a **sink interface that is already the
+delegation point** (`ArtifactSink`). So "do not build a compressor" is satisfied by the module as written, and M4
+is **wiring rather than building**.
+
+**Two implementations of one contract, located:**
+
+| | threshold | marker | full payload retrievable? |
+|---|---|---|---|
+| host: `extension.ts:2890` `compactToolResultContentWithMetadata` | `getToolResultCharBudget(toolName)`, per tool | `[tool result compacted for model context: omitted N characters; digest=...]`, head 75% + tail | through the host's `details` ("inspect the saved details") |
+| Dove: `src/core/context-admission.ts` `admit` | one number, 8000 default | channel + source + digest + `artifact:` + classification, head only | only through the supplied sink |
+
+Three differences, and each has to be decided rather than merged by accident: the **threshold** (the host's is
+per-tool and cache-aware - it should stay and be passed in, not replaced by one number), the **marker shape**
+(Dove's says *which channel* and whether the content is generated; the host's says neither), and the
+**retrievability** (the host's details path against Dove's sink).
+
+**The channel that matters most is not the tool-result one.** The recorded incident reached the model through a
+**background/custom-message path that bypassed tool-result compaction** - 2,865,326 characters, about 95% of that
+session's tool-result text. In the host that path is the custom message at `extension.ts:2694`; the admission
+module names the channel `background_notification`. **Delegating tool-result compaction is the smaller half;
+delegating the custom/background path is the half the incident is actually about**, and a boundary with one
+documented way around it is what this exists to remove.
+
+**Not yet decided, and it is the first thing to settle:** whether the host's `details` path is the sink - which
+would make the artifact reference resolvable without new storage - or whether a real sink is needed. M4's
+validation includes "the full payload is retrievable", so that question comes before the edit, not after it.
+
+**Also carried from the design, not yet checked in code:** the **belief invalidation**. The extension holds
+`doveContextPayloads`, and the design's finding is that the only implementation surveyed which invalidates its own
+cached beliefs about dropped content (Claude Code deleting a file from `readFileState` after clearing a Read
+result) is the one to copy. Whether that map is such a belief is unverified.
+
 ## M5. Acceptance: observables, not assertions
 
 Wiring point: `task-convergence.ts` is already reachable from the host.
