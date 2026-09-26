@@ -44,6 +44,20 @@ boundary** - an approval gate re-executes whatever sits before it.
 3. **One atomic claim** - compare-and-swap or a unique constraint - in a store **shared across hosts**. The
    in-memory store's own docstring says it is "atomic only within one JavaScript realm; the duplicate it is
    meant to prevent crosses hosts". **A real store is the point of this milestone.**
+
+   **Decided 2026-09-26 - do not re-litigate this, the evidence is in
+   `research/effect-claim-store-evidence.md`.** The store is a directory of claim files under the project
+   state root; the claim is the **exclusive create** of that file (`openSync(path, "wx")`, verified to raise
+   `EEXIST` on this runtime), never a read followed by a write. Record states are
+   `in_flight | completed | failed | cancelled | unknown`, and `unknown` is reached by construction: a crash
+   between the create and the outcome write leaves `in_flight` with no outcome.
+
+   **Two rules that are easy to get wrong, both stated in the design:**
+   - **Do not reuse `project-provider/lock.ts`'s staleness reclamation.** That lock deletes a lock older
+     than ten minutes and retries; copying it here would re-execute an effect whose outcome is unknown. A
+     claim with a dead owner is surfaced as `unknown` and never reclaimed.
+   - **Claim the run in a second process in the test, not just a second call in one process.** The failure
+     this milestone prevents is cross-process, and it is the one the in-memory store cannot express.
 4. The claim is taken **before** dispatch; a second attempt is refused and **reported**, not silently
    skipped.
 5. **Documentation changes**: the module stops describing itself as an exactly-once primitive and states

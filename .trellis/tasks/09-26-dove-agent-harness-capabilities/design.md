@@ -160,6 +160,27 @@ to auto-resolve.
 **The claim this design makes**: at-most-once dispatch from our own resumption paths, plus a forwarded key.
 **It does not claim exactly-once**, and the module documentation changes to match.
 
+**The store, decided 2026-09-26** (evidence and citations in `research/effect-claim-store-evidence.md`):
+
+- The claim is **a file whose existence is the claim**, created with exclusive create (`'wx'`, i.e. POSIX
+  `O_CREAT|O_EXCL` and Windows `CREATE_NEW`) under the project state root, one file per effect key. Never
+  `has()` then `record()`. `project-provider/lock.ts:17` already uses this primitive in this repository.
+- States: `in_flight | completed | failed | cancelled | unknown`, and **unknown is reachable by
+  construction** - a crash between the exclusive create and the outcome write leaves an `in_flight` record
+  with no outcome, which reads as unknown. The three-state model falls out of the primitive rather than
+  being bolted on.
+- **The staleness policy is the opposite of the lock's, and must not share code with it.**
+  `project-provider/lock.ts:35-42` reclaims a lock whose mtime is older than ten minutes. That is right for
+  a mutex and wrong for an effect claim: reclaiming an effect re-executes something whose outcome is
+  unknown, which is the duplicate. A claim whose owner is gone is surfaced as unknown, never reclaimed.
+- **The boundary, stated rather than implied**: atomic between processes **on one host with a local
+  filesystem**. Nothing here is safe across a network mount - not exclusive create, not `flock` (absent over
+  NFS before Linux 2.6.11; non-advisory over SMB since 5.5), not `O_APPEND` (documented racy on NFS), not
+  SQLite (documented to corrupt). Multi-host exclusion is the **backend's**, through the forwarded key.
+- `node:sqlite` is in this runtime and works, and is **not** adopted: it is experimental there and
+  `database-guidelines.md` says the first release has no database. `EffectStore` already returns promises,
+  so a transactional store can replace the file store without touching callers.
+
 ### 5.2 The gate contract
 
 **One policy, two adapters.** The policy is evaluated at the host's `tool_call` hook
