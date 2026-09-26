@@ -688,6 +688,43 @@ the scheme has something to name.
 **Validation:** the tree is back to the previous round's state plus the call-site comment; typecheck 0 errors; npm
 test 563 / 561 / 0 / 2.
 
+
+### M5's prerequisite, landed 2026-09-26  **[the observable exists, so the rule can be re-attempted]**
+
+A tool call the harness sees now gets a **guaranteed** ledger record (`tool.observed`, stepId `tool:<toolCallId>`),
+and a **successful** result carries a one-line marker naming it (`[Dove observable: ledger:tool:<id>]`), so the agent
+has something it can cite that it did not author.
+
+**Three decisions in that sentence, each with its reason.**
+
+1. **Guaranteed, not best-effort.** The hook already wrote a per-tool timing record - but conditionally
+   (`toolTiming && currentRequestPlan`) and inside a `try {} catch {}` that swallowed failures. A citation pointing at
+   a record that may not exist is the assertion in the right costume, so the observable is its own append and must
+   succeed **before** the marker is offered.
+2. **Successful results only.** A failure is not a pass-observable, and offering a citation for one would let an agent
+   cite a result it could not pass on. Failures still reach the ledger through the request and effect paths.
+3. **The marker is model-visible, and that costs context on every successful tool result.** That is the price of
+   checkability: an observable the agent cannot name is one it cannot cite, and telling the model to guess ids would be
+   worse. Recorded because it is a real cost, not a free improvement.
+
+**Correcting the round-12 note.** I wrote that "the ledger does not record tool calls". It does, as a runtime phase,
+conditionally. The missing piece was never the record - it was **guaranteeing it and naming it to the model**.
+
+**When the record cannot be written, the operator is told and no marker is offered:** no record, no citation, and the
+reason is visible rather than surfacing later as an unexplained refusal.
+
+**Next for M5:** with this in place, the resolution rule can be re-attempted - `ledger:tool:<id>` is now a ref both
+layers agree on - and `acceptance.passed` can require one.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests 10 / pass 10 / fail 0   (the effect test extended: marker + record, and none for a failure)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 563 / pass 561 / fail 0 / skipped 2
+```
+
 ## M6. The verification ladder
 
 1. A cost-ordered ladder that **short-circuits** and records `decided_by`, returning **unscored** rather
