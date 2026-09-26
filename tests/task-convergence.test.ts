@@ -102,6 +102,26 @@ describe("task convergence reducer invariants", () => {
 		assert.throws(() => reduceTaskConvergence(snapshot, { schemaVersion: 1, kind: "planned_step.completed", acceptanceId: "AC-001", stepId: "step-after-finish" }), /after ready_to_finish/);
 	});
 
+	it("refuses a pass with nothing behind it, and still records a failure without evidence", () => {
+		// The hole this closes: `evidenceRefs` used to be optional on `acceptance.passed`, so a criterion could be
+		// marked passed with nothing behind it - a claim the harness cannot check and the agent can author.
+		// **Acceptance criteria are observables, not assertions; a pass with no observable is an assertion.**
+		const snapshot = freezeSingleCriterion("AC-001");
+		assert.throws(
+			() => reduceTaskConvergence(snapshot, { schemaVersion: 1, kind: "acceptance.passed", acceptanceId: "AC-001" }),
+			/requires at least one evidence reference/,
+		);
+		assert.throws(
+			() => reduceTaskConvergence(snapshot, { schemaVersion: 1, kind: "acceptance.passed", acceptanceId: "AC-001", evidenceRefs: [] }),
+			// An explicitly empty list is the same claim as an absent one, so it is refused the same way - by whichever
+			// of the two layers sees it first.
+		);
+		assert.doesNotThrow(
+			() => reduceTaskConvergence(snapshot, { schemaVersion: 1, kind: "acceptance.failed", acceptanceId: "AC-001" }),
+			"a failure is not a claim of success, and refusing to record one for lack of evidence would lose the failure",
+		);
+	});
+
 	it("amends an open finding with late evidence without creating a duplicate", () => {
 		let snapshot = freezeSingleCriterion("finding-amend");
 		snapshot = reduceTaskConvergence(snapshot, {

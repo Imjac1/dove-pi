@@ -137,7 +137,20 @@ export function decodeTaskConvergenceEvent(value: unknown): TaskConvergenceEvent
 	}
 	if (kind === "acceptance.started" || kind === "task.verification_started") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId) };
 	if (kind === "acceptance.evidence_attached") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), evidenceRef: requireEvidenceRef(event.evidenceRef, "event.evidenceRef") };
-	if (kind === "acceptance.passed" || kind === "acceptance.failed") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), ...optionalEvidenceRefs(event.evidenceRefs, "event.evidenceRefs") };
+	if (kind === "acceptance.passed") {
+		// **A pass requires an observable, and this is where it is refused if it has none.** `acceptance.passed` used
+		// to take evidence refs optionally, so a criterion could be marked passed with nothing behind it - which is the
+		// shape of a claim the harness cannot check and the agent can author. A failure keeps its refs optional: a
+		// failure is not a claim of success, and refusing to record one for lack of evidence would lose the failure.
+		const evidenceRefs = event.evidenceRefs === undefined ? [] : decodeEvidenceRefs(event.evidenceRefs, "event.evidenceRefs");
+		if (evidenceRefs.length === 0) {
+			throw invalid(
+				"acceptance.passed requires at least one evidence reference: a pass with nothing behind it is the assertion this reducer exists to refuse. Attach the observable that decided it - a ledger record, a command exit status, an artifact - and pass with it.",
+			);
+		}
+		return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), evidenceRefs };
+	}
+	if (kind === "acceptance.failed") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), ...optionalEvidenceRefs(event.evidenceRefs, "event.evidenceRefs") };
 	if (kind === "acceptance.waived") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), evidenceRef: requireEvidenceRef(event.evidenceRef, "event.evidenceRef") };
 	if (kind === "planned_step.completed") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), stepId: requirePattern(event.stepId, "event.stepId", GENERIC_ID_PATTERN, 128) };
 	if (kind === "finding.recorded") {
