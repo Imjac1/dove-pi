@@ -91,3 +91,81 @@ npm test
   `tests/action-policy.test.ts`, which step 5 handles.
 - `modes/trading` still loads after the change, so the rule is a boundary rule and not an accidental load rule.
   **Checked by design** (nothing added to `work-mode.ts`), asserted by AC5.
+
+---
+
+## Outcome, 2026-09-27  **[DONE]**
+
+Implemented, but **the premise was falsified mid-flight and the plan changed**. Reported to the user, who chose to keep
+the check and re-point the evidence (option A).
+
+**What landed.** `ActionPolicyOptions.registeredCapabilities` (required, no default); a check inside `evaluate`
+immediately after the capability scope and before the limit gate, labelled `registered` and placed third in `gates`;
+the extension passing `registry.list().map((c) => c.name)`; and the rule recorded in
+`personal-agent-capability-runtime.md` (its planned home moved there from `personal-agent-framework-core.md`, which had
+56 bytes of headroom - see the amendment above).
+
+**The premise that did not hold.** The plan assumed the mismatch was trading-specific. It is not: **six of the nine
+capabilities the shipped modes declare have no implementation** - code-audit's `repo.read` and `report.write`,
+pentest's `net.scan` and `exploit.run`, trading's `market.read` and `order.submit`. `authority.capabilities` is a grant
+list, not a mirror of the registry. Consequences:
+
+- **AC3 as written was unachievable** and is amended in the PRD: `repo.read` is registered nowhere, so it is refused,
+  correctly, rather than running.
+- **Five host cases lost their subject**, because each demonstrated a mode control by invoking a capability nothing
+  implements: code-audit's permission lists, the `ask_before` confirmation, the no-dialog refusal, the conformance
+  refusal, and the effect claim. All five now run against a fixture mode over a **registered** capability, via
+  `writeFixtureMode` and `writeFixtureEngagement`. That is a stronger test than it was: the control is now exercised on
+  an action that can actually run, instead of on one that would have thrown.
+- The code-audit case now asserts what is true: the mode loads, its unimplemented declarations are refused as
+  `[registered]`, its deny list still refuses by name, and a raw host tool is still governed by the permission list.
+
+**The detector's sensitivity, checked by hand (step 6) rather than assumed.** The suite cannot test its own
+sensitivity, so each check was removed in turn and the right case observed to fail:
+
+- registration check disabled -> **three** cases fail: the policy-level one, and both host-level ones.
+- scope check disabled -> the `[scope]` assertion fails, plus the pre-existing scope case.
+
+Both probes were reverted immediately and the suite confirmed green afterwards. Recorded here because it is the only
+evidence that the three cases are load-bearing rather than decorative.
+
+**Three schema facts the fixture work turned up**, each of which cost a red run and is worth knowing:
+
+1. **A fixture mode must not write `semantics: limit` with no limits** - the sibling task's new rule refuses it. The
+   helper now emits `none` when it declares neither a limit nor a contract. The rule caught its own fixtures, which is
+   the rule working.
+2. **A grant's targets go at the grant level, not under `authorizes`.** `authorizes` accepts exactly `actions` and
+   `outcomes`; `targets` beside them is an unknown field and refuses the load.
+3. **A grant a principal issues to itself authorizes nothing**, and the conformance gate says so by name ("Grant
+   'g-workspace' is issued by the operator itself"). The fixture needs a separate grantor, and signed evidence on the
+   grant, or the pre-flight refuses the engagement before any action is reached.
+
+**Acceptance criteria, each with its evidence.**
+
+| AC | Evidence |
+|---|---|
+| AC1 | `tests/host-work-mode.test.ts`: under trading, `order.submit` (also over its declared notional) and `market.read` are refused with `[registered]`, `confirmCalls` is empty, and `.dove/effects` holds no claim |
+| AC2 | The same case, second name in the loop |
+| AC3 (amended) | `tests/action-policy.test.ts`: a registered action is allowed; `nope.nope` is refused with `[scope]` |
+| AC4 | `tests/action-policy.test.ts`: `dos.syn` is refused with `[deny]`, and the host case asserts `network.fetch` is refused by `never_allow` |
+| AC5 | `tests/host-work-mode.test.ts`: trading loads and announces itself; the refusal is at the action, not at startup |
+| AC6 | The two hand probes above |
+| AC7 | `tests/action-policy.test.ts`: `gates` is `["deny", "scope", "registered", ...]`, and the ordering case asserts both `[deny]` and `[scope]` come first |
+| AC8 | typecheck 0 errors; `npm test` 594 / pass 592 / fail 0 / skipped 2 |
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/action-policy.test.ts   -> tests 16 / pass 16 / fail 0   (12 before, +4)
+node --import tsx --test tests/host-work-mode.test.ts   -> tests 20 / pass 20 / fail 0   (19 before, +1; five re-pointed)
+node --import tsx --test tests/spec-context-budget.test.ts -> tests  5 / pass  5 / fail 0
+
+npm run typecheck -> 0 errors
+npm test          -> tests 594 / pass 592 / fail 0 / skipped 2   (589 before, +5)
+```
+
+**Not done, on purpose:** `modes/trading/*` is untouched (the mode keeps declaring what its deployment must provide),
+`toClientOrderId` still has no runtime caller (recorded in the dropped task's PRD), and the dead permission entries in
+`modes/code-audit/permissions.yaml` are recorded in the PRD rather than fixed - what that vertical's permission list
+should say is a decision about the vertical.
+

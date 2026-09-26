@@ -79,25 +79,56 @@ client order ids"). A static assertion would either fail on arrival or force the
 capabilities it exists to grant. The mismatch is a deployment fact, so it is decided at the boundary where the
 deployment is known - which is R1, not a load rule.
 
+## Falsified premise, found during implementation 2026-09-27
+
+The plan assumed the mismatch was trading-specific and that code-audit's capabilities were registered. Neither holds:
+
+| mode | declares | registered |
+|---|---|---|
+| code-audit | `repo.read`, `report.write`, `code-audit.seed`, `code-audit.disposition`, `code-audit.diff` | only the three `code-audit.*` |
+| pentest | `net.scan`, `exploit.run` | none |
+| trading | `market.read`, `order.submit` | none |
+
+**Six of the nine declared capabilities have no implementation** (grepped 2026-09-27). `authority.capabilities` is a
+grant list, not a mirror of the registry, so a mode naming an unimplemented action is stating what its *deployment*
+must provide - which is why the check is right, and why its blast radius is this wide.
+
+**What it invalidated.** Five host cases in `tests/host-work-mode.test.ts` demonstrated a mode control by invoking a
+capability nothing implements, so the check refuses them before the control is reached: code-audit's permission lists,
+the `ask_before` confirmation, the no-dialog refusal, the conformance refusal, and the effect claim. All five now run
+against a **fixture mode over a registered capability** (`writeFixtureMode` / `writeFixtureEngagement`), which is what
+makes them evidence about a control rather than about a call that would have thrown.
+
+**One more declaration is dead, and it is the one the sibling task fixed.** `modes/code-audit/permissions.yaml`'s
+`always_allow: [repo.read]` and `ask_before: [report.write]` name actions that cannot be invoked: no capability is
+registered under either name, and a raw host tool's action is the tool's own name (`read`, `write`). Changing `read_*`
+to `repo.read` replaced one dead value with another, because the earlier fix matched the mode's declaration instead of
+the registry. **Recorded, not fixed**: what code-audit's permission list should say is a decision about that vertical.
+
 ## Acceptance Criteria
 
-- [ ] **AC1** Through the host: under `modes/trading`, `agent_run_capability {name: "order.submit"}` is blocked, the
+- [x] **AC1** Through the host: under `modes/trading`, `agent_run_capability {name: "order.submit"}` is blocked, the
       reason names `order.submit` and says nothing registers it, the operator is **not** prompted, and **no effect
       claim file is created**.
-- [ ] **AC2** The same for `market.read` - the rule is generic, not a trading special case.
-- [ ] **AC3** A declared-and-registered capability still runs (code-audit's `repo.read`), and a capability the mode
-      does **not** declare is refused with the scope reason, so AC1's reason cannot be confused with AC3's.
-- [ ] **AC4** A capability on the mode's `never_allow` is refused with the denial reason, before the registration
+- [x] **AC2** The same for `market.read` - the rule is generic, not a trading special case.
+- [x] **AC3 - amended 2026-09-27, because the original was not achievable.** It said "a declared-and-registered
+      capability still runs (code-audit's `repo.read`)". **`repo.read` is registered nowhere** - the mode declares it
+      and nothing implements it - so it is refused, correctly, by this check. What AC3 now asserts: a
+      declared-and-registered capability runs (a fixture mode over `workspace.inspect`), and a capability the mode
+      does **not** declare is refused with the scope reason, so AC1's reason cannot be confused with AC3's. The
+      original claim was derived from the mode's own declaration rather than from the registry, which is the same
+      mistake that made `always_allow: [read_*]` look live.
+- [x] **AC4** A capability on the mode's `never_allow` is refused with the denial reason, before the registration
       check can speak.
-- [ ] **AC5** A mode naming a capability nothing registers still loads (R5), asserted on the loaded mode rather than
-      on a notification.
-- [ ] **AC6** The both-directions detector fails if the registration check is removed (declared-and-unregistered
-      would run) and fails if the scope check is removed (registered-and-undeclared would run) - so neither direction
-      is carried by the other.
-- [ ] **AC7** The registration check is the **third** check in `ActionPolicy.gates` order and not the first: a
+- [x] **AC5** A mode naming a capability nothing registers still loads (R5), asserted through the host on the shipped
+      mode: `trading` loads and announces itself, and the refusal comes at the action rather than at startup.
+- [x] **AC6** Verified by removing each check by hand and watching the right case fail: without the registration
+      check, three cases fail (the policy-level one and both host-level ones); without the scope check, the `[scope]`
+      assertion fails. Recorded in `implement.md`, because the suite cannot test its own sensitivity.
+- [x] **AC7** The registration check is the **third** check in `ActionPolicy.gates` order and not the first: a
       `never_allow` action reports the denial (AC4) and an undeclared capability reports the scope (AC3), because
       otherwise a deployment problem would be reported as a policy decision.
-- [ ] **AC8** `npm run typecheck` is clean and `npm test` is green.
+- [x] **AC8** `npm run typecheck` is clean and `npm test` is green.
 
 ## Key decisions (no user-owned question remains; these are mine and are overridable)
 
