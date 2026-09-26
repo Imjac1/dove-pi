@@ -245,9 +245,12 @@ Trigger: emitting findings, recording what an agent did, or resuming a long run.
 
 ```typescript
 // src/core/evidence-sarif.ts
-const FINGERPRINT_KEY = "doveFinding/v1";
-function fingerprintOf(f: Pick<Finding,"path"|"category"|"existingCode">): string;
-function toSarifLog(findings: readonly Finding[], o: SarifRunOptions): SarifLog;
+const FINGERPRINT_KEY = "doveFinding/v2";      // v1 included the path; see the contracts
+const CONTENT_HASH_KEY = "doveContent/v2";
+function contentHashOf(f: Pick<Finding,"category"|"existingCode">): string;   // path-free
+function fingerprintOf(f: Pick<Finding,"category"|"existingCode">, occurrenceIndex?: number): string;
+function toSarifLog(findings: readonly Finding[], o: SarifRunOptions): SarifLog;   // o.baseline?: SarifBaseline
+function baselineOf(log: SarifLog): SarifBaseline;
 // src/core/checkpoint.ts
 function captureCheckpoint(i: CaptureCheckpointInput): ActionCheckpoint;
 function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResult;
@@ -255,9 +258,53 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 
 ### 3. Contracts
 
-- A finding's identity is derived from path, category, and matched code - **never from the message**,
-  which is prose and varies between runs. The key is versioned, so a changed derivation cannot be
-  compared against an old baseline.
+- **Two hashes, not one.** A single hash over `path | category | code` cannot tell a move from an
+  edit, because the path is in it. `contentHashOf` is **path-free**, which is what makes a move
+  observable as a move; `fingerprintOf` is the content plus an **occurrence index**. Semgrep ships
+  six identity hashes for this reason, and `github/codeql-action` hashes content only - no path, no
+  rule id, no message.
+- **The occurrence index is inside the identity.** Without it, two findings of one category on
+  identical matched code in one file collapse into one and a real defect is lost. The index counts
+  how many earlier findings in the run share the same `(category, normalizedCode)`, in the
+  deterministic order of path, then start line, then end line.
+- **A finding's identity never includes the message**, which is prose and varies between runs, and
+- **never includes the artifact path**, so a finding that moves keeps its identity.
+- **`baselineState` carries all four schema values**: `new`, `unchanged`, `updated`, `absent`.
+  Matching is **tiered and deterministic; no model decides identity**:
+
+  **Pass one decides every same-path case, and completes for the whole run before pass two.**
+
+  | Pass | Rule | State |
+  |---|---|---|
+  | one | same content hash at the **same** path | `unchanged`, whatever the occurrence index |
+  | one | same `(category, path)`, content differs | `updated` |
+  | two | exact fingerprint anywhere in the baseline | `unchanged`, and a differing path records the move |
+  | two | same content hash at a different path | `unchanged` at the new location, move recorded |
+  | - | a baseline entry matched by no tier | `absent`, emitted so the resolution is visible |
+  | - | a finding matched by no baseline entry | `new` |
+
+  The split is not a performance choice. A content-derived identity cannot tell two identical matches
+  apart, so a tier that matches across paths will happily take an entry that belongs to a finding still
+  sitting where it was. Deciding the same-path cases first is what stops a newly added copy of existing
+  code from claiming the original (the original would be reported `new`), and what stops an in-place
+  edit from being narrated as a move from another file - which also leaves the finding that was truly
+  deleted with no result of its own.
+
+  **Every tier keeps all of its candidate baseline indices**, not just the first. A file with several
+  findings would otherwise have only one reachable by the same-path tier, and the rest would be
+  reported `absent` while their current counterparts were reported `new`.
+- **`baselineOf` is a pure derivative of a SARIF log**, so no side channel is needed, and it skips
+  `absent` results - otherwise a deletion would be re-reported on every subsequent run.
+- **A known limit, stated rather than left to be rediscovered.** A finding that **moves and is edited in
+  the same run** reads as one `new` plus one `absent`, not as an update at a new location. A content-only
+  identity cannot tell "this changed and went elsewhere" from "this was deleted and something else
+  appeared", and the two are genuinely indistinguishable from the two runs alone. Resolving it would need
+  a similarity match, which trades a false `new` for a false match - a worse trade in an audit, where a
+  false match can suppress a real finding. The limit is a consequence of choosing content over location as
+  the identity, and it is the price of move detection.
+- The key bump from v1 to v2 is **breaking on purpose**. v1 and v2 are not comparable, and the
+  version is how a changed derivation becomes visible rather than silently producing a wall of new
+  findings.
 - The SARIF log is 2.1.0 and carries `partialFingerprints`, `baselineState`, `occurrenceCount`, and a
   `rank` derived from severity.
 - The checkpoint unit is **an effect admitted and completed**, not a model turn. Only `completed`
@@ -270,24 +317,34 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 | Condition | Required behavior |
 |---|---|
 | Message reworded between runs | Identity unchanged |
-| Same identity seen twice in one run | One result with `occurrenceCount` |
-| Finding in the baseline | `baselineState: unchanged`; otherwise `new` |
+| Finding moved to another path | Identity unchanged; `unchanged` at the new location, with the move recorded |
+| Matched code edited in place | `updated` |
+| Finding deleted | `absent`, naming the artifact; never silence |
+| Two same-category findings on identical code in one file | Two identities, neither lost |
+| Several findings in one file, some edited | Each edited one `updated`, the rest `unchanged`, **nothing `new`** |
+| Reindentation only | Identity unchanged |
+| Finding in the baseline, matched by tier 1 | `baselineState: unchanged` |
 | Checkpoint resumed under a different mode version | Refused |
 | Tool set or gate changed since the checkpoint | Refused |
 
 ### 5. Tests Required
 
-- A reworded message keeps its identity; a changed path, category, or code does not.
-- Duplicates collapse with a count; baseline transitions are correct.
+- A reworded message and a move both keep the identity; a changed category or code does not.
+- An edit in place reads `updated`; a deletion reads `absent`; an addition reads `new`.
+- Several findings in one file, two of them edited, produce updates and no invented findings.
+- Two identical matches in one file stay two results, not one with a count.
+- Two runs over the same tree are byte-stable.
 - Only completed effects enter a checkpoint; the signature ignores tool registration order.
 - Restore refuses a mode-version, tool-set, or gate change.
 
 ### 6. Wrong vs Correct
 
-Wrong: fingerprint the finding's message, so every re-run is a wall of spurious new findings.
+Wrong: fingerprint the message, so every re-run is a wall of spurious new findings. Or fingerprint
+the path as well, so every move reads as a new finding plus a silent disappearance. Or emit only
+`new` and `unchanged`, so a deletion and an edit are indistinguishable from each other.
 
-Correct: fingerprint the stable parts, version the key, and checkpoint the unit that has consequences.
-
+Correct: hash the content for locality and the content plus an occurrence index for identity, match
+the baseline in cheap deterministic tiers, and report all four states.
 ## Scenario: Context Admission
 
 ### 1. Scope / Trigger

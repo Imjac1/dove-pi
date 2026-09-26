@@ -12,6 +12,7 @@ const routedSpecNames = [
 	"personal-agent-extension-runtime.md",
 	"personal-agent-managed-install.md",
 	"personal-agent-framework-core.md",
+	"personal-agent-audit-vertical.md",
 ] as const;
 const expectedHeadingsBySpec = {
 	"personal-agent-request-runtime.md": [
@@ -55,6 +56,10 @@ const expectedHeadingsBySpec = {
 		"Scenario: Evidence Plane and Action Checkpoint",
 		"Scenario: Context Admission",
 		"Scenario: Capability Scoping",
+	],
+	"personal-agent-audit-vertical.md": [
+		"Scenario: Deterministic Seeds and the Coverage Receipt",
+		"Scenario: The Finding Claim Schema",
 	],
 } as const satisfies Record<(typeof routedSpecNames)[number], readonly string[]>;
 

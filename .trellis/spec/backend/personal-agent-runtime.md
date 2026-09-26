@@ -12,6 +12,7 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 | [Extension runtime](./personal-agent-extension-runtime.md) | Optional Pi extension profiles, doctor behavior, Dove extension identity, trust, authority, and registration |
 | [Managed installation](./personal-agent-managed-install.md) | Managed installation, release manifests, launcher behavior, updates, repair, rollback, and installation diagnostics |
 | [Framework core](./personal-agent-framework-core.md) | Execution loop ownership, the gate boundary, work-mode layout and validation, the authority grant graph, effect identity and exactly-once, the evidence plane, context admission, and capability scoping |
+| [Code audit vertical](./personal-agent-audit-vertical.md) | Deterministic seed scanning, the coverage receipt, and the finding claim schema |
 
 ## Selection rules
 
