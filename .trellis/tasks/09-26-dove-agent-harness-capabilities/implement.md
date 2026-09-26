@@ -851,6 +851,36 @@ npm test          -> tests 571 / pass 569 / fail 0 / skipped 2   (566 before, +5
    citation or replace it with one that exists.
 2. Sweep for every claim about a guarantee the harness does not have (AC5).
 
+
+### M8 record, 2026-09-26  **[IN PROGRESS - two false claims found and corrected]**
+
+**1. The withdrawn citation, fixed.** `checkpoint.ts` attributed two guards to "the strongest precedent found in the
+wild (Microsoft's `WorkflowCheckpoint`)" - and no such class was found when the citation was checked. The guards are
+now stated as this project's own, **and the withdrawal is written into the comment** rather than the sentence quietly
+disappearing, because a reader searching for the precedent is exactly the reader who needs to know there is not one.
+
+**2. A claim broader than its own premise, fixed.** `loop-pi-agent-core.ts` ended its gate paragraph with "so the
+guarantees do not depend on which loop is running". The premise was the **gate** (two framework-level guards, both
+genuinely applied there); the conclusion promised every guarantee, including the effect claim that adapter
+**deliberately does not have** - its own `refusedEffects` comment below says so. **Two comments in one file disagreeing
+about what is guaranteed** is the shape this milestone exists to find. The paragraph now ends at the claim its premise
+supports, and names the effect boundary as the thing that is not shared.
+
+**3. The sweep, and what it found.** A case-sensitive scan of `src/**` for vendor attributions (`Microsoft`,
+`Anthropic`, `LangGraph`, `Temporal`, `Stripe`, `Claude Code`, `Aider`, `SWE-agent`) returns **one** comment: the
+withdrawal note above. The other hits in a first pass were false positives from case-insensitive matching
+(`inspect`). So **no unverified citation survives in `src/`**, and the remaining guarantee-bearing sentences were
+spot-checked: the fail-closed ones ("an unknown agent is never authorized", "an unmappable action is never in scope")
+match their code, and `context-admission.ts`'s "the tail always ends at the end, and never overlaps the head" holds
+because the retained slice is always smaller than the content that was compacted.
+
+**Still to do in M8:** the `modes/*/MODE.md` prose was written before several of these changes - the code-audit mode's
+Method section and its version convention in particular. That is the next sweep, and it is where a stale statement is
+most likely to survive: **a specification describing behaviour that is not there is a failure this task has already
+produced twice.**
+
+**Validation:** typecheck 0 errors; npm test 571 / 569 / 0 / 2 (prose only so far).
+
 ## Validation
 
 ```bash
