@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { loadWorkMode, evaluatePermission, type WorkModeFiles } from "../src/core/work-mode.ts";
+import { effectClassOf } from "../src/core/effect-ledger.ts";
 import { createConformanceGate } from "../src/core/gate-conformance.ts";
 import { createAgentLoop } from "../src/core/loop-runner.ts";
 import { createScriptedProvider } from "../src/adapters/loop-scripted.ts";
@@ -343,7 +344,22 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 	it("bumped the mode version when its authority changed", async () => {
 		const mode = await loadMode();
 		const governance = mode.governance as { version: string; evidence: { artifacts: readonly string[] } };
-		assert.equal(governance.version, "1.3.0", "an authority change increments the version, so a run can be attributed to one");
+		// 1.4.0 because the mode now declares which of its effects a retry may repeat, and that is a change to
+		// what it authorizes - the same reason 1.2.0 and 1.3.0 were bumped. A version that does not move when the
+		// authority set does cannot attribute a run to one authority set.
+		assert.equal(governance.version, "1.4.0", "an authority change increments the version, so a run can be attributed to one");
 		assert.ok(governance.evidence.artifacts.includes("coverage.json"), "the receipt is an artifact of the run, not an aside");
+	});
+
+	it("declares which of its effects a retry may repeat, and defaults the rest to non-idempotent", async () => {
+		const mode = await loadMode();
+		// The mapping is consumed by the claim at the dispatch line through effectClassOf, which reports an
+		// undeclared tool as a default rather than as a declaration - so an omission cannot grant a retry.
+		assert.equal(effectClassOf("code-audit.seed", mode.effectClasses).effectClass, "idempotent");
+		assert.equal(effectClassOf("code-audit.seed", mode.effectClasses).declared, true);
+		const undeclared = effectClassOf("bash", mode.effectClasses);
+		assert.equal(undeclared.effectClass, "non-idempotent", "running a command twice is two commands");
+		assert.equal(undeclared.declared, false, "and the caller can see that the mode did not say so");
+		assert.equal(effectClassOf("edit", mode.effectClasses).effectClass, "non-idempotent", "a patch applied twice is not the state one application produced");
 	});
 });

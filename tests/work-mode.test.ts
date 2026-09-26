@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { loadWorkMode, satisfiesFrameworkRange, evaluatePermission, WorkModeError, type WorkModeFiles } from "../src/core/work-mode.ts";
+import { effectClassOf } from "../src/core/effect-ledger.ts";
 
 const FRAMEWORK = "0.1.0";
 
@@ -100,6 +101,83 @@ describe("work-mode loader", () => {
 		});
 		const mode = loadWorkMode(folded, { frameworkVersion: FRAMEWORK });
 		assert.equal(mode.description, "Review the repository and emit findings\n");
+	});
+});
+
+/** A mode that declares whatever the caller appends under `gate:` or at the top level. */
+function withPolicy(yaml: string): WorkModeFiles {
+	return files({ governance: files().governance + yaml });
+}
+
+describe("mode-declared limits", () => {
+	it("validates and exposes the limits a mode declares, keyed by id", () => {
+		const mode = loadWorkMode(
+			withPolicy(["  limits:", "    notional:", "      argument: order.notional", "      max: 100000", "      unit: USD", "      tools: [order.submit]", ""].join("\n")),
+			{ frameworkVersion: FRAMEWORK },
+		);
+		assert.deepEqual(mode.limits, [{ id: "notional", argument: "order.notional", max: 100000, unit: "USD", tools: ["order.submit"] }]);
+	});
+
+	it("refuses a limit that can never decide anything, naming the file that declared it", () => {
+		const error = expectError(
+			() => loadWorkMode(withPolicy(["  limits:", "    useless:", "      argument: order.notional", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"missing-field",
+		);
+		assert.match(error.detail, /neither min nor max/, "a limit with no bound is refused at load, not later by whichever gate is built first");
+	});
+
+	it("refuses a non-finite bound rather than letting the limit always pass", () => {
+		expectError(
+			() => loadWorkMode(withPolicy(["  limits:", "    n:", "      argument: a", '      max: "lots"', ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"invalid-type",
+		);
+	});
+
+	it("refuses a list of limits, because the id would then be a second name for the key", () => {
+		const error = expectError(
+			() => loadWorkMode(withPolicy(["  limits:", "    - id: n", "      argument: a", "      max: 1", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"invalid-type",
+		);
+		assert.match(error.detail, /keyed by limit id/);
+	});
+
+	it("refuses an unknown field inside a limit, including a nested id", () => {
+		expectError(
+			() => loadWorkMode(withPolicy(["  limits:", "    n:", "      argument: a", "      max: 1", "      maximum: 2", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"unknown-field",
+		);
+		expectError(
+			() => loadWorkMode(withPolicy(["  limits:", "    n:", "      id: n2", "      argument: a", "      max: 1", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"unknown-field",
+		);
+	});
+});
+
+describe("mode-declared effect classes", () => {
+	it("exposes the declared classes, and an undeclared tool stays non-idempotent", () => {
+		const mode = loadWorkMode(
+			withPolicy(["effects:", "  classes:", "    read: idempotent", "    order.submit: key-idempotent", ""].join("\n")),
+			{ frameworkVersion: FRAMEWORK },
+		);
+		assert.deepEqual(mode.effectClasses, { read: "idempotent", "order.submit": "key-idempotent" });
+		const undeclared = effectClassOf("bash", mode.effectClasses);
+		assert.equal(undeclared.effectClass, "non-idempotent", "an omission must not grant a retry");
+		assert.equal(undeclared.declared, false, "and the caller can tell the mode did not say so");
+	});
+
+	it("refuses an unrecognised class by name rather than defaulting it", () => {
+		const error = expectError(
+			() => loadWorkMode(withPolicy(["effects:", "  classes:", "    read: safe", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"invalid-type",
+		);
+		assert.match(error.detail, /key-idempotent/, "the error names the accepted classes");
+	});
+
+	it("refuses an unknown field in the effects section", () => {
+		expectError(
+			() => loadWorkMode(withPolicy(["effects:", "  classez:", "    read: idempotent", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
+			"unknown-field",
+		);
 	});
 });
 

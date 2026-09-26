@@ -1,4 +1,4 @@
-version: 1.3.0
+version: 1.4.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -14,6 +14,27 @@ authority:
 gate:
   semantics: conformance
   approval: none
+
+# Which effects a retry may repeat. An undeclared tool is non-idempotent, so this map grants rather than
+# denies: it names only what a second run genuinely cannot duplicate. The claim at the dispatch line reads
+# it through effectClassOf, which reports an undeclared tool as a default rather than as a declaration.
+effects:
+  classes:
+    # The audit spine is reproducible by construction - the same receipt produces the same findings, and the
+    # report is overwritten rather than appended - so a retry cannot double it.
+    code-audit.seed: idempotent
+    code-audit.disposition: idempotent
+    code-audit.diff: idempotent
+    repo.read: idempotent
+    report.write: idempotent
+    # A second read of the same path is the same read.
+    read: idempotent
+    grep: idempotent
+    find: idempotent
+    ls: idempotent
+    # `write` replaces a file with the content it is given, so a second write leaves the same state. `edit`
+    # applies a patch, and a patch applied twice is not the state one application produced - so `edit` is
+    # absent here, as are `bash` and `powershell`. The default covers them, and the default is the safe one.
 
 sandbox:
   isolation: worktree

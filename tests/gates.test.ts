@@ -55,6 +55,22 @@ describe("limit gate (threshold semantics, for order-entry style controls)", () 
 		const lenient = createLimitGate([{ id: "optional", argument: "opt", max: 1, required: false }]);
 		assert.equal(lenient.evaluate(invocation("t", {})).outcome, "allow");
 	});
+
+	it("scopes a limit to the tools it names, so one action's threshold is not evaluated against another", () => {
+		// Why this is per limit and not only per gate: a **mode declares limits for different actions**, and a
+		// notional cap belongs to order entry. Without per-limit scoping this call is blocked for a *missing*
+		// notional it was never meant to have, which reads as a containment control and is a false alarm.
+		const scoped = createLimitGate([
+			{ id: "notional", argument: "order.notional", max: 100, tools: ["order.submit"] },
+			{ id: "batch", argument: "batch.size", max: 10, tools: ["report.export"] },
+		]);
+		assert.equal(scoped.evaluate(invocation("report.export", { batch: { size: 5 } })).outcome, "allow", "the notional limit does not apply to this tool");
+		assert.equal(scoped.evaluate(invocation("order.submit", { order: { notional: 50 } })).outcome, "allow");
+		assert.equal(scoped.evaluate(invocation("order.submit", { order: { notional: 500 } })).outcome, "block");
+		const overBatch = scoped.evaluate(invocation("report.export", { batch: { size: 50 } }));
+		assert.equal(overBatch.outcome, "block");
+		assert.match((overBatch as { reason: string }).reason, /exceeds limit 'batch'/);
+	});
 });
 
 describe("conformance gate (scope semantics, for authorized engagement work)", () => {

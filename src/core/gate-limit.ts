@@ -29,6 +29,14 @@ export interface LimitSpec {
 	readonly unit?: string;
 	/** Whether the absence of this argument is itself a block. Defaults to `true`. */
 	readonly required?: boolean;
+	/**
+	 * Restrict this limit to these tool names. Omitted means every action the gate is given.
+	 *
+	 * Per limit and not only per gate, because a **mode declares limits for different actions**: a notional cap
+	 * belongs to order entry and must not be evaluated against a read. Gate-wide scoping can express "these
+	 * limits apply to these tools", which cannot separate two limits that belong to two different tools.
+	 */
+	readonly tools?: readonly string[];
 }
 
 export class LimitSpecError extends Error {
@@ -63,13 +71,16 @@ export function createLimitGate(limits: readonly LimitSpec[], options: LimitGate
 		}
 	}
 	const scope = options.tools === undefined ? undefined : new Set(options.tools);
+	// Prepared once: a limit's own scope is part of the declaration, so it is not rebuilt per invocation.
+	const prepared = limits.map((limit) => ({ limit, scope: limit.tools === undefined ? undefined : new Set(limit.tools) }));
 
 	return {
 		id: "limit",
 		evaluate(invocation: GateInvocation): GateDecision {
 			if (scope !== undefined && !scope.has(invocation.tool)) return { outcome: "allow" };
 
-			for (const limit of limits) {
+			for (const { limit, scope: limitScope } of prepared) {
+				if (limitScope !== undefined && !limitScope.has(invocation.tool)) continue;
 				const raw = readPath(invocation.arguments, limit.argument);
 				const required = limit.required !== false;
 				const unit = limit.unit === undefined ? "" : ` ${limit.unit}`;

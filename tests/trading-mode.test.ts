@@ -53,10 +53,13 @@ describe("trading vertical (limit gate + venue-level idempotency)", () => {
 	});
 
 	it("blocks an over-threshold order before it reaches the venue", async () => {
-		const gate = createLimitGate([
-			{ id: "notional", argument: "order.notional", max: 100_000, unit: "USD" },
-			{ id: "quantity", argument: "order.quantity", min: 1, max: 10_000 },
-		]);
+		// The thresholds come from the loaded mode, not from this test. That is the difference between a
+		// pre-trade limit that a reviewer can read in governance.yaml and one that exists only where a test
+		// happened to write it down: the loader validates and exposes `gate.limits` now, and a mode that
+		// declares an undecidable limit fails to load rather than failing later in whichever gate is built.
+		const mode = await loadMode();
+		assert.deepEqual(mode.limits.map((limit) => limit.id), ["notional", "quantity"], "the mode declares both thresholds");
+		const gate = createLimitGate(mode.limits);
 		const venue = createSandboxVenue();
 		const decision = gate.evaluate({ tool: "order.submit", arguments: { order: { notional: 250_000, quantity: 10 } }, mode: MODE_IDENTITY, at: "2026-09-25T12:00:00.000Z", elapsedMs: 0, accumulatedIntensity: {} });
 		assert.equal(decision.outcome, "block");
@@ -65,7 +68,7 @@ describe("trading vertical (limit gate + venue-level idempotency)", () => {
 	});
 
 	it("blocks an order whose limit cannot be evaluated, rather than letting it through", async () => {
-		const gate = createLimitGate([{ id: "notional", argument: "order.notional", max: 100_000 }]);
+		const gate = createLimitGate((await loadMode()).limits);
 		const decision = gate.evaluate({ tool: "order.submit", arguments: { order: { quantity: 10 } }, mode: MODE_IDENTITY, at: "2026-09-25T12:00:00.000Z", elapsedMs: 0, accumulatedIntensity: {} });
 		assert.equal(decision.outcome, "block", "a limit gate that passes on a missing notional is worse than no gate");
 	});

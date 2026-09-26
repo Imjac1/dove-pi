@@ -1,4 +1,6 @@
 import { parse as parseYaml } from "yaml";
+import type { EffectClass } from "./effect-ledger.ts";
+import type { LimitSpec } from "./gate-limit.ts";
 
 /**
  * The work-mode loader (design section 3.4).
@@ -59,15 +61,33 @@ export interface WorkMode {
 	readonly frameworkRange: string;
 	readonly governance: Readonly<Record<string, unknown>>;
 	readonly permissions: PermissionSet;
+	/**
+	 * The numeric thresholds this mode declares, validated at load.
+	 *
+	 * Typed here rather than left inside `governance`, because a limit that can never decide anything must be a
+	 * **load** error naming the mode - not a `LimitSpecError` thrown later by whichever gate happens to be
+	 * constructed first. A mode that fails validation refuses to start (design section 5.4).
+	 */
+	readonly limits: readonly LimitSpec[];
+	/**
+	 * The effect class of each tool the mode names, consumed by the claim at the dispatch line (design 5.1).
+	 *
+	 * A tool this map does not name is `non-idempotent`: an omission must not silently grant the right to
+	 * retry. Declaring `idempotent` or `key-idempotent` is how a mode states that a second run is harmless.
+	 */
+	readonly effectClasses: Readonly<Record<string, EffectClass>>;
 }
 
 const MODE_FIELDS = new Set(["name", "description", "license", "compatibility", "metadata"]);
-const GOVERNANCE_FIELDS = new Set(["version", "framework", "scope", "authority", "gate", "sandbox", "session", "evidence", "coordination", "stop"]);
+const GOVERNANCE_FIELDS = new Set(["version", "framework", "scope", "authority", "gate", "effects", "sandbox", "session", "evidence", "coordination", "stop"]);
 const PERMISSION_FIELDS = new Set(["always_allow", "ask_before", "never_allow"]);
 const SCOPE_FIELDS = new Set(["targets", "environment", "exclusions", "ownership_evidence"]);
 const AUTHORITY_FIELDS = new Set(["grant", "grant_graph", "capabilities", "expires"]);
 const GATE_FIELDS = new Set(["semantics", "limits", "intensity", "excluded_techniques", "windows", "approval"]);
 const GATE_SEMANTICS = new Set(["limit", "conformance", "both"]);
+const LIMIT_FIELDS = new Set(["argument", "max", "min", "unit", "required", "tools"]);
+const EFFECTS_FIELDS = new Set(["classes"]);
+const EFFECT_CLASSES = new Set(["idempotent", "key-idempotent", "non-idempotent"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -121,6 +141,86 @@ function parseGovernance(source: string): Record<string, unknown> {
 	}
 	if (!isRecord(parsed)) throw new WorkModeError("invalid-type", "governance.yaml must be a mapping.");
 	return parsed;
+}
+
+/**
+ * Validate the limits a mode declares.
+ *
+ * A limit with neither `max` nor `min` is refused **here** rather than at gate construction: it can never
+ * decide anything, and the place to say so is the file that declared it, naming the mode rather than the
+ * gate that happened to be built first.
+ */
+function parseLimits(where: string, value: unknown): readonly LimitSpec[] {
+	if (value === undefined) return [];
+	if (Array.isArray(value)) {
+		throw new WorkModeError(
+			"invalid-type",
+			`${where} must be a mapping keyed by limit id - the shape modes/trading/governance.yaml declares. A list would make the id a field that can disagree with the key naming the same limit.`,
+		);
+	}
+	const declared = requireRecord(where, value);
+	return Object.entries(declared).map(([id, entry]) => {
+		const at = `${where}.${id}`;
+		if (id.trim() === "") {
+			throw new WorkModeError("missing-field", `${where} has an empty limit id, and the id is what a block reason and an evidence record name.`);
+		}
+		const record = requireRecord(at, entry);
+		// An inner `id` is rejected as unknown rather than ignored: the key is the identity, and two names for
+		// one limit is how they drift apart.
+		rejectUnknown(at, record, LIMIT_FIELDS);
+		if (typeof record.argument !== "string" || record.argument.trim() === "") {
+			throw new WorkModeError("missing-field", `${at}.argument is required: a limit with no argument to read can never decide anything.`);
+		}
+		for (const bound of ["min", "max"] as const) {
+			const raw = record[bound];
+			if (raw === undefined) continue;
+			if (typeof raw !== "number" || !Number.isFinite(raw)) {
+				throw new WorkModeError("invalid-type", `${at}.${bound} must be a finite number, because a limit that cannot compare is a limit that always passes.`);
+			}
+		}
+		if (record.min === undefined && record.max === undefined) {
+			throw new WorkModeError("missing-field", `${at} declares neither min nor max, so it can never decide anything. Declare a bound, or remove the limit.`);
+		}
+		if (record.unit !== undefined && typeof record.unit !== "string") {
+			throw new WorkModeError("invalid-type", `${at}.unit must be a string.`);
+		}
+		if (record.required !== undefined && typeof record.required !== "boolean") {
+			throw new WorkModeError("invalid-type", `${at}.required must be a boolean.`);
+		}
+		const tools = record.tools === undefined ? undefined : requireStringArray(`${at}.tools`, record.tools);
+		return {
+			id,
+			argument: record.argument,
+			...(record.max === undefined ? {} : { max: record.max as number }),
+			...(record.min === undefined ? {} : { min: record.min as number }),
+			...(record.unit === undefined ? {} : { unit: record.unit as string }),
+			...(record.required === undefined ? {} : { required: record.required as boolean }),
+			...(tools === undefined ? {} : { tools }),
+		};
+	});
+}
+
+/**
+ * Validate the declared effect classes (design section 5.1).
+ *
+ * An unrecognised class is refused by name rather than defaulted, because the default this map exists to
+ * avoid is the dangerous one: a class that silently became `idempotent` would hand the retry right to an
+ * effect that does not have it.
+ */
+function parseEffectClasses(where: string, value: unknown): Readonly<Record<string, EffectClass>> {
+	if (value === undefined) return {};
+	const effects = requireRecord(where, value);
+	rejectUnknown(where, effects, EFFECTS_FIELDS);
+	if (effects.classes === undefined) return {};
+	const classes = requireRecord(`${where}.classes`, effects.classes);
+	const result: Record<string, EffectClass> = {};
+	for (const [tool, raw] of Object.entries(classes)) {
+		if (typeof raw !== "string" || !EFFECT_CLASSES.has(raw)) {
+			throw new WorkModeError("invalid-type", `${where}.classes.${tool} must be one of: ${[...EFFECT_CLASSES].join(", ")} (got ${JSON.stringify(raw)}).`);
+		}
+		result[tool] = raw as EffectClass;
+	}
+	return result;
 }
 
 function parsePermissions(source: string): PermissionSet {
@@ -228,6 +328,8 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	}
 
 	const permissions = parsePermissions(files.permissions);
+	const limits = parseLimits("governance.gate.limits", gate.limits);
+	const effectClasses = parseEffectClasses("governance.effects", governance.effects);
 
 	return {
 		id: frontmatter.name,
@@ -237,6 +339,8 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		frameworkRange: governance.framework,
 		governance: { ...governance, scope, authority: { ...authority, capabilities }, gate },
 		permissions,
+		limits,
+		effectClasses,
 	};
 }
 
