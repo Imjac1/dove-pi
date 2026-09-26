@@ -592,6 +592,32 @@ npm run typecheck -> 0 errors
 npm test          -> tests 562 / pass 560 / fail 0 / skipped 2   (561 before, +1)
 ```
 
+
+### M4 closed, 2026-09-26  **[DONE - the belief-invalidation item has no counterpart here]**
+
+M4's third item asks for the belief invalidation the design's research singled out: when the harness drops content,
+its own cached beliefs about that content must be dropped too (Claude Code deleting a file from `readFileState`
+after clearing a Read result). The only candidate here was `doveContextPayloads`, and it is **not** such a belief.
+The evidence, in full:
+
+- Its **only writes** are inside the `context` transform that builds the current view (`extension.ts:2805-2812`), so
+  it is a **derived index of the payload that exists now**, not a cache that survives a drop.
+- It is **cleared before every rebuild** (`:2805`), at request end (`:2116`) and at session start (`:1825`) - nothing
+  it holds outlives the view it describes.
+- Its **only reader** (`:2531`) strips the very messages it indexes out of the **same** payload, so it cannot
+  disagree with that payload in the direction the finding cares about.
+- What Dove actually drops - oversized tool results - it **does not cache at all**. `details.doveOriginalContent`
+  is the host's own transcript record, and Dove never reads it back.
+
+Verdict: **not applicable rather than satisfied or missing.** Recorded that way instead of being ticked off, because
+the interesting half of the item is that it has no target in this host, and a reader should be able to check that
+claim against the four sites above.
+
+**One thing worth noting and not changing:** the name `doveContextPayloads` reads like a content cache and is a
+
+timestamp index for stripping. A name that promises more than the code does is in this project's defect family, and
+the rename is left as a candidate rather than done, because it is churn in a 3,000-line file for a naming quibble.
+
 ## M5. Acceptance: observables, not assertions
 
 Wiring point: `task-convergence.ts` is already reachable from the host.
@@ -603,6 +629,37 @@ Wiring point: `task-convergence.ts` is already reachable from the host.
    kernel-checked proofs, **30% had spec defects**.
 
 **Validate**: a criterion marked passed without a resolvable observable is refused.
+
+
+### M5's hole, closed 2026-09-26  **[IN PROGRESS - the observable must also be one the agent cannot author]**
+
+`acceptance.passed` took `evidenceRefs` **optionally**, so a criterion could be marked passed with nothing behind
+it. It now requires at least one, refused at the **event boundary** (`decodeTaskConvergenceEvent`) rather than in the
+reducer, because it is a shape rule: an event claiming a pass with no observable is not a well-formed claim, and the
+reducer should not have to arbitrate it. An explicitly empty list is the same claim as an absent one and is refused
+the same way. `acceptance.failed` keeps its refs optional **on purpose**: a failure is not a claim of success, and
+refusing to record one for lack of evidence would lose the failure.
+
+**What remains of M5 is the harder half: "a resolvable observable the agent did not author."** Requiring *a*
+reference is not requiring a *resolvable* one - `evidenceRefs: ["the suite passes"]` satisfies the rule as it now
+stands. The proposal, not yet decided or built: give refs a **scheme** whose kinds encode provenance, and let a pass
+accept only the host-authored kinds:
+
+- `ledger:<recordId>` - a record the execution ledger wrote, which the agent cannot author;
+- `command:<stepId>` - a recorded command exit status;
+- a bare path or a sentence - **refused for a pass**, because the agent can write either one.
+
+That is a boundary change with a resolver behind it (the ledger already exists), and it is the step that turns
+"observables, not assertions" from a request into an enforcement.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/task-convergence.test.ts -> tests 16 / pass 16 / fail 0   (15 before, +1)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 563 / pass 561 / fail 0 / skipped 2   (562 before, +1)
+```
 
 ## M6. The verification ladder
 
