@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"The Work-Mode scenario: the permission fields, the precedence rule, and the validation matrix are the contract this change edits, and the file is held to 24 KiB with 56 bytes of headroom."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"The host tool-call boundary where the permission list is evaluated, and where a refusal reaches the operator."}

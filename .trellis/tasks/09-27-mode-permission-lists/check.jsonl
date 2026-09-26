@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"The precedence rule and the matrix must match what the loader now accepts, and the budget test must stay green."}
+{"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"The boundary case: a shell call under code-audit is refused there, and that is the only place the change is observable."}
