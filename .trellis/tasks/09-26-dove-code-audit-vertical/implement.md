@@ -477,26 +477,40 @@ node --import tsx --test tests/spec-context-budget.test.ts
 
 ## Follow-up checks before `task.py start`
 
-- [ ] `design.md` and `implement.md` exist and `prd.md` has no blocking open question.
-- [ ] `implement.jsonl` and `check.jsonl` each hold real spec/research entries - not the empty files they
+- [x] `design.md` and `implement.md` exist and `prd.md` has no blocking open question.
+- [x] `implement.jsonl` and `check.jsonl` each hold real spec/research entries - not the empty files they
       are now, and not a placeholder row.
-- [ ] The user has approved the final planning summary **in a message after** that summary was presented.
-- [ ] The acceptance criterion with no external evidence base is stated as such: **no study was found
+- [x] The user has approved the final planning summary **in a message after** that summary was presented.
+- [x] The acceptance criterion with no external evidence base is stated as such: **no study was found
       that measures fingerprint stability across runs or the quality of a re-run's diff**, so this
       contract is defined and tested by us, not inherited.
-- [ ] The measured bar this vertical should eventually be judged against is recorded: Google's
+- [x] The measured bar this vertical should eventually be judged against is recorded: Google's
       **<10% effective false positives**, where "effective" means the developer took no action.
 
 ## Acceptance criteria
 
-- [ ] One mode runs end to end over a fixture repository and emits a SARIF log through
+- [x] One mode runs end to end over a fixture repository and emits a SARIF log through
       `evidence-sarif.ts`.
-- [ ] Two runs over the same tree produce identical identities; a reworded message does not create a new
+- [x] Two runs over the same tree produce identical identities; a reworded message does not create a new
       finding.
-- [ ] A moved finding reads as `unchanged` at a new location; an edited one as `updated`; a deleted one
+- [x] A moved finding reads as `unchanged` at a new location; an edited one as `updated`; a deleted one
       as `absent`; only a genuinely new one as `new`.
-- [ ] Every seed is either verified or explicitly dispositioned; none disappears.
-- [ ] The receipt fails validation when any mandatory family did not run.
-- [ ] An unreadable file produces a declared gap, never a clean result.
-- [ ] No audit-specific code under `src/core`; `never_allow: [shell.exec]` is unchanged.
-- [ ] `npm run typecheck` is clean and `npm test` is green.
+- [x] Every seed is either verified or explicitly dispositioned; none disappears.
+- [x] The receipt fails validation when any mandatory family did not run.
+- [x] An unreadable file produces a declared gap, never a clean result.
+- [x] No audit-specific code under `src/core`; `never_allow: [shell.exec]` is unchanged.
+- [x] `npm run typecheck` is clean and `npm test` is green.
+
+## Record closure
+
+Every box above is ticked on verified evidence, recorded 2026-09-26:
+
+- The eight acceptance criteria are covered by the test files M1-M5 name, and the whole gate was re-run on
+  the commit series ending `4e5b6f1`: `npm run typecheck` -> 0 errors, `npm test` -> tests 496 / pass 494 /
+  fail 0 / skipped 2.
+- Of the five pre-start check boxes: items 1, 2, 4 and 5 were verified directly (`implement.jsonl` and
+  `check.jsonl` hold real spec/research rows; the no-external-evidence caveat is at `prd.md:110`; the
+  <10% effective-false-positive bar is at `prd.md:98` and `design.md:281`). **Item 3 - the user's approval
+  of the final planning summary - has no separate artifact.** The only record it was given is that the task
+  reached `in_progress`, which the workflow does not allow without it. It is stated here rather than
+  implied, because this task's whole subject is claims that outrun their evidence.
