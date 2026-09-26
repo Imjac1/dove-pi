@@ -72,6 +72,7 @@ function mode(overrides: Partial<WorkMode> = {}): WorkMode {
 		governanceVersion: "1.0.0",
 		frameworkRange: ">=0.2.0 <0.3.0",
 		governance: {},
+		capabilities: ["net.scan", "exploit.run"],
 		gateSemantics: "conformance",
 		targetArgument: "target",
 		authorityGrant: "engagements/authority.yaml",
@@ -90,7 +91,7 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 	it("allows an action the grant covers, once the evidence digests verify", () => {
 		const files = workspace();
 		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
-		assert.deepEqual(policy.gates, ["deny", "conformance"], "conformance and no limit gate, in that order");
+		assert.deepEqual(policy.gates, ["deny", "scope", "conformance"], "denial, then the ceiling, then the contract - and no limit gate, because this mode declares no thresholds");
 		const decision = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
 		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
 	});
@@ -168,5 +169,15 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		assert.equal(denied.outcome, "block", "a caller that runs only evaluate must still get the denial");
 		assert.match((denied as { reason: string }).reason, /^\[deny\]/);
 	});
+	it("refuses a capability the mode does not grant, before any threshold or contract is consulted", () => {
+		const files = workspace();
+		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const outside = policy.evaluate(invocation("file.write", { target: "t-web" }), { viaCapability: true });
+		assert.equal(outside.outcome, "block");
+		assert.match((outside as { reason: string }).reason, /^\[scope\]/, "the ceiling refuses it, not the contract: a threshold asks how an action runs, this asks whether the agent may reach it at all");
+		// A granted capability passes the scope check and is then decided by the contract.
+		assert.equal(policy.evaluate(invocation("net.scan", { target: "t-web" }), { viaCapability: true }).outcome, "allow");
+	});
 });
+
 

@@ -18,6 +18,7 @@ function mode(effectClasses: WorkMode["effectClasses"]): WorkMode {
 		governanceVersion: "1.4.0",
 		frameworkRange: ">=0.2.0 <0.3.0",
 		governance: {},
+		capabilities: ["read", "edit", "code-audit.diff"],
 		gateSemantics: "conformance",
 		permissions: { always_allow: [], ask_before: [], never_allow: ["shell.exec"] },
 		limits: [],

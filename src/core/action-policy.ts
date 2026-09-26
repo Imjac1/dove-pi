@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { AuthorityDocument, AuthorityRequest } from "./authority.ts";
+import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
@@ -95,6 +96,10 @@ export function evidenceDigestsFor(document: AuthorityDocument, workspaceRoot: s
 
 export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	const { mode } = options;
+	// The ceiling comes from the mode, which is read before any untrusted content is: a scope assembled later has
+	// already been influenced by what was read (design 4.3). One agent today - the mode itself - and `narrow` is there
+	// for the day a delegate exists.
+	const scope = createCapabilityScope({ sets: [{ agentId: mode.id, capabilities: mode.capabilities.map((id) => ({ id })) }] });
 	const limitGate = mode.limits.length > 0 ? createLimitGate(mode.limits) : undefined;
 	const wantsConformance = mode.gateSemantics === "conformance" || mode.gateSemantics === "both";
 
@@ -141,7 +146,7 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 
 	return {
 		modeId: mode.id,
-		gates: ["deny", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id])],
+		gates: ["deny", "scope", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id])],
 		denyDecision,
 		evaluate(invocation, source) {
 			// The denial is evaluated here as well, so a caller who runs only `evaluate` cannot silently skip it.
@@ -149,6 +154,14 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			// as a second control that must be remembered.
 			const denial = denyDecision(invocation.tool);
 			if (denial.outcome === "block") return labelled(denial, "deny");
+			// **The scope check comes first among the capability checks**, and it is a name lookup while the others are
+			// value lookups: a threshold and a contract ask *how* an action may run, and this asks *whether this agent may
+			// reach it at all*. It is also the strongest control in the evidence base - an injected effect executes in
+			// 33-47 of 75 runs under ambient authority and 3 of 75 under capability scoping.
+			if (source.viaCapability) {
+				const authorized = scope.authorize({ agentId: mode.id, capability: invocation.tool });
+				if (authorized.outcome === "deny") return labelled({ outcome: "block", reason: authorized.reason, remediation: authorized.remediation }, "scope");
+			}
 			if (limitGate !== undefined) {
 				const decision = limitGate.evaluate(invocation);
 				if (decision.outcome === "block") return labelled(decision, limitGate.id);

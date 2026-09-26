@@ -86,6 +86,14 @@ export interface WorkMode {
 	readonly targetArgument?: string;
 	/** The `authority.grant` this mode names: a document path relative to the workspace, or a bare name. */
 	readonly authorityGrant?: string;
+	/**
+	 * The capabilities this mode grants the agent, from `authority.capabilities`.
+	 *
+	 * Typed and exposed rather than left in `governance`, because a capability scoping check is only worth having if
+	 * the ceiling comes from **trusted input read before untrusted content**: a scope assembled by a caller that has
+	 * already read a repository has been influenced by it (design section 4.3).
+	 */
+	readonly capabilities: readonly string[];
 	readonly limits: readonly LimitSpec[];
 	/**
 	 * The effect class of each tool the mode names, consumed by the claim at the dispatch line (design 5.1).
@@ -365,6 +373,7 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		governanceVersion: governance.version,
 		frameworkRange: governance.framework,
 		governance: { ...governance, scope, authority: { ...authority, capabilities }, gate },
+		capabilities,
 		gateSemantics: gate.semantics as "limit" | "conformance" | "both",
 		...(targetArgument === undefined ? {} : { targetArgument: targetArgument as string }),
 		...(grant === undefined ? {} : { authorityGrant: grant as string }),

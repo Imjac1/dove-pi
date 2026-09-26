@@ -51,7 +51,8 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// tool_call boundary - the third shrink, and the assertion is what noticed.
 	// `src/core/authority.ts` left this list when the mode loader began resolving a conformance mode's grant
 	// document - the second time the list has shrunk, and again the assertion is what noticed.
-	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode, which has not landed yet", wiredBy: "M3" },
+	// `src/core/capability-scope.ts` left this list when the action policy began scoping capability calls against
+	// the mode's declared set - the sixth shrink, and the last module a milestone claimed.
 	// `src/core/context-admission.ts` left this list when the host's tool-result compaction began delegating to
 	// it - the fifth shrink, and the first module to leave because it *replaced* an implementation rather than
 	// gaining a consumer.
