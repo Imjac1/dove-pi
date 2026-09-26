@@ -132,6 +132,10 @@ interface FixtureSpec {
 	readonly conformance?: { readonly targetArgument: string; readonly document: string };
 	/** A technique the mode forbids. Declared so a case can show whether anything reads it. */
 	readonly excludedTechniques?: readonly string[];
+	/** The mode's own expiry. Declared so a case can show whether anything compares it to now. */
+	readonly expires?: string;
+	/** Targets the mode excludes. Declared so a case can show whether anything checks them. */
+	readonly exclusions?: readonly string[];
 }
 
 function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
@@ -147,11 +151,11 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			"scope:",
 			"  targets: [workspace]",
 			"  environment: non-production",
-			"  exclusions: []",
+			"  exclusions: [" + (spec.exclusions ?? []).join(", ") + "]",
 			"authority:",
 			"  grant: " + (conformance === undefined ? "local-fixture" : conformance.document),
 			"  capabilities: [" + spec.capability + "]",
-			'  expires: "2027-01-01T00:00:00.000Z"',
+			'  expires: "' + (spec.expires ?? "2027-01-01T00:00:00.000Z") + '"',
 			"gate:",
 			// `none` when the fixture declares neither control: a fixture that wrote `limit` with no limits would be refused
 			// by the rule this branch is about.
@@ -658,6 +662,56 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "conformance" && record.details?.action === "workspace.inspect");
 			assert.ok(recorded !== undefined, "the conformance refusal is in the ledger with its gate and its action");
 			assert.match(recorded?.details?.reason ?? "", /is not present in authority document/, "and its reason names the target and the document, which is what a reader needs in order to check it");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+	it("loads a mode whose declared expiry is in the past  [KNOWN GAP]", async () => {
+		// All three shipped modes declare `authority.expires` (`2026-10-01`, `2026-12-31`, `2027-01-01`) and nothing
+		// compares it to now - a field-level reader scan over `src/` finds no reader. An authorization with a date on it
+		// that is never read is a time-bounded grant with no bound. The *document's* grant `window` **is** checked by
+		// the pre-flight, which is what makes the omission easy to miss.
+		//
+		// Invert this test when the expiry is enforced; do not delete it.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "expired", { capability: "workspace.inspect", expires: "2020-01-01T00:00:00.000Z" });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "expired" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			assert.ok(
+				host.notifications.some((message) => /expired loaded from modes\/expired/.test(message)),
+				"KNOWN GAP: an expired mode loads, because nothing reads its expiry: " + host.notifications.join(" | "),
+			);
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("allows a target the mode excludes, because nothing checks the exclusion  [KNOWN GAP]", async () => {
+		// `scope.exclusions` is declared by all three shipped modes (`[t-payments]`, `[production-venue]`, `[]`) and
+		// nothing reads it. This fixture excludes **the very target its own authority document authorizes**, which is
+		// the strongest form of the claim: an exclusion that cannot refuse the thing it names.
+		//
+		// Invert this test when exclusions are enforced; do not delete it.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		const engagement = writeFixtureEngagement(root);
+		writeFixtureMode(root, "excluding", {
+			capability: "workspace.inspect",
+			conformance: { targetArgument: "target", document: engagement.document },
+			exclusions: [engagement.target],
+		});
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "excluding" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
+
+			const excluded = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { target: engagement.target } }, "c-excluded");
+			assert.notEqual(excluded?.block, true, "KNOWN GAP: a target the mode excludes is allowed: " + (excluded?.reason ?? "(no reason)"));
 		} finally {
 			host.restoreCwd();
 		}
