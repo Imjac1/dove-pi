@@ -2362,6 +2362,32 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				? { ...(details as Record<string, unknown>), doveProgressWarning: { kind: warning.kind, snapshot: warning.snapshot } }
 				: { doveProgressWarning: { kind: warning.kind, snapshot: warning.snapshot } };
 		}
+		// **The citable observable.** A tool call the harness saw gets a record, and a successful one gets a marker
+		// naming it, so a later acceptance pass can be checked against something the agent did not author. The marker is
+		// offered **only when the record was written**: a citation pointing at a record that does not exist is the
+		// assertion in the right costume, which is what the withdrawn M5 rule was about.
+		if (event.isError !== true) {
+			const observableId = `tool:${event.toolCallId}`;
+			try {
+				await ledger.appendToolObserved({
+					taskId: currentRequestTaskId ?? "pi-session",
+					stepId: observableId,
+					mode: currentRequestPlan?.mode ?? mode.current,
+					tool: event.toolName,
+					isError: false,
+					requestId: currentRequestPlan?.requestId,
+					sessionId: (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.(),
+					attemptId: requestLifecycle.currentAttempt()?.attemptId,
+					toolCallId: event.toolCallId,
+				});
+				content = [...content, { type: "text", text: "[Dove observable: ledger:" + observableId + "]" }];
+				changed = true;
+			} catch (error) {
+				// No record, no citation - and the operator is told, because a later pass will be refused for lack of a
+				// resolvable observable and the reason would otherwise be invisible.
+				if (ctx.hasUI) ctx.ui.notify("[Dove observable] This tool result could not be recorded as an observable: " + (error instanceof Error ? error.message : String(error)), "warning");
+			}
+		}
 		if (toolTiming && currentRequestPlan) {
 			try {
 				const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();

@@ -297,10 +297,28 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			assert.equal(inFlight.tool, "order.submit", "the record names the action, not the umbrella tool that carried it");
 			assert.equal(inFlight.outcome, undefined, "and it has no outcome yet");
 
-			await host.events.get("tool_result")?.({ type: "tool_result", toolCallId: "c-1", toolName: "agent_run_capability", input, content: [], isError: false }, host.context);
+			const toolResult = (await host.events.get("tool_result")?.({ type: "tool_result", toolCallId: "c-1", toolName: "agent_run_capability", input, content: [], isError: false }, host.context)) as { content?: Array<{ text?: string }> } | undefined;
 			const completed = JSON.parse(readFileSync(join(effectsDir, claimed[0] as string), "utf8")) as { outcome?: string; completedAt?: string };
 			assert.equal(completed.outcome, "completed", "the result completes the claim");
 			assert.ok(completed.completedAt !== undefined, "with the time it completed");
+
+			// **The citable observable.** A record the harness wrote, named in the result so the agent can cite it: the
+			// agent can write a sentence claiming a criterion passed, but it cannot make this record exist.
+			const marker = (toolResult?.content ?? []).map((part) => part.text ?? "").join("\n");
+			assert.match(marker, /\[Dove observable: ledger:tool:c-1\]/, "a successful result names the observable it created");
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const observedRecords = existsSync(ledgerFile)
+				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; stepId?: string; details?: { tool?: string } })
+				: [];
+			const observed = observedRecords.find((record) => record.kind === "tool.observed" && record.stepId === "tool:c-1");
+			assert.ok(observed !== undefined, "and the record it names exists, which is what makes the citation worth anything");
+			assert.equal(observed?.details?.tool, "agent_run_capability");
+
+			// A failure is not a pass-observable, so it is offered no citation: one would let an agent cite a result it
+			// could not pass on.
+			const failed = (await host.events.get("tool_result")?.({ type: "tool_result", toolCallId: "c-2", toolName: "bash", input: { command: "npm test" }, content: [], isError: true }, host.context)) as { content?: Array<{ text?: string }> } | undefined;
+			const failedText = (failed?.content ?? []).map((part) => part.text ?? "").join("\n");
+			assert.ok(!failedText.includes("Dove observable"), "a failed result is not offered as an observable");
 		} finally {
 			host.restoreCwd();
 		}

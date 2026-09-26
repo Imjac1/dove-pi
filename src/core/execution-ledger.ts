@@ -328,6 +328,18 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "gate.refused", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { tool: input.tool, action: input.action, viaCapability: input.viaCapability, gate: input.gate, reason: input.reason, remediation: input.remediation } });
 	}
 
+	/**
+	 * A tool call the harness observed, recorded so a later acceptance pass can cite it.
+	 *
+	 * **This is the observable side of "a pass must be checkable".** The agent can write a file or a sentence saying a
+	 * criterion passed; it cannot make this record exist, which is what makes it evidence rather than an assertion. It
+	 * is written unconditionally (unlike the timing phase, which is best-effort) because a citation pointing at a
+	 * record that was never written is worse than no citation at all.
+	 */
+	public async appendToolObserved(input: { taskId: string; stepId: string; mode: AgentMode; tool: string; isError: boolean; requestId?: string; sessionId?: string; attemptId?: string; toolCallId: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "tool.observed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { tool: input.tool, isError: input.isError, toolCallId: input.toolCallId } });
+	}
+
 	public async appendProjectMutationStarted(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string, args: readonly string[] = [], beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<void> {
 		await this.append({ taskId, stepId, kind: "project.mutation.started", timestamp: new Date().toISOString(), mode, details: { mutationId, operation, provider, revision, args: args.map((arg) => arg.slice(0, 512)), beforeTaskIds: beforeTaskIds.slice(0, 512), ...(targetTaskId ? { targetTaskId } : {}), ...(beforeTargetStatus ? { beforeTargetStatus: beforeTargetStatus.slice(0, 128) } : {}), ...(beforeCurrentTaskId ? { beforeCurrentTaskId } : {}) } });
 	}
