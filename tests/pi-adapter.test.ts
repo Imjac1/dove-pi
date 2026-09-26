@@ -390,8 +390,16 @@ describe("Pi adapter", () => {
 		assert.match(String((beforeStart as { systemPrompt?: string })?.systemPrompt), /supplied separately at request time/);
 		const sysCaptured = notifications.length;
 		await commands.get("sysprompt")?.handler("", context);
-		assert.ok(notifications.slice(sysCaptured).at(-1)?.includes("[PERSONAL AGENT]"));
-		assert.ok(notifications.slice(sysCaptured).at(-1)?.includes("supplied separately at request time"));
+		const preview = notifications.slice(sysCaptured).at(-1) ?? "";
+		assert.ok(preview.includes("[PERSONAL AGENT]"), "the preview must show the injected block, so a reader can see what was sent");
+		// The preview is capped at 2000 characters, so it is the head of the prompt rather than the whole
+		// of it. Asserting tail content through it would make this assertion a proxy for how long the
+		// capability index happens to be - which is exactly what adding a capability exposed. What the
+		// preview owes a reader is the head, an honest note about the rest, and a way to get it.
+		assert.ok(preview.includes("/sysprompt save"), "a truncated preview must say how to obtain the whole prompt");
+		// The phrase asserted above against the full prompt sits after the capability index, which grows
+		// as capabilities are registered, so it is not guaranteed to fall inside any fixed head window.
+		assert.ok(String((beforeStart as { systemPrompt?: string })?.systemPrompt).includes("supplied separately at request time"));
 		await commands.get("reasoning-voice")?.handler("off", context);
 		const withoutVoiceStart = await events.get("before_agent_start")?.({ prompt: "修复登录超时问题", systemPrompt: "", type: "before_agent_start" }, context);
 		assert.doesNotMatch(String((withoutVoiceStart as { systemPrompt?: string })?.systemPrompt), /We need|first-person-plural/);

@@ -1,3 +1,4 @@
+import { registerCodeAuditCapabilities } from "./capabilities/code-audit.ts";
 import { registerDevelopmentCapabilities } from "./capabilities/development.ts";
 import { registerRuntimeCapabilities } from "./capabilities/runtime.ts";
 import { registerWebAccessCapabilities } from "./capabilities/web-access.ts";
@@ -16,6 +17,7 @@ export function createDoveRuntime(): DoveRuntime {
 	registerDevelopmentCapabilities(capabilities);
 	registerWebAccessCapabilities(capabilities);
 	registerRuntimeCapabilities(capabilities);
+	registerCodeAuditCapabilities(capabilities);
 	recipes.register({
 		name: "dev.validate_project",
 		version: "0.1.0",

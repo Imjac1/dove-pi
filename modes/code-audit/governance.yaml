@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 1.3.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -8,7 +8,7 @@ scope:
 
 authority:
   grant: local-review
-  capabilities: [repo.read, report.write]
+  capabilities: [repo.read, report.write, code-audit.seed, code-audit.disposition, code-audit.diff]
   expires: "2027-01-01T00:00:00.000Z"
 
 gate:
@@ -30,7 +30,7 @@ session:
 
 evidence:
   format: sarif
-  artifacts: [report.sarif]
+  artifacts: [report.sarif, coverage.json]
   retention: 90d
   isolation: per-engagement
 
