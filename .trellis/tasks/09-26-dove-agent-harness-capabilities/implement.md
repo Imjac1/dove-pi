@@ -979,6 +979,43 @@ errors; npm test 572 / 570 / 0 / 2.
 premise, two mode requirements asserted as behaviour the harness supplies, a mode described as loadable when it is not,
 a list formatted as if it had three members, and a spec's restriction that nothing enforces.
 
+### M3's last item, landed 2026-09-26  **[capability scoping has a runtime consumer]**
+
+`capability-scope.ts` was the last module a milestone claimed and nothing reached. It is now consulted **by the action
+policy, for capability calls only**, and it comes **first among the capability checks**: the others ask *how* an action
+may run - a threshold, a contract - and this asks *whether this agent may reach it at all*.
+
+**One more reason than ordering taste:** it is the strongest control in the evidence base. An injected effect executes
+in **33-47 of 75 runs** under ambient authority and **3 of 75** under capability scoping, at roughly no task cost. A
+control that cheap should not sit behind two that are more expensive and less decisive.
+
+**The ceiling comes from the mode**, which is read before any untrusted content is - the module's own first property.
+`WorkMode.capabilities` is exposed and typed rather than left inside `governance`, because a scope assembled by a caller
+that has already read a repository has been influenced by it.
+
+**Two test updates, both forced and both stated:** the type gained a required field, so two `WorkMode` literals in
+existing tests now declare their capability set; and an older assertion listed the policy's gates as
+`["deny", "conformance"]`, which is now `["deny", "scope", "conformance"]`. That assertion is the right place for the
+fact, so the duplicate I had just written was removed and it was updated instead.
+
+**The reachability allow-list is down to six entries** - the sixth shrink, and the last one a milestone claimed. The
+remaining six are the reference loop's runner and checkpoint, two adapters for a loop the host owns, and two modules
+that predate this work.
+
+**M3 is complete except for `ask_before`**, which is a decision rather than an implementation: the host has a
+confirmation UI, and using it or refusing instead changes what the permission set means.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/action-policy.test.ts         -> tests 10 / pass 10 / fail 0   (+1: the ceiling)
+node --import tsx --test tests/host-work-mode.test.ts        -> tests 14 / pass 14 / fail 0
+node --import tsx --test tests/harness-reachability.test.ts  -> tests  6 / pass  6 / fail 0   (allow-list 7 -> 6)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 573 / pass 571 / fail 0 / skipped 2   (572 before, +1)
+```
+
 ## Validation
 
 ```bash
