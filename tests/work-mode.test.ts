@@ -257,11 +257,13 @@ describe("loading a mode from a directory", () => {
 	const PACKAGE_VERSION = (JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as { version: string }).version;
 
 	it("loads a shipped mode by name, with its limits and effect classes", () => {
-		const codeAudit = loadWorkModeFromDirectory(process.cwd(), "code-audit", { frameworkVersion: PACKAGE_VERSION });
-		assert.equal(codeAudit.id, "code-audit");
-		assert.equal(effectClassOf("code-audit.seed", codeAudit.effectClasses).effectClass, "idempotent");
-		const trading = loadWorkModeFromDirectory(process.cwd(), "trading", { frameworkVersion: PACKAGE_VERSION });
+		const trading = loadWorkModeFromDirectory(process.cwd(), "trading", { frameworkVersion: PACKAGE_VERSION }).mode;
+		assert.equal(trading.id, "trading");
 		assert.deepEqual(trading.limits.map((limit) => limit.id), ["notional", "quantity"], "the thresholds are mode content, not test content");
+		const pentest = loadWorkModeFromDirectory(process.cwd(), "pentest", { frameworkVersion: PACKAGE_VERSION });
+		assert.equal(pentest.mode.id, "pentest");
+		assert.equal(pentest.authorityDocument?.engagement, "example-engagement", "a conformance mode loads with the document it is checked against");
+		assert.ok((pentest.authorityDocument?.grants.length ?? 0) > 0, "and that document has grants, or the mode is gated by an empty scope");
 	});
 
 	it("refuses a mode name that is a path, before touching the filesystem", () => {

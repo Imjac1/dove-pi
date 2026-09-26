@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -64,13 +64,14 @@ function declareMode(root: string, value: string): void {
 	writeFileSync(join(root, ".dove", "mode.json"), value);
 }
 
-/** Copy a shipped mode into the throwaway workspace, reading the real files so the fixture cannot drift. */
+/** Copy shipped content into the throwaway workspace, so a fixture cannot drift from what ships. */
 function copyMode(root: string, name: string): void {
-	const target = join(root, "modes", name);
-	mkdirSync(target, { recursive: true });
-	for (const file of ["MODE.md", "governance.yaml", "permissions.yaml"]) {
-		writeFileSync(join(target, file), readFileSync(join(repoRoot, "modes", name, file), "utf8"));
-	}
+	cpSync(join(repoRoot, "modes", name), join(root, "modes", name), { recursive: true });
+}
+
+/** A conformance mode's authority document lives beside the modes, so copying a mode is not enough. */
+function copyEngagements(root: string): void {
+	cpSync(join(repoRoot, "engagements"), join(root, "engagements"), { recursive: true });
 }
 
 async function callTool(host: ReturnType<typeof startHost>, toolName: string, input: unknown): Promise<{ block?: boolean; reason?: string } | undefined> {
@@ -116,26 +117,54 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 	it("enforces the loaded mode's never_allow against the action, and leaves an unlisted tool alone", async () => {
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
-		copyMode(root, "code-audit");
-		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		copyMode(root, "pentest");
+		copyEngagements(root);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "pentest" }));
 		const host = startHost(root);
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			assert.ok(host.notifications.some((message) => /code-audit loaded from modes\/code-audit/.test(message)), host.notifications.join(" | "));
+			assert.ok(host.notifications.some((message) => /pentest loaded from modes\/pentest/.test(message)), host.notifications.join(" | "));
+			assert.ok(
+				host.notifications.some((message) => /conformance against engagement 'example-engagement'/.test(message)),
+				"the operator is told which document bounds the run",
+			);
 			assert.ok(
 				host.notifications.some((message) => /ask_before is not consumed yet/.test(message)),
 				"the half that is not enforced is stated rather than implied",
 			);
 
-			// code-audit's never_allow names 'shell.exec', a Dove action. It is reached through the capability tool,
-			// which is exactly why the action mapping exists: matched against the tool name it would never fire.
-			const denied = await callTool(host, "agent_run_capability", { name: "shell.exec", args: {} });
+			// pentest's never_allow names 'dos.*', a Dove action reached through the capability tool - which is exactly
+			// why the action mapping exists: matched against the tool name it would never fire.
+			const denied = await callTool(host, "agent_run_capability", { name: "dos.syn", args: {} });
 			assert.equal(denied?.block, true, "the mode's deny list must actually fire");
 			assert.match(denied?.reason ?? "", /never_allow/);
-			assert.match(denied?.reason ?? "", /shell\.exec/);
+			assert.match(denied?.reason ?? "", /dos\.syn/);
 
 			const bash = await callTool(host, "bash", { command: "git status --short" });
 			assert.notEqual(bash?.block, true, "bash is not on this mode's deny list, and the mapping is what makes that distinguishable");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses a conformance mode whose grant is not a document, and names both ways out", async () => {
+		// This is the consequence of requiring a document, pinned as behaviour rather than discovered later:
+		// code-audit declares `gate.semantics: conformance` and its authority.grant is the bare name
+		// 'local-review', so there is no document for an action to be checked against. It refuses to load, and the
+		// refusal names the two fixes, because a conformance mode that cannot check anything must not start.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-audit");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const refusal = host.notifications.find((message) => /local-review/.test(message));
+			assert.ok(refusal !== undefined, "the refusal names the grant that could not be resolved: " + host.notifications.join(" | "));
+			assert.match(refusal, /authority\.grant/, "and the field to fix");
+			assert.match(refusal, /gate\.semantics: limit/, "and the alternative, so the operator is not left guessing");
+			const decision = await callTool(host, "bash", { command: "ls" });
+			assert.equal(decision?.block, true, "and no action runs while the mode is unresolved");
 		} finally {
 			host.restoreCwd();
 		}

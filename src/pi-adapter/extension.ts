@@ -42,6 +42,7 @@ import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
+import type { AuthorityDocument } from "../core/authority.ts";
 import { createLimitGate } from "../core/gate-limit.ts";
 import type { SynchronousActionGate } from "../core/loop.ts";
 import { evaluatePermission, loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
@@ -531,6 +532,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// rather than starting unconstrained** (design 5.4). Loading it in a test was the defect being fixed.
 	let activeWorkMode: WorkMode | undefined;
 	let modeRefusal: string | undefined;
+	// The document a conformance mode is checked against. Held from the load so the run's authority is the one
+	// that was validated, rather than read again per action from a file that may have changed under it.
+	let activeAuthorityDocument: AuthorityDocument | undefined;
 	// Built once from the loaded mode's declared limits, because a limit gate that is rebuilt per call is a gate
 	// whose thresholds can differ between two identical actions.
 	let activeLimitGate: SynchronousActionGate | undefined;
@@ -1772,6 +1776,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const selection = resolveWorkModeSelection({ workspaceRoot: modeRoot, workspaceMode: workspacePolicy.mode });
 		const frameworkVersion = process.env.DOVE_PI_FRAMEWORK_VERSION?.trim();
 		activeWorkMode = undefined;
+		activeAuthorityDocument = undefined;
 		modeRefusal = workModeRefusal(selection);
 		if (modeRefusal === undefined && selection.name !== undefined) {
 			if (frameworkVersion === undefined || frameworkVersion === "") {
@@ -1782,7 +1787,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				modeRefusal = `Work mode '${selection.name}' declares a framework range that cannot be checked here: DOVE_PI_FRAMEWORK_VERSION is not set. A mode that cannot be validated must not start.`;
 			} else {
 				try {
-					activeWorkMode = loadWorkModeFromDirectory(modeRoot, selection.name, { frameworkVersion });
+					const loaded = loadWorkModeFromDirectory(modeRoot, selection.name, { frameworkVersion });
+					activeWorkMode = loaded.mode;
+					activeAuthorityDocument = loaded.authorityDocument;
 				} catch (error) {
 					modeRefusal = workModeRefusal(selection, error as Error);
 				}
@@ -1803,8 +1810,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (activeWorkMode !== undefined && ctx.hasUI) {
 			// `ask_before` is not consumed yet. Saying so is the difference between a control that is absent and a
 			// control that reads as present: an unsaid gap is the defect this project keeps finding in configuration.
+			const bound =
+				activeAuthorityDocument === undefined
+					? "no authority document: this mode declares no conformance"
+					: `conformance against engagement '${activeAuthorityDocument.engagement}' with ${activeAuthorityDocument.grants.length} grant(s)`;
 			ctx.ui.notify(
-				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name}: ${activeWorkMode.permissions.never_allow.length} denied action(s) are enforced. ask_before is not consumed yet, so those ${activeWorkMode.permissions.ask_before.length} action(s) run without asking.`,
+				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are enforced. ask_before is not consumed yet, so those ${activeWorkMode.permissions.ask_before.length} action(s) run without asking.`,
 				activeWorkMode.permissions.ask_before.length > 0 ? "warning" : "info",
 			);
 		}

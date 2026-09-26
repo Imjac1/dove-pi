@@ -13,6 +13,8 @@
  * to prevent is a scope checker that treats an empty or unresolvable scope as "unrestricted".
  */
 
+import { parse as parseYaml } from "yaml";
+
 export interface Principal {
 	readonly id: string;
 	readonly kind: "grantor" | "operator" | "third-party";
@@ -138,6 +140,7 @@ function evidenceProblem(
 const DOCUMENT_FIELDS = new Set(["version", "engagement", "principals", "grants", "targets"]);
 const GRANT_FIELDS = new Set(["id", "from", "to", "authorizes", "targets", "window", "evidence", "constraints", "external_state", "risk_acceptance"]);
 const AUTHORIZES_FIELDS = new Set(["actions", "outcomes"]);
+const TARGET_FIELDS = ["id", "address", "owner", "ownership_evidence", "requires_grants"] as const;
 
 /**
  * Reject a malformed authority document before anything is evaluated.
@@ -162,6 +165,72 @@ export function validateAuthorityDocument(document: AuthorityDocument): string |
 		if (authorizesProblem !== undefined) return authorizesProblem;
 	}
 	return undefined;
+}
+
+/** Raised when an authority document cannot be read as one. */
+export class AuthorityDocumentError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "AuthorityDocumentError";
+	}
+}
+
+/**
+ * Parse an authority document from its YAML source.
+ *
+ * **Structural checks run here as well as the unknown-field check, because they prevent the same failure from
+ * two sides.** An unknown key is a constraint silently absent; a *missing* key is a constraint that cannot be
+ * evaluated - `grant.targets` as `undefined` is not an error the evaluator raises, it is a comparison that
+ * quietly fails, and a document exists precisely to make that impossible. Both are named, with the file they
+ * came from.
+ */
+export function parseAuthorityDocument(source: string, origin: string): AuthorityDocument {
+	let parsed: unknown;
+	try {
+		parsed = parseYaml(source);
+	} catch (error) {
+		throw new AuthorityDocumentError(`${origin} is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		throw new AuthorityDocumentError(`${origin} must be a mapping.`);
+	}
+	const record = parsed as Record<string, unknown>;
+	for (const field of ["version", "engagement", "principals", "grants", "targets"] as const) {
+		if (record[field] === undefined) {
+			throw new AuthorityDocumentError(`${origin} is missing '${field}': a document whose purpose is to bound an agent cannot omit the thing that bounds it.`);
+		}
+	}
+	if (typeof record.version !== "number") throw new AuthorityDocumentError(`${origin}.version must be a number.`);
+	if (typeof record.engagement !== "string" || record.engagement.trim() === "") {
+		throw new AuthorityDocumentError(`${origin}.engagement must be a non-empty string.`);
+	}
+	for (const field of ["principals", "grants", "targets"] as const) {
+		if (!Array.isArray(record[field])) throw new AuthorityDocumentError(`${origin}.${field} must be a list.`);
+	}
+
+	const document = record as unknown as AuthorityDocument;
+	const problem = validateAuthorityDocument(document);
+	if (problem !== undefined) throw new AuthorityDocumentError(`${origin}: ${problem}.`);
+
+	for (const grant of document.grants) {
+		const label = `grant '${grant === null || typeof grant !== "object" ? "?" : (grant as { id?: unknown }).id ?? "?"}'`;
+		if (grant === null || typeof grant !== "object") throw new AuthorityDocumentError(`${origin}: a grant entry is not a mapping.`);
+		for (const field of ["id", "from", "to", "targets"] as const) {
+			if (grant[field] === undefined) throw new AuthorityDocumentError(`${origin}: ${label} is missing '${field}'.`);
+		}
+		if (grant.authorizes === undefined || !Array.isArray(grant.authorizes.actions)) {
+			throw new AuthorityDocumentError(`${origin}: ${label} must declare 'authorizes.actions' - an authority with no actions authorizes nothing.`);
+		}
+	}
+	for (const target of document.targets) {
+		if (target === null || typeof target !== "object") throw new AuthorityDocumentError(`${origin}: a target entry is not a mapping.`);
+		for (const field of TARGET_FIELDS) {
+			if ((target as unknown as Record<string, unknown>)[field] === undefined) {
+				throw new AuthorityDocumentError(`${origin}: target '${target.id ?? "?"}' is missing '${field}'.`);
+			}
+		}
+	}
+	return document;
 }
 
 export function preflightAuthority(

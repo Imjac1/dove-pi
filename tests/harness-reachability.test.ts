@@ -46,7 +46,8 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	"src/core/effect-store-file.ts": { reason: "the claim store M1 adds; reached only from loop-runner.ts, which is itself unreachable. Reachable from tests until the boundary also sits on the host's tool_call/tool_result hooks", wiredBy: null },
 	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; reached only through the unreachable loop", wiredBy: null },
 	"src/core/gate-conformance.ts": { reason: "conformance-gate semantics; reached only from loop-runner, and M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
-	"src/core/authority.ts": { reason: "the grant graph the mode declares; M2's conformance gate is what consumes it, and the mode load alone does not reach this", wiredBy: "M2" },
+	// `src/core/authority.ts` left this list when the mode loader began resolving a conformance mode's grant
+	// document - the second time the list has shrunk, and again the assertion is what noticed.
 	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode, which has not landed yet", wiredBy: "M3" },
 	"src/core/context-admission.ts": { reason: "the admission policy; M4 either delegates from it or removes it", wiredBy: "M4" },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },

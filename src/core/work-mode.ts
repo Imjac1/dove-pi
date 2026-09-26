@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { parseAuthorityDocument, type AuthorityDocument } from "./authority.ts";
 import type { EffectClass } from "./effect-ledger.ts";
 import type { LimitSpec } from "./gate-limit.ts";
 import type { WorkspaceMode } from "./workspace-policy.ts";
@@ -31,7 +32,8 @@ export type WorkModeErrorCode =
 	| "unknown-field"
 	| "invalid-type"
 	| "framework-range"
-	| "framework-range-unparseable";
+	| "framework-range-unparseable"
+	| "authority-unresolved";
 
 export class WorkModeError extends Error {
 	public readonly code: WorkModeErrorCode;
@@ -71,6 +73,19 @@ export interface WorkMode {
 	 * **load** error naming the mode - not a `LimitSpecError` thrown later by whichever gate happens to be
 	 * constructed first. A mode that fails validation refuses to start (design section 5.4).
 	 */
+	/** Which gate semantics this mode declares. A consumer must not dig into `governance` for it. */
+	readonly gateSemantics: "limit" | "conformance" | "both";
+	/**
+	 * The dotted path into an action's arguments that names the authority target, for a conformance mode.
+	 *
+	 * Declared rather than inferred, because a host tool call carries a command or a path while an authority
+	 * document names targets it defines (`t-web`), and nothing in the call says which of its fields is *the*
+	 * target. Absent means the mode's targets cannot be resolved from an action, which the conformance gate
+	 * treats as "cannot tell" - a block, never an allow.
+	 */
+	readonly targetArgument?: string;
+	/** The `authority.grant` this mode names: a document path relative to the workspace, or a bare name. */
+	readonly authorityGrant?: string;
 	readonly limits: readonly LimitSpec[];
 	/**
 	 * The effect class of each tool the mode names, consumed by the claim at the dispatch line (design 5.1).
@@ -86,7 +101,7 @@ const GOVERNANCE_FIELDS = new Set(["version", "framework", "scope", "authority",
 const PERMISSION_FIELDS = new Set(["always_allow", "ask_before", "never_allow"]);
 const SCOPE_FIELDS = new Set(["targets", "environment", "exclusions", "ownership_evidence"]);
 const AUTHORITY_FIELDS = new Set(["grant", "grant_graph", "capabilities", "expires"]);
-const GATE_FIELDS = new Set(["semantics", "limits", "intensity", "excluded_techniques", "windows", "approval"]);
+const GATE_FIELDS = new Set(["semantics", "limits", "target_argument", "intensity", "excluded_techniques", "windows", "approval"]);
 const GATE_SEMANTICS = new Set(["limit", "conformance", "both"]);
 const LIMIT_FIELDS = new Set(["argument", "max", "min", "unit", "required", "tools"]);
 const EFFECTS_FIELDS = new Set(["classes"]);
@@ -330,6 +345,15 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		throw new WorkModeError("missing-field", `governance.gate.semantics is required and must be one of: ${[...GATE_SEMANTICS].join(", ")}.`);
 	}
 
+	const targetArgument = gate.target_argument;
+	if (targetArgument !== undefined && (typeof targetArgument !== "string" || targetArgument.trim() === "")) {
+		throw new WorkModeError("invalid-type", "governance.gate.target_argument must be a non-empty dotted path when declared.");
+	}
+	const grant = authority.grant;
+	if (grant !== undefined && (typeof grant !== "string" || grant.trim() === "")) {
+		throw new WorkModeError("invalid-type", "governance.authority.grant must be a non-empty string when declared.");
+	}
+
 	const permissions = parsePermissions(files.permissions);
 	const limits = parseLimits("governance.gate.limits", gate.limits);
 	const effectClasses = parseEffectClasses("governance.effects", governance.effects);
@@ -341,6 +365,9 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		governanceVersion: governance.version,
 		frameworkRange: governance.framework,
 		governance: { ...governance, scope, authority: { ...authority, capabilities }, gate },
+		gateSemantics: gate.semantics as "limit" | "conformance" | "both",
+		...(targetArgument === undefined ? {} : { targetArgument: targetArgument as string }),
+		...(grant === undefined ? {} : { authorityGrant: grant as string }),
 		permissions,
 		limits,
 		effectClasses,
@@ -475,8 +502,48 @@ export function readWorkModeFiles(directory: string): WorkModeFiles {
 	return { mode: read("MODE.md"), governance: read("governance.yaml"), permissions: read("permissions.yaml") };
 }
 
-/** Load a mode by name from `<root>/modes/<name>/`. */
-export function loadWorkModeFromDirectory(root: string, name: string, options: LoadWorkModeOptions): WorkMode {
-	return loadWorkMode(readWorkModeFiles(workModeDirectory(root, name)), options);
+export interface LoadedWorkMode {
+	readonly mode: WorkMode;
+	/** The document a conformance mode is checked against. Absent when the mode declares no conformance. */
+	readonly authorityDocument?: AuthorityDocument;
+}
+
+/**
+ * Load a mode by name from `<root>/modes/<name>/`, resolving the grant document a conformance mode needs.
+ *
+ * **This is the only supported way to load a mode for a host**, and it is why the authority document is
+ * resolved here rather than by the file-level loader: resolution needs a workspace root, and a conformance
+ * mode that cannot resolve its document must refuse to load rather than start gated by nothing.
+ */
+export function loadWorkModeFromDirectory(root: string, name: string, options: LoadWorkModeOptions): LoadedWorkMode {
+	const workspaceRoot = resolve(root);
+	const mode = loadWorkMode(readWorkModeFiles(workModeDirectory(workspaceRoot, name)), options);
+	if (mode.gateSemantics === "limit") return { mode };
+
+	const grant = mode.authorityGrant;
+	if (grant === undefined) {
+		throw new WorkModeError(
+			"authority-unresolved",
+			`Mode '${mode.id}' declares gate.semantics '${mode.gateSemantics}' and names no 'authority.grant', so there is nothing an action could be checked against. Declare the grant document, or declare gate.semantics: limit if this mode has no external grantor.`,
+		);
+	}
+	const path = resolve(workspaceRoot, grant);
+	if (!existsSync(path)) {
+		throw new WorkModeError(
+			"authority-unresolved",
+			`Mode '${mode.id}' declares gate.semantics '${mode.gateSemantics}' but its grant '${grant}' is not a document at '${path}'. A conformance mode with no document would run gated by nothing while declaring that it is gated. Point 'authority.grant' at a grant document, or declare gate.semantics: limit.`,
+		);
+	}
+	let source: string;
+	try {
+		source = readFileSync(path, "utf8");
+	} catch (error) {
+		throw new WorkModeError("authority-unresolved", `Mode '${mode.id}': grant document '${path}' could not be read: ${error instanceof Error ? error.message : String(error)}.`);
+	}
+	try {
+		return { mode, authorityDocument: parseAuthorityDocument(source, path) };
+	} catch (error) {
+		throw new WorkModeError("authority-unresolved", `Mode '${mode.id}': ${error instanceof Error ? error.message : String(error)}`);
+	}
 }
 
