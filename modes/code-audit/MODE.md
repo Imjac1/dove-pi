@@ -2,7 +2,7 @@
 name: code-audit
 description: Audit a repository for exploitable defects, seeding candidates deterministically and emitting findings as SARIF with a diffable baseline.
 license: MIT
-compatibility: Requires the code-audit capabilities, a deterministic sink catalog, and a resolvable authority document - this mode declares gate.semantics conformance while its authority.grant is the bare name local-review, so as of 2026-09-26 it refuses to load until the grant points at a document or the semantics declares limit.
+compatibility: "Requires the code-audit capabilities and a deterministic sink catalog. This mode declares gate.semantics limit with no thresholds, so what contains it is the permission list and the scope block rather than an authority document - an internal review has no third-party grantor, and a conformance mode whose grant does not resolve refuses to load."
 ---
 
 Audit the repository in scope for defects that a reviewer would act on. Report findings; do not patch.
@@ -59,4 +59,4 @@ about it, so do not put in a title what belongs in the claim.
 ## Stop
 
 Stop when the budget is exhausted or a re-run produces no new identities. Do not expand scope to keep
-looking; request a wider scope through the authority document instead.
+looking; ask for the scope to be widened in the mode's `scope` block instead.

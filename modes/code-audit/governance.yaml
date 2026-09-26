@@ -1,4 +1,4 @@
-version: 1.4.0
+version: 1.5.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -12,7 +12,15 @@ authority:
   expires: "2027-01-01T00:00:00.000Z"
 
 gate:
-  semantics: conformance
+  # `limit`, not `conformance`, and the distinction is not cosmetic. A conformance mode is checked against
+  # an authority *document*, and this mode has no external grantor to write one: `ownership_evidence` exists
+  # to record a third party's permission to test their asset, and an internal review has no such third party.
+  # Declaring conformance anyway made the mode refuse to load, which is the correct behaviour for a mode whose
+  # containment cannot be established - and the loader's own message names this field as the way out.
+  #
+  # No thresholds are declared, so there is no limit gate either. What contains this mode is the permission
+  # list and the scope block above, and MODE.md says so rather than leaving it to be inferred from `gates`.
+  semantics: limit
   approval: none
 
 # Which effects a retry may repeat. An undeclared tool is non-idempotent, so this map grants rather than

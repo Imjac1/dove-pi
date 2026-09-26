@@ -1,5 +1,8 @@
+# `read_*` was here and matched nothing: the list is matched against **action** names, this mode's read
+# capability is `repo.read` (no `read_` prefix) and the host's read tool is `read` (no underscore). A
+# wildcard that matches nothing reads as a permission while granting none.
 always_allow:
-  - read_*
+  - repo.read
 ask_before:
   - report.write
 never_allow:

@@ -27,7 +27,10 @@ async function loadMode() {
 	return loadWorkMode(files, { frameworkVersion: FRAMEWORK });
 }
 
-/** The authority contract the mode's conformance gate is checked against. */
+/**
+ * An authority contract in the shape this vertical's fixture models. The mode itself declares `limit`, so this
+ * document is not what the mode is checked against - it is what the conformance-gate case below is checked against.
+ */
 const AUTHORITY: AuthorityDocument = {
 	version: 1,
 	engagement: "audit-1",
@@ -96,9 +99,15 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 		const mode = await loadMode();
 		assert.equal(mode.id, "code-audit");
 		assert.equal(mode.governance.gate !== undefined, true);
-		assert.equal(evaluatePermission(mode.permissions, "read_file"), "allow");
+		// The list is matched against **action** names, so it names the capability. This assertion used to read
+		// `read_file`, a tool name no host here has, which is what made `always_allow: [read_*]` look live: the
+		// wildcard matched the test's invented name and none of the real ones.
+		assert.equal(evaluatePermission(mode.permissions, "repo.read"), "allow");
 		assert.equal(evaluatePermission(mode.permissions, "report.write"), "ask");
 		assert.equal(evaluatePermission(mode.permissions, "shell.exec"), "deny", "the deny list must survive the mode's own settings");
+		// An unlisted action is `ask` by the precedence rule and is *not* a control: the mode has said nothing about
+		// it, and the action policy is what distinguishes the two causes rather than treating both as a question.
+		assert.equal(evaluatePermission(mode.permissions, "read"), "ask", "the host's own read tool is outside this mode's permission list");
 	});
 
 	it("requires no per-vertical branch in the core", async () => {
@@ -145,7 +154,11 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 		assert.equal(states.get("src/auth/session.ts"), "new");
 	});
 
-	it("runs the mode's conformance gate end to end and blocks an out-of-scope action", async () => {
+	it("blocks an out-of-scope action when a conformance gate is built from an authority document", async () => {
+		// **Not the mode's own gate.** code-audit declares `gate.semantics: limit`, so the host builds no conformance
+		// gate for it; this pins the gate a mode *with* a document gets, over the document shape this vertical's
+		// fixture models. The name says which of the two this is, because "the mode's conformance gate" was a claim
+		// the mode stopped making.
 		const gate = createConformanceGate({
 			document: AUTHORITY,
 			toRequest: (invocation) => {
@@ -344,11 +357,24 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 	it("bumped the mode version when its authority changed", async () => {
 		const mode = await loadMode();
 		const governance = mode.governance as { version: string; evidence: { artifacts: readonly string[] } };
-		// 1.4.0 because the mode now declares which of its effects a retry may repeat, and that is a change to
-		// what it authorizes - the same reason 1.2.0 and 1.3.0 were bumped. A version that does not move when the
+		// 1.5.0 because the mode's gate semantics changed from conformance to limit and its `always_allow` list
+		// went from a wildcard that matched nothing to the capability it names - both changes to what it
+		// authorizes, the same reason 1.2.0, 1.3.0 and 1.4.0 were bumped. A version that does not move when the
 		// authority set does cannot attribute a run to one authority set.
-		assert.equal(governance.version, "1.4.0", "an authority change increments the version, so a run can be attributed to one");
+		assert.equal(governance.version, "1.5.0", "an authority change increments the version, so a run can be attributed to one");
 		assert.ok(governance.evidence.artifacts.includes("coverage.json"), "the receipt is an artifact of the run, not an aside");
+	});
+
+	it("declares limit semantics and names its read capability, so the mode loads and its permission list means something", async () => {
+		const mode = await loadMode();
+		// Two declarations that used to read as controls and were not. `conformance` with a bare-name grant made the
+		// whole mode refuse to load; `always_allow: [read_*]` matched no action at all, because the list is matched
+		// against action names and this mode's read capability is `repo.read`.
+		assert.equal(mode.gateSemantics, "limit", "a conformance mode with no resolvable document must not declare conformance");
+		assert.deepEqual(mode.limits, [], "and it declares no thresholds, which is why the containment is the permission list");
+		assert.equal(mode.authorityGrant, "local-review", "the grant stays as the name of the review that authorizes it, as trading's does");
+		assert.equal(evaluatePermission(mode.permissions, "repo.read"), "allow", "the read capability is allowed by declaration, not by the unlisted default");
+		assert.equal(evaluatePermission(mode.permissions, "report.write"), "ask", "and writing the report still needs the operator's consent");
 	});
 
 	it("declares which of its effects a retry may repeat, and defaults the rest to non-idempotent", async () => {

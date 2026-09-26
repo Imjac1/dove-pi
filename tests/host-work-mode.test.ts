@@ -99,6 +99,17 @@ function copyMode(root: string, name: string): void {
 	cpSync(join(repoRoot, "modes", name), join(root, "modes", name), { recursive: true });
 }
 
+/**
+ * Rewrite a copied mode's `gate.semantics` to `conformance`, so a case that pins the conformance rules has a mode
+ * that declares them. Done by editing the copy rather than by shipping a mode with the shape, because a shipped mode
+ * that refuses to load is not a fixture - it is a broken vertical.
+ */
+function forceConformance(root: string, name: string): void {
+	const path = join(root, "modes", name, "governance.yaml");
+	const rewritten = readFileSync(path, "utf8").replace("  semantics: limit", "  semantics: conformance");
+	writeFileSync(path, rewritten);
+}
+
 /** A conformance mode's authority document lives beside the modes, so copying a mode is not enough. */
 function copyEngagements(root: string): void {
 	cpSync(join(repoRoot, "engagements"), join(root, "engagements"), { recursive: true });
@@ -199,13 +210,15 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 	});
 
 	it("refuses a conformance mode whose grant is not a document, and names both ways out", async () => {
-		// This is the consequence of requiring a document, pinned as behaviour rather than discovered later:
-		// code-audit declares `gate.semantics: conformance` and its authority.grant is the bare name
-		// 'local-review', so there is no document for an action to be checked against. It refuses to load, and the
-		// refusal names the two fixes, because a conformance mode that cannot check anything must not start.
+		// The consequence of requiring a document, pinned as behaviour rather than discovered later. The shipped
+		// code-audit no longer has this shape - it declares `limit`, because an internal review has no third-party
+		// grantor to write an ownership document with - so the declaration is forced back here. A mode that declares
+		// conformance and cannot check anything must not start, and that rule needs a case even when no shipped mode
+		// exercises it today.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "code-audit");
+		forceConformance(root, "code-audit");
 		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
 		const host = startHost(root);
 		try {
@@ -216,6 +229,41 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			assert.match(refusal, /gate\.semantics: limit/, "and the alternative, so the operator is not left guessing");
 			const decision = await callTool(host, "bash", { command: "ls" });
 			assert.equal(decision?.block, true, "and no action runs while the mode is unresolved");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("loads code-audit through the host, and its permission lists decide what runs", async () => {
+		// AC1, for the mode that had to change to be loadable at all: changing `modes/code-audit/` changes what the
+		// running agent may do, observed through the host rather than through a unit test of the loader.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-audit");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			assert.ok(host.notifications.some((message) => /code-audit loaded from modes\/code-audit/.test(message)), host.notifications.join(" | "));
+			await host.events.get("input")?.({ type: "input", text: "audit the repository", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "audit the repository", systemPrompt: "" }, host.context);
+
+			// always_allow names the capability, so this runs without a question - which is what the declaration is for.
+			const read = await callTool(host, "agent_run_capability", { name: "repo.read", args: {} }, "c-read");
+			assert.notEqual(read?.block, true, "an always_allow action runs: " + (read?.reason ?? "(no reason)"));
+			assert.equal(host.confirmCalls.length, 0, "and it is not put to the operator");
+
+			// ask_before is a question, and the question is asked.
+			const write = await callTool(host, "agent_run_capability", { name: "report.write", args: {} }, "c-write");
+			assert.notEqual(write?.block, true, "a confirmed action runs");
+			assert.equal(host.confirmCalls.length, 1);
+			assert.match(host.confirmCalls[0]?.title ?? "", /report\.write/);
+
+			// never_allow still wins, and it is matched against the action rather than the umbrella tool.
+			const denied = await callTool(host, "agent_run_capability", { name: "network.fetch", args: {} }, "c-net");
+			assert.equal(denied?.block, true);
+			assert.match(denied?.reason ?? "", /never_allow/);
+			assert.equal(host.confirmCalls.length, 1, "a denied action is refused, not put to the operator");
 		} finally {
 			host.restoreCwd();
 		}
