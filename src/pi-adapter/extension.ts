@@ -2157,7 +2157,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				at: new Date().toISOString(),
 				elapsedMs: 0,
 				accumulatedIntensity: {},
-			});
+			}, { viaCapability: identity.viaCapability });
 			if (decision.outcome === "block") {
 				// The gate is named in the reason by the policy itself (`[limit]`/`[conformance]`), so the ledger and the
 				// refusal text agree about which check refused the action without a second mapping here.

@@ -34,8 +34,15 @@ export interface ActionPolicy {
 	readonly gates: readonly string[];
 	/** The name-only check. Safe to run before the arguments are final. */
 	denyDecision(action: string): GateDecision;
-	/** The argument-reading checks. Must run on the arguments that will be dispatched. */
-	evaluate(invocation: GateInvocation): GateDecision;
+	/**
+	 * The argument-reading checks. Must run on the arguments that will be dispatched.
+	 *
+	 * `viaCapability` is passed in rather than read off the invocation, because whether an action came from a
+	 * capability or from a raw host tool is a fact about the **host's** call path, not about the action: the
+	 * authority document authorizes *actions* and names *targets*, and a raw tool call carries neither. Leaking
+	 * that field into `GateInvocation` would put a host concept into the loop's own contract.
+	 */
+	evaluate(invocation: GateInvocation, source: { readonly viaCapability: boolean }): GateDecision;
 }
 
 function labelled(decision: GateDecision, gate: string): GateDecision {
@@ -107,23 +114,35 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			? createConformanceGate({ document: options.authorityDocument, toRequest })
 			: undefined;
 
+	const denyDecision = (action: string): GateDecision => {
+		if (evaluatePermission(mode.permissions, action) !== "deny") return { outcome: "allow" };
+		return {
+			outcome: "block",
+			reason: `'` + action + `' is on mode '` + mode.id + `'s never_allow list.`,
+			remediation: "Choose an action the mode permits, or change the mode's permissions deliberately rather than around them.",
+		};
+	};
+
 	return {
 		modeId: mode.id,
 		gates: ["deny", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id])],
-		denyDecision(action) {
-			if (evaluatePermission(mode.permissions, action) !== "deny") return { outcome: "allow" };
-			return {
-				outcome: "block",
-				reason: `'` + action + `' is on mode '` + mode.id + `'s never_allow list.`,
-				remediation: "Choose an action the mode permits, or change the mode's permissions deliberately rather than around them.",
-			};
-		},
-		evaluate(invocation) {
+		denyDecision,
+		evaluate(invocation, source) {
+			// The denial is evaluated here as well, so a caller who runs only `evaluate` cannot silently skip it.
+			// `denyDecision` exists so the host can run that half *early* - where the arguments are not yet final - not
+			// as a second control that must be remembered.
+			const denial = denyDecision(invocation.tool);
+			if (denial.outcome === "block") return labelled(denial, "deny");
 			if (limitGate !== undefined) {
 				const decision = limitGate.evaluate(invocation);
 				if (decision.outcome === "block") return labelled(decision, limitGate.id);
 			}
-			if (wantsConformance) {
+			// **The contract is checked against actions, not against tools, and a raw tool call has no action to check.**
+			// A document names actions (`net.scan`) and targets (`t-web`); a `bash` command is neither, so asking the
+			// conformance gate about one maps nothing and blocks everything - which is what it did, making an authorized
+			// engagement unusable. Raw tools are governed by the permission list and the limits, and a mode that needs
+			// containment beyond that must declare how its tools map (a per-tool table, not built yet).
+			if (wantsConformance && source.viaCapability) {
 				if (conformanceGate === undefined) {
 					// Unreachable through the loader, which refuses a conformance mode with no document. Exercised by a
 					// hand-built policy in the tests, because an unexercised branch is a claim rather than a control.
