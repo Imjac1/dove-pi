@@ -196,6 +196,53 @@ npm test          -> tests 525 / pass 523 / fail 0 / skipped 2   (515 after M1, 
 ```
 
 
+### M3 record, 2026-09-26  **[IN PROGRESS - the load has landed]**
+
+Landed: the loader's selection and directory reading (`resolveWorkModeSelection`, `loadWorkModeFromDirectory`,
+`workModeRefusal`); the **host load at `session_start`**; the fail-closed refusal that blocks every tool call
+while a declared mode is unreadable; and the `never_allow` consumer at `tool_call`, which needed the action
+mapping in `src/pi-adapter/action-identity.ts` first. `bin/dove-pi.cjs` now exports
+`DOVE_PI_FRAMEWORK_VERSION`.
+
+**Five findings.**
+
+1. **The permission sets named actions that do not exist, so the policy was inert.** `never_allow: [shell.exec]`
+   never fired against the tool `bash`, because a mode names **Dove actions** while Pi names **tools**, and the
+   umbrella capability tool carries its real action in `input.name`. Wiring `evaluatePermission` without the
+   mapping would have produced `ask` for every tool - a control that reads as present and does nothing. The
+   mapping is now one function, and the host-level test shows `shell.exec` being refused through
+   `agent_run_capability`.
+2. **`always_allow: read_*` still matches nothing real.** The capabilities are dotted (`repo.read`), so the
+   pattern matches neither a capability nor the host's `read` tool. **Not rewritten here**: choosing which real
+   action the author meant is a content decision in a security-relevant file, and inventing it would be the
+   silent-rewrite defect. Recorded for the user, with the observation that the entry is currently inert.
+3. **There was no framework version at runtime to check a mode's range against.** The launcher exports the
+   package version as `DOVE_PI_EXTENSION_VERSION` and the extension consumes it as its *identity* version -
+   a different number space that happens to agree until one of them moves. Added an explicit
+   `DOVE_PI_FRAMEWORK_VERSION`; when it is absent the load is **refused naming the missing variable**, rather
+   than compared against a wrong number or silently unchecked.
+4. **`ask_before` is not consumed**, and the load now says so in a warning instead of leaving it implicit:
+   `deny` is enforced, `ask` falls through. That is the remainder of this milestone's item 3, and an unstated
+   gap is the defect this project keeps finding in configuration.
+5. **M0's allow-list shrank for the first time.** Making `work-mode.ts` reachable from the host's startup path
+   took `gate-limit.ts`, `effect-ledger.ts` and `loop.ts` off the list with it - fifteen entries to eleven - and
+   the reachability test is what noticed, by asserting in both directions.
+
+**Remaining in M3:** `capability-scope.ts` has no runtime consumer yet (item 1's "capabilities"), the
+`ask_before` half of item 3, and item 1's "authority document" - the mode declares `authority.grant`, and
+nothing loads that document yet, which is what M2's conformance gate needs.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts    -> tests  5 / pass  5 / fail 0   (new: the host, not a unit)
+node --import tsx --test tests/work-mode.test.ts         -> tests 30 / pass 30 / fail 0   (21 before, +9)
+node --import tsx --test tests/harness-reachability.test.ts -> tests 6 / pass 6 / fail 0   (allow-list 15 -> 11)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 539 / pass 537 / fail 0 / skipped 2   (525 after the M3 prerequisite, +14)
+```
+
 ## M4. Admission: delegate, and supply the policy
 
 1. **Do not build a compressor.** The host has spill/retention/pruning. This resolves the

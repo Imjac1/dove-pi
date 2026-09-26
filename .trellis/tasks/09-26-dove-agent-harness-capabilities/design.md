@@ -246,6 +246,21 @@ requirement, never a performance number.**
 A mode declares capabilities, an authority document, limits, and an effect-class map. It is loaded **by the
 host**. "Loaded by a test" is the defect being fixed.
 
+**Which mode is decided in one place, and the two mode axes stay orthogonal** (decided 2026-09-26; folding the
+verticals into the workspace mode was the alternative and was rejected, because it makes "is Pi-lens on" and
+"what is authorized" one switch):
+
+- The **workspace mode** (`development | pentest`) governs Pi-lens and context isolation.
+- The **work mode** (`code-audit | pentest | trading`) governs authority, gates, limits, effect classes and
+  evidence. It is selected by a project declaration, `.dove/mode.json`, or by an explicit override.
+- **One implication, and no others**: a `pentest` *workspace* mode selects `modes/pentest`, because authorized
+  security testing is what that workspace mode means and its rules-of-engagement gate is part of that meaning
+  rather than a separate step. `development` selects no mode - ordinary work is not a mode.
+- **"No mode declared" and "a mode declared and unreadable" are different facts and must not be collapsed.**
+  The first is legitimate; the second refuses the run, because a project that declared a mode and got none would
+  run without the controls it asked for. `workModeRefusal` is the single function that decides this, so the host
+  and the tests cannot disagree about it.
+
 ### 5.5 The acceptance contract
 
 `task-convergence.ts`, with its **one known hole closed**: `acceptance.passed` currently takes **optional**
