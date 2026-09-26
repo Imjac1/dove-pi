@@ -237,7 +237,7 @@ stateless per call; `context-admission` and compaction can drop the very history
 
 **Not verified:**
 
-- ~~§10.1-10.10~~ **read on 2026-09-27; see §9 below.** ~~§14's platform-turn argument~~ **read; see §10.**
+- ~~§10.1-10.10~~ **read; see §11.** ~~§14's platform-turn argument~~ **read; see §12.** ~~§13.2~~ **read.**
 - §13.2's "twin absences", §14.2-14.4, and §16.1-16.5, §16.7-16.8 remain unread.
 - The paper is a preprint. Its corpus is eleven systems and its longitudinal claim is one quarter; it tags its own
   figures as self-reported where they are.
@@ -290,8 +290,124 @@ project is built on. So the paper's guidance for the layer we occupy is: keep th
 want to be *driven* by something else, that is an ACP-server question for the host, not a sub-agent-protocol question
 for us.
 
+## 9. The harness is now the thing being optimised, and its traces are the signal **[FETCHED]**
 
-## 9. The eleven permission models, and the design space they define (§10) **[FETCHED]**
+Four papers, all read as abstracts. Together they answer what "the harness as the synthesis of the frontier"
+means operationally: **the harness is no longer only a scaffold a human engineers; it is an artifact the agent
+improves from its own execution traces, with regression tests as the acceptance gate.**
+
+| Paper | Mechanism | Measured |
+|---|---|---|
+| **Self-Harness** `2606.09498` | A three-stage loop: **Weakness Mining** (failure patterns from execution traces) → **Harness Proposal** ("diverse yet minimal harness modifications tied to these failures") → **Proposal Validation** ("accepts candidate edits **only after regression testing**") | all nine model-benchmark combinations improve held-in **and held-out** pass rates; relative gains up to **132%** |
+| **RHO** `2606.05922` | self-supervised, **no external grading**: re-solve a coreset of past challenging tasks in parallel, judge the rollouts by **self-validation, self-consistency and the agent's own pairwise self-preference**, then propose harness updates | SWE-Bench Pro **59% → 78% in one round** |
+| **RHI** `2607.15524` | the harness as "a **prompt-level specification of the agent loop**", refined by pairwise feedback over its own revision history | a few iterations let **low-reasoning-effort** agents exceed the max-effort setting while cutting inference cost **up to 60%**; the gain is attributed to **context management and inter-agent information flow**, not longer reasoning |
+| **AutoHarness** `2603.03329` | the model synthesises a code harness from environment feedback; at the limit, **the whole policy moves into code** and the LLM leaves the decision loop | prevents **all** illegal moves across 145 TextArena games; the code-policy beats much larger models |
+
+**The AutoHarness motivation is the sharpest statement of why a harness exists at all**: "models often try to
+perform actions that are not just suboptimal for a given state, but are **strictly prohibited by the external
+environment**" - its example is that **78% of one model's chess losses were attributed to illegal moves**. A harness
+is the layer that makes illegal moves unrepresentable rather than merely discouraged.
+
+**What this means for us, in the three stages.** Our substrate already holds all three, which is not a coincidence -
+the harness task built them for other reasons:
+
+- **Weakness mining has its input.** The execution ledger (`~/.pi/agent/dove/workspaces/<hash>/execution.jsonl`),
+  `tool.observed` records, typed stop reasons, the progress guard's fingerprints and the task-convergence snapshot
+  are exactly "failure patterns from execution traces". **[LOCAL]**
+- **Harness proposal has its object.** For this project the harness *is* the Markdown/YAML tree - mode files,
+  specs, skills - which is the same claim §14.1 makes about the platform turn. A proposal is therefore an edit to
+  a declarative artifact, not to the loop. **[LOCAL]**
+- **Proposal validation has its gate.** `npm test`, the spec-context budget test and the reachability test are
+  regression gates over the harness itself, and the reachability test already exists because "a module nothing
+  reaches" was this project's founding defect. **[LOCAL]**
+
+**The honest tension to record.** RHO's selection signal is the agent's **own self-preference**, with no external
+grading, and it reports a large gain. Our own earlier research concluded that **judge self-preference is structural**
+and that a generator cannot validate itself. Both can be true - RHO may be measuring the value of *self-consistency
+across re-solves* rather than the value of self-judging - but the two claims cannot both be load-bearing in one
+design, and the safer reading is the one our own synthesis already took: an oracle the generator does not control.
+
+**And the maintenance half.** `2607.13285` **Harness Handbook** supplies the other end: as a harness evolves, the
+bottleneck is **behaviour localization** - "a developer or coding agent must identify all code locations that
+implement the target behavior", while "production harnesses are large, tightly coupled, and behaviourally
+distributed". Their answer is a behaviour-centric representation synthesized by static analysis plus LLM structuring,
+and **Behavior-Guided Progressive Disclosure (BGPD)**, which "guides agents from high-level behaviors to relevant
+implementation details and **verifies candidate locations against the current source**". Reported effect: better
+localization and edit plans **with fewer planner tokens**, largest on "scattered sites, rarely executed paths, and
+cross-module interactions".
+
+**That is this project's recurring defect, named.** Every finding this session had the same shape - a declaration
+with no consumer, a field nothing reads, a rule that never fires - and each was found by hand. Behaviour
+localization is the technique that would find them systematically.
+
+## 10. A second frame, the field's own list of open problems, and the hardest empirical result **[FETCHED]**
+
+### 12.1 `2605.18747` "Code as Agent Harness" (2026-05-18) - a survey, with the field's open problems
+
+> "In emerging agentic systems, code is no longer only a target output. It increasingly serves as an **operational
+> substrate** for agent reasoning, acting, environment modeling, and execution-based verification. We frame this
+> shift through the lens of agent harnesses and introduce **code as agent harness**."
+
+Its three layers: the **harness interface** (where code connects agents to reasoning, action and environment
+modeling), **harness mechanisms** (planning, memory and tool use for long-horizon execution, "together with
+feedback-driven control and optimization that make harness reliable and adaptive"), and **scaling the harness** from
+single-agent to multi-agent ("shared code artifacts support multi-agent coordination, review, and verification").
+
+**Its closing list of open challenges is a checklist for "把手脚架做清楚"**, quoted: "**evaluation beyond final task
+success, verification under incomplete feedback, regression-free harness improvement, consistent shared state across
+multiple agents, human oversight for safety-critical actions, and extensions to multimodal environments**." Three of
+those six are this project's agenda: verification under incomplete feedback (our `unknown` outcome and the withdrawn
+exactly-once claim), regression-free harness improvement (the reachability and budget tests), and human oversight for
+safety-critical actions (the approval boundary).
+
+### 12.2 `2608.15089` StateM (2026-08-15) - the hardest evidence for the goal's own thesis
+
+The thesis under test: *improve the execution system around the model without changing the model*. StateM is "an
+agent-native runtime that organizes execution around **durable states, phase-local context, checked transitions,
+recoverable runbooks, and versioned procedural practices that agents and users can inspect together**".
+
+Reported, on Terminal-Bench 2.1:
+
+- GPT-5.5 xhigh **92.1%** versus an **83.1%** reference; GPT-5.6 Sol xhigh **95.3%** raw accuracy across 445 trials,
+  succeeding on **all 89 tasks at least once**.
+- "The **runbook transfers unchanged** to GPT-5.6" - the scaffold is model-independent.
+- "The frozen profile raises GPT-5.6 Luna from 76.7 to 85.4%, above the 84.9% Sol xhigh reference" - a smaller model
+  with the scaffold beats a larger model without it.
+- "**less than $38 of adaptation** raises DeepSeek-V4 Flash from 82.7 to 88.1%"; "Final-score API usage is about
+  **$15 versus $574.68** for the GPT reference."
+- And the mechanism, in their words: StateM "turns **selected postmortem findings into persistent, executable
+  preconditions and practices**, making learned controls **explicit and enforceable** through stateful controls."
+
+**Why this matters here.** It is the same claim this project has been making structurally - code-owned enforcement
+over prose - measured on a public benchmark, with a 9-point gain and a ~38x cost ratio, and with the scaffold
+transferring across four model families. It also names the one loop we do not have: **postmortem findings becoming
+executable preconditions** is weakness mining plus harness proposal, applied to controls.
+
+**The uncomfortable overlap to record honestly.** StateM's five primitives - durable states, phase-local context,
+checked transitions, recoverable runbooks, versioned procedural practices - are the same five things this project
+calls the effect ledger, context admission, the gate, the checkpoint, and the specs and work modes. Two independent
+efforts converging on one shape is corroboration; it is also a warning that our differentiation cannot be the shape
+itself.
+
+### 12.3 `2607.27652` Harness-G (2026-07-30) - the interface, not the reward, was the bug
+
+An RL-search result with a transferable idea. The authors observe "**retrieval-equivalence collapse**": rollouts for
+the same question keep generating different query strings while their evidence sets converge, "leaving within-group
+returns with little effective retrieval contrast". Their fix is to redesign the **policy-environment interface** -
+free-form query generation becomes **finite action selection**, where "the policy selects an evidence sentence or
+entity, or chooses to answer, while **the environment constructs the menu, tracks retrieval state, and validates and
+executes each choice**". Effect: best average F1 across six QA benchmarks, +10.74 points at 1.5B over the strongest
+baseline.
+
+**The transferable idea**: when a policy keeps producing equivalent-but-different actions, the fix is to make the
+action space *finite and enumerated by the environment* rather than to reshape the reward. That is the same move as
+a registry that decides what can be asked for - our capability registry is that menu, and the finding says the menu
+belongs to the environment, not to the model's phrasing.
+
+
+
+
+## 11. The eleven permission models, and the design space they define (§10) **[FETCHED]**
 
 Read in full on 2026-09-27. This is subsystem 5 across the whole corpus, and it turns decision 2 into a menu with
 evidence rather than a preference.
@@ -350,7 +466,7 @@ systems, ships **zero** OS isolation and spends its safety budget on *content-bo
 **policy-only**; Pi documents the refusal as a security argument. So isolation is one of three strategies, not the
 only one - and the other two (content-borne defence, syntax-aware policy) are cheaper.
 
-## 10. The platform turn, and where our Markdown-tree design sits (§14) **[FETCHED]**
+## 12. The platform turn, and where our Markdown-tree design sits (§14) **[FETCHED]**
 
 > "The standard reading of the absence of LangChain, AutoGen and the rest is that production harnesses do not need
 > frameworks. But there is a second reading: **they do not need frameworks because the harness is itself the
