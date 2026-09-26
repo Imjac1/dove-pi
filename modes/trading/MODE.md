@@ -20,6 +20,10 @@ Every order carries a **client order id derived from the framework's effect iden
 makes a retry safe: if a resume or a retry resubmits, the venue rejects the duplicate rather than
 filling it twice. Never invent a fresh id for a retry - a new id is a new order.
 
+**Not yet produced by the framework** (2026-09-26). `toClientOrderId` exists in the framework and has **no runtime
+caller**, so no submission carries a derived id today. Until the submission capability calls it with the effect key,
+this section is a **requirement on whoever writes that capability** rather than something the harness supplies.
+
 ## When something fails
 
 A submission whose outcome is unknown is **ambiguous**, not failed: a timeout may have been filled. Do

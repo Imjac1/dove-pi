@@ -2,7 +2,7 @@
 name: code-audit
 description: Audit a repository for exploitable defects, seeding candidates deterministically and emitting findings as SARIF with a diffable baseline.
 license: MIT
-compatibility: Requires a conformance gate, the code-audit capabilities, and a deterministic sink catalog.
+compatibility: Requires the code-audit capabilities, a deterministic sink catalog, and a resolvable authority document - this mode declares gate.semantics conformance while its authority.grant is the bare name local-review, so as of 2026-09-26 it refuses to load until the grant points at a document or the semantics declares limit.
 ---
 
 Audit the repository in scope for defects that a reviewer would act on. Report findings; do not patch.
@@ -41,11 +41,11 @@ it, which is what lets a baseline recognise a move.
 - `new` - no counterpart in the baseline.
 - `unchanged` - the same finding, including at a new location, in which case the move is recorded.
 - `updated` - the matched code changed where the finding already was.
+- `absent` - the finding was in the baseline and is gone. A deletion must be visible, not silent.
 
 Severity is yours to set and it survives: `dove/severity` carries your value even though SARIF has only
 three levels, and a `HYPOTHESIS` is capped at `warning` however high you rate it, so an unconfirmed
 finding cannot fail a build.
-- `absent` - the finding was in the baseline and is gone. A deletion must be visible, not silent.
 
 Two runs over the same tree must produce identical identities. A reworded message, an inserted line,
 and a moved file must not create new findings.
