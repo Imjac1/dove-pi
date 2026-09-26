@@ -881,6 +881,41 @@ produced twice.**
 
 **Validation:** typecheck 0 errors; npm test 571 / 569 / 0 / 2 (prose only so far).
 
+### M8 record, part two, 2026-09-26  **[modes swept; two of the claims were about code that does not exist]**
+
+Four defects in three files, and the first two are the class this milestone exists for - a document asserting
+behaviour the repository does not have:
+
+1. **`modes/trading/MODE.md` claimed "Every order carries a client order id derived from the framework's effect
+   identity."** `toClientOrderId` has **no runtime caller**. The paragraph now says so, and marks the section as a
+   requirement on whoever writes the submission capability rather than something the harness supplies.
+2. **`modes/pentest/MODE.md` claimed "The engagement must pre-flight clean ... If any of that fails, the run does not
+   start."** `preflightAuthority` has **no runtime caller** either. Same treatment: a requirement on the operator
+   today, not a control the harness enforces - **and the difference is the point of saying it.**
+3. **`modes/code-audit/MODE.md` described a mode that cannot load**, and that is a consequence of this task: a
+   conformance mode whose grant is not a document now refuses to load. Its `compatibility` line states the current
+   truth and names the two ways out, which is also the pending content decision.
+4. A formatting defect with a real effect: the severity paragraph sat **inside** the `baselineState` list, between
+   `updated` and `absent`, so "all four of the schema values" read as three. The list is whole and the paragraph
+   follows it.
+
+**Both unwired helpers are now named as remaining work, with their wiring points:** the pre-flight belongs at the
+mode load (or the first action of a conformance run), and the client order id belongs in the submission capability's
+call to the effect boundary. Neither is built, and both are **stated** rather than left as prose claiming they work.
+
+**What M8 still has to sweep:** `.trellis/spec/backend/*.md`. The audit-vertical spec and the framework-core spec
+both predate several of these changes, and a specification describing behaviour that is not there is a failure this
+task has already produced twice.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/code-audit-mode.test.ts tests/pentest-mode.test.ts tests/trading-mode.test.ts tests/work-mode.test.ts -> tests 64 / pass 64 / fail 0
+
+npm run typecheck -> 0 errors
+npm test          -> tests 571 / pass 569 / fail 0 / skipped 2   (prose and fixtures only)
+```
+
 ## Validation
 
 ```bash
