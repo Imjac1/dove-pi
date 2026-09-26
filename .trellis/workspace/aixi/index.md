@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
-- **Last Active**: 2026-09-26
+- **Total Sessions**: 22
+- **Last Active**: 2026-09-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~783 | Active |
+| `journal-1.md` | ~812 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-09-27 | Harness capabilities: M3 complete, mode files made honest | `7312367`, `d82cc40`, `18a17e4`, `ed4a560`, `279caa0`, `d444cd4`, `0fb044f`, `1c97a89` | `feat/agent-harness-capabilities` |
 | 21 | 2026-09-26 | Code audit vertical: commit, closure, and five-task wrap-up | `20276d5`, `f7d94e0`, `f17e03e`, `a24c4ca`, `9cef15d`, `fd39cba`, `4e5b6f1`, `4ed2384` | `feat/code-audit-vertical` |
 | 20 | 2026-09-26 | Dove base agent framework: research, design, and implementation | `fa5a268`, `004eb60`, `22817f0`, `7dcac57`, `a2affde` | `feat/dove-base-agent-framework` |
 | 19 | 2026-09-25 | dove-pi 工作区交接：2.2 检查失败 + 基座选型研究 | - | `master` |

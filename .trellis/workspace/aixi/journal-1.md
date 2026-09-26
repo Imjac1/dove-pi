@@ -781,3 +781,32 @@ skipped 2，与 `implement.md` 记录的最终闸门一致。逐路径核对过�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 22: Harness capabilities: M3 complete, mode files made honest
+<!-- trellis-session: v=2 fp=87757b45513705c0 -->
+
+**Date**: 2026-09-27
+**Task**: Harness capabilities: M3 complete, mode files made honest
+**Branch**: `feat/agent-harness-capabilities`
+
+### Summary
+
+Finished M3 and closed the harness task. Wired the capability scope into the action policy; consumed ask_before at the host boundary by asking the operator through the host's own confirmation dialog (GateDecision gained an ask arm, both loops share normalizeGateDecision, approvals and refusals are recorded as gate.approved/gate.refused); fixed three shipped mode files that declared controls they did not have - trading's limits were unscoped and refused every non-order action, code-audit declared conformance with no document so it refused to load at all, and code-audit's always_allow wildcard matched no action. Gate: typecheck 0 errors, npm test 582 tests / 580 pass / 0 fail / 2 skipped.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7312367` | feat(scope): consult the capability scope in the action policy |
+| `d82cc40` | chore(task): record M3 complete except ask_before |
+| `18a17e4` | feat(gate): ask the operator before an action a mode lists in ask_before |
+| `ed4a560` | docs(spec): state how an ask is refused, and that the two asks differ |
+| `279caa0` | chore(task): record M3 complete |
+| `d444cd4` | fix(modes): make code-audit loadable, and its read permission mean something |
+| `0fb044f` | docs(spec): keep the framework-core spec inside its context budget |
+| `1c97a89` | chore(task): record the two mode-content decisions |
+
+### Status
+
+[OK] **Completed**
