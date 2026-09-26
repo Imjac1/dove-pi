@@ -779,6 +779,35 @@ npm test          -> tests 564 / pass 562 / fail 0 / skipped 2   (563 before, +1
 2. Reproduce the most-reported production failure as a test: a run that cannot make progress **stops and
    says so**, rather than looping.
 
+
+### M7, 2026-09-26  **[DONE - one half already existed, one half is now tested]**
+
+**The typed reason already existed, and the audit says so by enumeration rather than by assertion.** Every way a
+request can end has a producer and a typed origin: `user` (abort), `provider` (terminal failure), `model-budget`,
+`provider-round`, `progress-guard`, `convergence`, and `session` - where shutdown settles as `superseded` for a
+reload/new/resume/fork and `cancelled` otherwise, **preserving** an already-decided envelope rather than replacing it
+with the generic reason. `RequestTerminalOrigin` and the producers line up one for one.
+
+**The half that was missing is the test, and writing it corrected me.** The plan asks for the most-reported
+production failure to be reproduced: a run that cannot make progress must **stop and say so**. My first version drove
+eight identical `ls` calls and asserted a stop; it failed, and the reason is a distinction worth pinning:
+
+- **identical reads inside one turn are coalesced** (`coalesce`): the duplicate is answered with the first call's id,
+  because repeating yourself within a turn is not the same failure as a run that cannot progress **across** turns;
+- **identical reads across turns terminate** the request with a typed reason, and the reason reaches the ledger.
+
+Both are now pinned, in two tests, with the distinction stated in each. A test that conflated them would have
+"proved" either behaviour while measuring neither.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/host-work-mode.test.ts -> tests 13 / pass 13 / fail 0   (+2: the stop, and the coalesce it is not)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 566 / pass 564 / fail 0 / skipped 2   (564 before, +2)
+```
+
 ## M8. Truth in the documentation
 
 1. `checkpoint.ts:12-13` cites "Microsoft's `WorkflowCheckpoint`". **No such class was found.** Remove the
