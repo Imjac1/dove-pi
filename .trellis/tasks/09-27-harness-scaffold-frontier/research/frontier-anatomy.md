@@ -93,7 +93,7 @@ The paper catalogs **29 recurring patterns**. The ones that touch subsystem 5 an
 | Deferred Loading / Skills / Conditional Activation | tools and skills hidden from the prompt, discovered on demand, gated by path | 9 systems for skills; Claude Code / OpenHands / OpenClaw for gating | skills yes (via host); **conditional activation no** |
 | Harness Mimicry | "client presents a first-party harness's identity ... to ride its subscription OAuth backend" | **Pi** (Claude Code identity on Anthropic OAuth) | host behaviour, not ours; recorded because it is a fact about our host |
 
-## 3. The three inert-declaration classes this project already has, in the frontier's terms
+## 3. The inert-declaration classes this project already has, in the frontier's terms
 
 These were found by local reading, and the paper's own recommendations say why each matters. **[LOCAL]**
 
@@ -111,6 +111,26 @@ These were found by local reading, and the paper's own recommendations say why e
 3. **There is no isolation layer at all** - no sandbox, no namespace, no VM - while the host offers the
    `Operations` seam for exactly that, and the paper says the cost is tolerable when you reuse OS binaries
    rather than writing namespace plumbing (**Rec 10**).
+
+**And a fourth pass found five more, mechanically.** On 2026-09-27 a **field-level reader scan** was run: extract
+every field name the mode format declares (the eight `*_FIELDS` sets in `src/core/work-mode.ts`), then count
+occurrences of each name in `src/` outside the parser. It re-found `always_allow` and found five fields with **no
+reader at all**:
+
+| Field | Declared by | Note |
+|---|---|---|
+| `governance.sandbox` | **all three shipped modes** - `isolation: container` / `worktree`, `network: allowlist` / `none`, `filesystem: ephemeral` / `read-only-source` | the only `sandbox` mentions in `src/` are a code-audit finding category and the parser's field list. **A mode declaring `isolation: container` is not containerised.** |
+| `scope.exclusions` | code-audit `[]`, pentest `[t-payments]`, trading `[production-venue]` | nothing checks an exclusion |
+| `authority.expires` | all three | an expired mode keeps loading (the *document's* grant `window` is checked by the pre-flight) |
+| `authority.grant_graph` | accepted by the format | no reader |
+| `mode.license` | all three (`MIT`) | no reader |
+
+**The scan also missed two of the three classes above** - `gate.intensity` and `gate.excluded_techniques` looked
+read, because the bare names match `src/core/authority.ts` reading the *document's* `constraints`, and `gate.windows`
+matches the Windows runtime. That is the same failure as the vocabulary audit in D3, one level down: **a name-level
+proxy is unreliable exactly where a name is a common word**, which is why the detector's useful form is
+scope-aware (`gate.intensity`, not `intensity`). The scan itself is about thirty lines, which is evidence for the
+bounded version of D5 rather than against it.
 
 ## 4. The frontier's own statement of the "before vs now" thesis (§15.5)
 

@@ -21,7 +21,15 @@ But §10's Observation 6 reframes it: "OS-level sandboxing is one of the **most 
 corpus, and it is a choice rather than a consequence of scale**" - Hermes ships **zero** OS isolation and spends its
 budget on content-borne defence; OpenCode is **policy-only**. So the options are three strategies, not one.
 
-**Our state.** [LOCAL] Pi's own documented position is that safety is an extension's job (§10.8), and it supplies
+**Our state - and the finding that reframes this decision [LOCAL, 2026-09-27].** **Every shipped mode already declares
+an isolation policy, and nothing reads it.** `GOVERNANCE_FIELDS` accepts a `sandbox` block; `modes/code-audit`
+declares `isolation: worktree, network: none, filesystem: read-only-source`, and `modes/pentest` and `modes/trading`
+both declare `isolation: container, network: allowlist, filesystem: ephemeral`. A field-level reader scan over `src/`
+found **no reader**: the only `sandbox` mentions are a code-audit finding category and the parser's own field list.
+So `isolation: container` in a mode file currently reads as a guarantee and is not one - the same defect as
+`never_allow: [shell.exec]`, and the worst of this decision's three options rather than a fourth.
+
+**The seam.** [LOCAL] Pi's own documented position is that safety is an extension's job (§10.8), and it supplies
 `BashOperations { exec(command, cwd, options) }` - a **one-method seam** whose default is
 `createLocalShellOperations`, typed as "shared process execution used by the built-in shell tools". The `user_bash`
 event accepts `operations?` or a full `result?` replacement. **Not established by reading:** whether the *agent's*
@@ -37,9 +45,21 @@ cheapest and defends the shell specifically.
 
 **Reversibility.** High for all three: an `exec` wrapper can be removed; content defences are additive.
 
-**Recommendation.** **Do not build (a) first.** Take (c) with D4, because the evasion benchmark says the shell is
-where the measured losses are, and it is policy we can write today. Then decide (b) versus (a) once the shell is
-governed at all - and note that (b) is the one the *largest* system in the corpus chose.
+**Recommendation, revised after the finding above.** The choice is no longer whether to *have* an isolation policy -
+the modes already state one - but whether to **enforce it or delete it**. Both are defensible; leaving it is not.
+
+- **Enforce (a)**, because the declaration names exactly what to enforce (`container` / `worktree`,
+  `network: allowlist` / `none`, `filesystem: ephemeral` / `read-only-source`), the seam is one method, and the corpus
+  says the cost is tolerable when OS binaries are reused. The sequencing is then: enforce what is declared, then
+  extend it.
+- **Delete the block (b)** if enforcement cannot be done honestly on a given platform, and record that the mode
+  declares no isolation. That is (b) in D4's shape and it is the fail-honest direction.
+- **Never leave it.** A mode file claiming `isolation: container` while the run is unconfined is worse than either,
+  because it is the claim the host's own documentation warns against: "easy to misunderstand as a security
+  boundary".
+
+**And the shell still comes first.** Whatever happens to the `sandbox` block, the measured losses are at the shell
+(D4), and that is policy we can write today.
 
 **Cheapest falsifying step - executed 2026-09-27, and it changes the answer.** The seam analysis resolved further
 than expected, so the experiment is no longer "is it possible":
@@ -265,9 +285,42 @@ output is checkable (a list of behaviour-to-code locations), which is exactly th
 the half whose output can be verified against the source. Then (a) only with an oracle that is not the generator,
 i.e. the regression tests we already have.
 
-**Cheapest falsifying step.** Take the three inert-declaration classes found this session and ask whether a
-behaviour-to-code map would have found them mechanically. If it would not, localization is not the bottleneck for
-*our* defect class and (c) loses its justification.
+**Cheapest falsifying step - executed 2026-09-27, and it found five more than the three it was asked about.** Rather
+than reason about whether localization would help, a **field-level reader scan** was built and run: extract every
+field name the mode format declares (the eight `*_FIELDS` sets in `src/core/work-mode.ts`), then count occurrences of
+each name anywhere in `src/` **outside the parser**. A field with no occurrence has no reader.
+
+**It found the known case mechanically** - `PERMISSION_FIELDS.always_allow: NO READER` - and then found five the
+session had not:
+
+| Field | Declared by | Readers |
+|---|---|---|
+| `GOVERNANCE_FIELDS.sandbox` | **all three shipped modes**, with `isolation: container` / `worktree`, `network: allowlist` / `none`, `filesystem: ephemeral` / `read-only-source` | **none** - the only `sandbox` mentions in `src/` are a code-audit finding category (`sandbox_absent`, of all names) and the parser's field list |
+| `SCOPE_FIELDS.exclusions` | code-audit `[]`, pentest `[t-payments]`, trading `[production-venue]` | **none** |
+| `AUTHORITY_FIELDS.expires` | all three (`2026-10-01`, `2026-12-31`, `2027-01-01`) | **none** - an expired mode keeps loading |
+| `AUTHORITY_FIELDS.grant_graph` | the format accepts it | **none** |
+| `MODE_FIELDS.license` | all three (`MIT`) | **none** |
+
+**And it missed two of the three cases it was asked about.** `gate.intensity`, `gate.excluded_techniques` and
+`gate.windows` were reported as *having* readers, because the bare names match unrelated code: `intensity` and
+`excluded_techniques` match `src/core/authority.ts`, which reads the **authority document's** `constraints`, not the
+mode's `gate` block; `windows` matches the Windows runtime. **That is the vocabulary-proxy failure again, one level
+down**: the scan resolves *names*, and a field name that is a common word gets a false negative. The fix is
+scope-aware resolution (`gate.intensity`, not `intensity`) - which is what a behaviour-to-code map would have to do,
+and what the Harness Handbook paper's "verify candidate locations against the current source" is for.
+
+**Answer to the question the experiment was asked.** Localization would have found the class **partially**: it caught
+`always_allow` and found five more, but would have missed two of the three known instances. So (c) keeps its
+justification **only in the scope-aware form** - and the detector that answered this question is 30 lines, which is
+evidence for the bounded version rather than against it.
+
+**The finding that changes another decision.** `GOVERNANCE_FIELDS.sandbox` is not a cosmetic omission: **every shipped
+mode declares an execution-isolation policy and nothing reads it.** `isolation: container` in a mode file reads as
+"this run is containerised". It is not. That is the same defect as `never_allow: [shell.exec]`, and it is the *worst*
+of the three options in D1 - a mode file claiming isolation it does not have. **D1 is therefore not "should we build
+isolation" but "the declaration already exists and is a false claim: enforce it or remove it"**, which is exactly
+D4's choice applied to the sandbox block. It also makes enforcement more attractive than round 4 judged, because the
+modes already name the policy to enforce (container / allowlist / ephemeral) and the seam is one method.
 
 ---
 
