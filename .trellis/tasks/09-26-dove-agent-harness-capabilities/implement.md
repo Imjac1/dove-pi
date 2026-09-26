@@ -808,6 +808,43 @@ npm run typecheck -> 0 errors
 npm test          -> tests 566 / pass 564 / fail 0 / skipped 2   (564 before, +2)
 ```
 
+
+### M6, 2026-09-26  **[DONE - rungs 1-2; rung 3 named as not built]**
+
+`src/core/verification-ladder.ts`: rungs run **cheapest first** (cost declared, not inferred from array order) and the
+ladder **stops at the first rung that settles**, reporting **which one decided** (`decidedBy`). Three rules, each
+against a specific way a check can lie:
+
+1. **A check that did not run is a failure, not a skip** - and so is a rung that could not start. A skip that reads as
+   "nothing wrong" is how the agent weakens the ladder that is measuring it.
+2. **Positive evidence that it ran is required**: an exit status. Absent, or `null` for a signal, means no verdict was
+   reached - absence of evidence must not read as clean.
+3. **The parsed result is cross-checked against the exit status**: a command that exits 0 while its own output reports
+   `fail 3` is a failure, because the status is what a wrapper forwards and the output is what actually happened.
+
+**Nothing settles implies `unscored`, never a default**, and `decidedBy` is absent then, because a default verdict is
+one nobody reached.
+
+**Rung 3 of the design's set is not built, and it is named rather than implied:** comparison against a *second
+implementation* (roundtrip, idempotence). Nothing in this repository currently has a second implementation to compare
+against, and writing one would be manufacturing a test double rather than adding a rung.
+
+**Wired, not merely written.** `src/capabilities/development.ts` now decides every `dev.*` command **through the
+ladder**, and a failure names the rung (`dev.typecheck failed (dev.typecheck:exit-status): ...`). The claim parser is
+deliberately narrow - it reads a failure count out of a summary line - so `git status` is not cross-checked against a
+claim invented for it, and an `interrupted` run now reports "the check did not run to a verdict" instead of a bare exit
+code.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/verification-ladder.test.ts       -> tests 5 / pass 5 / fail 0   (new)
+node --import tsx --test tests/development-capabilities.test.ts -> unaffected by the rewiring
+
+npm run typecheck -> 0 errors
+npm test          -> tests 571 / pass 569 / fail 0 / skipped 2   (566 before, +5)
+```
+
 ## M8. Truth in the documentation
 
 1. `checkpoint.ts:12-13` cites "Microsoft's `WorkflowCheckpoint`". **No such class was found.** Remove the
