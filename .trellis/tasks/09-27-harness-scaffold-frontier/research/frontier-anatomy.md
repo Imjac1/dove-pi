@@ -822,6 +822,29 @@ enforced**: OpenCode parses commands with tree-sitter and scopes grants by argum
 dictionary; Hermes deobfuscates 47 patterns; Mistral Vibe parse-validates. So "we cannot enforce `never_allow:
 [shell.exec]` without a shell parser" is false in the corpus's terms - three systems do exactly that. **[LOCAL]**
 
+## 16. The remaining gaps, closed - and the one that turned out not to be a gap
+
+§7 listed what was unread. This round read all of it, and the result is that **the reading is done**: every open item
+either changed something (recorded above) or is not about this subject at all.
+
+| Gap | Outcome |
+|---|---|
+| §16.1-16.5, 16.7, 16.8, 16.10 (Recs 1-8, 12-14, 15-18) | read; §14 above. Rec 4 applies and was measured; the rest are already true here or not applicable |
+| §13.1-13.4 (pattern catalog, twin absences, protocol placement, trade-off axes) | read; §15.6 above. The catalog names our convergence work as a known pattern (**Outer Verification Loop**) and answers the "permission lists cannot be enforced" objection (**Syntax-Aware Command Permissioning**) |
+| §14.2-14.5 (merger, economics, meta-harness, ninety days) | read; §15.1-15.2 above. **"Policy migrated out of prose"** is the field's name for our defect |
+| §15.3, §15.6, §17 (safety as architecture, threats to validity, takeaways and future work) | read; §15.3-15.5 above. §17.2 makes D6 the field's *open problem*, and §15.6 bounds how much weight our citations can carry |
+| Harness Handbook `2607.13285`, BGPD detail | not re-read. The Handbook's contribution was already recorded in §9-10 (the behaviour-to-code map and the reachability scan); the remaining detail is an implementation sketch for a tool we do not have |
+| Show-Harness `2609.10522` | **read, and it is not about this.** It is a robotics paper - "Just a VLM Agent Can Play Robots" - where *harness* means a semantic action interface between a vision-language model and a physical embodiment, with GUMI for GUI-based demonstration collection. Nothing in it bears on coding-agent scaffolding; the word collision is the only connection. Recorded so a future round does not chase it |
+
+**What "done" means here.** Not that the literature is exhausted - it is not, and it will not be in a field whose
+pattern-diffusion half-life the paper measures in weeks. It means **the reading no longer changes the plan**: every
+remaining question is now a decision with a stated recommendation, a cost, and an executed falsifying step, and the
+only thing standing between the plan and the work is which decisions to take. That is the transition the goal's own
+wording describes - the pre-harness era's question was how to steer the model, and this round's reading says the
+frontier's answer is that steering has moved out of the prompt and into configuration the platform enforces. **We are
+halfway through that move, which is exactly the place where a synthesis of the frontier is worth building.**
+
+
 
 
 
