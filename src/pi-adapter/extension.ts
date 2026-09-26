@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext, type ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
@@ -349,7 +349,7 @@ export function normalizeLsToolInput(toolName: string, input: Record<string, unk
 	return true;
 }
 
-function convergenceOperationFromPiInput(input: {
+export function convergenceOperationFromPiInput(input: {
 	readonly operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume";
 	readonly acceptanceId?: string;
 	readonly acceptanceRevision?: string;
@@ -383,7 +383,21 @@ function convergenceOperationFromPiInput(input: {
 			// the rule this layer can state truthfully; a stronger one - that the reference must resolve to a record the
 			// harness wrote - was written here and then withdrawn, because the harness records no such thing for a tool
 			// call, so it would have refused every honest pass. See the M5 record.
-			case "passed": return { action: "progress", acceptanceId, progress: { kind: "passed", ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) } };
+			case "passed": {
+				// **A pass must cite something the harness wrote.** Not a label and not a path: the agent can author either.
+				// `ledger:<stepId>` names a step in the execution ledger - every tool call writes one and the result
+				// offers the id - and `effect:<effectKey>` names a claim in the effect store. Those exist, so a pass
+				// can be checked against them; the *existence* is checked one layer up, where the ledger is readable.
+				const evidenceRefs = (input.evidenceRefs ?? []).map((value) => value.trim()).filter((value) => value.length > 0);
+				if (evidenceRefs.length === 0) {
+					throw new Error("agent_task_convergence progress 'passed' requires at least one evidenceRef naming where the observable lives: ledger:<stepId> or effect:<effectKey>.");
+				}
+				const unshaped = evidenceRefs.filter((value) => !/^(?:ledger|effect):[A-Za-z0-9._:-]+$/.test(value));
+				if (unshaped.length > 0) {
+					throw new Error(`agent_task_convergence progress 'passed' refuses ${unshaped.join(", ")}: a pass must name a record the harness wrote (ledger:<stepId>) or an effect claim (effect:<effectKey>). A label or a file path is something the agent can author, so it cannot decide whether the criterion passed.`);
+				}
+				return { action: "progress", acceptanceId, progress: { kind: "passed", evidenceRefs } };
+			}
 			case "failed": return { action: "progress", acceptanceId, progress: { kind: "failed", ...(input.evidenceRefs ? { evidenceRefs: input.evidenceRefs } : {}) } };
 			case "waived": return { action: "progress", acceptanceId, progress: { kind: "waived", evidenceRef: required(input.evidenceRef, "evidenceRef") } };
 			case "step_completed": return { action: "progress", acceptanceId, progress: { kind: "step_completed", stepId: required(input.stepId, "stepId") } };
@@ -519,6 +533,36 @@ const MAX_BACKGROUND_MESSAGE_CHARS = 8_000;
  * so the caller can report it: silently skipping it would be the exemption this exists to remove, and silently
  * rewriting an unknown shape would be worse.
  */
+/**
+ * Resolve acceptance evidence refs against what the harness actually wrote.
+ *
+ * The companion to the shape rule in the tool-argument layer: that one refuses a ref the agent could have authored,
+ * and this one refuses a well-shaped ref whose record does not exist. Neither is sufficient alone - a well-shaped ref
+ * to a record that was never written is the assertion in the right costume.
+ *
+ * What resolves:
+ * - `ledger:<stepId>` - a step the execution ledger wrote. Every tool call now writes one (`tool:<toolCallId>`) and
+ *   the result names it, so this is the kind a model can actually produce.
+ * - `effect:<effectKey>` - a claim file in the effect store, whose existence is the claim.
+ */
+export async function unresolvedAcceptanceEvidence(
+	evidenceRefs: readonly string[],
+	options: { readonly readLedger: () => Promise<readonly { readonly stepId: string }[]>; readonly effectsDirectory: string },
+): Promise<readonly string[]> {
+	const needsLedger = evidenceRefs.some((ref) => ref.startsWith("ledger:"));
+	const stepIds = needsLedger ? new Set((await options.readLedger()).map((record) => record.stepId)) : new Set<string>();
+	const unresolved: string[] = [];
+	for (const ref of evidenceRefs) {
+		const separator = ref.indexOf(":");
+		const kind = separator < 0 ? "" : ref.slice(0, separator);
+		const id = separator < 0 ? "" : ref.slice(separator + 1);
+		if (kind === "ledger" && !stepIds.has(id)) unresolved.push(ref);
+		else if (kind === "effect" && !existsSync(join(options.effectsDirectory, id + ".json"))) unresolved.push(ref);
+		else if (kind !== "ledger" && kind !== "effect") unresolved.push(ref);
+	}
+	return unresolved;
+}
+
 export async function admitNonConversationalMessages<T>(payload: T, maxCharacters: number): Promise<{ payload: T; leftAlone: number }> {
 	if (typeof payload !== "object" || payload === null) return { payload, leftAlone: 0 };
 	let leftAlone = 0;
@@ -1499,6 +1543,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "形式任务收敛元数据变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
 			const operation = convergenceOperationFromPiInput(typed);
+		// The companion to the shape rule one layer down: a well-shaped ref to a record the harness never wrote is the
+		// same assertion in the right costume, and only the layer that can read the ledger can tell the difference.
+		if (operation.action === "progress" && operation.progress.kind === "passed") {
+			const unresolved = await unresolvedAcceptanceEvidence(operation.progress.evidenceRefs ?? [], {
+				readLedger: () => ledger.read(),
+				effectsDirectory: join(resolveWorkspaceRoot(cwd), ".dove", "effects"),
+			});
+			if (unresolved.length > 0) {
+				throw new Error("agent_task_convergence progress 'passed' names evidence the harness has no record of: " + unresolved.join(", ") + ". Cite the observable that decided the criterion - the id in a tool result's [Dove observable: ...] marker - and pass with that.");
+			}
+		}
 			const snapshot = await projectProvider.mutateTaskConvergence(target.stableId, operation);
 			const taskId = target.stableId;
 			const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();

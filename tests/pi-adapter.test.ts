@@ -598,7 +598,12 @@ describe("Pi adapter", () => {
 			const usableWithMalformedConvergence = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "malformed-convergence-write", toolName: "write", input: { path: "still-usable.txt", content: "Pi remains usable" } }, context);
 			assert.equal(usableWithMalformedConvergence, undefined, "malformed convergence metadata must not become a Pi tool firewall");
 			writeFileSync(convergencePath, validConvergence, "utf8");
-			await convergenceTool!.execute("pass-convergence", { operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["evidence:formal-pass"] }, undefined, undefined, context);
+			// **An observable must exist before a pass can cite one**, so the test drives a tool call *and its result*
+			// through the host first - that is what writes the record, and the result names it. The ref this test used to
+			// carry ("evidence:formal-pass") was a label the agent could have written, which is what the rule now refuses.
+			await events.get("tool_call")?.({ type: "tool_call", toolCallId: "suite-run", toolName: "bash", input: { command: "git status --short" } }, context);
+			await events.get("tool_result")?.({ type: "tool_result", toolCallId: "suite-run", toolName: "bash", input: { command: "git status --short" }, content: [{ type: "text", text: "clean" }], isError: false }, context);
+			await convergenceTool!.execute("pass-convergence", { operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["ledger:tool:suite-run"] }, undefined, undefined, context);
 			const blockedAfterFinish = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "formal-write-after-finish", toolName: "write", input: { path: "should-not-write.txt", content: "blocked" } }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
 			assert.equal(blockedAfterFinish?.block, true);
 			assert.equal(blockedAfterFinish?.terminate, true);

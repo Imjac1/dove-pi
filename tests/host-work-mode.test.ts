@@ -5,7 +5,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "../src/pi-adapter/extension.ts";
-import { admitNonConversationalMessages } from "../src/pi-adapter/extension.ts";
+import { admitNonConversationalMessages, convergenceOperationFromPiInput, unresolvedAcceptanceEvidence } from "../src/pi-adapter/extension.ts";
 import { resolveActionIdentity } from "../src/pi-adapter/action-identity.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 
@@ -344,4 +344,30 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		assert.equal(((messages[2]?.content as Array<{ text: string }>)[0]?.text ?? "").length, body.length, "a tool result is admitted at its own hook, not twice");
 		assert.equal(result.leftAlone, 0, "nothing was skipped in silence");
 	});
+	it("refuses a pass that cites a label, and one whose record does not exist", async () => {
+		// Two layers, and neither is sufficient alone: the shape rule refuses a ref the agent could have authored, and
+		// the resolution rule refuses a well-shaped ref to a record the harness never wrote. A pass is what an agent
+		// most wants and the harness can least check, so both are needed - and with the observable now recorded per tool
+		// call (and named in the result), a citation the agent can actually produce exists, which is what the earlier
+		// attempt at this rule lacked.
+		assert.throws(
+			() => convergenceOperationFromPiInput({ operation: "progress", acceptanceId: "AC-001", status: "passed" }),
+			/requires at least one evidenceRef/,
+		);
+		assert.throws(
+			() => convergenceOperationFromPiInput({ operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["evidence:formal-pass"] }),
+			/refuses evidence:formal-pass/,
+			"a label is something the agent can write, so it cannot decide whether the criterion passed",
+		);
+		const shaped = convergenceOperationFromPiInput({ operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["ledger:tool:suite-run"] });
+		assert.equal(shaped.action, "progress", "a ref naming a ledger step passes the shape rule");
+
+		const effectsDirectory = join(freshRoot(), ".dove", "effects");
+		assert.deepEqual(
+			await unresolvedAcceptanceEvidence(["ledger:tool:suite-run", "ledger:tool:never-ran", "effect:missing"], { readLedger: async () => [{ stepId: "tool:suite-run" }], effectsDirectory }),
+			["ledger:tool:never-ran", "effect:missing"],
+			"a well-shaped ref is not a record",
+		);
+	});
 });
+
