@@ -505,6 +505,55 @@ validation includes "the full payload is retrievable", so that question comes be
 cached beliefs about dropped content (Claude Code deleting a file from `readFileState` after clearing a Read
 result) is the one to copy. Whether that map is such a belief is unverified.
 
+### M4's tool-result half, landed 2026-09-26  **[IN PROGRESS - one channel delegated, the incident's channel still open]**
+
+The host's own compactor is **gone** rather than left sitting beside the policy: `compactToolResultContentWithMetadata`
+and `compactToolResultContent` are deleted, replaced by `admitToolResult`, which calls the policy with the host's
+per-tool threshold and maps the result back onto the host's shape so no caller changed. `context-admission.ts` left
+the reachability allow-list - the fifth shrink, and the first module to leave because it **replaced** an
+implementation rather than gaining a consumer.
+
+**Correcting my own round-8 narration while recording this.** I said the host threw the full text away. It does
+not: `extension.ts:2259` keeps it as `details.doveOriginalContent`. So the marker's "inspect the saved details"
+was true, and the payload is **operator**-retrievable. What it was not is **model**-resolvable, and that
+distinction is what decided the rest:
+
+- **No artifact sink for the tool-result channel**, deliberately. A path the model can read invites it to pull the
+  payload back into the transcript, and that read produces a tool result which would be admitted again - a
+  spill, read, spill cycle. The host's continuation ("request a narrower range") has no such cycle, because a
+  narrower query returns *less*.
+- The policy gained the retention strategy with **head-tail as the default**: a head-only boundary compacts away
+  the stack trace, the exit status and the `FAIL` line, and the host's own compaction had chosen head-and-tail for
+  exactly that reason. A new test pins the tail and the `head` alternative.
+- The policy gained a caller-supplied `continuation` line, because it is channel-specific: a tool result can be
+  re-queried more narrowly, a background diagnostic cannot.
+
+**A bug fixed on the way, in the policy rather than the host.** `maxCharacters` was a *threshold* while a separate
+`headCharacters` decided retention, so the admitted form **exceeded the budget it claimed to respect**. The budget
+is now a real bound: the fixed part of the marker is rendered first and the retained slice takes what is left.
+`headCharacters` was removed rather than kept as a knob that can break the bound, and one admission test's
+absolute bound (3000) came from that old retention default - it now asserts the property that holds: fits the
+budget, and under 1% of the original.
+
+**The classification is live for the first time.** The hook now passes the tool's `path` when it has one, so a
+diagnostic for `node_modules/...` is marked "not delivered as actionable task context" - the classification the
+recorded incident needed and did not get.
+
+**Still not done, and it is the half the incident is actually about:** the **custom/background message channel**
+(`extension.ts:2694`). A boundary that guards tool results and leaves that path open is the boundary the incident
+went around.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/context-admission.test.ts  -> tests  7 / pass  7 / fail 0   (6 before, +1)
+node --import tsx --test tests/pi-adapter.test.ts         -> tests 32 / pass 32 / fail 0   (the compaction test rewritten)
+node --import tsx --test tests/harness-reachability.test.ts -> tests 6 / pass 6 / fail 0   (allow-list 8 -> 7)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 561 / pass 559 / fail 0 / skipped 2   (560 before, +1)
+```
+
 ## M5. Acceptance: observables, not assertions
 
 Wiring point: `task-convergence.ts` is already reachable from the host.
