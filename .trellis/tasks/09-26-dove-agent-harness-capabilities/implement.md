@@ -251,8 +251,58 @@ npm run typecheck -> 0 errors
 npm test          -> tests 549 / pass 547 / fail 0 / skipped 2   (548 before the pentest mapping fix, +1)
 ```
 
-**Still open:** M1's AC8 gap - the effect boundary's second adapter on `tool_call`/`tool_result` - and the
-`loop.ts` override question that belongs to it. Both are the same seam and the same change.
+### M1's reachability gap, closed 2026-09-26  **[DONE]**
+
+The claim now sits on the host's own hooks: **`tool_call` takes it** (after the action policy and on the final
+input, because the identity is derived from the arguments that will be dispatched) and **`tool_result` completes
+it**. The store lives at `<workspaceRoot>/.dove/effects`, the engagement is the authority document's engagement
+(or `local:<modeId>` when there is no document, named as such rather than left blank), and
+`effect-store-file.ts` **left the reachability allow-list** - the fourth shrink - so M1's AC8 now holds for
+everything the host actually runs.
+
+**The finding that decided the design, and it is a design finding rather than a bug: an argument-derived effect
+identity cannot tell a replay from a deliberate repeat.** A model that reads the same file twice, or runs the same
+check twice, produces the same key twice, and both are legitimate. Refusing those would break ordinary work while
+looking like containment - the worst shape a control can take. So the claim is scoped to **the resumption path it
+exists for**:
+
+- on the **0th attempt** it always dispatches. There is no earlier attempt to duplicate, so a refusal there is a
+  false positive by construction.
+- on a **later attempt of the same request** it refuses, **unless** the mode's declared class says a second run is
+  harmless. That is what the class is *for*, and it is the reason `key-idempotent` and `idempotent` are separate
+  from `non-idempotent` rather than all being refused.
+- a claim whose record **cannot be read** is refused on any attempt: it is the one state where both guesses are
+  wrong.
+
+**Three further findings.**
+
+1. **Under a conformance mode, every raw tool call is now refused.** `bash`, `read` and `edit` carry no `target`, so
+   the request cannot be mapped and "cannot tell" is a block. This was found by trying to write the host test for
+   the effect boundary under pentest. **It is a containment-versus-usability fork and it is raised with the user
+   rather than decided here**: either raw tools are exempt from conformance (they are covered by the permission
+   list and the limits), or each mode must declare how each tool maps to an action and a target.
+2. **The `loop.ts` override question is answered, and the answer is that it is vacuous there.**
+   `createAgentLoop`'s `decide` consults **one** gate, so "deny must beat allow" has no channel pair to arbitrate.
+   The real arbitration is in the action policy, where the denial is evaluated first and returns. Separately,
+   `options.gate === undefined -> allow` is a **deliberate fail-open default**, documented at `loop.ts:148` as
+   "never omit in production" - so C2 holds for a gate that cannot evaluate, and does **not** hold for "no gate
+   configured", in both the loop and the host. Stated rather than implied.
+3. **The reference loop still holds a claim nothing reaches.** `loop-runner.ts` remains on the allow-list, and that
+   is now the *only* place the at-most-once primitive is exercised by tests alone. AC8 is satisfied for the host
+   path; whether the reference loop should exist at all is the same question M1 raised.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/effect-boundary.test.ts   -> tests  8 / pass  8 / fail 0   (new: the claim's scope, including the deliberate repeat)
+node --import tsx --test tests/host-work-mode.test.ts    -> tests  9 / pass  9 / fail 0   (+1: claim taken at the boundary, completed by the result)
+node --import tsx --test tests/harness-reachability.test.ts -> tests 6 / pass 6 / fail 0   (allow-list 9 -> 8)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 558 / pass 556 / fail 0 / skipped 2   (549 before, +9)
+```
+
+
 
 
 
