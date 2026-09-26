@@ -318,6 +318,16 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind, timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, executionId: input.executionId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { executionId: input.executionId, capability: input.capability, reason: input.reason } });
 	}
 
+	/**
+	 * A pre-execution gate refused an action, with the reason and the remediation it gave.
+	 *
+	 * The reason is the evidence: a refusal that leaves no record is indistinguishable from an action that never
+	 * happened, and the two need different responses from whoever reads the ledger later.
+	 */
+	public async appendGateRefused(input: { taskId: string; stepId: string; mode: AgentMode; tool: string; action: string; viaCapability: boolean; gate: string; reason: string; remediation: string; requestId?: string; sessionId?: string; toolCallId?: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "gate.refused", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { tool: input.tool, action: input.action, viaCapability: input.viaCapability, gate: input.gate, reason: input.reason, remediation: input.remediation } });
+	}
+
 	public async appendProjectMutationStarted(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string, args: readonly string[] = [], beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<void> {
 		await this.append({ taskId, stepId, kind: "project.mutation.started", timestamp: new Date().toISOString(), mode, details: { mutationId, operation, provider, revision, args: args.map((arg) => arg.slice(0, 512)), beforeTaskIds: beforeTaskIds.slice(0, 512), ...(targetTaskId ? { targetTaskId } : {}), ...(beforeTargetStatus ? { beforeTargetStatus: beforeTargetStatus.slice(0, 128) } : {}), ...(beforeCurrentTaskId ? { beforeCurrentTaskId } : {}) } });
 	}

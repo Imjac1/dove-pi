@@ -72,10 +72,22 @@ export interface CapabilityResult<TResult = unknown> {
 	readonly retries?: number;
 }
 
+/**
+ * Every kind of record the ledger can carry.
+ *
+ * Named rather than written inline, so the append methods and the projection cannot drift apart from it.
+ *
+ * `gate.refused` is separate from `capability.blocked` on purpose: the latter is a capability-invocation
+ * refusal with capability-shaped details, while a gate refusal happens at the host's pre-tool-call boundary and
+ * covers every tool. Folding them together would make "the gate stopped this" indistinguishable from "the
+ * capability refused".
+ */
+export type ExecutionRecordKind = "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "runtime.phase.completed" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered" | "task.convergence.decision" | "task.convergence.observed" | "gate.refused";
+
 export interface ExecutionRecord {
 	readonly taskId: string;
 	readonly stepId: string;
-	readonly kind: "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "runtime.phase.completed" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered" | "task.convergence.decision" | "task.convergence.observed";
+	readonly kind: ExecutionRecordKind;
 	readonly timestamp: string;
 	readonly mode: AgentMode;
 	readonly details: Record<string, unknown>;

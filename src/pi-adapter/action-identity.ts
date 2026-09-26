@@ -13,6 +13,12 @@
 export interface ActionIdentity {
 	/** The action name a permission list or an authority document names. */
 	readonly action: string;
+	/**
+	 * The arguments a policy should read. **A capability's own arguments, not the envelope that carries them**:
+	 * a mode declares a limit as a path into the action's payload (`order.notional`), and the envelope's shape
+	 * (`{name, args}`) is the transport's business rather than the action's.
+	 */
+	readonly arguments: unknown;
 	/** True when the action came from a capability invocation rather than from a direct host tool. */
 	readonly viaCapability: boolean;
 }
@@ -21,11 +27,15 @@ export interface ActionIdentity {
 export const CAPABILITY_TOOL = "agent_run_capability";
 
 export function resolveActionIdentity(toolName: string, input: unknown): ActionIdentity {
-	if (toolName !== CAPABILITY_TOOL) return { action: toolName, viaCapability: false };
-	const name = (input as { name?: unknown } | undefined)?.name;
-	if (typeof name === "string" && name.trim() !== "") return { action: name, viaCapability: true };
+	if (toolName !== CAPABILITY_TOOL) return { action: toolName, arguments: input, viaCapability: false };
+	const envelope = input as { name?: unknown; args?: unknown } | undefined;
+	// A capability call with no arguments is an empty payload, not an absent one: a limit that reads into it must
+	// find nothing and say so, rather than the policy being skipped.
+	const args = envelope?.args ?? {};
+	const name = envelope?.name;
+	if (typeof name === "string" && name.trim() !== "") return { action: name, arguments: args, viaCapability: true };
 	// A capability call whose name cannot be read is not "no action": it is an action that cannot be named, and
 	// a permission list cannot permit or deny what it cannot name. The sentinel keeps it inside the
 	// `agent_run_capability.*` namespace, so a mode can still deny every capability invocation.
-	return { action: `${CAPABILITY_TOOL}.<unnamed>`, viaCapability: true };
+	return { action: `${CAPABILITY_TOOL}.<unnamed>`, arguments: args, viaCapability: true };
 }

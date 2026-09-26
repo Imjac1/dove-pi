@@ -42,6 +42,8 @@ import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
+import { createLimitGate } from "../core/gate-limit.ts";
+import type { SynchronousActionGate } from "../core/loop.ts";
 import { evaluatePermission, loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
 import { projectModelMessages } from "./context-projection.ts";
@@ -529,6 +531,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// rather than starting unconstrained** (design 5.4). Loading it in a test was the defect being fixed.
 	let activeWorkMode: WorkMode | undefined;
 	let modeRefusal: string | undefined;
+	// Built once from the loaded mode's declared limits, because a limit gate that is rebuilt per call is a gate
+	// whose thresholds can differ between two identical actions.
+	let activeLimitGate: SynchronousActionGate | undefined;
 	const subagentProvider = createConfiguredPiSubagentProvider();
 	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
@@ -1783,6 +1788,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				}
 			}
 		}
+		activeLimitGate = undefined;
+		if (activeWorkMode !== undefined && activeWorkMode.limits.length > 0) {
+			try {
+				activeLimitGate = createLimitGate(activeWorkMode.limits);
+			} catch (error) {
+				// The loader validates the shapes, so this should be unreachable; if it ever fires, it must not leave the
+				// run with no gate while the mode says it has limits.
+				modeRefusal = `Work mode '${activeWorkMode.id}' declares limits that could not be built into a gate: ${error instanceof Error ? error.message : String(error)}`;
+				activeWorkMode = undefined;
+			}
+		}
 		if (modeRefusal !== undefined && ctx.hasUI) ctx.ui.notify(`[Dove mode] ${modeRefusal}`, "error");
 		if (activeWorkMode !== undefined && ctx.hasUI) {
 			// `ask_before` is not consumed yet. Saying so is the difference between a control that is absent and a
@@ -2083,6 +2099,38 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 		}
 		normalizeLsToolInput(event.toolName, event.input);
+		// The gate is evaluated here, **after** every mutation of `event.input` in this handler and not before.
+		// The host does not re-validate after a mutation (types.d.ts:703-708), so a gate that validated the input it
+		// saw at the top of the handler would have permitted something other than what runs.
+		if (activeLimitGate !== undefined && activeWorkMode !== undefined) {
+			const identity = resolveActionIdentity(event.toolName, event.input);
+			const decision = activeLimitGate.evaluate({
+				tool: identity.action,
+				arguments: identity.arguments,
+				// A work mode carries one version today (its governance version). Inventing a second here would be a
+				// fiction, and the record exists to say what was authorized when the action ran.
+				mode: { id: activeWorkMode.id, version: activeWorkMode.governanceVersion, governanceVersion: activeWorkMode.governanceVersion },
+				at: new Date().toISOString(),
+				elapsedMs: 0,
+				accumulatedIntensity: {},
+			});
+			if (decision.outcome === "block") {
+				await ledger.appendGateRefused({
+					taskId: currentRequestTaskId ?? "pi-session",
+					stepId: `gate:${event.toolCallId}`,
+					mode: mode.current,
+					tool: event.toolName,
+					action: identity.action,
+					viaCapability: identity.viaCapability,
+					gate: activeLimitGate.id,
+					reason: decision.reason,
+					remediation: decision.remediation,
+					toolCallId: event.toolCallId,
+					sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
+				});
+				return { block: true, reason: `[Dove mode ${activeWorkMode.id} / ${activeLimitGate.id}] ${decision.reason}\nDo this instead: ${decision.remediation}` };
+			}
+		}
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
 		const progressDecision = progressGuard.beforeToolCall(event.toolCallId, event.toolName, event.input, idempotent);
 		if (progressDecision.action !== "allow") {

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -81,11 +81,15 @@ async function callTool(host: ReturnType<typeof startHost>, toolName: string, in
 
 describe("the host loads the work mode (design 5.4: 'loaded by the host' is the point)", () => {
 	it("names the action a tool call is, so a capability invocation is not its tool name", () => {
-		assert.deepEqual(resolveActionIdentity("bash", { command: "ls" }), { action: "bash", viaCapability: false });
-		assert.deepEqual(resolveActionIdentity("agent_run_capability", { name: "shell.exec", args: {} }), { action: "shell.exec", viaCapability: true });
+		assert.deepEqual(resolveActionIdentity("bash", { command: "ls" }), { action: "bash", arguments: { command: "ls" }, viaCapability: false });
+		assert.deepEqual(
+			resolveActionIdentity("agent_run_capability", { name: "shell.exec", args: { target: "t-web" } }),
+			{ action: "shell.exec", arguments: { target: "t-web" }, viaCapability: true },
+			"a policy reads the capability's own arguments, not the envelope that carries them",
+		);
 		assert.deepEqual(
 			resolveActionIdentity("agent_run_capability", {}),
-			{ action: "agent_run_capability.<unnamed>", viaCapability: true },
+			{ action: "agent_run_capability.<unnamed>", arguments: {}, viaCapability: true },
 			"an unnameable capability call stays inside a namespace a mode can still deny",
 		);
 	});
@@ -170,4 +174,44 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("refuses an over-limit action at the tool-call boundary, and records the refusal in the ledger", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "trading");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			assert.ok(host.notifications.some((message) => /trading loaded from modes\/trading/.test(message)), "the mode must load before its limits can fire: " + host.notifications.join(" | "));
+			// A request, because the gate sits where the input is final, and that is inside a Dove-managed request.
+			await host.events.get("input")?.({ type: "input", text: "place one order", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "place one order", systemPrompt: "" }, host.context);
+
+			const over = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { notional: 250_000, quantity: 10 } } });
+			assert.equal(over?.block, true, "the mode's declared limit must fire at the host boundary");
+			assert.match(over?.reason ?? "", /exceeds limit 'notional'/, "the reason names the limit that refused it");
+			assert.match(over?.reason ?? "", /Do this instead:/, "a refusal carries remediation, not only a reason");
+
+			const under = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { notional: 50_000, quantity: 10 } } });
+			assert.notEqual(under?.block, true, "an order inside the declared bounds is not refused by the limit gate");
+
+			const unevaluable = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { quantity: 10 } } });
+			assert.equal(unevaluable?.block, true, "a limit that cannot find the argument it checks is a block, not a pass");
+			assert.match(unevaluable?.reason ?? "", /could not be evaluated/);
+
+			// The refusal is evidence, not only a message to the model: a blocked action that leaves no record is
+			// indistinguishable from one that never happened, and the two need different responses later.
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const records = existsSync(ledgerFile)
+				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { reason?: string; action?: string; gate?: string } })
+				: [];
+			const recorded = records.find((record) => record.kind === "gate.refused" && /exceeds limit 'notional'/.test(record.details?.reason ?? ""));
+			assert.ok(recorded !== undefined, "the refusal is in the ledger with its reason");
+			assert.equal(recorded?.details?.action, "order.submit", "and it names the action rather than only the tool");
+			assert.equal(recorded?.details?.gate, "limit");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 });
+
