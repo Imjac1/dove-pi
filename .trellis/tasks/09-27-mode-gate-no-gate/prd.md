@@ -54,21 +54,23 @@ thresholds: an internal review has no third-party grantor, and it also has no pr
 
 ## Acceptance Criteria
 
-- [ ] **AC1** A mode declaring `limit` (or `both`) with no `gate.limits` does not load, and the refusal names the
+All eight verified 2026-09-27; the evidence for each is the table in `implement.md`.
+
+- [x] **AC1** A mode declaring `limit` (or `both`) with no `gate.limits` does not load, and the refusal names the
       field and both ways out. Observed through the loader and, for the operator-visible case, through the host.
-- [ ] **AC2** A mode declaring `none` loads, and its action policy builds neither a threshold gate nor a conformance
+- [x] **AC2** A mode declaring `none` loads, and its action policy builds neither a threshold gate nor a conformance
       gate — asserted on `ActionPolicy.gates`, which is the list a reader uses to see the policy instead of inferring
       it.
-- [ ] **AC3** A mode declaring `none` **and** limits does not load, and the refusal names the contradiction.
-- [ ] **AC4** `modes/code-audit` loads through the host with `none`, and its permission lists decide what runs (the
+- [x] **AC3** A mode declaring `none` **and** limits does not load, and the refusal names the contradiction.
+- [x] **AC4** `modes/code-audit` loads through the host with `none`, and its permission lists decide what runs (the
       case `tests/host-work-mode.test.ts` already asserts, unchanged in substance).
-- [ ] **AC5** `modes/trading` still loads with its two limits, and an over-limit order is still refused by the
+- [x] **AC5** `modes/trading` still loads with its two limits, and an over-limit order is still refused by the
       `limit` gate.
-- [ ] **AC6** `modes/pentest` is unchanged: conformance with a resolvable document loads, and a grant that is not a
+- [x] **AC6** `modes/pentest` is unchanged: conformance with a resolvable document loads, and a grant that is not a
       document is still refused.
-- [ ] **AC7** The conformance refusal offers `none` as well as `limit`, so an author whose mode has neither a grantor
+- [x] **AC7** The conformance refusal offers `none` as well as `limit`, so an author whose mode has neither a grantor
       nor thresholds is not sent to a value that does not fit.
-- [ ] **AC8** `npm run typecheck` is clean and `npm test` is green.
+- [x] **AC8** `npm run typecheck` is clean and `npm test` is green.
 
 ## Key decision (user, 2026-09-27)
 
