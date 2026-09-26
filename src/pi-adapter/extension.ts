@@ -41,7 +41,9 @@ import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity
 import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
-import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, writeWorkspacePolicy } from "../core/workspace-policy.ts";
+import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
+import { evaluatePermission, loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
+import { resolveActionIdentity } from "./action-identity.ts";
 import { projectModelMessages } from "./context-projection.ts";
 
 type DoveRegistrationClaim = { readonly identity: DoveExtensionIdentity; readonly owner: ExtensionAPI };
@@ -522,6 +524,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	const cwd = process.cwd();
 	const launchWorkspaceMode = normalizeWorkspaceMode(process.env.DOVE_PI_WORKSPACE_MODE) ?? "development";
 	let workspacePolicy = readWorkspacePolicy(cwd, process.env.DOVE_PI_WORKSPACE_MODE_OVERRIDE).policy;
+	// The work mode, loaded at session start. `modeRefusal` is set when a declared mode could not be loaded, and
+	// it blocks every tool call until the declaration is fixed: **a mode that fails validation refuses to start
+	// rather than starting unconstrained** (design 5.4). Loading it in a test was the defect being fixed.
+	let activeWorkMode: WorkMode | undefined;
+	let modeRefusal: string | undefined;
 	const subagentProvider = createConfiguredPiSubagentProvider();
 	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
@@ -1753,6 +1760,39 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		await reconcileProjectMutations(ctx);
 		await reconcileCapabilityExecutions(ctx);
 		await reconcileProviderRequests(ctx);
+
+		// The mode, loaded by the host (design 5.4). A loader a test calls is not a load: the point is that a change
+		// under modes/<name>/ changes what the running agent may do.
+		const modeRoot = resolveWorkspaceRoot(cwd);
+		const selection = resolveWorkModeSelection({ workspaceRoot: modeRoot, workspaceMode: workspacePolicy.mode });
+		const frameworkVersion = process.env.DOVE_PI_FRAMEWORK_VERSION?.trim();
+		activeWorkMode = undefined;
+		modeRefusal = workModeRefusal(selection);
+		if (modeRefusal === undefined && selection.name !== undefined) {
+			if (frameworkVersion === undefined || frameworkVersion === "") {
+				// The mode declares a framework range and this process cannot check it. Comparing it against the
+				// extension's identity version would compare two different number spaces, and skipping the check would
+				// ignore a constraint the mode declared. So the load is refused and the operator is told which variable
+				// is missing rather than being handed a mode nobody validated.
+				modeRefusal = `Work mode '${selection.name}' declares a framework range that cannot be checked here: DOVE_PI_FRAMEWORK_VERSION is not set. A mode that cannot be validated must not start.`;
+			} else {
+				try {
+					activeWorkMode = loadWorkModeFromDirectory(modeRoot, selection.name, { frameworkVersion });
+				} catch (error) {
+					modeRefusal = workModeRefusal(selection, error as Error);
+				}
+			}
+		}
+		if (modeRefusal !== undefined && ctx.hasUI) ctx.ui.notify(`[Dove mode] ${modeRefusal}`, "error");
+		if (activeWorkMode !== undefined && ctx.hasUI) {
+			// `ask_before` is not consumed yet. Saying so is the difference between a control that is absent and a
+			// control that reads as present: an unsaid gap is the defect this project keeps finding in configuration.
+			ctx.ui.notify(
+				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name}: ${activeWorkMode.permissions.never_allow.length} denied action(s) are enforced. ask_before is not consumed yet, so those ${activeWorkMode.permissions.ask_before.length} action(s) run without asking.`,
+				activeWorkMode.permissions.ask_before.length > 0 ? "warning" : "info",
+			);
+		}
+
 		ctx.ui.notify("Ctrl+P 切换模型 · Ctrl+Alt+M 循环执行策略 · Ctrl+D 或 /quit 退出", "info");
 	});
 
@@ -1973,6 +2013,22 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
+		// Mode checks come first, ahead of the lease check: a mode that failed to load must stop the action even
+		// when the request bookkeeping is not set up. Reading only the tool name - and, for a capability call, the
+		// capability name - is deliberate: the permission list is name-based, so this decision cannot be
+		// invalidated by an argument mutation performed later in this handler.
+		if (modeRefusal !== undefined) {
+			return { block: true, reason: `[Dove mode] ${modeRefusal}` };
+		}
+		if (activeWorkMode !== undefined) {
+			const identity = resolveActionIdentity(event.toolName, event.input);
+			if (evaluatePermission(activeWorkMode.permissions, identity.action) === "deny") {
+				return {
+					block: true,
+					reason: `[Dove mode ${activeWorkMode.id}] '${identity.action}' is on this mode's never_allow list, so it does not run in this workspace${identity.viaCapability ? ` (invoked through ${event.toolName})` : ""}.`,
+				};
+			}
+		}
 		if (!requestLifecycle.activeLease()) return;
 		const capabilityMutation = event.toolName === "agent_run_capability" && typeof event.input?.name === "string" && registry.get(event.input.name)?.sideEffects.some((effect) => effect !== "read_only");
 		let recipeMutation = false;

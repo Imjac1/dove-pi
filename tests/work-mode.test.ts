@@ -1,9 +1,28 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadWorkMode, satisfiesFrameworkRange, evaluatePermission, WorkModeError, type WorkModeFiles } from "../src/core/work-mode.ts";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+	loadWorkMode,
+	loadWorkModeFromDirectory,
+	evaluatePermission,
+	resolveWorkModeSelection,
+	satisfiesFrameworkRange,
+	workModeDirectory,
+	workModeRefusal,
+	WorkModeError,
+	type WorkModeFiles,
+	type WorkModeSelection,
+} from "../src/core/work-mode.ts";
 import { effectClassOf } from "../src/core/effect-ledger.ts";
 
 const FRAMEWORK = "0.1.0";
+
+/** A throwaway workspace root, used by everything that reads a declaration or a mode directory off disk. */
+function freshRoot(): string {
+	return mkdtempSync(join(tmpdir(), "dove-mode-"));
+}
 
 function files(overrides: Partial<WorkModeFiles> = {}): WorkModeFiles {
 	return {
@@ -178,6 +197,101 @@ describe("mode-declared effect classes", () => {
 			() => loadWorkMode(withPolicy(["effects:", "  classez:", "    read: idempotent", ""].join("\n")), { frameworkVersion: FRAMEWORK }),
 			"unknown-field",
 		);
+	});
+});
+
+describe("mode selection", () => {
+	function declare(where: string, value: string): void {
+		mkdirSync(join(where, ".dove"), { recursive: true });
+		writeFileSync(join(where, ".dove", "mode.json"), value);
+	}
+
+	it("selects nothing when nothing is declared, which is a state and not a failure", () => {
+		const selection = resolveWorkModeSelection({ workspaceRoot: freshRoot() });
+		assert.equal(selection.name, undefined);
+		assert.equal(selection.source, "none");
+		assert.equal(workModeRefusal(selection), undefined, "running with no mode is legitimate; the host says which state it is in");
+	});
+
+	it("reads a declaration and records where the selection came from", () => {
+		const where = freshRoot();
+		declare(where, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		const selection = resolveWorkModeSelection({ workspaceRoot: where });
+		assert.equal(selection.name, "code-audit");
+		assert.equal(selection.source, "declared");
+		assert.equal(selection.malformed, false);
+	});
+
+	it("refuses a malformed declaration instead of degrading to no mode", () => {
+		const where = freshRoot();
+		for (const value of ["{ not json", JSON.stringify({ schemaVersion: 2, mode: "code-audit" }), JSON.stringify({ schemaVersion: 1, mode: "../../etc" }), JSON.stringify({ schemaVersion: 1 })]) {
+			declare(where, value);
+			const selection = resolveWorkModeSelection({ workspaceRoot: where });
+			assert.equal(selection.malformed, true, `${value} must not read as a valid declaration`);
+			assert.equal(selection.name, undefined);
+			const refusal = workModeRefusal(selection);
+			assert.ok(refusal !== undefined, "a declared-but-unreadable mode must stop the run");
+			assert.match(refusal, /not "no mode declared"/, "the refusal distinguishes the two facts");
+		}
+	});
+
+	it("implies pentest from the workspace mode, and implies nothing else", () => {
+		const where = freshRoot();
+		const pentest = resolveWorkModeSelection({ workspaceRoot: where, workspaceMode: "pentest" });
+		assert.equal(pentest.name, "pentest");
+		assert.equal(pentest.source, "workspace-pentest");
+		assert.equal(resolveWorkModeSelection({ workspaceRoot: where, workspaceMode: "development" }).name, undefined, "ordinary development declares no mode");
+	});
+
+	it("lets an explicit override win, and refuses one that is not a mode name", () => {
+		const where = freshRoot();
+		declare(where, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		assert.equal(resolveWorkModeSelection({ workspaceRoot: where, override: "trading" }).name, "trading");
+		assert.equal(resolveWorkModeSelection({ workspaceRoot: where, override: "trading" }).source, "override");
+		assert.equal(resolveWorkModeSelection({ workspaceRoot: where, override: "not a name" }).malformed, true);
+	});
+});
+
+describe("loading a mode from a directory", () => {
+	// The version the host is actually running, so the shipped modes load the way the host loads them.
+	const PACKAGE_VERSION = (JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as { version: string }).version;
+
+	it("loads a shipped mode by name, with its limits and effect classes", () => {
+		const codeAudit = loadWorkModeFromDirectory(process.cwd(), "code-audit", { frameworkVersion: PACKAGE_VERSION });
+		assert.equal(codeAudit.id, "code-audit");
+		assert.equal(effectClassOf("code-audit.seed", codeAudit.effectClasses).effectClass, "idempotent");
+		const trading = loadWorkModeFromDirectory(process.cwd(), "trading", { frameworkVersion: PACKAGE_VERSION });
+		assert.deepEqual(trading.limits.map((limit) => limit.id), ["notional", "quantity"], "the thresholds are mode content, not test content");
+	});
+
+	it("refuses a mode name that is a path, before touching the filesystem", () => {
+		assert.throws(() => workModeDirectory(process.cwd(), "../../etc"), WorkModeError);
+	});
+
+	it("treats a missing file as an error, never as an empty default", () => {
+		const where = freshRoot();
+		mkdirSync(join(where, "modes", "half"), { recursive: true });
+		writeFileSync(join(where, "modes", "half", "governance.yaml"), "version: 1.0.0\nframework: \">=0.1.0\"\n");
+		const error = expectError(() => loadWorkModeFromDirectory(where, "half", { frameworkVersion: "0.1.0" }), "missing-file");
+		assert.match(error.detail, /MODE\.md/, "the error names the file that is missing");
+	});
+
+	it("refuses a corrupt mode with a reason the host can report, which is 'refuses to start'", () => {
+		const where = freshRoot();
+		mkdirSync(join(where, "modes", "broken"), { recursive: true });
+		writeFileSync(join(where, "modes", "broken", "MODE.md"), "---\nname: broken\ndescription: A mode with no governance\n---\nbody\n");
+		writeFileSync(join(where, "modes", "broken", "governance.yaml"), "version: 1.0.0\n");
+		writeFileSync(join(where, "modes", "broken", "permissions.yaml"), "never_allow: [shell.exec]\n");
+		const selection: WorkModeSelection = { workspaceRoot: where, path: join(where, ".dove", "mode.json"), name: "broken", source: "declared", malformed: false };
+		let failure: unknown;
+		try {
+			loadWorkModeFromDirectory(where, "broken", { frameworkVersion: "0.1.0" });
+		} catch (error) {
+			failure = error;
+		}
+		assert.ok(failure instanceof WorkModeError, "a mode that fails validation throws rather than loading partially");
+		const refusal = workModeRefusal(selection, failure);
+		assert.ok(refusal !== undefined && /refuses to start rather than starting unconstrained/.test(refusal), String(refusal));
 	});
 });
 

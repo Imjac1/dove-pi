@@ -38,22 +38,16 @@ const ENTRY_POINTS = [
  * task makes it reachable, stated rather than left blank.
  */
 const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
-	// The reference loop, and everything only it reaches. **No milestone in this task makes these reachable.**
-	// M2, M3 and M4 wire the host's hooks and the host's startup path, and the host runs its own loop. M1 does
-	// place the effect claim inside loop-runner.ts - which means the claim is reachable from tests only, and
-	// adding a module there (effect-store-file.ts) turned this very test red. That is a finding about the plan,
-	// recorded in the M1 milestone record rather than absorbed here.
-	"src/core/loop.ts": { reason: "the loop contract and the reference loop; no milestone edits or reaches it, because the host owns the loop that runs", wiredBy: null },
+	// **Four entries left this list when M3's host load landed**, which is the first time it has shrunk:
+	// `work-mode.ts` became reachable from the host's startup path, and `gate-limit.ts`, `effect-ledger.ts` and
+	// `loop.ts` came with it (work-mode imports the first two, and gate-limit imports the loop's gate types).
+	// The assertion below is what noticed, which is the reason it asserts in both directions.
 	"src/core/loop-runner.ts": { reason: "the reference runner; M1 places the effect claim at its dispatch line, but nothing reaches this module, so the claim is exercised by tests only", wiredBy: null },
 	"src/core/effect-store-file.ts": { reason: "the claim store M1 adds; reached only from loop-runner.ts, which is itself unreachable. Reachable from tests until the boundary also sits on the host's tool_call/tool_result hooks", wiredBy: null },
-	"src/core/effect-ledger.ts": { reason: "effect identity, the claim contract and the dispatch helper; M1 corrects its exactly-once claim and widens EffectOutcome, but it is reached only through the unreachable loop", wiredBy: null },
 	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; reached only through the unreachable loop", wiredBy: null },
-	// Each of these can be reached from the host, and names the milestone that does it.
-	"src/core/gate-limit.ts": { reason: "limit-gate semantics; M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
-	"src/core/gate-conformance.ts": { reason: "conformance-gate semantics; M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
-	"src/core/work-mode.ts": { reason: "the declarative mode loader; M3 loads it at host startup", wiredBy: "M3" },
-	"src/core/authority.ts": { reason: "the grant graph the mode declares; M3 gives it a runtime consumer", wiredBy: "M3" },
-	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode", wiredBy: "M3" },
+	"src/core/gate-conformance.ts": { reason: "conformance-gate semantics; reached only from loop-runner, and M2 composes it behind the gate policy at the host's tool_call hook", wiredBy: "M2" },
+	"src/core/authority.ts": { reason: "the grant graph the mode declares; M2's conformance gate is what consumes it, and the mode load alone does not reach this", wiredBy: "M2" },
+	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode, which has not landed yet", wiredBy: "M3" },
 	"src/core/context-admission.ts": { reason: "the admission policy; M4 either delegates from it or removes it", wiredBy: "M4" },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },

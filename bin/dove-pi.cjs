@@ -140,6 +140,11 @@ function spawnPi(argumentsList) {
 	try {
 		const packageJson = require(path.join(packageRoot, "package.json"));
 		launchEnv.DOVE_PI_EXTENSION_VERSION = packageJson.version || "0.1.0";
+		// The framework version a mode declares its range against. It is the same number as the extension version
+		// here, and it is a separate variable on purpose: one names the extension identity, the other names the
+		// framework a mode targets, and code that compares a mode's range against an identity version is comparing
+		// two different number spaces that happen to agree until one of them changes.
+		launchEnv.DOVE_PI_FRAMEWORK_VERSION = packageJson.version || "0.1.0";
 	} catch {
 		launchEnv.DOVE_PI_EXTENSION_VERSION = "0.1.0";
 	}
