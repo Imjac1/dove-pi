@@ -23,7 +23,13 @@ import type { ModeIdentity } from "../core/effect-ledger.ts";
  * validation and returns `{block: true}` to prevent execution, which is the same pre-execution,
  * parameter-level boundary the reference loop enforces. The two framework-level guards the reference
  * loop applies - a target/display mismatch, and treating an unrecognised decision as a block - are
- * applied here too, so the guarantees do not depend on which loop is running.
+ * applied here too, so **the gate** behaves the same in both loops.
+ *
+ * That is as far as the equivalence goes, and the sentence used to end one claim further: "so the
+ * guarantees do not depend on which loop is running" is broader than its own premise. This adapter has
+ * **no dispatch line of its own to take an effect claim at** (see `refusedEffects` below), so at-most-once
+ * dispatch belongs to the reference loop and to the host, not to this adapter. Two comments in one file
+ * disagreeing about what is guaranteed is the defect this statement was corrected for.
  */
 export interface PiAgentLoopOptions {
 	/** Caller-supplied model transport. In production this comes from Pi-ai's provider catalog. */

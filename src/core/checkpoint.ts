@@ -9,8 +9,11 @@ import type { EffectRecord, ModeIdentity } from "./effect-ledger.ts";
  * the surveyed frameworks end up re-running side effects: their resume unit does not line up with the
  * unit that has consequences.
  *
- * Two guards are copied from the strongest precedent found in the wild (Microsoft's
- * `WorkflowCheckpoint`), because both catch a real class of mistake:
+ * Two guards, and both catch a real class of mistake. **They are this project's own, and the attribution this
+ * comment used to carry is withdrawn:** it cited a `WorkflowCheckpoint` class in Microsoft's agent framework as the
+ * precedent, and when the citation was checked no such class could be found. The guards stand on what they do rather
+ * than on who else does it, which is also why the withdrawal is written down here instead of the sentence quietly
+disappearing.
  *
  * - **a graph signature** - a hash of the orchestration shape. A checkpoint taken under one tool set,
  *   mode version, or gate must not be resumed under another, because the resumed run would then be a
