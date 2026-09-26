@@ -28,7 +28,11 @@ describe("context admission", () => {
 		const result = await admit({ channel: "background_notification", source: "pi-lens scan", content: payload }, { sink });
 
 		assert.equal(result.originalCharacters, payload.length);
-		assert.ok(result.admittedCharacters < 3000, `the compacted form must be small, was ${result.admittedCharacters}`);
+		// The bound is the contract: `maxCharacters` is what the admitted form fits inside, and the retained slice is
+		// whatever is left of it after the marker. The old number here (3000) came from a *separate* retention
+		// default, and keeping two knobs let the admitted form exceed the budget it claimed to respect.
+		assert.ok(result.admittedCharacters <= 8000, `the compacted form must fit the budget, was ${result.admittedCharacters}`);
+		assert.ok(result.admittedCharacters / payload.length < 0.01, "and it must be a small fraction of the original, not a truncation of it");
 		assert.equal(result.omittedCharacters, payload.length);
 		assert.match(result.admitted, /digest: sha256:[0-9a-f]{64}/, "the digest must be retained");
 		assert.match(result.admitted, new RegExp(`omitted: ${payload.length} characters`), "the omitted size must be retained");
@@ -54,6 +58,18 @@ describe("context admission", () => {
 		assert.equal(result.admitted, "42 lines, no issues");
 		assert.equal(result.omittedCharacters, 0);
 		assert.equal(result.nonActionable, false);
+	});
+
+	it("keeps the tail, because the tail is where a failure is reported", async () => {
+		// A head-only boundary compacts away the stack trace, the exit status and the `FAIL` line. The host's own
+		// compaction chose head-and-tail for that reason, and the policy must not be a regression against it.
+		const payload = "x".repeat(20_000) + "\nTAIL-MARKER-failure-reported-here\n";
+		const result = await admit({ channel: "tool_result", source: "bash", content: payload }, { maxCharacters: 2_000 });
+		assert.match(result.admitted, /TAIL-MARKER-failure-reported-here/, "the end of the output survives");
+		assert.equal(result.strategy, "head-tail");
+		assert.ok(result.admitted.length <= 2_000, "and the whole admitted form still fits the budget");
+		const headOnly = await admit({ channel: "tool_result", source: "bash", content: payload }, { maxCharacters: 2_000, strategy: "head" });
+		assert.ok(!headOnly.admitted.includes("TAIL-MARKER"), "head-only is available where the tail carries nothing");
 	});
 
 	it("does not deliver generated or dependency content as actionable context, even when it is small", async () => {

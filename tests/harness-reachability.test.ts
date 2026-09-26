@@ -52,7 +52,9 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// `src/core/authority.ts` left this list when the mode loader began resolving a conformance mode's grant
 	// document - the second time the list has shrunk, and again the assertion is what noticed.
 	"src/core/capability-scope.ts": { reason: "typed capabilities held outside model context; M3 scopes them from the loaded mode, which has not landed yet", wiredBy: "M3" },
-	"src/core/context-admission.ts": { reason: "the admission policy; M4 either delegates from it or removes it", wiredBy: "M4" },
+	// `src/core/context-admission.ts` left this list when the host's tool-result compaction began delegating to
+	// it - the fifth shrink, and the first module to leave because it *replaced* an implementation rather than
+	// gaining a consumer.
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },

@@ -48,14 +48,30 @@ export interface AdmittedContent {
 	readonly artifactRef?: string;
 	/** True when the content was classified as generated/dependency material rather than task material. */
 	readonly nonActionable: boolean;
+	/**
+	 * Which slice was retained. Present only when something was omitted: unchanged content has no strategy, and
+	 * reporting one would describe a choice that was never made.
+	 */
+	readonly strategy?: "head" | "head-tail";
 }
 
 export interface ContextAdmissionOptions {
 	readonly sink?: ArtifactSink;
 	/** Above this, content is compacted. Default 8000. */
 	readonly maxCharacters?: number;
-	/** How much of the head survives compaction, for orientation. Default 1200. */
-	readonly headCharacters?: number;
+	/**
+	 * What to retain. Default `head-tail`, not `head`.
+	 *
+	 * The tail is where a failure is reported - a stack trace, an exit status, a `FAIL` line - so a boundary that
+	 * keeps only the head compacts away the part a reader most needs. The host's own compaction chose head-and-tail
+	 * for exactly that reason, and this policy should not be a regression against the thing it replaces.
+	 */
+	readonly strategy?: "head" | "head-tail";
+	/**
+	 * A line of guidance for the model, rendered into the marker. Supplied by the caller because it is
+	 * channel-specific: a tool result can be re-queried more narrowly, a background diagnostic cannot.
+	 */
+	readonly continuation?: string;
 }
 
 /**
@@ -73,24 +89,48 @@ function digestOf(content: string): string {
 	return createHash("sha256").update(content).digest("hex");
 }
 
-function compact(request: AdmissionRequest, omittedCharacters: number, digest: string, artifactRef: string | undefined, headCharacters: number, nonActionable: boolean): string {
-	const head = request.content.slice(0, headCharacters);
+/**
+ * Render the compacted form, **fitting inside the budget the caller gave**.
+ *
+ * The fixed part of the marker is rendered first so its length is known, and the retained slice takes what is
+ * left. The alternative - treating the budget as the retention size - makes "compacted to N characters" a claim
+ * the output does not keep, because the marker is added on top of it. A budget that is not a bound is not a
+ * budget.
+ */
+function compact(request: AdmissionRequest, digest: string, artifactRef: string | undefined, maxCharacters: number, nonActionable: boolean, options: ContextAdmissionOptions): string {
+	const strategy = options.strategy ?? "head-tail";
 	const lines = request.content.split(/\r?\n/).length;
-	return [
+	const fixed = [
 		`[admitted content compacted - ${request.channel} from ${request.source}]`,
 		`source: ${request.source}`,
 		`channel: ${request.channel}`,
 		`digest: sha256:${digest}`,
-		`omitted: ${omittedCharacters} characters (${lines} lines total)`,
+		`omitted: ${request.content.length} characters (${lines} lines total)`,
 		...(artifactRef === undefined ? [] : [`artifact: ${artifactRef}`]),
 		...(nonActionable
 			? ["classification: generated/dependency content - not delivered as actionable task context"]
 			: []),
+		...(options.continuation === undefined ? [] : [`continuation: ${options.continuation}`]),
+	].join("\n");
+	const heading = "--- head of the omitted content ---";
+	const tailHeading = "--- tail of the omitted content ---";
+	// Two blank-line separators, plus the tail heading when there is a tail to label.
+	const overhead = fixed.length + heading.length + tailHeading.length + (strategy === "head-tail" ? 8 : 4);
+	const retain = Math.max(0, maxCharacters - overhead);
+	const headCharacters = strategy === "head-tail" ? Math.floor(retain * 0.75) : retain;
+	const tailCharacters = strategy === "head-tail" ? retain - headCharacters : 0;
+	const head = request.content.slice(0, headCharacters);
+	// The tail always ends at the end, and never overlaps the head.
+	const tail = tailCharacters > 0 && request.content.length > headCharacters ? request.content.slice(-tailCharacters) : "";
+	return [
+		fixed,
 		"",
-		"--- head of the omitted content ---",
+		heading,
 		head,
+		...(tail === "" ? [] : ["", tailHeading, tail]),
 	].join("\n");
 }
+
 
 /**
  * Admit content into model-visible context.
@@ -100,7 +140,6 @@ function compact(request: AdmissionRequest, omittedCharacters: number, digest: s
  */
 export async function admit(request: AdmissionRequest, options: ContextAdmissionOptions = {}): Promise<AdmittedContent> {
 	const maxCharacters = options.maxCharacters ?? 8000;
-	const headCharacters = options.headCharacters ?? 1200;
 	const digest = digestOf(request.content);
 	const nonActionable = request.path !== undefined && isNonActionablePath(request.path);
 	const oversized = request.content.length > maxCharacters;
@@ -123,9 +162,11 @@ export async function admit(request: AdmissionRequest, options: ContextAdmission
 		artifactRef = await options.sink.write({ source: request.source, channel: request.channel, content: request.content, digest });
 	}
 
-	const admitted = compact(request, request.content.length, digest, artifactRef, oversized ? headCharacters : 0, nonActionable);
+	const strategy = options.strategy ?? "head-tail";
+	const admitted = compact(request, digest, artifactRef, maxCharacters, nonActionable, options);
 	return {
 		admitted,
+		strategy,
 		channel: request.channel,
 		source: request.source,
 		digest,

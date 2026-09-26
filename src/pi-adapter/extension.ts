@@ -44,6 +44,7 @@ import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./sub
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
 import { createActionPolicy, type ActionPolicy } from "../core/action-policy.ts";
 import { createEffectBoundary, type EffectBoundary } from "../core/effect-boundary.ts";
+import { admit } from "../core/context-admission.ts";
 import { createFileEffectStore } from "../core/effect-store-file.ts";
 import type { AuthorityDocument } from "../core/authority.ts";
 import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
@@ -2249,7 +2250,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (warning && ctx.hasUI) ctx.ui.notify(`Dove 进度守护：${warning.message}`, "warning");
 		updateStatus(ctx);
 		const compactable = event.toolName === "read" || event.toolName === "bash" || event.toolName === "powershell" || event.toolName === "grep" || event.toolName === "find" || event.toolName === "ls";
-		const compacted = compactable ? compactToolResultContentWithMetadata(event.content, getToolResultCharBudget(event.toolName, currentRequestPlan?.intent)) : undefined;
+		const resultPath = typeof (event.input as { path?: unknown } | undefined)?.path === "string" ? (event.input as { path: string }).path : undefined;
+		// The path is what lets the policy classify generated/dependency content, which is the classification the
+		// recorded incident needed and the reason it went through the background channel unnoticed.
+		const compacted = compactable
+			? await admitToolResult(event.content, getToolResultCharBudget(event.toolName, currentRequestPlan?.intent), event.toolName, resultPath)
+			: undefined;
 		let content = compacted?.content ?? [...event.content];
 		const lsObservation = event.toolName === "ls" ? getLsObservationMetadata(event.input, event.details, event.content) : undefined;
 		let changed = compacted !== undefined || lsObservation !== undefined;
@@ -2887,18 +2893,33 @@ export function getToolResultCharBudget(toolName: string, intent: RequestPlan["i
 	return MAX_MODEL_TOOL_RESULT_CHARS;
 }
 
-export function compactToolResultContentWithMetadata(content: readonly { type: "text" | "image"; text?: string; data?: string; mimeType?: string }[], maxChars = MAX_MODEL_TOOL_RESULT_CHARS): CompactedToolResult | undefined {
+/**
+ * Admit an oversized tool result into model context, through the admission policy.
+ *
+ * **This replaces the host's own compactor rather than sitting beside it.** Two implementations of one contract is
+ * the failure this project keeps finding, and the marker is that contract's visible half: it says what was
+ * omitted, what the content's digest is, and how to get at the rest. The threshold stays here because it is a host
+ * fact - per tool, and aware of the intent the request is in - while the *shape* of the marker belongs to the
+ * policy, which is also where the generated/dependency classification lives.
+ *
+ * **No artifact sink for this channel, deliberately.** A path the model can read invites it to pull the payload
+ * back into the transcript, and that read produces a tool result which would be admitted again - a spill, read,
+ * spill cycle. The host's continuation ("request a narrower range") has no such cycle: a narrower query returns
+ * *less*. The sink stays available for channels where re-entry is not a loop.
+ */
+export async function admitToolResult(
+	content: readonly { type: "text" | "image"; text?: string; data?: string; mimeType?: string }[],
+	maxChars = MAX_MODEL_TOOL_RESULT_CHARS,
+	source = "tool",
+	path?: string,
+): Promise<CompactedToolResult | undefined> {
 	const text = content.filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("\n");
-	if (text.length <= maxChars) return undefined;
-	const contentDigest = createHash("sha256").update(text).digest("hex").slice(0, 24);
-	const markerTemplate = `[tool result compacted for model context: omitted CHARS characters; digest=${contentDigest}; request a narrower range or inspect the saved details]`;
-	const available = Math.max(0, maxChars - markerTemplate.length - 6);
-	const headChars = Math.floor(available * 0.75);
-	const tailChars = Math.max(0, available - headChars);
-	const omitted = text.length - headChars - tailChars;
-	const marker = markerTemplate.replace("CHARS", String(omitted));
-	const compactedText = `${text.slice(0, headChars)}\n\n${marker}\n\n${tailChars > 0 ? text.slice(-tailChars) : ""}`;
-	const compacted: CompactedToolResult["content"] = [{ type: "text", text: compactedText }];
+	const admitted = await admit(
+		{ channel: "tool_result", source, content: text, ...(path === undefined ? {} : { path }) },
+		{ maxCharacters: maxChars, strategy: "head-tail", continuation: "request a narrower range or inspect the saved details" },
+	);
+	if (admitted.omittedCharacters === 0) return undefined;
+	const compacted: CompactedToolResult["content"] = [{ type: "text", text: admitted.admitted }];
 	for (const part of content) {
 		if (part.type === "image" && typeof part.data === "string" && typeof part.mimeType === "string") compacted.push({ type: "image", data: part.data, mimeType: part.mimeType });
 	}
@@ -2906,16 +2927,13 @@ export function compactToolResultContentWithMetadata(content: readonly { type: "
 		content: compacted,
 		metadata: {
 			schemaVersion: 1,
-			originalChars: text.length,
-			retainedChars: compactedText.length,
-			omittedChars: omitted,
-			contentDigest,
+			originalChars: admitted.originalCharacters,
+			retainedChars: admitted.admittedCharacters,
+			omittedChars: admitted.omittedCharacters,
+			contentDigest: admitted.digest,
 			strategy: "head-tail",
 			continuation: "narrow-query",
 		},
 	};
 }
 
-export function compactToolResultContent(content: readonly { type: "text" | "image"; text?: string; data?: string; mimeType?: string }[], maxChars = MAX_MODEL_TOOL_RESULT_CHARS): Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> | undefined {
-	return compactToolResultContentWithMetadata(content, maxChars)?.content;
-}

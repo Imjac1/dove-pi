@@ -5,7 +5,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createBashTool } from "@earendil-works/pi-coding-agent";
-import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, compactToolResultContent, compactToolResultContentWithMetadata, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, admitToolResult, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
@@ -1050,23 +1050,29 @@ describe("Pi adapter", () => {
 		}
 	});
 
-	it("bounds oversized built-in tool results without changing small results", () => {
-		assert.equal(compactToolResultContent([{ type: "text", text: "small" }]), undefined);
-		const compacted = compactToolResultContent([{ type: "text", text: "x".repeat(40_000) }], 1_000);
+		it("bounds oversized built-in tool results through the admission policy, and leaves small results alone", async () => {
+		assert.equal(await admitToolResult([{ type: "text", text: "small" }]), undefined);
+		const compacted = await admitToolResult([{ type: "text", text: "x".repeat(40_000) }], 1_000, "bash");
 		assert.ok(compacted);
-		assert.ok((compacted?.[0] as { text: string }).text.length <= 1_100);
-		assert.match((compacted?.[0] as { text: string }).text, /tool result compacted/);
-		const withImage = compactToolResultContent([{ type: "text", text: "x".repeat(40_000) }, { type: "image", data: "abc", mimeType: "image/png" }], 1_000);
-		assert.equal(withImage?.some((part) => part.type === "image"), true);
-		const metadata = compactToolResultContentWithMetadata([{ type: "text", text: "z".repeat(20_000) }], 1_000)?.metadata;
+		const text = (compacted?.content[0] as { text: string }).text;
+		assert.ok(text.length <= 1_000, `the admitted form fits the budget it was given, was ${text.length}`);
+		assert.match(text, /admitted content compacted/);
+		assert.match(text, /channel: tool_result/, "the marker says which channel the content came through");
+		assert.match(text, /continuation: request a narrower range/, "and how the model gets at the rest");
+		const withImage = await admitToolResult([{ type: "text", text: "x".repeat(40_000) }, { type: "image", data: "abc", mimeType: "image/png" }], 1_000, "bash");
+		assert.equal(withImage?.content.some((part) => part.type === "image"), true);
+		// The classification the recorded incident needed: a diagnostic for a downloaded tree is a fact about the
+		// tree, not an instruction about the task.
+		const generated = await admitToolResult([{ type: "text", text: "x".repeat(40_000) }], 1_000, "read", "project/node_modules/left-pad/index.js");
+		assert.match((generated?.content[0] as { text: string }).text, /not delivered as actionable task context/);
+		const metadata = (await admitToolResult([{ type: "text", text: "z".repeat(20_000) }], 1_000, "bash"))?.metadata;
 		assert.equal(metadata?.originalChars, 20_000);
 		assert.ok((metadata?.retainedChars ?? 0) <= 1_000);
-		assert.equal(metadata?.contentDigest.length, 24);
+		assert.equal(metadata?.contentDigest.length, 64, "the whole digest: nothing here forces a truncation, and a truncated identifier collides");
 		assert.equal(getToolResultCharBudget("read", "lookup"), 8_000);
 		assert.equal(getToolResultCharBudget("read", "project-work"), 12_000);
 		assert.equal(getToolResultCharBudget("bash", "project-work"), 32_000);
 	});
-
 	it("derives context capacity only from observed provider-window usage", () => {
 		assert.equal(getRemainingContextChars(undefined, 200_000), undefined);
 		assert.equal(getRemainingContextChars(10_000, undefined), undefined);
