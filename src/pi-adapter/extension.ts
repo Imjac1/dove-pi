@@ -489,6 +489,83 @@ function terminalForReason(reason: RequestTerminalReason, detail?: string): Requ
 }
 
 /** Remove only Dove's derived context messages when a final payload is over budget. */
+
+/** Roles that are the conversation itself, and are never rewritten by the admission boundary. */
+const CONVERSATIONAL_ROLES = new Set(["user", "assistant", "toolresult", "tool_result", "system"]);
+
+/** How much of a non-conversational message may enter model context. */
+const MAX_BACKGROUND_MESSAGE_CHARS = 8_000;
+
+/**
+ * Admit every non-conversational message in a provider payload.
+ *
+ * **Why at the payload and not at each producer.** The admission rule is that a boundary guarding one channel
+ * has a documented way around it, and this repository has the incident to prove it: a 2.8 MB diagnostic reached
+ * the model through a background/extension message that never passed the tool-result guard. Walking the payload
+ * covers channels nobody remembered, including the next one, instead of only the ones someone listed.
+ *
+ * **It runs before the budget is accounted**, deliberately: a payload that admission would have made fit must not
+ * be rejected for being too large - the reverse order turns a compaction into a rejection.
+ *
+ * What it leaves alone is the conversation: user, assistant and tool-result messages. Rewriting those is
+ * rewriting history, and prefix stability is a cost the provider cache pays for.
+ *
+ * A message whose content cannot be replaced in a shape the host still understands is left alone **and counted**,
+ * so the caller can report it: silently skipping it would be the exemption this exists to remove, and silently
+ * rewriting an unknown shape would be worse.
+ */
+export async function admitNonConversationalMessages<T>(payload: T, maxCharacters: number): Promise<{ payload: T; leftAlone: number }> {
+	if (typeof payload !== "object" || payload === null) return { payload, leftAlone: 0 };
+	let leftAlone = 0;
+	const admitOne = async (item: unknown): Promise<unknown> => {
+		if (typeof item !== "object" || item === null) return item;
+		const record = item as Record<string, unknown>;
+		const role = record.role;
+		if (typeof role === "string" && CONVERSATIONAL_ROLES.has(role.toLowerCase())) return item;
+		const text = payloadMessageText(item);
+		if (text.length <= maxCharacters) return item;
+		const admitted = await admit(
+			{ channel: "extension_message", source: typeof role === "string" ? role : "unnamed-message", content: text },
+			{ maxCharacters, strategy: "head-tail", continuation: "ask whatever produced this for a narrower result" },
+		);
+		if (Array.isArray(record.content)) return { ...record, content: [{ type: "text", text: admitted.admitted }] };
+		if (typeof record.content === "string") return { ...record, content: admitted.admitted };
+		if (typeof record.text === "string") return { ...record, text: admitted.admitted };
+		leftAlone += 1;
+		return item;
+	};
+	// **Identity is preserved when nothing changed.** The caller decides whether to hand a modified payload back to
+	// the host by comparing it to the original, so returning an equal-but-new object tells the host the request was
+	// rewritten when it was not. A pass that claims to have changed something it did not is the same defect as a
+	// gate that claims to have checked something it did not.
+	const admitAll = async (items: readonly unknown[]): Promise<{ items: unknown[]; changed: boolean }> => {
+		const out: unknown[] = [];
+		let changed = false;
+		for (const item of items) {
+			const next = await admitOne(item);
+			if (next !== item) changed = true;
+			out.push(next);
+		}
+		return { items: out, changed };
+	};
+	if (Array.isArray(payload)) {
+		const admitted = await admitAll(payload);
+		return { payload: admitted.changed ? (admitted.items as T) : payload, leftAlone };
+	}
+	const object = payload as Record<string, unknown>;
+	if (Array.isArray(object.messages)) {
+		const admitted = await admitAll(object.messages);
+		return { payload: admitted.changed ? ({ ...object, messages: admitted.items } as T) : payload, leftAlone };
+	}
+	const input = object.input;
+	if (typeof input === "object" && input !== null && Array.isArray((input as Record<string, unknown>).messages)) {
+		const nested = input as Record<string, unknown>;
+		const admitted = await admitAll(nested.messages as unknown[]);
+		return { payload: admitted.changed ? ({ ...object, input: { ...nested, messages: admitted.items } } as T) : payload, leftAlone };
+	}
+	return { payload, leftAlone };
+}
+
 function stripDoveContextFromPayload<T>(payload: T, doveContextPayloads: ReadonlyMap<number, string>): T {
 	if (typeof payload !== "object" || payload === null) return payload;
 	const isDoveGuidance = (item: unknown) => {
@@ -2438,16 +2515,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			});
 			return { payload, budget: gateway.validate(modelPayloadFromProvider(payload)) };
 		}
-		let payload = event.payload;
+		// The one boundary, every channel, and it runs before the budget is accounted: a payload that admission
+		// would have made fit must not be rejected for being too large.
+		const admittedPayload = await admitNonConversationalMessages(event.payload, MAX_BACKGROUND_MESSAGE_CHARS);
+		if (admittedPayload.leftAlone > 0 && ctx.hasUI) ctx.ui.notify("[Dove admission] " + admittedPayload.leftAlone + " non-conversational message(s) exceeded the model context budget and could not be compacted in a shape the host understands, so they were left as they are.", "warning");
+		let payload: unknown = admittedPayload.payload;
 		let finalBudget: BudgetAccounting | undefined;
 		let rejection: unknown;
 		try {
-			({ payload, budget: finalBudget } = preparePayload(event.payload));
+			({ payload, budget: finalBudget } = preparePayload(payload));
 		} catch (error) {
 			rejection = error;
 			// First remove only derived Dove context. This is deterministic and
 			// preserves user/project history while recovering output headroom.
-			const compacted = stripDoveContextFromPayload(event.payload, doveContextPayloads);
+			const compacted = stripDoveContextFromPayload(payload, doveContextPayloads);
 			if (compacted !== event.payload) {
 				try {
 					({ payload, budget: finalBudget } = preparePayload(compacted));

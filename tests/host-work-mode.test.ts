@@ -5,6 +5,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "../src/pi-adapter/extension.ts";
+import { admitNonConversationalMessages } from "../src/pi-adapter/extension.ts";
 import { resolveActionIdentity } from "../src/pi-adapter/action-identity.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 
@@ -304,7 +305,29 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("admits a non-conversational message in the provider payload, and leaves the conversation alone", async () => {
+		// The channel the recorded incident used: a background/extension message that never passed the tool-result
+		// guard. The deep marker sits in the middle, so its absence proves the payload is out rather than truncated.
+		const body = "y".repeat(20_000) + "DEEP-MARKER-9f3a" + "z".repeat(20_000);
+		const payload = {
+			messages: [
+				{ role: "user", content: "review this" },
+				{ role: "custom", customType: "pi-lens-diagnostics", content: [{ type: "text", text: body }] },
+				{ role: "toolResult", content: [{ type: "text", text: body }] },
+			],
+		};
+		const result = await admitNonConversationalMessages(payload, 8_000);
+		const messages = (result.payload as { messages: Array<{ role: string; content: unknown }> }).messages;
+		assert.equal(messages[0]?.content, "review this", "a user message is the conversation and is never rewritten");
+		const extensionText = (messages[1]?.content as Array<{ text: string }>)[0]?.text ?? "";
+		assert.ok(extensionText.length <= 8_000, "the extension message is compacted into the budget");
+		assert.match(extensionText, /channel: extension_message/, "and the marker says which channel it came through");
+		assert.ok(!extensionText.includes("DEEP-MARKER-9f3a"), "the payload is absent from model-visible content, not truncated into it");
+		assert.equal(((messages[2]?.content as Array<{ text: string }>)[0]?.text ?? "").length, body.length, "a tool result is admitted at its own hook, not twice");
+		assert.equal(result.leftAlone, 0, "nothing was skipped in silence");
+	});
 });
+
 
 
 
