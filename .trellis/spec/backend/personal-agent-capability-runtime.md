@@ -102,6 +102,14 @@ and evidence contracts still apply to Dove-owned executors.
   projection so headless and interactive clients can attribute a generic host
   `Operation aborted` to one stable origin/code. The existing CLI install
   diagnostics array remains backwards compatible alongside this projection.
+- **A mode's grant list and the registry are different things, and the gap between them is a deployment fact.** A
+  mode declares what it *authorizes*; the registry holds what this build *implements*. Six of the nine capabilities
+  the shipped modes declare have no implementation (`repo.read`, `report.write`, `net.scan`, `exploit.run`,
+  `market.read`, `order.submit`, checked 2026-09-27), so a mode naming them is stating what its environment must
+  provide - `modes/trading/MODE.md` says so in as many words. **Loading does not refuse the mismatch**, because a mode
+  file is a portable document and the registry is a deployment; the host's tool-call boundary refuses it instead, and
+  that refusal comes **before** the approval prompt and **before** the effect claim: an action that cannot run has no
+  arguments worth judging and must not spend the operator's attention.
 
 ### 4. Validation & Error Matrix
 
@@ -114,6 +122,8 @@ and evidence contracts still apply to Dove-owned executors.
 | Duplicate project authorities | Preserve source labels and report a conflict; never silently merge |
 | Evidence reference names credential/key material | Exclude it at the shared execution boundary |
 | Capability platform is unsupported | Return `unsupported_platform` with an execution correlation ID |
+| An invocation names an action the mode grants and the registry does not implement | Refuse at the host's tool-call boundary, before the approval prompt and before any effect claim |
+| An invocation names an action the mode does not grant | Refuse as a scope denial: that is a policy decision, and it is reported ahead of the deployment fact |
 | Diagnostics filter is not an object or contains non-string IDs | Return a JSON-RPC error without reading or mutating state |
 
 ### 5. Good / Base / Bad Cases
@@ -127,6 +137,12 @@ and evidence contracts still apply to Dove-owned executors.
   before checking its size, or expose raw ledger records through diagnostics.
 
 ### 6. Tests Required
+
+- A granted-but-unregistered capability is refused at the boundary with no approval prompt and no effect claim; a
+  registered one runs; an ungranted one is refused as a scope denial. Each of the three is load-bearing on its own -
+  removing either check must fail a case.
+- A mode naming an unimplemented capability still **loads**, because the mismatch is a deployment fact and not a
+  malformed mode.
 
 The vendor-account-free smoke matrix must exercise one read-only capability
 through Direct Core, CLI/JSON-RPC, official MCP transport, and Pi's registered
