@@ -504,3 +504,97 @@ surface, not the code. That makes the mode files a **product surface**, not an i
 a developer writes to program the agent. It also means Pi's rejection of MCP is deliberate and ours to inherit,
 not a gap to close.
 
+## 13. The frame that groups everything: Plan, Execute, Verify - and the loop over it **[FETCHED]**
+
+`2605.18747` §3.4 names the loop this project has been circling: **PEV - Plan, Execute, Verify**. Read together with
+§3.5 it groups every decision in `decisions.md` and adds one item that was not on the list.
+
+### 13.1 Plan is contract formation, and the contract must be an artifact
+
+> "The planning phase turns a user request into an **explicit contract over the next state transition**. A robust
+> plan does more than decompose the request into implementation steps; it also identifies relevant files, expected
+> invariants, validation commands, rollback points, and risky operations. **This makes planning a harness artifact
+> rather than an unobserved reasoning trace.** ... it constrain[s] the subsequent action space by specifying **which
+> components may be read, which files may be edited, and which verification criteria must be satisfied before
+> completion**." And: "the PEV framing also clarifies **why planning and debugging should not be separated: failed
+> verification updates the plan, while the plan determines which verification evidence is meaningful**."
+
+**Ours.** This is the Trellis layer: `prd.md` and `implement.md` are the contract, `implement.jsonl` / `check.jsonl`
+are literally "which components may be read", and the convergence criteria are "which verification criteria must be
+satisfied before completion". So the Plan phase is the one this project has done most thoroughly - and the survey's
+claim that it must be an *artifact* rather than a reasoning trace is the same claim this project makes when it
+refuses to let a plan live only in the model's context. **[LOCAL]**
+
+### 13.2 Execute must be sandboxed *and* permissioned, in tiers
+
+> "The sandboxed environment is the operational substrate of the loop... **Sandboxes also improve reproducibility**
+> because the harness can replay the same patch, command, seed, dependency lockfile, or test configuration under
+> comparable conditions. **Without this stable substrate, verification signals become difficult to interpret, and
+> failures may reflect environment drift rather than program defects.**" And: "**Execution must also be
+> permissioned. A multi-tier model separates low-risk observation from high-risk action: a read-only tier** supports
+> repository browsing, retrieval, static inspection, log analysis; **a sandbox-edit tier** supports local patching,
+> test execution, temporary dependency installation inside an isolated workspace; and **a full-access tier** covers
+> network access, credentials, deployment..."
+
+**Ours, and this is the sharpest mapping in the whole survey.** The three tiers are **the mode format's own fields**:
+`filesystem: read-only-source` / `ephemeral` is the read-only tier, the sandbox-edit tier is what a workspace with
+write access is, and `network: allowlist` / `none` is the full-access boundary. Every shipped mode already declares
+the tier - and nothing reads it (inventory #6). So the survey's tier model is not a new design to adopt; it is a
+**name for what our mode files already claim and do not enforce**. And its reason for sandboxes is the one that
+matters most here: **without a stable substrate, a failure may be environment drift rather than a program defect** -
+which is exactly the ambiguity our verification ladder cannot resolve today. **[LOCAL]**
+
+### 13.3 Verify is deterministic sensors, and critique interprets them
+
+> "**Compilation and static-analysis feedback provide low-cost sensors** before full execution... **Runtime signals**
+> expose failures that only arise along concrete execution paths... **Test-based feedback** then evaluates whether the
+> observed behavior satisfies the intended specification... **Evaluation harnesses broaden this idea from a single
+> test command to repeatable task distributions**: they encode evaluator logic, simulation hooks, red-team cases, or
+> RL-style environments that can **compare harness variants under controlled conditions**. Compared with
+> natural-language critique, **these sensors are deterministic or at least reproducible enough to serve as control
+> signals. Human or agentic critiques remain useful when failure evidence is sparse, but in a governed PEV loop they
+> should interpret sensor outputs rather than replace them.**"
+
+**Ours.** The ladder plus the exit-status requirement is the sensor half, and the last sentence is the rule this
+project reached the hard way - an execution oracle, not a judge - stated by the survey as a requirement rather than
+as a preference. The **evaluation-harness** clause is the item that was not on our list: comparing *harness variants*
+under controlled conditions is how D1-D5 would be decided with evidence instead of by argument, and it is the one
+thing this project has no version of. **[LOCAL]**
+
+### 13.4 The loop over the loop is legitimate only when governed
+
+> §3.5.1 **Deep Telemetry as the Optimization Substrate**: "structured traces that connect model decisions, harness
+> actions, environment states, and outcomes... records the decision process in greater detail: prompts and retrieved
+> context, token usage and cost, model/tool latency, tool arguments, **permission requests**, edited files, sandbox
+> snapshots, command outputs, test results, stack traces, lint warnings, **branch decisions, rejected alternatives,
+> human interventions**, and final task outcome."
+>
+> §3.5.3 **Governed Harness Mutation**: "AHE should not be confused with unconstrained self-modification. Because the
+> Evolution Agent changes the harness that controls later task agents, its actions require **stronger governance than
+> ordinary code repair**. Candidate harness changes should be **evaluated inside sandboxes, compared against fixed
+> regression suites, and recorded with auditable rationales. Changes that alter permission boundaries, network
+> access, credential handling, deployment behavior, or human-review requirements should require HITL approval**
+> before activation."
+
+**Ours.** The ledger is close to deep telemetry already - tool arguments, permission requests, command outputs, test
+results, human interventions - and the survey names the gaps: **sandbox snapshots** (there are none), **branch
+decisions** and **rejected alternatives** (a refused action is recorded, but not the alternative the model then
+took). And §3.5.3 is D5's governance condition stated as a rule: the optimization loop must be sandboxed, regressed,
+and **escalate permission-boundary changes to a human** - which is D1/D2's subject matter, so D5 depends on D1 and D2
+rather than preceding them. **[LOCAL]**
+
+### 13.5 What the frame does to the five decisions
+
+| Phase | Decisions |
+|---|---|
+| **Plan** (contract as artifact) | done most thoroughly here - and the survey says why it matters, not that it needs work |
+| **Execute** (sandboxed + permissioned) | **D1** (the sandbox block is inert), **D2** (the permission list decides nothing), **D4** (the declared constraints cannot fire) |
+| **Verify** (deterministic sensors) | **D3** (the link from criterion to sensor is recorded nowhere) |
+| **The loop over the loop** (governed mutation) | **D5** (the detector half first) - and it **depends on Execute**, because governed mutation must escalate permission-boundary changes |
+| **not on the list** | **an evaluation harness**: repeatable task distributions that compare harness variants. It is the survey's own addition to Verify, and the mechanism by which the other decisions could be settled with evidence |
+
+So the ordering the survey implies is not the ordering I proposed: **Execute before the loop over it**, and the
+evaluation harness is the thing that would make the rest measurable. That is a sixth decision, and it is recorded in
+`decisions.md` as D6 rather than folded into D3, because it compares harness variants while D3 verifies one run.
+
+

@@ -1,10 +1,13 @@
-# The five decisions, with their evidence, cost and cheapest first step
+# The six decisions, with their evidence, cost and cheapest first step
 
 - Date: 2026-09-27
 - Basis: `research/frontier-anatomy.md` (sources tagged [FETCHED] / [LOCAL]) plus the local reading recorded there.
 - Shape: each decision states the question, the field's evidence, our state, the options, what it costs, how
   reversible it is, a recommendation, and **the cheapest step that would falsify the recommendation**. Nothing here
   is built; this is the artifact that makes the scaffold decidable.
+- D1-D5 are the decisions the local reading produced; **D6** is the one the survey adds (`2605.18747` §3.4.4) and it
+  arrives with the frame that orders all six - see "The frame that groups D1-D5" below, which also **corrects the
+  ordering**: D5 is downstream of D1/D2, not parallel to them.
 
 ---
 
@@ -322,6 +325,96 @@ isolation" but "the declaration already exists and is a false claim: enforce it 
 D4's choice applied to the sandbox block. It also makes enforcement more attractive than round 4 judged, because the
 modes already name the policy to enforce (container / allowlist / ephemeral) and the seam is one method.
 
+---
+
+## The frame that groups D1-D5, and the sixth decision it adds
+
+**The frame [FETCHED].** `2605.18747` §3.4 names the loop as **PEV - Plan, Execute, Verify** - and §3.5 adds the
+optimization loop over it. §3.4.2 makes the plan "an **explicit contract over the next state transition**" that is a
+"**harness artifact rather than an unobserved reasoning trace**"; §3.4.3 requires execution to be "**sandboxed and
+permissioned**" with three tiers (read-only / sandbox-edit / full-access); §3.4.4 requires verification to run on
+"**deterministic or at least reproducible**" sensors, with critique "**interpret[ing] sensor outputs rather than
+replac[ing] them**"; §3.5.1 asks for deep telemetry; §3.5.3 requires the loop's own mutations to be sandboxed,
+regression-tested, and **escalated to a human when they move a permission boundary**.
+
+**Where the five decisions land in it.**
+
+| Phase | Decisions | Note |
+|---|---|---|
+| **Plan** | none | the contract-as-artifact phase is what `.trellis/` already is; the survey argues it *matters*, not that it needs work |
+| **Execute** | **D1**, **D2**, **D4** | all three are "execution must be sandboxed *and* permissioned"; the three-tier model is the frontier's name for what our mode files already declare |
+| **Verify** | **D3** | "the link from criterion to the sensor that decided it" is the survey's own requirement that verification be reproducible |
+| **The loop over the loop** | **D5** | governed mutation - and §3.5.3 makes it **dependent on Execute**, since permission-boundary changes need HITL approval |
+
+**Two consequences for the ordering.** First, the survey's own logic puts **Execute before the loop over it**: D5
+cannot be governed without D1/D2 having drawn the boundary it escalates. Second, and more usefully, §3.4.4's
+"**evaluation harnesses**" clause names something we have no version of, and it is the instrument that would settle
+the other five decisions with evidence instead of argument. That is recorded as **D6** below rather than folded into
+D3, because it compares *harness variants* while D3 verifies *one run*.
+
+**What the frame does not change.** It does not promote D1 or D2 above the others, and it does not make the ordering
+D2 -> D4 -> D3 -> D1 -> D5 wrong: within Execute, D2 (what a permission list means) has to be settled before D4 (which
+declared constraints can fire), and D1's enforcement seam is one method, so it is cheap whenever it is taken. The
+frame's contribution is that **D5 is downstream of D1/D2, not parallel to them** - which is a correction to the
+ordering I proposed in round 8.
+
+---
+
+## D6. Do we build an evaluation harness - a way to compare harness variants under controlled conditions?
+
+**The question.** §3.4.4: "**Evaluation harnesses broaden this idea from a single test command to repeatable task
+distributions**: they encode evaluator logic, simulation hooks, red-team cases, or RL-style environments that can
+**compare harness variants under controlled conditions**." We have one test suite that verifies our code, and nothing
+that measures our harness. Every decision above is currently argued from literature and local reading, not from a
+measurement.
+
+**The field's evidence.** [FETCHED] The AHE ablation quoted in `frontier-anatomy.md` §15.5 is exactly this
+instrument: it is what produced "tools +3.3 pp, middleware +2.2 pp, long-term memory +5.6 pp, **system prompt alone
+-2.3 pp**". Self-Harness's weakness mining, RHO's self-preference result (59% -> 78% on SWE-Bench Pro), RHI's -60%
+cost, and StateM's 92.1% vs 83.1% are all measurements of *harness* variants against a fixed task set. **Every number
+in this document's evidence base comes from a system that has one.** That is the strongest argument for D6 and it is
+also the reason not to start with it: those systems had a task set, a scoring function, and a baseline to compare
+against, and we have none of the three.
+
+**Our state.** The convergence criteria (`.trellis/tasks/archive/2026-09/09-03-task-convergence-control/convergence.json`)
+are the closest thing: 10 criteria, each with a check and a `pending` status. But they are one run's acceptance
+contract, not a repeatable distribution, and they are frozen at `revision: 1` with `evidenceRefs: []` - i.e. **D3's
+gap and D6's absence are the same artifact**. The ledger records enough to score a run (tool calls, permission
+requests, test results, outcomes) but nothing aggregates it across runs.
+
+**The options.**
+
+- **(a) Build it now**, before D1-D5: define a small task set, a scoring function, and a baseline, then measure each
+  change. Correct in principle; requires tasks, a scoring function, and a baseline, and the tasks would have to be
+  about *this* project to be meaningful. Cost: large, and the first version would measure the wrong thing.
+- **(b) Build it after Execute (D2/D4/D1)**, using D3's work as the seed: once every criterion records the check that
+  decided it, the criteria *are* a scoring function and runs *are* comparable. Cost: moderate, and it reuses D3.
+- **(c) Do not build it**, and keep arguing from literature plus targeted tests. Cost: zero; and the five decisions
+  stay unfalsifiable at the level that matters ("did this change make the harness better?").
+
+**Recommendation: (b), and only after D3.** D6 is not urgent, and it is not independent: D3 is a prerequisite,
+because an evaluation harness that cannot say which check decided a criterion cannot score a variant either. The
+ordering D2 -> D4 -> D3 -> D1 -> D5 stands, with D6 as the thing that makes D2..D5 measurable rather than the thing
+that decides them.
+
+**The cheapest step that would falsify (b).** Take one already-settled decision and try to score it. Concretely:
+ask whether any observable distinguishes "the mode loaded correctly" from "the mode loaded and its declarations were
+honoured". If nothing can distinguish them, no scoring function exists and (b) is not reachable from D3 alone.
+
+**[Executed 2026-09-27] `node --import tsx --test --test-name-pattern="KNOWN GAP" tests/host-work-mode.test.ts` ->
+exit 0, all three green.** So the three gap tests **pass**: they pin the *absence* of an effect, they do not detect
+it. **Withdrawal:** an earlier draft of this paragraph claimed they "fail at the point where a declaration should have
+had an effect". That was false - I asserted a test outcome instead of running the test. The run above is the
+correction, and the claim is withdrawn rather than reworded.
+
+**What the run actually establishes.** The distinguishing observable exists and is *nameable*: each gap test's title
+names the missing effect (`does not enforce a forbidden technique`, `allows a target the mode excludes`, `loads a mode
+whose declared expiry is in the past`), and each was written from a fixture whose declaration the runtime ignores.
+The scoring signal D6 needs is therefore one inversion away - the same fixture, the same assertion, with the expected
+value flipped from "nothing happens" to "this happens" - and inverting them is exactly what D2/D4/D1 would do as they
+land. **Not falsified**, but the stronger version of the claim is: D6's first scoring function is *not* new work, it is
+the gap tests flipped, so (b) is cheaper than the cost column says - and (b) is still correctly placed after D3, since
+a flipped test is only a measurement once the criterion records which check decided it.
 ---
 
 ## What is not on this list, and why
