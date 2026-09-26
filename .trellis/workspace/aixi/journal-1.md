@@ -810,3 +810,37 @@ Finished M3 and closed the harness task. Wired the capability scope into the act
 ### Status
 
 [OK] **Completed**
+
+
+## Session 23: Two mode-declaration fixes: a gate that declares no gate, and a grant nothing implements
+<!-- trellis-session: v=2 fp=305f94473d921e3a -->
+
+**Date**: 2026-09-27
+**Task**: Two mode-declaration fixes: a gate that declares no gate, and a grant nothing implements
+**Branch**: `feat/mode-declared-capability`
+
+### Summary
+
+Planned and completed both follow-ups from the harness task. (1) mode-gate-no-gate: gate.semantics gained 
+one; limit/both with no limits and none with limits now refuse to load, naming both ways out; code-audit declares none and moves to 1.6.0. (2) mode-declared-capability: the action policy refuses a capability a mode grants and nothing registers, before the approval prompt and before the effect claim. Its premise was falsified mid-flight - six of the nine capabilities the shipped modes declare have no implementation - so five host cases were re-pointed at fixture modes over registered capabilities, and the detector's sensitivity was verified by hand. Also dropped and archived a trading-submission task as unnecessary. Gate: typecheck 0 errors, npm test 594 tests / 592 pass / 0 fail / 2 skipped.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8d651b6` | docs(readme): state the permission layer a declared work mode adds |
+| `d0244fd` | chore(task): record the post-archive documentation audit |
+| `7c32cc3` | chore(task): plan the two mode-declaration fixes and archive the dropped task |
+| `965cbe0` | feat(mode): refuse a gate declaration that cannot decide anything |
+| `c8ac74a` | docs(spec): record the no-gate value and the two refusals |
+| `48fea4a` | docs(task): correct a test count in the archived harness record |
+| `e1b0097` | chore(task): record the gate-semantics outcome |
+| `7bc8f91` | chore(task): move the capability-registration rule to a spec with headroom |
+| `dc4f6d7` | chore(task): start the declared-capability task |
+| `1123e96` | feat(policy): refuse a capability the mode grants and nothing registers |
+| `8c59e7c` | docs(spec): state how a mode's grant and the registry disagree |
+| `39263da` | chore(task): record the capability-registration outcome |
+
+### Status
+
+[OK] **Completed**
