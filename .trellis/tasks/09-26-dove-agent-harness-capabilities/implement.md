@@ -725,6 +725,40 @@ npm run typecheck -> 0 errors
 npm test          -> tests 563 / pass 561 / fail 0 / skipped 2
 ```
 
+
+### M5 complete, 2026-09-26  **[DONE]**
+
+The resolution rule was **re-attempted, and this time it holds** - because the thing it needed now exists: a
+guaranteed observable record per tool call, named in the result. A pass must cite `ledger:<stepId>` (the id in a tool
+result's `[Dove observable: ...]` marker) or `effect:<effectKey>`, checked in two layers:
+
+- **shape**, in the tool-argument validator: a label or a path is refused **by name**, because the agent can author
+  either one;
+- **existence**, where the ledger is readable: a well-shaped ref to a record that was never written is refused.
+
+**What changed from the withdrawal is only the prerequisite, and that is the part worth keeping:** the same rule was
+correct and unusable one round earlier. The difference is not the rule - it is that the harness now records something
+an honest agent can cite. **Enforcement cannot precede the observable.**
+
+**The pre-existing test was updated, not exempted.** `records an optional native goal directly...` used to pass a label
+(`evidence:formal-pass`); it now drives a tool call **and its result** through the host first - which is what writes the
+record - and cites `ledger:tool:suite-run`. The test got longer and truer: it demonstrates the discipline instead of
+asserting around it.
+
+**One kind was dropped from the earlier attempt:** `command:`. Nothing writes one, and a kind with no writer is a
+promise the harness does not keep, so the accepted kinds are exactly the two that exist.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/pi-adapter.test.ts         -> tests 33 / pass 33 / fail 0   (the pre-existing test now establishes and cites an observable)
+node --import tsx --test tests/host-work-mode.test.ts     -> tests 11 / pass 11 / fail 0   (+1: the two-layer refusals)
+node --import tsx --test tests/task-convergence.test.ts   -> tests 16 / pass 16 / fail 0   (a pass with no ref is still refused at the event decoder)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 564 / pass 562 / fail 0 / skipped 2   (563 before, +1)
+```
+
 ## M6. The verification ladder
 
 1. A cost-ordered ladder that **short-circuits** and records `decided_by`, returning **unscored** rather
