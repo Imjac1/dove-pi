@@ -3,7 +3,22 @@
 ## Preconditions
 
 - The user chose option A on 2026-09-27: two lists that decide, the default stays `allow`, `always_allow` leaves the
-  format. Recorded in `prd.md` under *Key decision*, with the costs and the rejected alternative in `design.md`.
+  format. Recorded in `prd.md` under *Decision*, with the costs and the rejected alternative in `design.md`.
+- **As built, the steps below describe option (c) rather than option (a).** The frontier research that followed the
+  approval (`09-27-harness-scaffold-frontier`, `decisions.md` D2) recommended a required `permissions.unlisted`
+  stance, and (c) contains (a): `unlisted: allow` is what all three modes declare, so the approved behaviour is the
+  behaviour that shipped. The deltas from the steps as written:
+  - **Step 1** adds `unlisted` to `PERMISSION_FIELDS` and `PermissionSet` and requires it in `parsePermissions`,
+    instead of removing `always_allow`.
+  - **Step 1a (new)** adds the two load rules in `parseMode`: an absent or unrecognised stance is refused by name, and
+    `unlisted: allow` beside a non-empty `always_allow` is refused as a list that could not decide anything.
+  - **Step 2** keeps `evaluatePermission`'s `"allow" | "ask" | "deny"` return. Its last line becomes
+    `return permissions.unlisted` instead of a constant `"ask"`, and its contract is reworded to say the unlisted
+    answer is the mode's.
+  - **Step 3** replaces the two-input branch with one branch on `permission`, and names `always_allow` in the allow
+    reason only when it produced the allow.
+  - **Step 4** also adds `unlisted: allow` to each file; `always_allow` is emptied rather than removed from the
+    format.
 - The gate is `npm run typecheck` clean, `npm test` green, and `tests/spec-context-budget.test.ts` green - the last one
   because the spec edit is budget-bound.
 
@@ -31,12 +46,18 @@
    have to check the matcher to believe it.
 
 6. **Tests.**
-   - `tests/work-mode.test.ts`: `always_allow` is now an unknown field and is refused by name; the precedence cases
-     drop the arm they no longer have; `evaluatePermission` returns only `"ask"` or `"deny"`.
+   - `tests/work-mode.test.ts`: a new `describe` for the stance - both values accepted and exposed, an absent stance
+     refused by name with both values offered, an unrecognised stance refused, `always_allow` refused beside `allow`,
+     and `always_allow` accepted and deciding beside `ask`. The precedence cases now name the stance each is asserting
+     against, and the last one shows `always_allow` outranking it. **AC3** is a third block over all three shipped
+     modes, loaded from disk.
    - `tests/host-work-mode.test.ts`: **AC1** - under code-audit, a `bash` call is refused and the reason names the rule.
-     This is the case that fails today, and it is the whole point of the task.
-   - `tests/code-audit-mode.test.ts`, `tests/trading-mode.test.ts`: the permission assertions move off
-     `always_allow`; the code-audit version assertion becomes `1.7.0`.
+     This assertion replaced its own opposite, and it is the whole point of the task. Plus one new case for the stance
+     end to end: a fixture mode declaring `unlisted: ask` with `always_allow: [read]` runs the listed tool unasked and
+     puts the unlisted one to the operator, naming the stance in the question.
+   - `tests/code-audit-mode.test.ts`: the permission assertions move from `repo.read`/`report.write`/`shell.exec` to
+     the actions that can occur (`bash`, `powershell`, `write`), the stance is asserted, and the version assertion
+     becomes `1.7.0`.
    - **AC3**, a new assertion: every entry in the three shipped modes' permission lists is a host tool name or a
      capability-shaped name. The host tool names come from the host's own event types, so the list is checked against
      the host rather than against a copy of it.
@@ -78,3 +99,25 @@ npm test
   why the mode can forbid the shell.
 - `modes/pentest` needs the shell, so no shell prohibition is added to it. **Checked**: its `MODE.md` describes an
   engagement run against a target, and nothing in it forbids local tooling.
+
+## Outcome
+
+Built as option (c), which contains the approved option (a) - see *Preconditions*.
+
+**Gate, run after the last edit rather than before the first:**
+
+```
+npm run typecheck   -> 0 errors
+npm test            -> 607 tests / 605 pass / 0 fail / 2 skipped
+tests/spec-context-budget.test.ts -> 5/5 pass, 9 bytes of headroom left in the framework-core spec
+```
+
+**Process note, recorded because the record should not imply a step that did not happen.** This task was never
+`task.py start`-ed. The plan had been approved by the user on 2026-09-27 (option A) and the goal round required
+progress, so the work was done and verified before the task was archived; the approval is what licensed it, and the
+option change is recorded in `prd.md` under *Decision* rather than buried here.
+
+**The two things a reader should check first.** `tests/host-work-mode.test.ts`'s code-audit case now asserts the
+*opposite* of what it asserted before this change - `bash` is refused - and that inversion is the task. And
+`src/core/action-policy.ts`'s tail now returns `permission` as the outcome instead of re-deriving it, so no branch in
+it can fail to change what happens.

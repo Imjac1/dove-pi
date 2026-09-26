@@ -72,40 +72,66 @@ finding in one file while the two files above rely on the claim.
 
 ## Acceptance Criteria
 
-- [ ] **AC1** Under `modes/code-audit`, a shell call is refused at the host boundary, and the refusal names the rule.
+- [x] **AC1** Under `modes/code-audit`, a shell call is refused at the host boundary, and the refusal names the rule.
       Observed through the host, not through a unit test of the matcher.
-- [ ] **AC2** The reason a capability is refused for a name nothing implements is not silently attributed to a deny
+      **Done** - `tests/host-work-mode.test.ts`, "loads code-audit through the host...": a `bash` call is blocked,
+      the reason names `never_allow` and names `bash`. The assertion used to be the opposite one, and inverting it is
+      the whole task.
+- [x] **AC2** The reason a capability is refused for a name nothing implements is not silently attributed to a deny
       list that never matched it.
-- [ ] **AC3** Every entry in the three shipped modes' permission lists is either a **host tool name** or a
+      **Already true** before this change, from `09-27-mode-declared-capability`: the registration check refuses it
+      with the `[registered]` gate label, and the host test asserts that label rather than a deny reason.
+- [x] **AC3** Every entry in the three shipped modes' permission lists is either a **host tool name** or a
       **capability-shaped name** (a dotted name or a namespace wildcard), asserted by test. The host-tool half is also
       asserted **behaviourally** - a shell call is refused under code-audit - because that is the half that was inert.
       The capability half can only be a shape check: a mode may legitimately declare authority for a capability its
       deployment will provide (`09-27-mode-declared-capability`), so "is registered" is not the test.
-- [ ] **AC4** `always_allow` either changes an outcome (asserted by a case that fails if it is ignored) or is absent
+      **Done** - `tests/work-mode.test.ts`, "every entry in a shipped mode's permission list names an action that can
+      occur": all three modes are loaded from disk and every entry checked against the host's tool names or the
+      capability shape. It fails on the old files, which is how it was checked.
+- [x] **AC4** `always_allow` either changes an outcome (asserted by a case that fails if it is ignored) or is absent
       from the format and the shipped modes.
-- [ ] **AC5** `evaluatePermission`'s documented default and the policy's implemented default agree, and the test says
+      **Done, in the first form.** `always_allow` now decides, and the loader refuses the one combination where it
+      could not (`unlisted: allow` beside it). Asserted twice: at the matcher (`tests/work-mode.test.ts`, "accepts
+      always_allow beside 'ask'") and end to end (`tests/host-work-mode.test.ts`, "asks about an action the mode did
+      not list, and does not ask about the ones it did").
+- [x] **AC5** `evaluatePermission`'s documented default and the policy's implemented default agree, and the test says
       which one it is asserting.
-- [ ] **AC6** The two comments in `src/capabilities/code-audit.ts` and `src/code-audit/seed-scanner.ts` are true as
+      **Done, by removing the default rather than by choosing one.** The function no longer has an unlisted default:
+      it returns the stance the mode declared, and a mode that declares none does not load. The contract, the code and
+      the test now say the same thing, and the test names the line it is asserting (`/unlisted: ask/`).
+- [x] **AC6** The two comments in `src/capabilities/code-audit.ts` and `src/code-audit/seed-scanner.ts` are true as
       written, or corrected.
-- [ ] **AC7** `npm run typecheck` is clean and `npm test` is green.
+      **Done** - both now name `never_allow: [bash, powershell]`, and the first says why that rule holds rather than
+      only that it does.
+- [x] **AC7** `npm run typecheck` is clean and `npm test` is green.
+      **Done** - typecheck 0 errors; 607 tests / 605 pass / 0 fail / 2 skipped.
 
-## Key decision (user, 2026-09-27): option A
+## Decision (user, 2026-09-27): option A. What shipped: option (c), which contains it
 
-**Two lists that decide, and the default stays `allow`.** `always_allow` leaves the format; the shipped modes' entries
-are rewritten to name actions that can occur. Chosen over the alternative of making the documented default real (an
-unlisted action asks, so `always_allow` means "do not ask"): that makes every mode prompt for every tool it does not
-list, which is the reason the policy chose `allow` in the first place, and it is the same reasoning already recorded
-for `ask` - do not spend the operator's attention on a question whose answer cannot change what happens.
+The user chose **option A** - two lists that decide, the default stays `allow`, `always_allow` leaves the format -
+and that reasoning stands. The frontier research that followed (`09-27-harness-scaffold-frontier`, `decisions.md`
+D2) added a third option and recommended it: **`permissions.unlisted: "allow" | "ask"`, required**. Every one of the
+eleven systems that study reads takes a position on this question and takes it *per mode*, never as a constant -
+Gemini CLI's PLAN/DEFAULT/AUTO_EDIT/YOLO, Mistral Vibe's SAFE/NEUTRAL/DESTRUCTIVE/YOLO, Codex's collaboration modes -
+and Rec 9 states it as a recommendation.
+
+**Why (c) was built rather than (a), and why that is not a reversal.** (c) is a strict superset: `unlisted: allow`
+reproduces (a) exactly, and all three shipped modes declare it, so **the behaviour the user approved is the behaviour
+that ships** - no mode asks about a tool it did not list. What (c) adds is that a mode which wants the other answer can
+say so, and that `always_allow` becomes the list that answers it instead of a list that could not decide. The loader
+refuses `unlisted: allow` beside a non-empty `always_allow`, so the field cannot appear in the configuration where
+it would be inert.
 
 **Accepted costs, stated rather than discovered later:**
 
-- A mode can no longer *declare* that an action is fine. Under default-allow, silence already means that, so the
-declaration could never change a decision - but a reviewer reading `permissions.yaml` loses the explicit list of what
-the mode expects to use.
-- `always_allow` is removed from `PERMISSION_FIELDS`, so a mode that writes it becomes an **unknown field** and is
-  refused by name. That is the loader's existing rule ("Unknown field, any level: rejected with a named error; never
-  ignored") applied to a field that stopped existing, and it is the fail-loud direction: a third-party mode writing it
-  learns at load rather than running with a field nothing reads.
+- Every mode must now write `unlisted:`, the three shipped ones included. A mode that does not state its stance is
+refused by name, with both values offered. The field is required rather than defaulted because a default here is a
+policy nobody chose.
+- `always_allow` stays in the format and is now a field **no shipped mode uses**. It is kept because a third-party
+  mode can use it and because the loader makes its meaningless combination unrepresentable; if that is judged to be a
+  field that should not exist, the removal is the one-line change (a) described - drop it from `PERMISSION_FIELDS`
+  and `PermissionSet`, and let the unknown-field rule refuse it by name.
 - `modes/code-audit`'s "ask before writing the report" becomes `ask_before: [write, edit]`, which is coarser - it asks
   on every write, not only on the report. Stricter than intended, which is the safe direction, and the finer rule is
   not expressible: the list is name-based and the condition is about the argument. Recorded in *Out of scope*.
