@@ -130,6 +130,8 @@ interface FixtureSpec {
 	readonly askBefore?: boolean;
 	readonly limit?: { readonly argument: string; readonly max: number };
 	readonly conformance?: { readonly targetArgument: string; readonly document: string };
+	/** A technique the mode forbids. Declared so a case can show whether anything reads it. */
+	readonly excludedTechniques?: readonly string[];
 }
 
 function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
@@ -155,6 +157,7 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			// by the rule this branch is about.
 			"  semantics: " + (conformance !== undefined ? "conformance" : spec.limit === undefined ? "none" : "limit"),
 			...(conformance === undefined ? [] : ["  target_argument: " + conformance.targetArgument]),
+			...(spec.excludedTechniques === undefined ? [] : ["  excluded_techniques: [" + spec.excludedTechniques.join(", ") + "]"]),
 			...(spec.limit === undefined
 				? []
 				: ["  limits:", "    payload:", "      argument: " + spec.limit.argument, "      max: " + spec.limit.max, "      tools: [" + spec.capability + "]"]),
@@ -202,6 +205,8 @@ function writeFixtureEngagement(root: string): { document: string; target: strin
 			"    window:",
 			'      from: "2020-01-01T00:00:00.000Z"',
 			'      to: "2030-01-01T00:00:00.000Z"',
+			"    constraints:",
+			"      excluded_techniques: [dos]",
 			"    evidence:",
 			"      - kind: signed-permission",
 			"        ref: engagements/fixture-engagement/permission-to-inspect.txt",
@@ -653,6 +658,42 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "conformance" && record.details?.action === "workspace.inspect");
 			assert.ok(recorded !== undefined, "the conformance refusal is in the ledger with its gate and its action");
 			assert.match(recorded?.details?.reason ?? "", /is not present in authority document/, "and its reason names the target and the document, which is what a reader needs in order to check it");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+	it("does not enforce a forbidden technique, because nothing carries one to the authority  [KNOWN GAP: D4]", async () => {
+		// **This asserts the defect, so that the fix has somewhere to land.** Both declarations below forbid the technique
+		// `dos`: the mode's `gate.excluded_techniques`, and the engagement document's `constraints.excluded_techniques`.
+		// The call carries the technique in its arguments. It is allowed, because the authority request the policy builds
+		// carries only `{ action, target, at, evidenceDigests }` (`src/core/action-policy.ts:145`) while
+		// `src/core/authority.ts:403` needs `request.technique` to be present before it can refuse. The mode's own
+		// `gate.excluded_techniques` is worse still: `src/` has no consumer for it at all.
+		//
+		// When either half is wired, this test must be **inverted rather than deleted** - it is the only mechanical
+		// statement that the declaration is inert.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		const engagement = writeFixtureEngagement(root);
+		writeFixtureMode(root, "contract", {
+			capability: "workspace.inspect",
+			conformance: { targetArgument: "target", document: engagement.document },
+			excludedTechniques: ["dos"],
+		});
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "contract" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
+
+			const forbidden = await callTool(
+				host,
+				"agent_run_capability",
+				{ name: "workspace.inspect", args: { target: engagement.target, technique: "dos", phase: "discovery", intensity: 99 } },
+				"c-forbidden",
+			);
+			assert.notEqual(forbidden?.block, true, "KNOWN GAP: a forbidden technique is allowed, because no request carries one: " + (forbidden?.reason ?? "(no reason)"));
 		} finally {
 			host.restoreCwd();
 		}

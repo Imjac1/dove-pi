@@ -41,9 +41,27 @@ cheapest and defends the shell specifically.
 where the measured losses are, and it is policy we can write today. Then decide (b) versus (a) once the shell is
 governed at all - and note that (b) is the one the *largest* system in the corpus chose.
 
-**Cheapest falsifying step.** A ~20-line experiment: register an extension that returns custom `operations` and
-observe whether the agent's `bash` tool call goes through it. If it does, (a) is a small task rather than a project;
-if it does not, (a) needs a different seam and the recommendation hardens.
+**Cheapest falsifying step - executed 2026-09-27, and it changes the answer.** The seam analysis resolved further
+than expected, so the experiment is no longer "is it possible":
+
+- Every built-in tool has an `*Operations` interface (`EditOperations`, `FindOperations`, `GrepOperations`,
+  `LsOperations`, `ReadOperations`, `WriteOperations`, `PowerShellOperations`), and `ToolsOptions`
+  (`core/tools/index.d.ts:25`) carries them per tool, with `BashToolOptions.operations` documented as "Custom
+  operations for command execution. Default: local shell" plus a `spawnHook` that "adjust[s] command, cwd, or env
+  before execution". **[LOCAL]**
+- But the *construction* is the host's (`createAllToolDefinitions(cwd, options)`), and the seam Pi documents for
+  extensions is `user_bash`'s `operations?`, whose docstring scopes it to "extensions that **intercept `user_bash`**".
+  That is the **user's** shell, not the agent's. **[LOCAL]**
+- What an extension *does* hold over the agent's shell is the `tool_call` event's **mutable arguments** - the same lever
+  this project already uses for `normalizeLsToolInput` and `applyAdaptiveShellTimeout`, and the host's own docs say no
+  re-validation happens after a mutation, so the mutated command is what runs. **[LOCAL]**
+
+So isolation is **feasible without a new host capability**: wrap the command at the boundary (or register replacement
+buildings built from `createAllToolDefinitions`). The remaining step is therefore not a feasibility probe but a
+**platform** one: pick the wrapper (Seatbelt/Bubblewrap on POSIX; a restricted-token process on Windows, per Rec 10)
+and prove that the wrapped command still satisfies the read-only-vs-mutating classification the permission list
+depends on. **The recommendation hardens**: (a) is a small task, which makes "do (c) first" a sequencing choice
+rather than a necessity - and it moves (a) up the order if the shell cannot be governed by policy alone.
 
 ---
 
@@ -152,9 +170,28 @@ truth.
 project's founding defect; the choice is to make it real or remove it, never to leave it declared. Do **(c) only
 after** (a), because decomposition is what the benchmark measured and encoding is what the corpus guessed.
 
-**Cheapest falsifying step.** Pick one engagement constraint (the pentest document's `max_requests_per_second` or
-`excluded_techniques`), write the test that should fail when it is violated, and watch it pass - which is what
-happens today.
+**Cheapest falsifying step - executed 2026-09-27, and it confirmed the gap.** Written as a permanent test rather
+than a probe, so the fix has somewhere to land:
+
+```text
+tests/host-work-mode.test.ts
+  ✔ does not enforce a forbidden technique, because nothing carries one to the authority  [KNOWN GAP: D4]
+```
+
+The test declares `dos` as forbidden in **both** places it can be declared - the fixture mode's
+`gate.excluded_techniques` and the fixture engagement's grant `constraints.excluded_techniques` - and calls the
+capability with `technique: "dos"`. **The call is allowed.** The chain is exactly as read: the authority gate does
+refuse an excluded technique when the request carries one (`src/core/authority.ts:403`), and the policy's
+`toRequest` (`src/core/action-policy.ts:145`) builds `{ action, target, at, evidenceDigests }` and never supplies
+one. The mode-level declaration has no consumer at all.
+
+The test asserts the defect **so that the fix is a one-line inversion rather than a new test**, and its name carries
+`[KNOWN GAP: D4]` so it cannot be mistaken for an endorsement. Full suite after adding it: 595 tests, 593 pass, 0 fail.
+
+**What this changes for the recommendation.** Nothing about (a) versus (b) - the declared-and-inert fields still have
+to be made real or removed. It does mean the *decomposition* half of the evasion paper's finding is worse than
+reading suggested: it is not that the accumulator is empty, it is that **no request can ever carry the facts a
+technique-scoped rule needs**.
 
 ---
 
