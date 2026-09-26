@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
+- **Total Sessions**: 21
 - **Last Active**: 2026-09-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~679 | Active |
+| `journal-1.md` | ~783 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-09-26 | Code audit vertical: commit, closure, and five-task wrap-up | `20276d5`, `f7d94e0`, `f17e03e`, `a24c4ca`, `9cef15d`, `fd39cba`, `4e5b6f1`, `4ed2384` | `feat/code-audit-vertical` |
 | 20 | 2026-09-26 | Dove base agent framework: research, design, and implementation | `fa5a268`, `004eb60`, `22817f0`, `7dcac57`, `a2affde` | `feat/dove-base-agent-framework` |
 | 19 | 2026-09-25 | dove-pi 工作区交接：2.2 检查失败 + 基座选型研究 | - | `master` |
 | 18 | 2026-09-06 | Native read-only subagent dispatch | `3c99f4d`, `a58ccd7`, `ab3c56b`, `866dc07` | `master` |

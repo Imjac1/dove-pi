@@ -677,3 +677,107 @@ npm test           -> tests 425 / pass 423 / fail 0 / skipped 2   (318 基线 + 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 21: Code audit vertical: commit, closure, and five-task wrap-up
+<!-- trellis-session: v=2 fp=1271237003ae8fb8 -->
+
+**Date**: 2026-09-26
+**Task**: Code audit vertical: commit, closure, and five-task wrap-up
+**Branch**: `feat/code-audit-vertical`
+
+### Summary
+
+Committed the code audit vertical that the previous session left uncommitted (41 files, 7 work commits), ticked and evidenced its 13 closure boxes, and archived it plus four other in_progress tasks whose work was verified to be on master, taking active tasks from 12 to 7.
+
+### Main Changes
+
+## 本会话做了什么
+
+接上一个会话未收尾的代码审计垂直（09-26-dove-code-audit-vertical），把它从"实现已完成但整个工作树未提交"
+推到归档，然后逐个核对并归档了另外 4 个已经做完却一直挂在 in_progress 的任务。
+
+### 一、代码审计垂直：提交 + 归档（8 个 commit）
+
+上个会话在 20:25 完成了实现（M0–M6 加八轮复查、闸门 496/494/0），但 41 个文件全部留在工作树里没有提交，
+任务卡在 Phase 3.4。本会话按 Phase 3.4 的分批提交流程补上：
+
+| Hash | Message |
+|------|---------|
+| `20276d5` | fix(core): make finding identity path-free and move-aware |
+| `f7d94e0` | feat(code-audit): add the deterministic seed spine and coverage receipt |
+| `f17e03e` | feat(code-audit): add the finding claim schema |
+| `a24c4ca` | feat(code-audit): register the audit capabilities and derive findings from seeds |
+| `9cef15d` | test(code-audit): drive the vertical end to end |
+| `fd39cba` | docs(spec): record the code audit vertical contracts |
+| `4e5b6f1` | chore(task): record 09-26-dove-code-audit-vertical planning and implementation |
+| `4ed2384` | docs(task): record verified acceptance criteria for the code audit vertical |
+
+提交前重跑了闸门（不采信记录）：`npm run typecheck` 0 errors，`npm test` 496 / pass 494 / fail 0 /
+skipped 2，与 `implement.md` 记录的最终闸门一致。逐路径核对过剩余 91 个脏文件，全部属于约定的排除集
+（Trellis 框架 0.6.16→0.6.17 升级 88 个路径、08-27 的两个 spec、harness 任务目录），没有本任务遗留。
+
+`implement.md` 末尾 13 个勾选框（8 条验收判据 + 5 条 start 前自查）全部补勾，并追加一节
+"## Record closure" 写明依据。**其中一条写明的是缺口而不是结论**：第 3 条"用户已批准最终规划摘要"
+没有任何独立产物，唯一记录是任务到达过 `in_progress`。这个任务的全部主题就是"声明跑在证据前面"，
+所以按同一条标准把它写出来，而不是默认勾掉。
+
+### 二、另外 4 个任务：核对后归档
+
+| 任务 | 归档依据 |
+|---|---|
+| `09-03-task-convergence-control` | implement 31/31 全勾，自述"all AC-* 有观测证据、controller 报告 ready_to_finish"；`scripts/trellis-convergence.mts`、`tests/fixtures/task-convergence-traces.json` 均存在且在 master 上 |
+| `09-06-dove-workspace-modes-context-isolation` | implement 14/14，自述全部验证命令通过；`src/core/workspace-policy.ts` 与 `bin/dove-pi.cjs:119`（`pentest` 才加 `--no-lens`）核实存在 |
+| `09-01-dove-native-workflow` | 无独立完成声明，以"聚焦测试通过 + spec 契约已记录"为依据：`state-dir / project-provider / task-cli / context-projection` 39/39 通过；`src/project-provider/native-*.ts` 在 master 上 |
+| `09-02-installer-reliability-recovery` | 同上依据：`managed-install-status / extensions / windows-runtime` 23/23 通过；`src/managed-install-status.ts`、`src/extensions/install.ts` 在 master 上 |
+
+四者的 `branch` 字段都是空（09-06 甚至记成 master/master），`task.py archive` 按分支校验拒绝了它们。
+核实它们的产物**确实都在 master 上**（逐个 `git cat-file -e master:<path>`），即"工作没有自己的分支、
+直接落在 master"，所以用脚本为此提供的 `--skip-branch-validation` 归档——不是绕过校验，而是它命名的那个情形。
+
+活跃任务从 12 个降到 7 个。
+
+## 未处置 / 下一步
+
+1. **08-27-dove-interop-layer 仍未收尾，而且是真未完**：它的两个 spec 文件
+   （`personal-agent-project-context.md` +107、`quality-guidelines.md` +23）仍在工作树里没提交；
+   session 19 留下的下一步是"修 `src/skills/discovery.ts` 的路径依赖后重跑 2.2"，`f513295` 是那一步的代码；
+   `discoverUserSkills` / `discoverAllSkills` 仍无测试覆盖。**这是唯一一个不该动它的未收尾任务。**
+2. `09-01-dove-adaptive-formal-workflow` 只差一条：`implement.md:61` "Run a longer multi-turn
+   real-provider comparison for cache and model"——是一次测量，不是代码。它与已归档的 09-01-native 可能重叠。
+3. `08-28-dove-pi-web` 的 `prd.md` 还是未填写的 TBD 模板，状态却是 `in_progress`——该回到 planning。
+4. `08-28-dove-pi-usage-review` 状态是 `active`（非标准值），内容是中文用量报告，不是代码任务。
+5. **3 个从未执行的任务（全部 artifacts 齐全，都在 Phase 1.4 评审闸门）**：
+   `08-30-dove-pi-runtime-reliability-sync`（P0，父）、`08-30-dove-audit-observability-regression`（P0，子）、
+   `09-26-dove-agent-harness-capabilities`（P2）。后者的结论值得先读：九项 harness 能力在 `.trellis/` 里
+   已经存在并正在跑，而 `src/core/` 里对应的是"只被自己的测试引用"的库。
+
+## 环境事实
+
+- 本会话的 shell 看不到 `DSH_SESSION_ID`，所以 `task.py current` 解析不出活动任务；磁盘上的唯一指针
+  `.trellis/.runtime/sessions/dove-pi-workspace.json` 指的是 harness 任务。**跨会话接续要靠产物和 git 判定，
+  不能靠这个指针。**
+- 用 PowerShell 改仓库里的 markdown 会把 UTF-8 读成 ANSI：`Add-Content`/`Set-Content` 会引入 BOM、
+  把 `—` 变成 `鈥?`、并把 LF 换成 CRLF。文件原本是纯 LF。最后用 python 按字节修正。
+  **改这个仓库的文件要么用 Edit/Write，要么用 python，不要用 PowerShell 的文本 cmdlet。**
+- `Select-String -Pattern '\[x\]'` 走管道（`$c | Select-String`）不生效，用 `-Path` 才生效；
+  `if (git cat-file -e ...)` 这种"用命令当条件"的写法恒为假，因为该命令无输出——我因此差点报了一个
+  不存在的问题（"master 上没有 native-provider.ts"）。**判存在用 `$LASTEXITCODE`，不要用输出真值。**
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `20276d5` | fix(core): make finding identity path-free and move-aware |
+| `f7d94e0` | feat(code-audit): add the deterministic seed spine and coverage receipt |
+| `f17e03e` | feat(code-audit): add the finding claim schema |
+| `a24c4ca` | feat(code-audit): register the audit capabilities and derive findings from seeds |
+| `9cef15d` | test(code-audit): drive the vertical end to end |
+| `fd39cba` | docs(spec): record the code audit vertical contracts |
+| `4e5b6f1` | chore(task): record 09-26-dove-code-audit-vertical planning and implementation |
+| `4ed2384` | docs(task): record verified acceptance criteria for the code audit vertical |
+
+### Status
+
+[OK] **Completed**
