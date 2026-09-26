@@ -1,0 +1,5 @@
+{"file":".trellis/tasks/09-26-dove-code-audit-vertical/design.md","reason":"The design this task implements: the seed spine, the claim schema, and the tiered baseline match that fixes D1/D2/D3."}
+{"file":".trellis/tasks/09-26-dove-code-audit-vertical/implement.md","reason":"The milestone list, per-milestone validation commands, risky files, and rollback points."}
+{"file":".trellis/tasks/09-26-dove-code-audit-vertical/research/brief-seed-receipt-claim.md","reason":"The concrete contract shapes to implement: the catalog format, the scanner steps, the receipt fields and validation rules, the per-category proof obligations, and the exact identity change with its evidence."}
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"Scenario 'Evidence Plane and Action Checkpoint' owns the finding-identity contract being amended. Read before touching src/core/evidence-sarif.ts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Code standards and forbidden patterns for this repository."}

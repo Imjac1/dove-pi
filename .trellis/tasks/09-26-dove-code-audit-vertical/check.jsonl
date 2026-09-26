@@ -1,0 +1,4 @@
+{"file":".trellis/tasks/09-26-dove-code-audit-vertical/implement.md","reason":"The milestone list and the per-milestone validation commands the checker runs against."}
+{"file":".trellis/tasks/09-26-dove-code-audit-vertical/research/brief-seed-receipt-claim.md","reason":"The contract the checker verifies against, including the measured acceptance bar: does the implementation match these shapes and rules, or only approximate them, and is the untested acceptance criterion described honestly."}
+{"file":".trellis/spec/backend/personal-agent-framework-core.md","reason":"The frozen contracts the vertical must not violate: no mode id in executable code under src/core, unknown fields rejected, and the evidence-plane scenario."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Error contracts: fail-closed behaviour, and a load-time failure rather than a silent default."}
