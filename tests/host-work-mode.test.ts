@@ -112,6 +112,116 @@ function forceSemantics(root: string, name: string, value: string): void {
 	writeFileSync(path, rewritten);
 }
 
+/**
+ * A mode over a capability the runtime **actually has**, so the mode's own controls are reachable at the host boundary.
+ *
+ * **Why a fixture and not a shipped mode.** All three shipped modes declare capabilities nothing implements - six of the
+ * nine they declare (`repo.read`, `report.write`, `net.scan`, `exploit.run`, `market.read`, `order.submit`), verified by
+ * grep on 2026-09-27. A capability invocation for one of those is refused by the registration check before any other
+ * control is consulted, so a host case that demonstrates a mode control through such a call is demonstrating it for an
+ * action that cannot run. This fixture is how the controls keep host-level evidence.
+ *
+ * The limit's argument path is the mode author's to choose, which is why a synthetic one is a fixture rather than a
+ * fiction.
+ */
+interface FixtureSpec {
+	readonly capability: string;
+	/** Listed in `ask_before`, so consent is what stands between the call and dispatch. */
+	readonly askBefore?: boolean;
+	readonly limit?: { readonly argument: string; readonly max: number };
+	readonly conformance?: { readonly targetArgument: string; readonly document: string };
+}
+
+function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
+	const directory = join(root, "modes", name);
+	mkdirSync(directory, { recursive: true });
+	writeFileSync(join(directory, "MODE.md"), ["---", "name: " + name, "description: A fixture mode over a capability the runtime has.", "license: MIT", "---", "", "Exercise one control at the host boundary.", ""].join("\n"));
+	const conformance = spec.conformance;
+	writeFileSync(
+		join(directory, "governance.yaml"),
+		[
+			"version: 1.0.0",
+			'framework: ">=0.2.0 <0.3.0"',
+			"scope:",
+			"  targets: [workspace]",
+			"  environment: non-production",
+			"  exclusions: []",
+			"authority:",
+			"  grant: " + (conformance === undefined ? "local-fixture" : conformance.document),
+			"  capabilities: [" + spec.capability + "]",
+			'  expires: "2027-01-01T00:00:00.000Z"',
+			"gate:",
+			// `none` when the fixture declares neither control: a fixture that wrote `limit` with no limits would be refused
+			// by the rule this branch is about.
+			"  semantics: " + (conformance !== undefined ? "conformance" : spec.limit === undefined ? "none" : "limit"),
+			...(conformance === undefined ? [] : ["  target_argument: " + conformance.targetArgument]),
+			...(spec.limit === undefined
+				? []
+				: ["  limits:", "    payload:", "      argument: " + spec.limit.argument, "      max: " + spec.limit.max, "      tools: [" + spec.capability + "]"]),
+			"  approval: none",
+			"",
+		].join("\n"),
+	);
+	// `ask_before` and `always_allow` are kept disjoint: precedence makes `ask_before` win, and listing the same action in
+	// both would leave a reader unable to tell which control the case is about.
+	const permissions = spec.askBefore === true
+		? ["always_allow: []", "ask_before: [" + spec.capability + "]", "never_allow: []", ""]
+		: ["always_allow: [" + spec.capability + "]", "ask_before: []", "never_allow: []", ""];
+	writeFileSync(join(directory, "permissions.yaml"), permissions.join("\n"));
+}
+
+/**
+ * A conformance document naming a capability the runtime has. The shipped `example-engagement` authorizes `net.scan`,
+ * and nothing implements `net.scan`, so a mode pointing at it cannot reach its own conformance gate through a
+ * capability call. This is the document that can, with real digests so it pre-flights.
+ */
+function writeFixtureEngagement(root: string): { document: string; target: string } {
+	const directory = join(root, "engagements", "fixture-engagement");
+	mkdirSync(directory, { recursive: true });
+	writeFileSync(join(directory, "inventory.csv"), "asset,owner\nlocal-workspace,operator\n");
+	writeFileSync(join(directory, "permission-to-inspect.txt"), "signed permission to inspect the local workspace\n");
+	const digestOf = (file: string): string => createHash("sha256").update(readFileSync(join(directory, file))).digest("hex");
+	const digest = digestOf("inventory.csv");
+	const permission = digestOf("permission-to-inspect.txt");
+	writeFileSync(
+		join(directory, "authority.yaml"),
+		[
+			"version: 1",
+			"engagement: fixture-engagement",
+			"principals:",
+			"  - { id: grantor, kind: grantor }",
+			"  - { id: operator, kind: operator }",
+			"grants:",
+			"  - id: g-workspace",
+			// Not `from: operator`: a grant a principal issues to itself authorizes nothing, and the gate says so.
+			"    from: grantor",
+			"    to: operator",
+			"    authorizes:",
+			"      actions: [workspace.inspect]",
+			"    targets: [t-workspace]",
+			"    window:",
+			'      from: "2020-01-01T00:00:00.000Z"',
+			'      to: "2030-01-01T00:00:00.000Z"',
+			"    evidence:",
+			"      - kind: signed-permission",
+			"        ref: engagements/fixture-engagement/permission-to-inspect.txt",
+			'        sha256: "' + permission + '"',
+			"        signed_by: grantor",
+			"targets:",
+			"  - id: t-workspace",
+			"    address: local",
+			"    owner: operator",
+			"    ownership_evidence:",
+			"      kind: asset-inventory-attestation",
+			"      ref: engagements/fixture-engagement/inventory.csv",
+			'      sha256: "' + digest + '"',
+			"    requires_grants: [g-workspace]",
+			"",
+		].join("\n"),
+	);
+	return { document: "engagements/fixture-engagement/authority.yaml", target: "t-workspace" };
+}
+
 /** A conformance mode's authority document lives beside the modes, so copying a mode is not enough. */
 function copyEngagements(root: string): void {
 	cpSync(join(repoRoot, "engagements"), join(root, "engagements"), { recursive: true });
@@ -259,9 +369,16 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 
-	it("loads code-audit through the host, and its permission lists decide what runs", async () => {
+	it("loads code-audit through the host, and refuses what it declares but nothing implements", async () => {
 		// AC1, for the mode that had to change to be loadable at all: changing `modes/code-audit/` changes what the
 		// running agent may do, observed through the host rather than through a unit test of the loader.
+		//
+		// **`repo.read` and `report.write` are refused, and that is the finding, not a regression.** The mode declares
+		// them in `authority.capabilities` and nothing registers them: they are *specifications* of what an audit does,
+		// performed with ordinary host tools, and `agent_run_capability` was never a route to them. Until the
+		// registration check existed, a call would have been allowed by the permission list and then thrown. The mode's
+		// permission list is therefore only observable through the actions that *are* invocable - the deny list, and
+		// the raw tools it does not name.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "code-audit");
@@ -273,22 +390,21 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			await host.events.get("input")?.({ type: "input", text: "audit the repository", source: "interactive" }, host.context);
 			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "audit the repository", systemPrompt: "" }, host.context);
 
-			// always_allow names the capability, so this runs without a question - which is what the declaration is for.
-			const read = await callTool(host, "agent_run_capability", { name: "repo.read", args: {} }, "c-read");
-			assert.notEqual(read?.block, true, "an always_allow action runs: " + (read?.reason ?? "(no reason)"));
-			assert.equal(host.confirmCalls.length, 0, "and it is not put to the operator");
-
-			// ask_before is a question, and the question is asked.
-			const write = await callTool(host, "agent_run_capability", { name: "report.write", args: {} }, "c-write");
-			assert.notEqual(write?.block, true, "a confirmed action runs");
-			assert.equal(host.confirmCalls.length, 1);
-			assert.match(host.confirmCalls[0]?.title ?? "", /report\.write/);
+			for (const name of ["repo.read", "report.write"]) {
+				const declared = await callTool(host, "agent_run_capability", { name, args: {} }, "c-" + name);
+				assert.equal(declared?.block, true, name + " is declared by the mode and implemented by nothing");
+				assert.match(declared?.reason ?? "", /\[registered\]/, "and it is refused as that, not as something else");
+			}
+			assert.equal(host.confirmCalls.length, 0, "nothing unimplemented is put to the operator");
 
 			// never_allow still wins, and it is matched against the action rather than the umbrella tool.
 			const denied = await callTool(host, "agent_run_capability", { name: "network.fetch", args: {} }, "c-net");
 			assert.equal(denied?.block, true);
-			assert.match(denied?.reason ?? "", /never_allow/);
-			assert.equal(host.confirmCalls.length, 1, "a denied action is refused, not put to the operator");
+			assert.match(denied?.reason ?? "", /never_allow/, "a denial is a policy decision and comes first");
+
+			// A raw tool is not the registry's business, so the permission list still decides it.
+			const shell = await callTool(host, "bash", { command: "ls" }, "c-shell");
+			assert.notEqual(shell?.block, true, "an unlisted host tool is not refused: " + (shell?.reason ?? "(no reason)"));
 		} finally {
 			host.restoreCwd();
 		}
@@ -327,7 +443,15 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
-	it("refuses an over-limit action at the tool-call boundary, and records the refusal in the ledger", async () => {
+	it("refuses a capability the mode grants and nothing registers, before the limit gate and before the operator", async () => {
+		// `modes/trading` declares `market.read` and `order.submit`, and the framework registers neither - the mode
+		// stating what its *deployment* must provide. Until 2026-09-27 the order got a confirmation prompt, the operator
+		// confirmed, an effect claim was taken, and then `registry.require` threw: fail-closed, but the operator was
+		// asked about an action that could not run.
+		//
+		// **The limit gate is not consulted, and that is the point of the position.** An action that cannot run has no
+		// arguments worth judging, so this check sits immediately after the capability scope - the same reasoning that
+		// puts `ask` last, where consent about an action everything else refused would be noise.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "trading");
@@ -335,56 +459,100 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		const host = startHost(root);
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			assert.ok(host.notifications.some((message) => /trading loaded from modes\/trading/.test(message)), "the mode must load before its limits can fire: " + host.notifications.join(" | "));
-			// A request, because the gate sits where the input is final, and that is inside a Dove-managed request.
+			assert.ok(
+				host.notifications.some((message) => /trading loaded from modes\/trading/.test(message)),
+				"the mode still loads: a missing registration is a deployment fact, not a malformed mode: " + host.notifications.join(" | "),
+			);
 			await host.events.get("input")?.({ type: "input", text: "place one order", source: "interactive" }, host.context);
 			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "place one order", systemPrompt: "" }, host.context);
 
-			const over = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { notional: 250_000, quantity: 10 } } });
-			assert.equal(over?.block, true, "the mode's declared limit must fire at the host boundary");
-			assert.match(over?.reason ?? "", /exceeds limit 'notional'/, "the reason names the limit that refused it");
-			assert.match(over?.reason ?? "", /Do this instead:/, "a refusal carries remediation, not only a reason");
+			// An order that is also over its declared notional, so the ordering is observed rather than assumed.
+			for (const [index, name] of ["order.submit", "market.read"].entries()) {
+				const decision = await callTool(host, "agent_run_capability", { name, args: { order: { notional: 250_000, quantity: 10 } } }, "c-unregistered-" + index);
+				assert.equal(decision?.block, true, name + " is granted by the mode and registered by nothing");
+				assert.match(decision?.reason ?? "", /\[registered\]/, "the reason says which check refused it, not only that something did");
+				assert.match(decision?.reason ?? "", /nothing in this runtime registers it/);
+				assert.match(decision?.reason ?? "", /Do this instead:/, "a refusal carries remediation, not only a reason");
+			}
+			assert.equal(host.confirmCalls.length, 0, "the operator is not asked about an action that cannot run");
 
-			const under = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { notional: 50_000, quantity: 10 } } });
-			assert.notEqual(under?.block, true, "an order inside the declared bounds is not refused by the limit gate");
-
-			const unevaluable = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { quantity: 10 } } });
-			assert.equal(unevaluable?.block, true, "a limit that cannot find the argument it checks is a block, not a pass");
-			assert.match(unevaluable?.reason ?? "", /could not be evaluated/);
+			// No claim either: a claim is what makes a later attempt refuse, so one taken for an action that never ran
+			// would block a future attempt for the wrong reason.
+			const effectsDir = join(root, ".dove", "effects");
+			const claimed = existsSync(effectsDir) ? readdirSync(effectsDir).filter((name) => name.endsWith(".json")) : [];
+			assert.deepEqual(claimed, [], "no effect claim for an action that never reached dispatch");
 
 			// The refusal is evidence, not only a message to the model: a blocked action that leaves no record is
 			// indistinguishable from one that never happened, and the two need different responses later.
 			const ledgerFile = join(stateDir, "execution.jsonl");
 			const records = existsSync(ledgerFile)
-				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { reason?: string; action?: string; gate?: string } })
+				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { action?: string; gate?: string } })
 				: [];
-			const recorded = records.find((record) => record.kind === "gate.refused" && /exceeds limit 'notional'/.test(record.details?.reason ?? ""));
-			assert.ok(recorded !== undefined, "the refusal is in the ledger with its reason");
-			assert.equal(recorded?.details?.action, "order.submit", "and it names the action rather than only the tool");
-			assert.equal(recorded?.details?.gate, "limit");
+			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "registered" && record.details?.action === "order.submit");
+			assert.ok(recorded !== undefined, "the refusal is in the ledger with its gate and its action");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses an over-threshold action at the boundary when the capability is registered", async () => {
+		// **A fixture mode, because no shipped mode can exercise this.** `modes/trading` is the only mode with limits,
+		// and its only limited action is unregistered - so the check above refuses it before the limit gate is reached.
+		// This mode declares a capability the runtime *does* have, which leaves the threshold as the only thing between
+		// the call and dispatch. Without it, the limit gate's host-level coverage would be lost with nothing replacing it.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "thresholds", { capability: "workspace.inspect", limit: { argument: "payload.bytes", max: 1_000 } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "thresholds" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			assert.ok(host.notifications.some((message) => /thresholds loaded from modes\/thresholds/.test(message)), host.notifications.join(" | "));
+			await host.events.get("input")?.({ type: "input", text: "inspect", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect", systemPrompt: "" }, host.context);
+
+			const over = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { path: ".", payload: { bytes: 5_000 } } });
+			assert.equal(over?.block, true, "the mode's declared threshold must fire at the host boundary");
+			assert.match(over?.reason ?? "", /exceeds limit 'payload'/, "the reason names the limit that refused it");
+			assert.match(over?.reason ?? "", /Do this instead:/, "a refusal carries remediation, not only a reason");
+
+			const under = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { path: ".", payload: { bytes: 10 } } });
+			assert.notEqual(under?.block, true, "an action inside the declared bound is not refused");
+
+			const unevaluable = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { path: "." } });
+			assert.equal(unevaluable?.block, true, "a limit that cannot find the argument it checks is a block, not a pass");
+			assert.match(unevaluable?.reason ?? "", /could not be evaluated/);
+
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const records = existsSync(ledgerFile)
+				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { action?: string; gate?: string } })
+				: [];
+			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "limit" && record.details?.action === "workspace.inspect");
+			assert.ok(recorded !== undefined, "and it is recorded with the gate that refused it");
 		} finally {
 			host.restoreCwd();
 		}
 	});
 	it("asks the operator before an action the mode lists in ask_before, and runs it only on consent", async () => {
+		// The fixture declares a capability the runtime has and puts it on `ask_before`, so the consent requirement is
+		// the only thing between the call and dispatch. `modes/trading` used to carry this case and cannot any more:
+		// its `order.submit` is refused by the registration check before the ask is reached.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
-		copyMode(root, "trading");
-		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		writeFixtureMode(root, "consent", { capability: "workspace.inspect", askBefore: true });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "consent" }));
 		const host = startHost(root);
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			await host.events.get("input")?.({ type: "input", text: "submit one order", source: "interactive" }, host.context);
-			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "submit one order", systemPrompt: "" }, host.context);
+			assert.ok(host.notifications.some((message) => /consent loaded from modes\/consent/.test(message)), host.notifications.join(" | "));
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
 
-			// `order.submit` is on trading's ask_before list. Inside its declared limits nothing else refuses it, so the
-			// requirement is the only thing standing between the call and dispatch - which is exactly what makes it the
-			// case worth testing at the host boundary.
-			const input = { name: "order.submit", args: { order: { notional: 5_000, quantity: 10 } } };
+			const input = { name: "workspace.inspect", args: { path: "." } };
 			const approved = await callTool(host, "agent_run_capability", input, "c-ask-1");
-			assert.notEqual(approved?.block, true, "a confirmed action is not refused");
+			assert.notEqual(approved?.block, true, "a confirmed action is not refused: " + (approved?.reason ?? "(no reason)"));
 			assert.equal(host.confirmCalls.length, 1, "the operator is asked, exactly once");
-			assert.match(host.confirmCalls[0]?.title ?? "", /order\.submit/, "the question names the action, not the umbrella tool");
+			assert.match(host.confirmCalls[0]?.title ?? "", /workspace\.inspect/, "the question names the action, not the umbrella tool");
 			assert.match(host.confirmCalls[0]?.message ?? "", /ask_before/, "and says why it is being asked");
 
 			host.setConfirmAnswer(false);
@@ -399,10 +567,10 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const records = existsSync(ledgerFile)
 				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { action?: string; gate?: string } })
 				: [];
-			const approvedRecord = records.find((record) => record.kind === "gate.approved" && record.details?.action === "order.submit");
+			const approvedRecord = records.find((record) => record.kind === "gate.approved" && record.details?.action === "workspace.inspect");
 			assert.ok(approvedRecord !== undefined, "the consent is recorded, so the run is distinguishable from one that never asked");
 			assert.equal(approvedRecord?.details?.gate, "ask");
-			const declinedRecord = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "ask" && record.details?.action === "order.submit");
+			const declinedRecord = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "ask" && record.details?.action === "workspace.inspect");
 			assert.ok(declinedRecord !== undefined, "and so is the refusal");
 		} finally {
 			host.restoreCwd();
@@ -412,18 +580,18 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 	it("refuses an action needing consent when the host has no dialog, instead of running it unasked", async () => {
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
-		copyMode(root, "trading");
-		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		writeFixtureMode(root, "consent", { capability: "workspace.inspect", askBefore: true });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "consent" }));
 		const host = startHost(root);
 		try {
 			// The host's own no-op UI context answers `false` for every confirmation, which is the same direction: a
 			// requirement that cannot be put to the operator is refused, not waived.
 			host.removeDialog();
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			await host.events.get("input")?.({ type: "input", text: "submit one order", source: "interactive" }, host.context);
-			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "submit one order", systemPrompt: "" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
 
-			const decision = await callTool(host, "agent_run_capability", { name: "order.submit", args: { order: { notional: 5_000, quantity: 10 } } });
+			const decision = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { path: "." } });
 			assert.equal(decision?.block, true, "an action awaiting consent must not run just because nobody could be asked");
 			assert.match(decision?.reason ?? "", /no confirmation dialog/);
 			assert.equal(host.confirmCalls.length, 0, "and the harness must not call a dialog the host does not have");
@@ -454,22 +622,27 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 	});
 
 	it("refuses an action outside the authority document at the boundary, and records which check refused it", async () => {
+		// The fixture declares a capability the runtime has and points at a document that authorizes it, so the contract
+		// is the only thing between the call and dispatch. `modes/pentest` used to carry this case and cannot any more:
+		// its `net.scan` is declared and implemented by nothing, so the registration check refuses it first.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
-		copyMode(root, "pentest");
-		copyEngagements(root);
-		preflightableEngagement(root);
-		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "pentest" }));
+		const engagement = writeFixtureEngagement(root);
+		writeFixtureMode(root, "contract", { capability: "workspace.inspect", conformance: { targetArgument: "target", document: engagement.document } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "contract" }));
 		const host = startHost(root);
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			await host.events.get("input")?.({ type: "input", text: "scan the target", source: "interactive" }, host.context);
-			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "scan the target", systemPrompt: "" }, host.context);
+			assert.ok(host.notifications.some((message) => /contract loaded from modes\/contract/.test(message)), host.notifications.join(" | "));
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
 
-			// The engagement pre-flights clean, so the run starts - and an action against a target the document does not
-			// name is still refused, at the boundary, by name. The refusal that used to happen here was the *pre-flight*
-			// refusing to start at all, which is a different (and earlier) fact.
-			const scanned = await callTool(host, "agent_run_capability", { name: "net.scan", args: { target: "t-elsewhere" } });
+			// The document pre-flights clean, so the run starts - and an action against a target it does not name is still
+			// refused, at the boundary, by name. The refusal that used to happen here was the *pre-flight* refusing to
+			// start at all, which is a different (and earlier) fact.
+			const covered = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { target: engagement.target } }, "c-covered");
+			assert.notEqual(covered?.block, true, "a target the document names is not refused: " + (covered?.reason ?? "(no reason)"));
+			const scanned = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { target: "t-elsewhere" } }, "c-elsewhere");
 			assert.equal(scanned?.block, true, "a conformance mode must refuse an action against a target it does not cover");
 			assert.match(scanned?.reason ?? "", /\[conformance\]/, "the reason names the check, not only the outcome");
 
@@ -477,7 +650,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const records = existsSync(ledgerFile)
 				? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; details?: { gate?: string; action?: string; reason?: string } })
 				: [];
-			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "conformance" && record.details?.action === "net.scan");
+			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "conformance" && record.details?.action === "workspace.inspect");
 			assert.ok(recorded !== undefined, "the conformance refusal is in the ledger with its gate and its action");
 			assert.match(recorded?.details?.reason ?? "", /is not present in authority document/, "and its reason names the target and the document, which is what a reader needs in order to check it");
 		} finally {
@@ -485,19 +658,21 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 	it("claims an effect at the boundary and records its outcome when the result arrives", async () => {
+		// The fixture declares a capability the runtime has and needs no consent, so the claim is the only thing this
+		// case is about. `modes/trading` used to carry it: its `order.submit` is refused by the registration check.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
-		copyMode(root, "trading");
-		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "trading" }));
+		writeFixtureMode(root, "effects", { capability: "workspace.inspect" });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "effects" }));
 		const host = startHost(root);
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			await host.events.get("input")?.({ type: "input", text: "submit one order", source: "interactive" }, host.context);
-			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "submit one order", systemPrompt: "" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
 
-			const input = { name: "order.submit", args: { order: { notional: 100, quantity: 1 } } };
+			const input = { name: "workspace.inspect", args: { path: "." } };
 			const decision = await callTool(host, "agent_run_capability", input);
-			assert.notEqual(decision?.block, true, "an order inside the declared limits is not refused");
+			assert.notEqual(decision?.block, true, "an action nothing refuses is not refused: " + (decision?.reason ?? "(no reason)"));
 
 			// The claim is the file's existence, taken before dispatch, and it reads as in flight until a result
 			// arrives - which is what an interrupted dispatch actually is.
@@ -505,7 +680,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const claimed = existsSync(effectsDir) ? readdirSync(effectsDir).filter((name) => name.endsWith(".json")) : [];
 			assert.equal(claimed.length, 1, "one claim, taken at the boundary");
 			const inFlight = JSON.parse(readFileSync(join(effectsDir, claimed[0] as string), "utf8")) as { tool?: string; outcome?: string };
-			assert.equal(inFlight.tool, "order.submit", "the record names the action, not the umbrella tool that carried it");
+			assert.equal(inFlight.tool, "workspace.inspect", "the record names the action, not the umbrella tool that carried it");
 			assert.equal(inFlight.outcome, undefined, "and it has no outcome yet");
 
 			const toolResult = (await host.events.get("tool_result")?.({ type: "tool_result", toolCallId: "c-1", toolName: "agent_run_capability", input, content: [], isError: false }, host.context)) as { content?: Array<{ text?: string }> } | undefined;

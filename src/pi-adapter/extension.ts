@@ -1958,6 +1958,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				activeActionPolicy = createActionPolicy({
 					mode: activeWorkMode,
 					workspaceRoot: modeRoot,
+					// What this runtime can actually run. A mode may grant authority for a capability the deployment does
+					// not have (`modes/trading` does, deliberately), and the policy is where that becomes a refusal at the
+					// boundary rather than a throw after the operator has already confirmed it.
+					registeredCapabilities: registry.list().map((capability) => capability.name),
 					...(activeAuthorityDocument === undefined ? {} : { authorityDocument: activeAuthorityDocument }),
 				});
 			} catch (error) {

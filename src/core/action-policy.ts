@@ -32,6 +32,16 @@ export interface ActionPolicyOptions {
 	readonly authorityDocument?: AuthorityDocument;
 	/** The workspace the engagement's evidence paths are resolved against. */
 	readonly workspaceRoot: string;
+	/**
+	 * The capabilities this runtime actually provides, by name.
+	 *
+	 * **Required, with no default, because neither default is safe.** A mode may grant authority for a capability the
+	 * deployment does not have - `modes/trading` declares `order.submit` and the framework ships no such capability,
+	 * which is the mode stating what its *environment* must provide. An empty default would refuse every honest
+	 * caller; omitting the check lets the call through to `registry.require`, which throws **after** the operator has
+	 * confirmed it and after the effect claim was taken.
+	 */
+	readonly registeredCapabilities: readonly string[];
 }
 
 export interface ActionPolicy {
@@ -149,9 +159,12 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 		};
 	};
 
+	// A `Set` because this is a name lookup on every capability invocation, against the runtime's whole surface.
+	const registered = new Set(options.registeredCapabilities);
+
 	return {
 		modeId: mode.id,
-		gates: ["deny", "scope", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id]), "ask"],
+		gates: ["deny", "scope", "registered", ...(limitGate === undefined ? [] : [limitGate.id]), ...(conformanceGate === undefined ? [] : [conformanceGate.id]), "ask"],
 		denyDecision,
 		evaluate(invocation, source) {
 			// The denial is evaluated here as well, so a caller who runs only `evaluate` cannot silently skip it.
@@ -166,6 +179,22 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			if (source.viaCapability) {
 				const authorized = scope.authorize({ agentId: mode.id, capability: invocation.tool });
 				if (authorized.outcome === "deny") return labelled({ outcome: "block", reason: authorized.reason, remediation: authorized.remediation }, "scope");
+				// **The third check, and the position is the point.** `deny` is a policy decision, `scope` asks whether this
+				// agent may reach the action, and this asks whether the deployment can run it at all - a fact about the
+				// runtime rather than about the action. Ahead of `scope` it would report a deployment problem as a policy
+				// decision; after `ask` it would put the question to the operator first, which is what happened until
+				// 2026-09-27: the confirmation appeared, and then `registry.require` threw. Reaching here at all means the
+				// mode declares it, because `scope` refuses what the mode does not grant.
+				if (!registered.has(invocation.tool)) {
+					return labelled(
+						{
+							outcome: "block",
+							reason: `Mode '` + mode.id + `' grants authority for '` + invocation.tool + `' and nothing in this runtime registers it.`,
+							remediation: "Install or register the capability the mode expects, or correct the mode's authority.capabilities deliberately rather than around them.",
+						},
+						"registered",
+					);
+				}
 			}
 			if (limitGate !== undefined) {
 				const decision = limitGate.evaluate(invocation);

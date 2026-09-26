@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createActionPolicy } from "../src/core/action-policy.ts";
+import { createActionPolicy, type ActionPolicy, type ActionPolicyOptions } from "../src/core/action-policy.ts";
 import type { AuthorityDocument } from "../src/core/authority.ts";
 import type { GateInvocation } from "../src/core/loop.ts";
 import type { WorkMode } from "../src/core/work-mode.ts";
@@ -87,13 +87,22 @@ function invocation(tool: string, args: unknown): GateInvocation {
 	return { tool, arguments: args, mode: MODE_IDENTITY, at: AT, elapsedMs: 0, accumulatedIntensity: {} };
 }
 
+/**
+ * A policy over the caller's mode, with **the runtime providing what the mode declares** - the ordinary case, and the
+ * one that keeps a test which is not about the registration check from exercising it. A test that is about it passes
+ * `registeredCapabilities` explicitly.
+ */
+function createPolicy(options: Omit<ActionPolicyOptions, "registeredCapabilities"> & { registeredCapabilities?: readonly string[] }): ActionPolicy {
+	return createActionPolicy({ registeredCapabilities: options.mode.capabilities, ...options });
+}
+
 describe("action policy: one policy, and the order it evaluates in", () => {
 	it("allows an action the grant covers, once the evidence digests verify", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		assert.deepEqual(
 			policy.gates,
-			["deny", "scope", "conformance", "ask"],
+			["deny", "scope", "registered", "conformance", "ask"],
 			"denial, then the ceiling, then the contract, then consent - and no limit gate, because this mode declares no thresholds",
 		);
 		const decision = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
@@ -104,13 +113,56 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		// `gate.semantics: none` is a mode saying it has no gate. The policy is where that becomes visible: `gates` is
 		// the list a reader uses to see the policy instead of inferring it, so it must not name a check nobody built.
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode({ gateSemantics: "none" }), workspaceRoot: files.root });
-		assert.deepEqual(policy.gates, ["deny", "scope", "ask"], "denial, the ceiling, then consent - and no gate the mode does not have");
+		const policy = createPolicy({ mode: mode({ gateSemantics: "none" }), workspaceRoot: files.root });
+		assert.deepEqual(policy.gates, ["deny", "scope", "registered", "ask"], "denial, the ceiling, what the runtime provides, then consent - and no gate the mode does not have");
+	});
+
+	it("refuses a capability the mode declares and nothing registers, naming both ways out", () => {
+		const files = workspace();
+		// `exploit.run` is in the fixture mode's capabilities and this runtime provides only `net.scan`, which is the
+		// shape `modes/trading` has in production: the mode states what its *deployment* must provide.
+		const under = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root, registeredCapabilities: ["net.scan"] });
+		const decision = under.evaluate(invocation("exploit.run", {}), asCapability);
+		assert.equal(decision.outcome, "block");
+		assert.match((decision as { reason: string }).reason, /^\[registered\]/, "the reason says which check refused it");
+		assert.match((decision as { reason: string }).reason, /nothing in this runtime registers it/);
+		assert.match((decision as { remediation: string }).remediation, /authority\.capabilities/, "and gives the way out that is in the mode's hands");
+	});
+
+	it("allows the same action once the runtime registers it, and still asks for consent", () => {
+		const files = workspace();
+		// The check is about the deployment, not about the action: registering it changes nothing else, and
+		// `ask_before` still applies. A registration that quietly granted consent would be a second authority path.
+		const under = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root, registeredCapabilities: ["net.scan", "exploit.run"] });
+		assert.equal(under.evaluate(invocation("exploit.run", {}), asCapability).outcome, "ask");
+	});
+
+	it("keeps the registration check behind the scope and the denial, so a deployment problem is not reported as a policy decision", () => {
+		const files = workspace();
+		const under = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root, registeredCapabilities: [] });
+		// Neither declared nor registered: the mode never granted it, and that is the fact worth reporting. Reporting
+		// the missing registration instead would send the reader to install something the mode would still refuse.
+		const undeclared = under.evaluate(invocation("nope.nope", {}), asCapability);
+		assert.equal(undeclared.outcome, "block");
+		assert.match((undeclared as { reason: string }).reason, /^\[scope\]/);
+		// Denied: the deny list is a policy decision, and it wins over a missing registration.
+		const denied = under.evaluate(invocation("dos.syn", {}), asCapability);
+		assert.equal(denied.outcome, "block");
+		assert.match((denied as { reason: string }).reason, /^\[deny\]/);
+	});
+
+	it("leaves a raw tool alone, because the registry is not what governs it", () => {
+		const files = workspace();
+		// A raw host tool's action is a tool name, and whether the host offers `bash` is the host's business. Gating it
+		// on the capability registry would refuse every tool the moment a mode was loaded.
+		const under = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root, registeredCapabilities: [] });
+		const decision = under.evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
+		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
 	});
 
 	it("refuses a target the grant does not cover, naming the authority", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		const elsewhere = policy.evaluate(invocation("net.scan", { target: "t-somewhere-else" }), asCapability);
 		assert.equal(elsewhere.outcome, "block");
 		assert.match((elsewhere as { reason: string }).reason, /^\[conformance\]/, "the reason says which check refused it");
@@ -120,7 +172,7 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 
 	it("refuses an action whose target cannot be established rather than treating it as unscoped", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		const missing = policy.evaluate(invocation("net.scan", {}), asCapability);
 		assert.equal(missing.outcome, "block");
 		assert.match((missing as { reason: string }).reason, /could not be mapped/);
@@ -129,7 +181,7 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 	it("refuses to check anything when the evidence cannot be read, instead of supplying a placeholder", () => {
 		const files = workspace();
 		const wrong = document(sha256("something else"), files.inventory);
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: wrong, workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: wrong, workspaceRoot: files.root });
 		const decision = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
 		assert.equal(decision.outcome, "block", "the digest the file has does not match the digest the document expects");
 		assert.match((decision as { reason: string }).reason, /digest mismatch/);
@@ -137,7 +189,7 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 
 	it("refuses a conformance mode with no document, which the loader makes unreachable and a hand-built policy can still be", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), workspaceRoot: files.root });
 		const decision = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
 		assert.equal(decision.outcome, "block");
 		assert.match((decision as { reason: string }).reason, /no authority document was loaded/);
@@ -145,7 +197,7 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 
 	it("denies independently of the target, and a denial cannot be reached around by scope", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		assert.equal(policy.denyDecision("dos.syn").outcome, "block");
 		assert.equal(policy.denyDecision("net.scan").outcome, "allow");
 		const denied = policy.denyDecision("dos.syn");
@@ -154,14 +206,14 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 
 	it("returns 'ask' for an action the mode declares needs consent, instead of deciding consent itself", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		// exploit.run is ask_before, but conformance refuses it here for a reason of its own - so the consent is never
 		// reached, which is the order the policy documents rather than an accident of this fixture.
 		const refused = policy.evaluate(invocation("exploit.run", { target: "t-web" }), asCapability);
 		assert.equal(refused.outcome, "block", "an action outside the grant is refused by conformance even though the permission list only asked");
 		// With nothing else refusing it, the action comes back as `ask`: the declaration is stated, not resolved, because
 		// whether consent exists is a fact about the host. The arm is distinct from `allow` on purpose.
-		const asked = createActionPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root }).evaluate(invocation("exploit.run", {}), asCapability);
+		const asked = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root }).evaluate(invocation("exploit.run", {}), asCapability);
 		assert.equal(asked.outcome, "ask");
 		assert.match((asked as { reason: string }).reason, /^\[ask\]/, "the reason says which check is asking");
 		assert.match((asked as { reason: string }).reason, /ask_before/);
@@ -171,14 +223,14 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		const files = workspace();
 		// `evaluatePermission` answers 'ask' for an unlisted action as well as for `ask_before`; only the second is a
 		// control. Treating the first as one would put a prompt in front of every ordinary tool.
-		const policy = createActionPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode({ gateSemantics: "limit" }), workspaceRoot: files.root });
 		const decision = policy.evaluate(invocation("bash", { command: "ls" }), { viaCapability: false });
 		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
 		assert.match((decision as { reason?: string }).reason ?? "", /none of the mode's permission lists/);
 	});
 	it("does not ask the conformance gate about a raw tool, because a document names actions and targets and a call has neither", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		// Asking conformance about a shell command maps nothing and blocks everything, which is what made an
 		// authorized engagement unusable. Raw tools are governed by the permission list and the limits.
 		const shell = policy.evaluate(invocation("bash", { command: "nmap -sV t-web" }), { viaCapability: false });
@@ -190,14 +242,14 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 
 	it("evaluates the denial inside evaluate too, so one entry point is not a way around the other", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		const denied = policy.evaluate(invocation("dos.syn", { target: "t-web" }), { viaCapability: true });
 		assert.equal(denied.outcome, "block", "a caller that runs only evaluate must still get the denial");
 		assert.match((denied as { reason: string }).reason, /^\[deny\]/);
 	});
 	it("refuses a capability the mode does not grant, before any threshold or contract is consulted", () => {
 		const files = workspace();
-		const policy = createActionPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory), workspaceRoot: files.root });
 		const outside = policy.evaluate(invocation("file.write", { target: "t-web" }), { viaCapability: true });
 		assert.equal(outside.outcome, "block");
 		assert.match((outside as { reason: string }).reason, /^\[scope\]/, "the ceiling refuses it, not the contract: a threshold asks how an action runs, this asks whether the agent may reach it at all");
