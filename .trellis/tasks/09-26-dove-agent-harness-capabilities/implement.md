@@ -204,8 +204,57 @@ npm run typecheck -> 0 errors
 npm test          -> tests 541 / pass 539 / fail 0 / skipped 2   (540 before, +1)
 ```
 
-**Still open from M1:** the effect boundary's second adapter on `tool_call`/`tool_result`, which is the same seam
-as this milestone's and should share its change.
+### M2 record, part two, 2026-09-26  **[DONE]**
+
+Landed: **`src/core/action-policy.ts`, the one policy a mode's controls add up to**, with **two entry points** - not
+one - because they have different input requirements. `denyDecision` reads a tool name and nothing else, so the
+host calls it before the lease check and before the handler finishes shaping the call; `evaluate` reads the
+**arguments**, so the host calls it after every mutation of `event.input`. The order lives in the policy: **deny
+first and independently**, then thresholds, then the contract, and anything unevaluable is a block. Conformance's
+request is built from the mode's `target_argument`, and **the evidence digests are computed by reading the files
+the document names** - the document carries the digest it expects, and supplying the one the file has is what
+makes it a check. An unreadable reference is left unsupplied rather than given a placeholder, so the authority
+stays the only decider of whether a grant resolves.
+
+**M2's validation is met:** an over-limit action and an out-of-authority action are both refused **at the host's
+`tool_call` boundary**, and **both appear in the execution ledger** as `gate.refused` with `gate: "limit"` and
+`gate: "conformance"` respectively.
+
+**Four findings.**
+
+1. **The shipped pentest mode declared no `target_argument`, so its conformance gate refused every capability
+   call** with "could not be mapped to an action and target". The host test found it by asserting the *reason* and
+   not only the block. `target_argument: target` is now declared and the mode moves **1.0.0 -> 1.1.0**, because a
+   mode's authority changed. **A gate whose mapping is undeclared refuses everything - fail-closed and useless at
+   the same time**, which is worth stating out loud: "fail-closed" alone would have looked healthy.
+2. **The example engagement can never authorize anything.** Its evidence digests are placeholders (`"aaaa"`,
+   `"bbbb"`), so the authority blocks on a digest no file can match. That behaviour is correct, and it means the
+   example is a shape to copy rather than an engagement to run - recorded so that "the mode loads" is not read as
+   "the engagement works".
+3. **`gate-conformance.ts` left the reachability allow-list** - the third shrink, and again the assertion is what
+   noticed.
+4. **C3 holds at the host by construction, and is unverified where the plan asked.** The policy's denial is
+   evaluated first and returns, so no allow channel can override it. The plan's "check `loop.ts` for an override
+   path" concerns the **unreachable reference loop**, and it has not been checked there. Stated rather than
+   implied - and it is part of the same gap M1 left.
+
+**Validation (all run):**
+
+```text
+node --import tsx --test tests/action-policy.test.ts     -> tests  7 / pass  7 / fail 0   (new: the policy, including an in-scope grant that verifies)
+node --import tsx --test tests/host-work-mode.test.ts    -> tests  8 / pass  8 / fail 0   (+1: the conformance refusal and its ledger record)
+node --import tsx --test tests/pentest-mode.test.ts      -> tests 13 / pass 13 / fail 0
+node --import tsx --test tests/work-mode.test.ts         -> tests 30 / pass 30 / fail 0
+node --import tsx --test tests/harness-reachability.test.ts -> tests 6 / pass 6 / fail 0   (allow-list 10 -> 9)
+
+npm run typecheck -> 0 errors
+npm test          -> tests 549 / pass 547 / fail 0 / skipped 2   (548 before the pentest mapping fix, +1)
+```
+
+**Still open:** M1's AC8 gap - the effect boundary's second adapter on `tool_call`/`tool_result` - and the
+`loop.ts` override question that belongs to it. Both are the same seam and the same change.
+
+
 
 **Validation (all run):**
 
