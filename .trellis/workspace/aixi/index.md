@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 56
+- **Total Sessions**: 57
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~202 | Active |
+| `journal-2.md` | ~241 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 57 | 2026-09-28 | A count of what the code declares is a claim with no reader | `4c8865a`, `27251c2` | `master` |
 | 56 | 2026-09-28 | Citations name a thing, not a position | `d96beab`, `e81c339` | `master` |
 | 55 | 2026-09-28 | The vocabulary consumers, typed: the axis keeps printing a number that would have quietly gone wrong | `8a08534`, `8953cc3`, `22f67df` | `master` |
 | 54 | 2026-09-28 | One vocabulary for the refusal labels, and the eleventh the compiler found | `5aee501`, `2a16343`, `01df626`, `6eb91cf` | `master` |

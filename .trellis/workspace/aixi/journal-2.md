@@ -200,3 +200,42 @@ Eighteen line-number citations were found in comments - the specifications cite 
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the seven unjudgeable citations, which no check can judge, are the residue of this class.
+
+
+## Session 57: A count of what the code declares is a claim with no reader
+<!-- trellis-session: v=2 fp=489e9babef4079be -->
+
+**Date**: 2026-09-28
+**Task**: A count of what the code declares is a claim with no reader
+**Branch**: `master`
+
+### Summary
+
+Thirty-three countable claims in prose were found, every one about a declared enumeration was verified true, and the count was removed from nine sites anyway - because a sentence saying three and a code saying three are connected by nothing, which is how the refusal labels came to be documented as ten when they had become eleven.
+
+### Main Changes
+
+- the verification came first and found nothing wrong: terminal classes four, observables three, components seven, steps seven, operations ten, readings two, each read against the thing it counts
+- the replacement is the declaration or its members, and it is shorter: the loop specification went from 24,314 to 24,306 bytes, which matters because that file has 262 bytes of headroom and protecting a count with words spends the room the next contract needs
+- one replacement grew the file by four bytes and was shortened until it did not - the criterion existing for exactly that reason
+- structural numbers stay: one path may belong to two components is a rule about the map, not a count of an enumeration, and deleting the number would delete the rule
+- and the convention says which it is: prose cannot be checked, the labels are kept true by the typecheck, the surface by its loader, the citations by a prohibition, and this is the residue - a convention that read as a control would be the defect the other checks exist to prevent
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c8865a` | docs(prose): a count of what the code declares is a claim with no reader |
+| `27251c2` | chore(task): record the count sweep, the verification that found nothing wrong, and the nine replacements |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 723 tests, 721 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the loop specification is smaller than before the round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and what remains of the drift survey is the class no check can reach - prose about meaning, which is read by people or not at all.
