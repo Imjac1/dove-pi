@@ -3,6 +3,13 @@
 The convergence contract for a formal native task, and the records around it: what is frozen, what a request observed,
 what a change predicted, what the classifier of a failure said, what a round decided, and which commit embodies an edit.
 
+**A record is decoded by the decoder that owns its format, never cast into a shape.** The turn reading asserted the parsed JSON
+into `{ changes?: readonly TaskChange[] }`, and a record carrying `changes: "none"` satisfied the assertion **because a string is
+iterable**: it counted four characters as four changes, printed `changes recorded: 4`, and died on the first of them. The decoder
+is total and typed, it refuses that record, and a reading that refuses one now **reports** it - because a reading that hides a task
+is a reading whose count cannot be trusted to be complete, and "no turn has been recorded here" is a different fact from "a record
+exists that this build cannot read".
+
 **The ledger line format has one reader, and a line the writer never finished is not a record.** The ledger is written one JSON
 object per line, one line per append, so a partial line can only be a crash - and the reading that mines failures was, until a
 round ago, one of two copies of the parse with the `try` removed: on a truncated ledger it printed nothing at all, which is
