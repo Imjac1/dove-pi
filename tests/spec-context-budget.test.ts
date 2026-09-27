@@ -12,6 +12,7 @@ const routedSpecNames = [
 	"personal-agent-extension-runtime.md",
 	"personal-agent-managed-install.md",
 	"personal-agent-framework-core.md",
+	"personal-agent-mode-format.md",
 	"personal-agent-audit-vertical.md",
 ] as const;
 const expectedHeadingsBySpec = {
@@ -50,13 +51,13 @@ const expectedHeadingsBySpec = {
 	"personal-agent-managed-install.md": ["Scenario: Managed Dove Pi Installation and Stable Updates"],
 	"personal-agent-framework-core.md": [
 		"Scenario: Loop Ownership and Gate Boundary",
-		"Scenario: Work-Mode Layout and Validation",
 		"Scenario: Authority Grant Graph",
 		"Scenario: Effect Identity and Exactly-Once",
 		"Scenario: Evidence Plane and Action Checkpoint",
 		"Scenario: Context Admission",
 		"Scenario: Capability Scoping",
 	],
+	"personal-agent-mode-format.md": ["Scenario: Work-Mode Layout and Validation"],
 	"personal-agent-audit-vertical.md": [
 		"Scenario: Deterministic Seeds and the Coverage Receipt",
 		"Scenario: The Finding Claim Schema",

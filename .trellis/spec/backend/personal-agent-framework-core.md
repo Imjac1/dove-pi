@@ -1,6 +1,6 @@
 # Personal Agent Framework Core
 
-> **Scope:** The framework's own execution loop, its gate boundary, the work-mode artifact, the
+> **Scope:** The framework's own execution loop, its gate boundary, the
 > authority contract, effect identity, the evidence plane, context admission, and capability scoping.
 >
 > **Canonical router:** [Personal Agent Runtime Contract](./personal-agent-runtime.md)
@@ -43,6 +43,12 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 - Two implementations must agree: `src/core/loop-runner.ts` (reference) and
   `src/adapters/loop-pi-agent-core.ts` (external). `AgentLoop` is the interface, not the provider; both
   call `normalizeGateDecision` - a rule copied into two loops differs in one of them.
+- **The boundary is consulted in two halves, and the host decides which can run.** `denyDecision` reads a tool
+  name and nothing else, so `src/pi-adapter/extension.ts` runs it *before* its lease check; `evaluate` reads the
+  arguments, so it runs only when `requestLifecycle.activeLease()` is active (`:2301`) - inside a request, where
+  the arguments are final. State the consequence rather than discover it: **a tool call outside an active request
+  is checked by the name-only half alone**, so an argument-reading control (a `sandbox` claim, an excluded
+  technique, a mode's `fence`) does not run there.
 
 ### 4. Validation & Error Matrix
 
@@ -54,6 +60,7 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 | `ask` to a loop with no dialog, or `ask`/`block` with no `reason`/`remediation` | Block; the message names which fault |
 | `target` !== `displayTarget` | Block before the gate is consulted |
 | Action allowed | `onGateInvoked` still fires, so an off-path gate is detectable |
+| Tool call with no active request lease | The name-only half runs (`never_allow`); argument-reading controls do not, because the arguments they read are only final inside a request |
 
 ### 5. Tests Required
 
@@ -63,6 +70,9 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 - Throwing gate, unrecognised decision, and an `ask` the loop cannot put all fail closed.
 - Target/display mismatch blocks with the gate never consulted.
 - The external adapter satisfies the same cases.
+- A case about an **argument-reading** control opens a request first (`input` plus `before_agent_start`, the way
+  the host does): without a lease the handler returns after the name-only denial, so the case would be asserting
+  against a call path the control never sees. Two host tests learned this the hard way.
 
 ### 6. Wrong vs Correct
 
@@ -70,87 +80,6 @@ Wrong: put a mandatory check in a callback the provider may skip, or treat "no d
 
 Correct: one pre-execution, parameter-level boundary the loop always calls, with the reason and the
 remediation written into the tool result.
-
-## Scenario: Work-Mode Layout and Validation
-
-### 1. Scope / Trigger
-
-Trigger: adding a vertical, or changing how a mode is declared or loaded.
-
-### 2. Signatures
-
-```typescript
-// src/core/work-mode.ts
-function loadWorkMode(files: { mode: string; governance: string; permissions: string }, options: { frameworkVersion: string }): WorkMode;
-function satisfiesFrameworkRange(range: string, version: string): boolean;
-function evaluatePermission(p: PermissionSet, tool: string): "allow" | "ask" | "deny";
-function matchesPermission(list: readonly string[], action: string): boolean;
-```
-
-### 3. Contracts
-
-- A mode is three files: `MODE.md` (frontmatter `name` + `description`, body = instructions),
-  `governance.yaml`, `permissions.yaml`. `MODE.md` stays Agent-Skills-compatible, so the portable part
-  remains consumable elsewhere.
-- `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities` and
-  `gate.semantics` (`none`/`limit`/`conformance`/`both`).
-- The framework range accepts only `>=X.Y.Z` and `<X.Y.Z` clauses; anything else is refused rather than
-  assumed satisfied.
-- `never_allow` wins over `always_allow`, over `ask_before`, and over any mode setting. An unlisted
-  action gets the declared `unlisted` stance; `always_allow` outranks it.
-- **`ask` has two declared causes.** `ask_before` names an action; `unlisted: ask` covers everything
-  unnamed. Separate them with `matchesPermission(p.ask_before, action)` when the reason must be exact.
-  The host asks through its dialog and records both answers; a host with no dialog refuses.
-- **The gate reads every field a mode declares.** `excluded_techniques` is checked against the call's
-  `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
-  simply outside both. `toRequest` forwards `technique`/`phase`/`intensity` so a grant's `constraints`
-  fire too.
-- **`sandbox` and `fence` are honoured or refused, never ignored.** `network: none` and `filesystem:
-  read-only-source` are enforced at the boundary; `isolation: container`/`worktree` and `network:
-  allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
-  no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
-  through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
-- **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
-  framework defect.
-
-### 4. Validation & Error Matrix
-
-| Condition | Required behavior |
-|---|---|
-| Unknown field, any level | Rejected with a named error; never ignored |
-| Missing fence, `name`, or `description` | Rejected |
-| Missing `scope`, `authority.capabilities`, or `gate.semantics` | Rejected |
-| Unrecognised `gate.semantics` | Rejected, naming the four values |
-| `limit`/`both` with no limits, or `none` with any | Refused at load, naming both ways out |
-| `unlisted` absent or unrecognised | Refused, naming `allow` and `ask` |
-| `unlisted: allow` with a non-empty `always_allow` | Refused, naming both ways out |
-| `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
-| `gate.excluded_techniques` not a string list | Refused at load |
-| `gate.windows` declared | Refused: the grant carries the window |
-| `sandbox` axis unrecognised, or `isolation: none` with `filesystem: ephemeral` | Refused, naming the axis or the contradiction |
-| `framework` excludes the running version | Refused, naming the version |
-| Unparseable `framework` clause | Refused |
-
-### 5. Tests Required
-
-- A well-formed three-file mode loads; body and permission set are exposed.
-- Unknown fields rejected in frontmatter, governance, permissions, and the nested `scope` /
-  `authority` / `gate` mappings.
-- Each required field, when absent, is rejected.
-- A YAML block-scalar description parses correctly.
-- A vertical's mode id does not appear in executable code under `src/core`.
-- A mode declaring a gate it does not supply is refused; `none` builds no gate.
-- An excluded technique is refused at the boundary, including on a call that names no target; a phase over
-  its `gate.intensity` ceiling is refused, and the ceiling counts actions actually run.
-- An `ask_before` action returns `ask`; an unlisted one returns the declared stance; a host with a dialog
-  runs the first on consent and refuses it without. A limit without `tools` evaluates against every action,
-  so a mode names the action its threshold belongs to.
-
-### 6. Wrong vs Correct
-
-Wrong: ignore an unrecognised key, so a typo in `permissionMode` fails open and silent.
-
-Correct: reject it by name, and require the fields whose absence makes a mode unreviewable.
 
 ## Scenario: Authority Grant Graph
 
