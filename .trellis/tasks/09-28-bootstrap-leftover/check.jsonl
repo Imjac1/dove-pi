@@ -1,0 +1,2 @@
+{"file": ".agents/skills/trellis-spec-bootstrap/SKILL.md", "reason": "The skill line the check implements."}
+{"file": "tests/document-drift.test.ts", "reason": "The check that keeps the tables true."}
