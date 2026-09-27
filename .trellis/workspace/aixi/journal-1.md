@@ -1811,3 +1811,42 @@ The records specification was 331 bytes from its cap, and measuring it section b
 ### Next Steps
 
 - The second half of the verifier extraction: the four verification functions in the record module are still embedded, and they are entangled with the record reducer rather than sitting in a block.
+
+
+## Session 48: The tail that would not move, and the reason that had to be measured
+<!-- trellis-session: v=2 fp=4190a504cef76147 -->
+
+**Date**: 2026-09-28
+**Task**: The tail that would not move, and the reason that had to be measured
+**Branch**: `master`
+
+### Summary
+
+A plan to finish the verifier extraction was refuted by measurement twice and the move was reverted: the verification tail calls the record validation vocabulary and shares movementFromParts with the record own decoders, so the separation needs a third module rather than a move. What the round delivered is the measurement, written where the next attempt will read it.
+
+### Main Changes
+
+- the first measurement was too narrow: searching for the four function names found no call sites in the record side, and the plan was written on that - the move then failed on identifiers, because the tail calls the record vocabulary rather than the record functions
+- the second measurement found the real wall: movementFromParts is called by the record own decoders as well as by the parser, which makes the sharing bidirectional and makes a third module the shape of the real change
+- the declaration embedded entry and the boundary contract now carry the measured reason, including a note that the earlier sentence - entangled with the record reducer - was a guess that pointed at the right answer for the wrong reason, and that the wrong reason is what made this attempt look cheap
+- and nothing about the code changed: the move was reverted rather than forced, because exporting record internals until it compiles would have made the dependency bidirectional in practice while the contract claimed it was one-way
+- a task that ends by improving the record instead of the code is still a task done - which is only true if the record says so plainly, and this one does
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c31fbde` | docs(spec): the reason the verification tail stays embedded, measured instead of assumed |
+| `a8b8a89` | chore(task): record the refuted plan, the two measurements and the reverted move |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the two modules are byte-identical to their committed state.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The third module: the movement vocabulary - movementFromParts, movementKey and the validation names the parser needs - shared by the record and the verifier, which is what would let the tail move afterwards.
