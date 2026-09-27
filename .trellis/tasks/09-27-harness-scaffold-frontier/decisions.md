@@ -750,6 +750,66 @@ it needs its own consent, like every build (R4).
 
 ---
 
+## Round 13: how the decision record has to be shaped, from AHE's own method section (2026-09-27)
+
+Source: `2604.25850v2/v3` **read in the body**, not only the abstract - §3.3, Appendix B.2, C.3 and D. This round
+answers the shape question left open by Round 11/12's delta 5, and it answers it **against two shapes this file was
+about to adopt**.
+
+**What the manifest actually is.** "Each edit attaches a manifest entry that names the **failure evidence**, the
+**inferred root cause**, the **targeted fix**, and a **predicted impact comprising both expected fixes and at-risk
+regressions**; this manifest is the loop's evidence ledger." And the check: "In the next round, the loop
+**intersects the predicted-fix and predicted-regression sets with the observed task-level deltas** to produce a
+**per-edit verdict**." The stated purpose: "each edit thereby becomes falsifiable by the next evaluation, which
+**replaces rationale-driven self-justification with a measurable contract between rounds**." The prediction is at
+**task granularity** ("naming which Terminal-Bench 2 tasks it expects to fix"), each manifest also carries a
+**constraint level** (prompt / tool implementation / middleware / ...), and every entry is "subject to the same
+**automatic rollback if their predicted fixes do not appear**".
+
+**Three findings that change our answer.**
+
+1. **A prediction verified only by "the reference resolves" is the thing this design exists to replace.**
+   Resolvability is a claim that a record exists - guessable by whoever writes both the prediction and the record.
+   The verifiable form compares **predicted movements against observed movements**. Round 11 delta 5's draft
+   ("a `prediction` the next round's resolver checks") is therefore **too weak**, and the strengthening is not
+   optional decoration: it is the difference between a contract and a rationale.
+2. **The regression half does not work, and the field measured it.** Appendix D: across 9 rounds the agent issued
+   **43 unique regression predictions and only 5 landed (cumulative P = 11.6%)**, while **40 regressions it did not
+   foresee occurred (cumulative R = 11.1%)** - "regression predictions instead stay near the floor, below 25% on
+   most rounds". The paper's own conclusion: "the loop's self-attribution is reliable for fixes but **blind to
+   regressions**, pinpointing regression foresight as the clearest direction for future self-evolution loops". So:
+   **carry the field** (absence has to be stated, and the manifest's shape is the field's), but **do not build a
+   mechanism and claim it protects against regressions** - at P/R ≈ 11% it is a record, not a control. Regression
+   *detection* stays where it already is: held-out criteria, the gates, and the fence.
+3. **Attribution needs a baseline and a rollback, and both are cheap here.** "A seed already fitted to the target
+   benchmark would **contaminate every subsequent edit's attribution**" - so the comparison needs the previous
+   round, not an absolute score. And "each logical edit becomes **one commit** on the workspace's git history,
+   which yields file-level diffs and **rollback granularity for free**" - which is the shape our commits already
+   have. The limit to record: our loop has no authority to revert by itself; a rollback that moves a permission
+   boundary needs HITL (§3.5.3), and the fence is what keeps that boundary out of the loop's reach.
+
+**Answer to the shape question.** The record is a **change manifest with two-sided predicted movements over a
+closed, harness-read observable set**, plus a **per-edit verdict** produced by intersecting predicted against
+observed: `confirmed` / `contradicted` / `unobserved`, with "predicted fix did not appear" as the rollback
+trigger. The observable universe must be **a set the harness reads**, never prose the model supplies, or the
+contract is self-reported again. For this repository the closed set is small and already exists: criterion
+statuses and the D3 `verification` vector, gate refusals by label from the ledger (which now includes `fence`,
+`sandbox`, `technique`), typed stop reasons, and per-round counts.
+
+**And the honest weakness, before it is discovered.** AHE measured over a benchmark with k rollouts per task and
+9 rounds; **we have one task's run**, so an observed delta here is weak evidence and the record must say so rather
+than borrow AHE's confidence. That is D6's absence showing through this task: the record makes a change
+falsifiable, and D6 is what would make it *measurable*.
+
+**What this adds to `frontier-anatomy.md` §9.1.** That summary carries the abstract's words - "paired with a
+self-declared prediction, later verified against the next round's task-level outcomes" - which are correct, and which
+I read as weaker than they are. The body supplies the fields the abstract compresses: *what* is predicted (expected
+fixes **and** at-risk regressions), *against what* (the observed task-level deltas), *at what granularity* (per task,
+per constraint level), and *what happens on a miss* (automatic rollback). §9.1 is left as it stands; this round is
+its detail.
+
+---
+
 ## What is not on this list, and why
 
 - **A framework** (Rec 15): 0/11 harnesses use one; we are a hand-rolled extension of a hand-rolled runtime.
