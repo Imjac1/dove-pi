@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 49
+- **Total Sessions**: 50
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1892 | Active |
+| `journal-1.md` | ~1931 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 50 | 2026-09-28 | The roadmap closed out, and the frontier archived with its entry | `c3ee142`, `da0f7f7` | `master` |
 | 49 | 2026-09-28 | The third module, measured and declined with the numbers | `7d98f0d`, `ea72af9` | `master` |
 | 48 | 2026-09-28 | The tail that would not move, and the reason that had to be measured | `c31fbde`, `a8b8a89` | `master` |
 | 47 | 2026-09-28 | The convergence contract gets its own specification, one heading level up | `f1835f9`, `d85fcdc` | `master` |

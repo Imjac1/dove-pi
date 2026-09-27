@@ -1890,3 +1890,42 @@ The refactor the previous round named as the way forward was measured and declin
 ### Next Steps
 
 - The loop specification has 262 bytes left, so the next contract there needs a split; and the first real turn of the loop remains a Pi-hosted act.
+
+
+## Session 50: The roadmap closed out, and the frontier archived with its entry
+<!-- trellis-session: v=2 fp=9a1cd6d817947d5d -->
+
+**Date**: 2026-09-28
+**Task**: The roadmap closed out, and the frontier archived with its entry
+**Branch**: `master`
+
+### Summary
+
+The decision record that has owned this work since round 1 was stale - it said nothing about the sixteen rounds of building that followed - so a Round 14 entry records what shipped, each claim against an artifact that can be checked, and the task whose plan is delivered is archived.
+
+### Main Changes
+
+- the entry names thirteen built things with where each one is: the fence, the manifest and verdict, the observation and its repair, the SSM axis, the declared surface, the failure reading, the verdict as a record, the applied commit, the corpus reading, the verifier declaration and boundary, the extraction, the first real failure, and the two readings that closed the loop ends
+- D6 is stated where it honestly stands: its first measurable step shipped as a reading over our own ledger, and the variant comparison it was built for still needs a task set and a held-out split - partly delivered is the honest word, further than not now and short of done
+- the two decisions from the rounds that belong in a plan are named: the verifier is outside the loop, and the third module was measured and declined with 74 use sites and a value-level cycle as the reason
+- and what is not built is stated as a property of the environment rather than as a backlog: the first turn needs a Pi-hosted session with a formal native task, and this workspace has no .dove directory, so no manifest can be recorded here at all
+- two claims in the draft table were corrected against the archives before writing, and one of them was wrong in a way worth noting: the axis task is dated 09-27, not 09-28 - a table that had not been checked would have pointed a reader at a name that does not exist
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3ee142` | chore(task): archive 09-27-harness-scaffold-frontier |
+| `da0f7f7` | chore(task): record the roadmap close-out |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and no source or specification file changed - the diff is the decision record and the task tree.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which is a Pi-hosted act; and the loop specification has 262 bytes of headroom, so its next contract needs a split first.
