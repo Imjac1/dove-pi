@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { AgentMode, DispatchActual, DispatchDecision, ExecutionRecord } from "./contracts.ts";
+import type { ChangeVerdict } from "./task-convergence.ts";
 import type { RequestPlan } from "./request-plan.ts";
 import type { RequestAttemptOutcome, RequestAttemptTrigger, RequestDelivery, RequestInputSource, RequestTerminalEnvelope, RequestTerminalReason } from "./request-lifecycle.ts";
 import type { BudgetAccounting, BudgetDiagnostic } from "./model-gateway.ts";
@@ -385,7 +386,7 @@ export class ExecutionLedger {
 	 * mutates a criterion, or refuses a call. Same convention as the observation, for the same reason: a reader must be
 	 * able to tell a record that reports from a record that acted.
 	 */
-	public async appendChangeDecided(input: { taskId: string; stepId: string; mode: AgentMode; changeId: string; verdict: string; observed: readonly string[]; revision: number; requestId?: string; sessionId?: string }): Promise<void> {
+	public async appendChangeDecided(input: { taskId: string; stepId: string; mode: AgentMode; changeId: string; verdict: ChangeVerdict; observed: readonly string[]; revision: number; requestId?: string; sessionId?: string }): Promise<void> {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "change.decided", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { changeId: input.changeId, verdict: input.verdict, observed: input.observed, decidedAtRevision: input.revision, verdictOnly: true } });
 	}
 

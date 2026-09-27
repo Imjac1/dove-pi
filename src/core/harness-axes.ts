@@ -1,5 +1,6 @@
 import type { ExecutionRecord } from "./contracts.ts";
 import type { RequestTerminalReason } from "./request-lifecycle.ts";
+import type { GateLabel } from "./task-convergence.ts";
 
 /**
  * **D6's first axis, taken from the field rather than invented.**
@@ -46,7 +47,7 @@ export const TERMINAL_CLASSES: Readonly<Record<RequestTerminalReason, TerminalCl
 };
 
 /** The two controls whose refusal is what makes an isolation claim enforceable at the tool boundary. */
-export const ISOLATION_CONTROLS: ReadonlySet<string> = new Set(["sandbox", "fence"]);
+export const ISOLATION_CONTROLS: ReadonlySet<GateLabel> = new Set(["sandbox", "fence"]);
 
 export function classifyTerminal(reason: RequestTerminalReason): TerminalClass {
 	return TERMINAL_CLASSES[reason];
