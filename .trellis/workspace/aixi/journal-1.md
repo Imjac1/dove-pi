@@ -1042,3 +1042,48 @@ Built the D1 fail-honest path: the sandbox block is validated at load and carrie
 ### Next Steps
 
 - The community half of the self-improvement subject, then the fence
+
+
+## Session 29: The fence, and what the community says that the papers do not
+<!-- trellis-session: v=2 fp=b681ec3034e92184 -->
+
+**Date**: 2026-09-27
+**Task**: The fence, and what the community says that the papers do not
+**Branch**: `master`
+
+### Summary
+
+Read the RSI community (a curated map, a practitioner definition of iteration versus self-improvement versus RSI, framework READMEs and one forum thread), corrected our own AHE citation, then built the first piece of the bounded-self-improvement scaffold: a mode declares a protected surface and the tool boundary refuses writes into it.
+
+### Main Changes
+
+- research/rsi-community-landscape.md records the community half, and found that the D6 position was half wrong: the instrument exists for measuring self-improvement and does not exist for the verifier-raising axis
+- decisions.md Rounds 11 and 12 revise D5 (bounded self-improvement, with a misevolution guard and a keep-rate prior), revise D6 (adopt a named axis rather than invent a score) and upgrade D8 from candidate to the control our own substrate documentation names
+- frontier-anatomy.md corrected: AHE is 2604.25850 and not 2603.03329, which is AutoHarness, and 71.9 percent was the score AHE surpassed rather than its own
+- the fence: a mode format field with a required shell stance, the path-scoped refusal at the tool boundary, a load announcement that says uncovered out loud, and 23 tests
+- the probe that opened the task read the installed host schemas and corrected the design: the path argument is path, the host core is four tools, and our own patch tool names a list, so a mutation the fence cannot classify is refused rather than assumed harmless
+- the behaviour map left the test gate for a script: as a gate it reported two false orphans and kept three vacuous rows green
+- the mode format split out of framework core, which sat at 24,575 of 24,576 bytes, and the two-half gate boundary is now in a spec: with no active request lease only the name-only half of the policy runs
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `58668d3` | docs(task): add the community half of the self-improvement subject, and correct the AHE citation |
+| `f5ebaf7` | chore(tools): make the behaviour map a report instead of a gate |
+| `529555e` | feat(fence): let a mode declare its own protected surface, and refuse writes into it |
+| `4ee1470` | docs(spec): record the fence beside the sandbox honoured-or-refused contract |
+| `c6376fc` | chore(task): record the fence task plan and the probe that corrected it |
+| `9cc571a` | docs(spec): split the mode format out of framework core, and record the lease boundary |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 632 tests, 630 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The decision record: a prediction recorded beside a change, plus the two failure-record fields Self-Harness requires. Then D6 first axis, SSM and ITQ, which the ledger can already feed.
