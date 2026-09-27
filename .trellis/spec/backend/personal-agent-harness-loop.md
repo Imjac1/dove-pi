@@ -69,6 +69,16 @@ that reports says so in a field a reader can check.
     matter - a closure *with* a provider outcome has its cause on the record, and any other terminal means the request
     reached the loop. **It never imports the upstream name**: the ledger does not hold `provider-authorization-denied`,
     the RPC did, and a record that borrowed it would claim an observation this process never made.
+  - **A failure record carries the reference that resolves it, and a manifest resolves what it cites.** Mining and
+    prediction were joined at neither end: the record produced no reference, and the change operation never resolved the
+    one it was given - so a manifest could cite a failure that never happened, while a criterion pass with the same
+    reference was refused one path over.
+    - **The reference is taken from the record, not rebuilt.** The resolver matches `ledger:<stepId>` by equality, so the
+      reading carries the step id of the record the failure came from rather than reconstructing the writer naming
+      convention, which is a rule the writer owns.
+    - **The change operation calls the same resolver the pass path calls**, and refuses an unresolved reference by naming
+      it. One rule, two callers - a second implementation of "does this reference resolve" is the drift this record keeps
+      paying for.
   - **Three accounts of one failure, never merged.** Dove terminal says what the runtime observed
     (`host-shutdown-preflight`); the provider records say what the provider did, when the request reached it; and a
     **client** may say what it called the failure. Each is attributed to the boundary that produced it.
@@ -200,7 +210,9 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A preflight failure with no provider record | `unseen` on the record, naming the boundary and not the cause |
 | A preflight failure whose provider outcome was recorded | No `unseen`: the cause is on the record |
 | A client account supplied for a request | Carried with its source, and never merged into the mechanism |
-| A summary whose ledger terminal matches several requests | No account attached, and the reason reported |ed |
+| A summary whose ledger terminal matches several requests | No account attached, and the reason reported |
+| A manifest citing failure evidence the ledger does not hold | Refused, naming the reference; nothing is recorded |
+| A mined failure | Carries `ledger:<stepId>` for the record it came from |ed |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
@@ -216,6 +228,8 @@ The steps a turn is made of, because instruments only become a loop when someone
   corpus with no failure has none - and does not say it when the corpus holds one.
 - A client account lands only on the failure whose request it names, and leaves the other failures in the same ledger
   alone.
+- A failure record reference is the record step id with the prefix the resolver looks for, and a manifest citing a
+  reference the ledger does not hold is refused with the reference named.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
   directions, and lets one path belong to two components; the status read reports it.
 - The failure reading keeps the mechanism beside the class, counts only the terminals the axis calls failures,
