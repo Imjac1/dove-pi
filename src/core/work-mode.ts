@@ -116,6 +116,19 @@ export interface WorkMode {
 	 */
 	readonly excludedTechniques?: readonly string[];
 	/**
+	 * The isolation policy this mode declares, from the `governance.sandbox` block.
+	 *
+	 * **Carrying it is not enforcing it.** What the host does with this is the decision D1 turns on: refuse to run
+	 * under an isolation it cannot provide (fail-honest, and the reason the shape is validated here), enforce what is
+	 * enforceable at its tool boundary, or record that the block was deleted. A mode file that claims
+	 * `isolation: container` while the run is unconfined is the claim the host's own documentation warns against.
+	 */
+	readonly sandbox?: {
+		readonly isolation?: "none" | "container" | "worktree";
+		readonly network?: "none" | "allowlist" | "unrestricted";
+		readonly filesystem?: "unrestricted" | "ephemeral" | "read-only-source";
+	};
+	/**
 	 * How many actions this mode permits per phase, from `gate.intensity`, e.g. `{ discovery: 2 }`.
 	 *
 	 * A **ceiling on a count**, not a threshold on an argument: a limit says an order may not exceed a notional,
@@ -145,6 +158,12 @@ const GATE_SEMANTICS = new Set(["none", "limit", "conformance", "both"]);
 const LIMIT_FIELDS = new Set(["argument", "max", "min", "unit", "required", "tools"]);
 const EFFECTS_FIELDS = new Set(["classes"]);
 const EFFECT_CLASSES = new Set(["idempotent", "key-idempotent", "non-idempotent"]);
+const SANDBOX_FIELDS = new Set(["isolation", "network", "filesystem"]);
+const SANDBOX_ISOLATION = new Set(["none", "container", "worktree"]);
+const SANDBOX_NETWORK = new Set(["none", "allowlist", "unrestricted"]);
+const SANDBOX_FILESYSTEM = new Set(["unrestricted", "ephemeral", "read-only-source"]);
+/** The isolation claims a host can actually enforce at its tool boundary, without an OS sandbox. */
+const ENFORCEABLE_SANDBOX = new Set(["network: none", "filesystem: read-only-source"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -489,6 +508,37 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		);
 	}
 
+	// **The sandbox block is validated at load, and what it claims is carried.** Whether the host can *honour* it
+	// is the host's decision (it may refuse to run the mode), but a mode whose isolation fields are misspelled or
+	// contradictory must not load looking governed. An explicit `none`/`unrestricted` is honest in a way an absent
+	// block is not - and a field that is **absent** is not refused either: D1's own conclusion is that a mode
+	// deletes a claim it cannot honour, so the block may name only the axes it is stating.
+	let sandbox: WorkMode["sandbox"];
+	if (governance.sandbox !== undefined) {
+		const block = requireRecord("governance.sandbox", governance.sandbox);
+		rejectUnknown("governance.sandbox", block, SANDBOX_FIELDS);
+		const readField = (field: string, allowed: ReadonlySet<string>): string | undefined => {
+			const value = block[field];
+			if (value === undefined) return undefined;
+			if (typeof value !== "string" || !allowed.has(value)) {
+				throw new WorkModeError("invalid-type", `governance.sandbox.${field} must be one of: ${[...allowed].join(", ")} (got ${JSON.stringify(value)}).`);
+			}
+			return value;
+		};
+		const isolation = readField("isolation", SANDBOX_ISOLATION) as "none" | "container" | "worktree" | undefined;
+		const network = readField("network", SANDBOX_NETWORK) as "none" | "allowlist" | "unrestricted" | undefined;
+		const filesystem = readField("filesystem", SANDBOX_FILESYSTEM) as "unrestricted" | "ephemeral" | "read-only-source" | undefined;
+		sandbox = {
+			...(isolation === undefined ? {} : { isolation }),
+			...(network === undefined ? {} : { network }),
+			...(filesystem === undefined ? {} : { filesystem }),
+		};
+		// A claim the mode contradicts in its own file: an unconfined run has no ephemeral filesystem to write to.
+		if (sandbox.isolation === "none" && sandbox.filesystem === "ephemeral") {
+			throw new WorkModeError("invalid-type", "governance.sandbox declares 'isolation: none' with 'filesystem: ephemeral', but an unconfined run has no ephemeral filesystem to write to. Declare an isolation the host provides, or 'filesystem: unrestricted'.");
+		}
+	}
+
 	return {
 		id: frontmatter.name,
 		description: frontmatter.description,
@@ -501,6 +551,7 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		...(targetArgument === undefined ? {} : { targetArgument: targetArgument as string }),
 		...(grant === undefined ? {} : { authorityGrant: grant as string }),
 		...(excludedTechniques.length === 0 ? {} : { excludedTechniques }),
+		...(sandbox === undefined ? {} : { sandbox }),
 		...(Object.keys(intensityCeilings).length === 0 ? {} : { intensityCeilings }),
 		permissions,
 		limits,
@@ -699,4 +750,3 @@ export function loadWorkModeFromDirectory(root: string, name: string, options: L
 		throw new WorkModeError("authority-unresolved", `Mode '${mode.id}': ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
-

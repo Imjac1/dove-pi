@@ -358,11 +358,11 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 	it("bumped the mode version when its authority changed", async () => {
 		const mode = await loadMode();
 		const governance = mode.governance as { version: string; evidence: { artifacts: readonly string[] } };
-		// 1.7.0 because the mode's permission list changed - every entry was rewritten to name an action that can
+		// 1.8.0 because the mode's permission list and sandbox claims changed - every entry was rewritten to name an action that can
 		// occur, and the mode now states its approval stance - which is a change to what the mode authorizes, the same
-		// reason 1.2.0 through 1.6.0 were bumped. A version that does not move when the authority set does cannot
+		// reason 1.2.0 through 1.7.0 were bumped. A version that does not move when the authority set does cannot
 		// attribute a run to one authority set.
-		assert.equal(governance.version, "1.7.0", "an authority change increments the version, so a run can be attributed to one");
+		assert.equal(governance.version, "1.8.0", "an authority change increments the version, so a run can be attributed to one");
 		assert.ok(governance.evidence.artifacts.includes("coverage.json"), "the receipt is an artifact of the run, not an aside");
 	});
 

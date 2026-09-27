@@ -9,6 +9,16 @@ import type { GateDecision, GateInvocation } from "./loop.ts";
 import { evaluatePermission, matchesPermission, type WorkMode } from "./work-mode.ts";
 
 /**
+ * The host tools that can reach outside the machine (a network call) or mutate the workspace filesystem, by name.
+ *
+ * **This is a boundary list, not a capability list**: it names Pi's own tools, because the host's tool boundary is
+ * where an isolation claim becomes enforceable without an OS sandbox. A capability that shells out is governed by
+ * the mode's permission list and its own declared effects, which is a separate control.
+ */
+const NETWORK_TOOLS = new Set(["web_search", "fetch_content", "get_search_content", "source_check", "browser", "agent_browser", "mcp", "mcpScript"]);
+const FILESYSTEM_MUTATORS = new Set(["write", "edit", "bash", "powershell", "replace", "insert", "notebook_edit"]);
+
+/**
  * The one action policy a mode's controls add up to.
  *
  * **Two entry points, because they have different input requirements, and that is the whole reason they are
@@ -246,6 +256,33 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			// forbidding `dos` is a statement about conduct that a permission list over tools cannot make. Checked on
 			// raw tools too, because how a command runs is a fact about the call, not about whether it went through the
 			// capability tool.
+			// **The enforceable half of the sandbox block, at the tool boundary.** A mode that declares
+			// `network: none` or `filesystem: read-only-source` is making a claim the policy can keep, and this is
+			// where it is kept. The host has already refused the claims it cannot honour (`container`, `worktree`,
+			// `allowlist`) at load, so whatever reaches here is a claim the policy can hold.
+			const sandbox = mode.sandbox;
+			if (sandbox !== undefined) {
+				if (sandbox.network === "none" && NETWORK_TOOLS.has(invocation.tool)) {
+					return labelled(
+						{
+							outcome: "block",
+							reason: `Mode '${mode.id}' declares 'sandbox.network: none' and '${invocation.tool}' performs network access.`,
+							remediation: "Use a tool that does not leave the machine, or change the mode's sandbox.network deliberately rather than around it.",
+						},
+						"sandbox",
+					);
+				}
+				if (sandbox.filesystem === "read-only-source" && FILESYSTEM_MUTATORS.has(invocation.tool)) {
+					return labelled(
+						{
+							outcome: "block",
+							reason: `Mode '${mode.id}' declares 'sandbox.filesystem: read-only-source' and '${invocation.tool}' mutates the filesystem.`,
+							remediation: "Write to the paths the mode's evidence artifacts name instead, or change sandbox.filesystem deliberately rather than around it.",
+						},
+						"sandbox",
+					);
+				}
+			}
 			const technique = techniqueOf(invocation);
 			if (technique !== undefined && excludedTechniques !== undefined && excludedTechniques.includes(technique)) {
 				return labelled(

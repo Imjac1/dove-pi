@@ -1972,6 +1972,25 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				}
 			}
 		}
+		// **D1's fail-honest path: refuse an isolation claim the runtime cannot honour.** `isolation: container` or
+		// `worktree` requires an OS sandbox this runtime does not provide, and `network: allowlist` requires an egress
+		// control it does not have. Loading the mode anyway would be exactly the claim the host's own documentation
+		// warns against - a string that reads as a security boundary and is not one. The mode author's two ways out
+		// are named: declare what the runtime can honour (enforced at the tool boundary), or run the mode under a
+		// host that provides the isolation.
+		if (activeWorkMode?.sandbox !== undefined) {
+			const sandbox = activeWorkMode.sandbox;
+			const unenforceable: string[] = [];
+			if (sandbox.isolation === "container" || sandbox.isolation === "worktree") unenforceable.push(`isolation: '${sandbox.isolation}' requires an OS sandbox this runtime does not provide`);
+			if (sandbox.network === "allowlist") unenforceable.push(`network: 'allowlist' requires an egress control this runtime does not provide`);
+			if (unenforceable.length > 0) {
+				modeRefusal = `Work mode '${activeWorkMode.id}' declares sandbox isolation this runtime cannot honour: ${unenforceable.join("; ")}.` +
+					` The enforceable claims are network: 'none' and filesystem: 'read-only-source' (both checked at the tool boundary), plus isolation: 'none' with network: 'unrestricted'.` +
+					` Declare one of those, or run this mode under a host that provides the isolation it names.`;
+				activeWorkMode = undefined;
+				activeAuthorityDocument = undefined;
+			}
+		}
 		activeActionPolicy = undefined;
 		if (activeWorkMode !== undefined) {
 			try {

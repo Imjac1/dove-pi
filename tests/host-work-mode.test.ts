@@ -631,6 +631,52 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 
+	it("refuses to load a mode whose sandbox claims isolation this runtime cannot honour", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "overpromise", { capability: "workspace.inspect" });
+		let governance = readFileSync(join(root, "modes", "overpromise", "governance.yaml"), "utf8");
+		governance = governance.replace("gate:", "sandbox:\n  isolation: container\n  network: allowlist\n  filesystem: ephemeral\n\ngate:");
+		writeFileSync(join(root, "modes", "overpromise", "governance.yaml"), governance);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "overpromise" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const refusal = host.notifications.find((message: string) => /cannot honour/.test(message));
+			assert.ok(refusal, "the run does not start under a claim the runtime cannot back: " + host.notifications.join(" | "));
+			assert.match(refusal ?? "", /isolation: 'container'/, "and it names the claim it refuses");
+			assert.match(refusal ?? "", /network: 'none'/, "and names an enforceable claim as the way out");
+			const blocked = await callTool(host, "bash", { command: "ls" });
+			assert.equal(blocked?.block, true, "with the mode refused, nothing runs unconstrained");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("enforces the sandbox claims a mode can honour, at the tool boundary  [D1]", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "sealed", { capability: "workspace.inspect" });
+		let governance = readFileSync(join(root, "modes", "sealed", "governance.yaml"), "utf8");
+		governance = governance.replace("gate:", "sandbox:\n  network: none\n  filesystem: read-only-source\n\ngate:");
+		writeFileSync(join(root, "modes", "sealed", "governance.yaml"), governance);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "sealed" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "probe", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "probe", systemPrompt: "" }, host.context);
+			const networked = await callTool(host, "web_search", { query: "local network probe" }, "c-net");
+			assert.equal(networked?.block, true, "a network tool is refused under 'network: none'");
+			assert.match(networked?.reason ?? "", /\[sandbox\]/, "and the refusal names the sandbox as the check that refused it");
+			const mutating = await callTool(host, "write", { path: "nope.txt", content: "no" }, "c-write");
+			assert.equal(mutating?.block, true, "a filesystem-mutating tool is refused under 'read-only-source'");
+			assert.match(mutating?.reason ?? "", /\[sandbox\]/);
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
 	it("refuses an action needing consent when the host has no dialog, instead of running it unasked", async () => {
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";

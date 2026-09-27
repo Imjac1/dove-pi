@@ -1,4 +1,4 @@
-version: 1.7.0
+version: 1.8.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -48,7 +48,12 @@ effects:
     # absent here, as are `bash` and `powershell`. The default covers them, and the default is the safe one.
 
 sandbox:
-  isolation: worktree
+  # The two claims this runtime can actually enforce, and does, at the tool boundary: no tool that
+  # performs network access runs under this mode, and no tool that mutates the filesystem runs at all -
+  # the audit reads. `isolation: worktree` was deleted rather than left here: it requires an OS sandbox
+  # this runtime does not provide, and a claim the runtime cannot honour refuses to load instead of
+  # reading as containment. The write-protection that matters is enforced; where the writes would land
+  # is not, and the mode does not pretend otherwise.
   network: none
   filesystem: read-only-source
 
