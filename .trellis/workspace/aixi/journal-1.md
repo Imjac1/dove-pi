@@ -1003,3 +1003,42 @@ Built the D3 sensor half: agent_task_convergence status returns a verification v
 ### Next Steps
 
 - D1: refuse an isolation claim the runtime cannot honour
+
+
+## Session 28: Refuse isolation the runtime cannot honour, and enforce what it can
+<!-- trellis-session: v=2 fp=355ff35263a3eac5 -->
+
+**Date**: 2026-09-27
+**Task**: Refuse isolation the runtime cannot honour, and enforce what it can
+**Branch**: `master`
+
+### Summary
+
+Built the D1 fail-honest path: the sandbox block is validated at load and carried on the mode, the host refuses a mode whose claims it cannot honour naming an enforceable claim as the way out, and the policy enforces the two claims that need no OS sandbox at the tool boundary.
+
+### Main Changes
+
+- the host refuses to load a mode declaring isolation container or worktree, or network allowlist, and names an enforceable claim as the way out
+- the policy refuses every network-capable tool under network none and every filesystem-mutating tool under filesystem read-only-source, labelled sandbox
+- the three shipped modes were rewritten to claims the runtime can keep, with version bumps
+- the OS-sandbox half was deliberately not built, and the reason is recorded rather than implied: wrapping a command is not the same as proving the wrapped command satisfies the read-only-versus-mutating classification
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2ece003` | feat(sandbox): refuse isolation the runtime cannot honour, and enforce what it can |
+| `011abac` | docs(spec): record the sandbox honoured-or-refused contract |
+| `bf26954` | docs(task): record D1 resolved to honour-or-refuse, with the OS sandbox left open |
+
+### Testing
+
+- [OK] Backfilled from the commits; the counts of that session were not captured. Two host tests pin the refusal and the enforcement, and the suite is green as of the entry written after it.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The community half of the self-improvement subject, then the fence
