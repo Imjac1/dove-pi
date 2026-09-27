@@ -288,6 +288,32 @@ under `.dove/tasks/<goal-id>/convergence.json`.
     the rest of the read is unaffected.
   - **`revertible` is a convention here, stated rather than assumed**: one logical harness edit is one commit,
     which is what gives an edit a revert and what a change manifest's `fix` describes.
+- **The failure reading (`src/core/failure-reading.ts`) is the mining half of the loop: a pure function of the
+  ledger that turns an unsuccessful request into a bounded record.** It reads; it clusters nothing, ranks nothing and
+  proposes nothing.
+  - **The class and the mechanism are separate fields.** `reason` is one of the nine terminal reasons (usually
+    `failed`) and `terminal.code` is what actually went wrong - `provider-attempt-limit`,
+    `retry-refused-after-effect`, `model-budget-rejected`. Two requests that share the class and differ in the
+    mechanism must not read the same, which is the distinction Self-Harness says is usually missing.
+  - **Which terminals count as failures is the SSM axis's rule** (`classifyTerminal`), not a second one, so the
+    reading and the axis cannot disagree.
+  - **A refusal is attributed to a request by id, never by ledger position.** The four `appendGateRefused` sites
+    pass the live `requestId`, and a refusal that carries none is **counted in `unrefused` rather than guessed
+    at**: `issueRequestHostAbort` can settle a previous request after the next one has been received, so position
+    would attribute a refusal to the wrong request.
+  - **A convergence refusal is a terminal, not a gate refusal.** That path aborts the request instead of refusing one
+    tool call, so the ledger holds a `request.terminal` with `origin: convergence` and no `gate.refused` record -
+    which is why the reading attributes from the terminal's origin as well as from refusals.
+  - **The component attribution is stated, with its evidence, or it is `unattributed`.** A refusal points at
+    `middleware` (the policy that refuses); a provider outcome points at nothing of ours. An invented attribution
+    would point an edit at the wrong file, which is worse than saying the records do not determine one.
+  - **An empty corpus is a finding.** The reading reports how many requests it examined and what the corpus does not
+    contain, so "nothing failed" cannot be read as "the reader is broken".
+  - **A failing tool leaves no record at all**, because `appendToolObserved` is called only when the tool did not
+    error - the same write is what offers the observable marker a passing criterion may cite. A failure record
+    therefore cannot name the tool that failed. **Recorded as a decision, not an oversight**: recording an errored
+    tool would also make its id citable by a pass, which is a change to the citation rule rather than to telemetry.
+  - **The reading prints and never asserts** (`scripts/harness-failures.mts`, exit 0 always), like the axis.
 - Trellis calls the shared TypeScript reducer through its narrow helper; Dove
   never imports or executes Trellis scripts.
 
@@ -304,6 +330,10 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 | A surface entry that resolves to nothing | Refused, naming the entry as `component:path` |
 | A component outside `CHANGE_SURFACES`, or one with no paths | Refused, naming the components there are |
 | A missing or unreadable surface declaration | `surfaceIssue` on the status read; the read itself is unaffected |
+| A refusal recorded with a live request | Carries `correlation.requestId` for the request it refused |
+| A refusal with no request id | Counted as unrefused by the failure reading; never attributed by position |
+| A terminal whose mechanism is unfamiliar | Emitted with the mechanism carried through; never dropped |
+| A request whose converged state will not take an event | The ledger names the state; the convergence record is untouched |
 | A request terminal with no active criterion, or in a state that refuses events | Record the ledger observation with a `convergenceSkipReason`; offer nothing to the record |
 | A superseded request settling after the active one | Record no observation for it; its `request.terminal` record stands alone |
 | A change manifest with no predicted fix | Refused: a change with nothing predicted is a rationale, not a contract |
@@ -326,6 +356,9 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - Assert `task.py convergence apply/status` round-trips an atomic snapshot.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
   directions, and lets one path belong to two components; the status read reports it.
+- The failure reading keeps the mechanism beside the class, counts only the terminals the axis calls failures,
+  attributes refusals by id, reports an empty corpus as a finding, and returns `unattributed` where the records
+  do not determine a component.
 - Assert fast-lane requests create no convergence file or mutation guard.
 - Assert `ready_to_finish`, checkpoint, scope drift, and malformed-state paths
   fail closed at the Pi tool boundary.
