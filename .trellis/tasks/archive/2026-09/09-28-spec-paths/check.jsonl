@@ -1,0 +1,2 @@
+{"file": "tests/document-drift.test.ts", "reason": "Where the check goes."}
+{"file": ".agents/skills/trellis-spec-bootstrap/SKILL.md", "reason": "The rule this check serves: the specs describe the project as it exists now."}
