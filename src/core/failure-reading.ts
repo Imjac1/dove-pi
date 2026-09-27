@@ -40,6 +40,20 @@ export interface ProviderOutcome {
 	readonly diagnostic?: string;
 }
 
+/**
+ * What a **client** of this run called the failure, and how it decided.
+ *
+ * **The third account of one failure**, after Dove own terminal and the provider records - and the one with the weakest
+ * evidence behind it. The account this was built for was produced by a regex over a provider error message
+ * (`scripts/real-dove-blackbox.mjs` `classifyRpcFailure`), which is why `source` is required: recording the code
+ * without saying how it was reached would promote a text heuristic to the standing of a recorded status code.
+ */
+export interface ClientAccount {
+	readonly code: string;
+	/** How the client decided, in its own terms. */
+	readonly source: string;
+}
+
 export interface FailureRecord {
 	readonly requestId: string;
 	/** Always `failure`: this is the classification the SSM axis applies, not a second one. */
@@ -51,6 +65,8 @@ export interface FailureRecord {
 	readonly resources?: TaskResourceObservation;
 	/** The provider outcome for this request, when the ledger holds one that reports trouble. */
 	readonly provider?: ProviderOutcome;
+	/** What a client called it, attributed to the client. Never presented as the ledger own reading. */
+	readonly client?: ClientAccount;
 	/**
 	 * **What this record cannot see**, when the cause is upstream of every recording hook.
 	 *
@@ -135,7 +151,12 @@ export function componentForFailure(input: { readonly refusalLabels: readonly st
  * the next one has been received, so a positional rule would attribute a refusal to the wrong request. A refusal with
  * no id is counted in `unrefused` and left out of every record, which is what the producer fix exists to remove.
  */
-export function readFailures(records: readonly ExecutionRecord[]): FailureReading {
+/**
+ * The optional argument carries the client accounts **keyed by request id**, so an account can only land on the failure
+ * whose request it describes. The reading never goes looking for a summary file: pairing two artifacts is a decision
+ * about them, and the caller is the one who knows they belong together.
+ */
+export function readFailures(records: readonly ExecutionRecord[], options: { readonly clientAccounts?: ReadonlyMap<string, ClientAccount> } = {}): FailureReading {
 	const requestIds = new Set<string>();
 	const refusals = new Map<string, { gate: string; reason: string }[]>();
 	const convergence = new Map<string, { state?: string; acceptanceId?: string }>();
@@ -241,6 +262,7 @@ export function readFailures(records: readonly ExecutionRecord[]): FailureReadin
 			...(providers.has(terminal.requestId) ? { provider: providers.get(terminal.requestId) as ProviderOutcome } : {}),
 			// Both halves matter: a preflight closure **with** a provider outcome has its cause on the record, and any
 			// other terminal means the request reached the loop, so the closure is not what happened.
+			...(options.clientAccounts?.has(terminal.requestId) ? { client: options.clientAccounts.get(terminal.requestId) as ClientAccount } : {}),
 			...(terminal.reason === "startup-failed" && !providers.has(terminal.requestId)
 				? { unseen: "the request ended before the agent loop started: whatever rejected it did so upstream of every recording hook, so this ledger cannot name the cause" }
 				: {}),

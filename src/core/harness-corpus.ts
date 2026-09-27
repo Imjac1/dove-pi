@@ -1,5 +1,5 @@
 import type { ExecutionRecord } from "./contracts.ts";
-import { readFailures, type FailureRecord } from "./failure-reading.ts";
+import { readFailures, type ClientAccount, type FailureRecord } from "./failure-reading.ts";
 import { classifyTerminal, gateRefusalCounts, TERMINAL_CLASSES, type TerminalClass } from "./harness-axes.ts";
 import type { RequestTerminalReason } from "./request-lifecycle.ts";
 
@@ -15,9 +15,14 @@ import type { RequestTerminalReason } from "./request-lifecycle.ts";
  * it is summarising, and a reader never has to work out which of two numbers is the right one.
  */
 
+/**
+ * A ledger, plus whatever account of a failure the caller could pair with it - keyed by request id, exactly as the
+ * reading takes it. The caller pairs, because pairing two artifacts is a decision about them.
+ */
 export interface CorpusLedger {
 	readonly path: string;
 	readonly records: readonly ExecutionRecord[];
+	readonly clientAccounts?: ReadonlyMap<string, ClientAccount>;
 }
 
 export interface CorpusSummary {
@@ -61,7 +66,7 @@ export function summarizeCorpus(ledgers: readonly CorpusLedger[]): CorpusSummary
 			if (typeof reason === "string" && reason in TERMINAL_CLASSES) terminalClasses[classifyTerminal(reason as RequestTerminalReason)] += 1;
 		}
 		for (const [label, count] of Object.entries(gateRefusalCounts(ledger.records))) byLabel[label] = (byLabel[label] ?? 0) + count;
-		const reading = readFailures(ledger.records);
+		const reading = readFailures(ledger.records, ledger.clientAccounts === undefined ? {} : { clientAccounts: ledger.clientAccounts });
 		requests += reading.requests;
 		unrefused += reading.unrefused;
 		failures.push(...reading.failures);

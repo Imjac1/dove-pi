@@ -215,4 +215,27 @@ describe("the failure reading", () => {
 		assert.equal(reached.failures[0]?.unseen, undefined, "a provider failure is on the record under its own name");
 		assert.equal(reached.failures[1]?.unseen, undefined, "and a convergence refusal is a different boundary altogether");
 	});
+
+	it("carries a client account when the caller supplies one, and never merges it into the mechanism", () => {
+		// The account is keyed by request id, so it can only land on the failure whose request it describes - and the
+		// source is carried because this one came from a regex over an error text, not from a recorded status.
+		const accounts = new Map([["req-1", { code: "provider-authorization-denied", source: "classified from the provider error text by the black-box client" }]]);
+		const reading = readFailures([received("req-1"), terminal("req-1", "startup-failed", { origin: "session", code: "host-shutdown-preflight", retryable: false })], { clientAccounts: accounts });
+		const failure = reading.failures[0]!;
+		assert.deepEqual(failure.client, { code: "provider-authorization-denied", source: "classified from the provider error text by the black-box client" });
+		assert.equal(failure.mechanism.code, "host-shutdown-preflight", "the mechanism stays what Dove observed: the two names are not merged");
+		assert.match(String(failure.unseen ?? ""), /cannot name the cause/, "and the limit still says the ledger could not see it");
+	});
+
+	it("leaves the other failures alone when a ledger holds more than one", () => {
+		const accounts = new Map([["req-2", { code: "provider-authorization-denied", source: "classified by the client" }]]);
+		const reading = readFailures([
+			received("req-1"),
+			terminal("req-1", "failed", { origin: "provider", code: "provider-attempt-limit", retryable: true }),
+			received("req-2"),
+			terminal("req-2", "startup-failed", { origin: "session", code: "host-shutdown-preflight", retryable: false }),
+		], { clientAccounts: accounts });
+		assert.equal(reading.failures.find((failure) => failure.requestId === "req-1")?.client, undefined, "the account describes one request and does not smear across the ledger");
+		assert.equal(reading.failures.find((failure) => failure.requestId === "req-2")?.client?.code, "provider-authorization-denied");
+	});
 });
