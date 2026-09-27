@@ -20,6 +20,9 @@ Managed by Trellis. Edits outside this block are preserved; edits inside may be 
 
 <!-- TRELLIS:END -->
 
+<!-- Everything in this section is outside the Trellis-managed block above, which a test checks: content inside the block may be
+     overwritten by a `trellis update`, and content outside it is preserved. -->
+
 ## Where this harness is documented
 
 The coding specifications live under `.trellis/spec/`, indexed in [`.trellis/spec/backend/index.md`](./.trellis/spec/backend/index.md) -

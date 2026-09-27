@@ -197,6 +197,44 @@ describe("the documents that name things", () => {
 		}
 	});
 
+	/** The text between the managed-block markers, which is the region a tool update owns. */
+	function managedRegion(text: string): string {
+		const start = text.indexOf("<!-- TRELLIS:START -->");
+		const end = text.indexOf("<!-- TRELLIS:END -->");
+		if (start < 0 || end < start) return "";
+		return text.slice(start, end);
+	}
+
+	it("keeps this repository content outside the managed block, and the specifications untracked", () => {
+		// **Two arrangements a reader cannot see, and both were guessed at before they were measured.** A previous round removed text
+		// from the specification indexes on the reasoning that a tool update might rewrite them. The tool own bookkeeping answers it:
+		// `.trellis/.template-hashes.json` tracks 181 files - AGENTS.md, workflow.md, the tool directories - and **not one
+		// `.trellis/spec/**` path**. So the specifications are project content, and the block is the region an update owns.
+		//
+		// **What the marker check cannot see**: whether an update replaces the block correctly, only that our content is outside it.
+		// **What the ownership check cannot see**: anything, when the bookkeeping file is absent - which is a fresh clone, and a
+		// check that failed there would punish a clean checkout.
+		const agents = readFileSync(join(process.cwd(), "AGENTS.md"), "utf8");
+		const SECTION = "Where this harness is documented";
+		assert.ok(agents.includes(SECTION), "AGENTS.md still carries this repository own section");
+		assert.ok(!managedRegion(agents).includes(SECTION), "and it is outside the managed block, which a tool update may overwrite");
+		assert.ok(agents.slice(agents.indexOf("<!-- TRELLIS:END -->")).includes(SECTION), "which is to say, after the end marker");
+
+		// **Seeded to fail**, because a rule nobody has seen refuse is a rule with unproven wiring: a document that puts the same
+		// section *inside* the markers must be reported as inside.
+		const seeded = "<!-- TRELLIS:START -->\n" + SECTION + "\n<!-- TRELLIS:END -->\n";
+		assert.ok(managedRegion(seeded).includes(SECTION), "the rule sees content inside the block");
+
+		const tracked = join(process.cwd(), ".trellis", ".template-hashes.json");
+		if (!existsSync(tracked)) {
+			// A fresh clone: the bookkeeping is management state and may simply not be there, and no ownership claim is made.
+			return;
+		}
+		const hashes = JSON.parse(readFileSync(tracked, "utf8")) as { hashes?: Record<string, string> };
+		const specs = Object.keys(hashes.hashes ?? {}).filter((path) => path.startsWith(".trellis/spec/"));
+		assert.deepEqual(specs, [], "a tool update tracks a specification now, so editing one may be reverted by it");
+	});
+
 	it("cites a thing and not a position, in the live code", () => {
 		// **A prohibition, which is the one thing a pattern check can honestly do.** A comment citing a line of this
 		// repository is wrong the moment somebody edits above it, and nothing notices: of the eighteen citations this round
