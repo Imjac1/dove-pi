@@ -30,7 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 73 | 2026-09-28 | What the template hashes can and cannot say | `47faff7`, `8ec25d8` | `master` |
+| 73 | 2026-09-28 | What the template hashes can and cannot say | `994a908`, `8ec25d8` | `master` |
 | 72 | 2026-09-28 | The gate names the owners of its rules, and keeps the one that has none | `826fd2e`, `610970d` | `master` |
 | 71 | 2026-09-28 | A header that stopped describing its file, in the two files whose subject is exactly that | `dd82767`, `ca45096` | `master` |
 | 70 | 2026-09-28 | The source of truth names two artifacts that are not there | `e8b0c86`, `ca6cd33` | `master` |

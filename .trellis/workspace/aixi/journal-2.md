@@ -843,7 +843,7 @@ Recomputing every tracked hash classified the numbers: 73 match, 34 differ, 74 a
 
 | Hash | Message |
 |------|---------|
-| `47faff7` | chore(task): archive 09-28-hash-baseline |
+| `994a908` | docs(tests): the template hashes are a baseline, not a tamper check, and the check says so |
 | `8ec25d8` | chore(task): record what the template hashes can and cannot say |
 
 ### Testing
