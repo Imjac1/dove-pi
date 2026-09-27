@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate and the testing requirements the check step has to run."}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "The host seams the fence sits on: the tool_call veto and the per-tool Operations seam."}
