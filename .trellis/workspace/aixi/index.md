@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 34
+- **Total Sessions**: 35
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1291 | Active |
+| `journal-1.md` | ~1332 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 35 | 2026-09-28 | The failure reading, and the request id a refused action never carried | `7b9099c`, `cd626ed`, `43eaf16` | `master` |
 | 34 | 2026-09-28 | The declared editable surface, and the two corrections the tests forced | `4b45f99`, `35aaac3`, `ba9655a` | `master` |
 | 33 | 2026-09-28 | One writer for the observation, and the false premise behind the duplicate | `5c26d4a`, `d569dbd`, `f822a0b` | `master` |
 | 32 | 2026-09-28 | The Safety and Stability axis, and the axes we cannot read | `f6986db`, `4400855`, `378bf55` | `master` |

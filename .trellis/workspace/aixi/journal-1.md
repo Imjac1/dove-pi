@@ -1289,3 +1289,44 @@ Delivered AHE component observability in the form this repository can check: the
 ### Next Steps
 
 - The failure reading - experience observability - which needs this map to attribute a pattern to a component, and a corpus that contains a failure, which nothing on this machine does yet.
+
+
+## Session 35: The failure reading, and the request id a refused action never carried
+<!-- trellis-session: v=2 fp=e3142702ca9f613a -->
+
+**Date**: 2026-09-28
+**Task**: The failure reading, and the request id a refused action never carried
+**Branch**: `master`
+
+### Summary
+
+Delivered the mining half of the loop in the smallest honest form: a pure reading over the ledger that turns an unsuccessful request into a bounded record with its class, the mechanism the class collapses, the refusals that preceded it, the convergence state, the cost and a stated component attribution - and fixed the producer gap that made a refusal unattributable.
+
+### Main Changes
+
+- class and mechanism are separate fields because reason collapses every cause to failed while terminal.code names it: provider-attempt-limit, retry-refused-after-effect, model-budget-rejected. Two requests that share a class and differ in mechanism must not read the same
+- a refusal is attributed by request id and never by position - issueRequestHostAbort settles a previous request after the next one is received, so position attributes to the wrong request. The four appendGateRefused sites now pass the id the ledger contract always accepted, and a refusal without one is counted rather than guessed
+- an empty corpus is reported as a finding: the reading names how many requests it examined and what the corpus does not contain, so nothing failed cannot be read as the reader is broken
+- the attribution table is stated with its evidence and returns unattributed where the records do not determine a component, including for model-budget because the surface declares src wholesale as tool-implementation and a claim that points nowhere is worse than an admission
+- three findings by implementing: a convergence refusal is a terminal rather than a gate refusal and writes no gate.refused record at all; the host-work-mode harness writes one ledger across all its tests so a test must filter by its own gate; and the reachability gate refused the new module, which is now listed with the reason that a reading the harness acted on would be a control
+- and one budget fact: personal-agent-project-context.md is at 24,030 of 24,576 bytes, so the next contract there needs a split rather than a trim
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7b9099c` | feat(reading): the failure reading, and the request id a refused action never carried |
+| `cd626ed` | docs(spec): record the failure reading, its attribution rule, and the two gaps it reads around |
+| `43eaf16` | chore(task): record the failure reading, the three findings, and the budget fact |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 677 tests, 675 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The reading was run on the real corpus and on a constructed failure; both exit 0.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The loop itself, piece 4c: the proposal and validation halves over this record, which is a procedure rather than only runtime code - and the corpus gap it still reads around.
