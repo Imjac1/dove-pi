@@ -1929,3 +1929,41 @@ The decision record that has owned this work since round 1 was stale - it said n
 ### Next Steps
 
 - The first real turn, which is a Pi-hosted act; and the loop specification has 262 bytes of headroom, so its next contract needs a split first.
+
+
+## Session 51: The turn, executable: a checklist for the one thing this environment cannot run
+<!-- trellis-session: v=2 fp=399a97cdbadab33e -->
+
+**Date**: 2026-09-28
+**Task**: The turn, executable: a checklist for the one thing this environment cannot run
+**Branch**: `master`
+
+### Summary
+
+Everything the loop needs exists except a Pi host, so the round wrote the part that makes it runnable by a person: seven steps, each with the exact tool call or command, the fields as the schema spells them, and the reading it should produce.
+
+### Main Changes
+
+- ten claims were verified against the thing that owns each one: the applied operation and the commit and predictedRegressions fields against the tool schema, the three observable names against the parser, the cite line against the failure script, the three usage forms against their own script headers, verdictOnly against the ledger appender, and verifiedBy against the declaration
+- the guide says which of its parts were checked and which are judgments left to the reader - which is the difference between it and a document written from a working session
+- the failure modes are a table, because the useful question at a step that produced nothing is what the absence means: an unattributed failure, an unresolvable citation, a pending round, or an unobserved verdict that is an answer rather than a failure
+- and it is filed as a guide rather than a routed specification, with the mismatch stated in its own head: a routed specification is a contract the harness enforces and the budget test measures, while this is instructions for a person and a checklist that must be compressed loses its fields
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbc87f6` | docs(guide): the turn, executable - seven steps with their fields and the reading each should produce |
+| `ebff3aa` | chore(task): record the turn checklist and the ten claims it verified |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and no source file or routed specification changed - the diff is a guide, its index and the task tree.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Running the turn, which needs a Pi-hosted session with a formal native task; and the loop specification still has 262 bytes of headroom for whenever a contract needs them.
