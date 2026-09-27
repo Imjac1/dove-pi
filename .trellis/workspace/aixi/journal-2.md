@@ -933,3 +933,40 @@ Every script step of the turn guide runs against fixtures and every tool step ne
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task - the only step left that this environment cannot take.
+
+
+## Session 76: The inside answer, from a commit found at runtime
+<!-- trellis-session: v=2 fp=bde0f39c0caad68e -->
+
+**Date**: 2026-09-28
+**Task**: The inside answer, from a commit found at runtime
+**Branch**: `master`
+
+### Summary
+
+Round 42 rehearsed the last mile with outside and unresolved and left inside to the unit tests. Measured: scanning thirty commits takes about half a second and finds one that stays within a single surface, so the subject is resolved at runtime and the reading own inside line is asserted too - all three answers now, on real commits.
+
+### Main Changes
+
+- a checkout with no such commit skips the assertion with a message that says so, rather than passing silently or failing about its history depth
+- the fourth answer the reading can print - surface not declared - is unreachable from a valid record, because the decoder validates a surface against the union the code carries, so it is recorded rather than tested
+- and the new assertion found a fixture omission on its first run: the third change was added to the snapshot and not to the ledger, so the reading answered none recorded - which is the reading being right about an incomplete fixture
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2df1db4` | chore(task): record the runtime scan, the inside answer and the fourth answer that cannot fire |
+| `5189baa` | test(readings): the inside answer, from a commit found at runtime |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 733 tests, 731 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the readings suite is 6 of 6 with all three surface answers asserted.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task - the only step this environment cannot take.
