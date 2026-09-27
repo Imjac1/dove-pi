@@ -42,15 +42,14 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
   consent, and consent is a fact about the *host*, which owns the dialog. A consumer that cannot ask must
   **refuse**.
 - Two implementations exist and must agree: `src/core/loop-runner.ts` (reference) and
-  `src/adapters/loop-pi-agent-core.ts` (external). The provider abstraction differs per implementation;
-  the interface is `AgentLoop`, not the provider. **Both call `normalizeGateDecision`** rather than
-  reimplementing it: a rule copied into two loops differs in one of them.
+  `src/adapters/loop-pi-agent-core.ts` (external). `AgentLoop` is the interface, not the provider;
+  **both call `normalizeGateDecision`** - a rule copied into two loops differs in one of them.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Required behavior |
 |---|---|
-| No gate configured | Every action runs, and the reason says so. **Omitting the gate is only safe where every action is read-only, and nothing enforces that today** - both gate-less paths return `allow` unconditionally, and neither is reachable from an entry point (see the reachability test), so a rule there would be dead code. The host's own boundary refuses an unmappable or unevaluable action instead. |
+| No gate configured | Every action runs, and the reason says so. Omitting the gate is only safe where every action is read-only; both gate-less paths return `allow` and are unreachable from an entry point (reachability test). |
 | Gate throws | Block, reason names the gate and the error |
 | Gate returns an unrecognised shape | Block |
 | `ask` to a loop with no dialog, or `ask`/`block` with no `reason`/`remediation` | Block; the message names which fault |
@@ -104,6 +103,10 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   `unlisted: ask` says the same for everything unnamed. Separate them with
   `matchesPermission(p.ask_before, action)` when the reason must be exact. The host asks through its
   dialog and records `gate.approved`/`gate.refused`; a host with no dialog refuses.
+- **The gate reads every field a mode declares.** `excluded_techniques` is checked against the call's
+  `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
+  simply outside both. `toRequest` forwards `technique`/`phase`/`intensity` so a grant's `constraints`
+  fire too.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -118,6 +121,9 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `limit`/`both` with no limits, or `none` with any | Refused at load, naming both ways out |
 | `unlisted` absent or unrecognised | Refused, naming `allow` and `ask` |
 | `unlisted: allow` with a non-empty `always_allow` | Refused, naming both ways out |
+| `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
+| `gate.excluded_techniques` not a string list | Refused at load |
+| `gate.windows` declared | Refused: the grant carries the window |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |
 
@@ -130,6 +136,8 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - A YAML block-scalar description parses correctly.
 - A vertical's mode id does not appear in executable code under `src/core`.
 - A mode declaring a gate it does not supply is refused; `none` builds no gate.
+- An excluded technique is refused at the boundary, including on a call that names no target; a phase over
+  its `gate.intensity` ceiling is refused, and the ceiling counts actions actually run.
 - An `ask_before` action returns `ask` and an unlisted one returns the declared stance; a host with a
   dialog runs it on consent and one without refuses it. A limit declared without `tools` is evaluated against
   every action, so a mode names the action its threshold belongs to.
@@ -162,14 +170,13 @@ function evaluateAuthority(d: AuthorityDocument, r: AuthorityRequest, o?: Author
   `evidence`, `constraints` (`intensity` per phase, `excluded_techniques`), `external_state`, and
   `risk_acceptance`.
 - A target carries `ownership_evidence` and `requires_grants`; **every** required grant must resolve.
-- A grant is evidenced by a signed document **or** an approved external authorization; a grant with
-  neither is an unauthorized grant.
-- Unknown keys are rejected at the document, grant, and `authorizes` levels. A silently ignored key is
-  a constraint that is silently absent.
-- **The agent must not be able to write its own authority.** Authority documents live outside every
-  capability granted to the agent.
-- `preflightAuthority` runs before the first action so a missing authorization stops the engagement
-  rather than surfacing on its first attempt.
+- A grant is evidenced by a signed document **or** an approved external authorization; neither means an
+  unauthorized grant. Unknown keys are rejected at the document, grant, and `authorizes` levels - a
+  silently ignored key is a silently absent constraint.
+- **The agent must not be able to write its own authority**: documents live outside every capability
+  granted to the agent.
+- `preflightAuthority` runs before the first action, so a missing authorization stops the engagement
+  before its first attempt.
 
 ### 4. Validation & Error Matrix
 
@@ -280,15 +287,13 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 
 ### 3. Contracts
 
-- **Two hashes, not one.** A single hash over `path | category | code` cannot tell a move from an
-  edit, because the path is in it. `contentHashOf` is **path-free**, which is what makes a move
-  observable as a move; `fingerprintOf` is the content plus an **occurrence index**. Semgrep ships
-  six identity hashes for this reason, and `github/codeql-action` hashes content only - no path, no
-  rule id, no message.
+- **Two hashes, not one.** A hash over `path | category | code` cannot tell a move from an edit, the
+  path being in it. `contentHashOf` is **path-free**, which makes a move observable as a move;
+  `fingerprintOf` is content plus an **occurrence index**. Semgrep ships six identity hashes for this
+  reason; `github/codeql-action` hashes content only - no path, no rule id, no message.
 - **The occurrence index is inside the identity.** Without it, two findings of one category on
-  identical matched code in one file collapse into one and a real defect is lost. The index counts
-  how many earlier findings in the run share the same `(category, normalizedCode)`, in the
-  deterministic order of path, then start line, then end line.
+  identical code in one file collapse into one and a real defect is lost. It counts earlier findings
+  sharing the same `(category, normalizedCode)`, in path, start-line, end-line order.
 - **A finding's identity never includes the message**, which is prose and varies between runs, and
 - **never includes the artifact path**, so a finding that moves keeps its identity.
 - **`baselineState` carries all four schema values**: `new`, `unchanged`, `updated`, `absent`.
@@ -305,25 +310,20 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
   | - | a baseline entry matched by no tier | `absent`, emitted so the resolution is visible |
   | - | a finding matched by no baseline entry | `new` |
 
-  The split is not a performance choice. A content-derived identity cannot tell two identical matches
-  apart, so a tier that matches across paths will happily take an entry that belongs to a finding still
-  sitting where it was. Deciding the same-path cases first is what stops a newly added copy of existing
-  code from claiming the original (the original would be reported `new`), and what stops an in-place
-  edit from being narrated as a move from another file - which also leaves the finding that was truly
-  deleted with no result of its own.
+  The split is not a performance choice. Deciding same-path cases first stops a new copy of existing
+  code from claiming the original (reported `new`), and stops an in-place edit being narrated as a move
+  from another file, which would leave the truly deleted finding with no result of its own.
 
-  **Every tier keeps all of its candidate baseline indices**, not just the first. A file with several
-  findings would otherwise have only one reachable by the same-path tier, and the rest would be
-  reported `absent` while their current counterparts were reported `new`.
+  **Every tier keeps all of its candidate baseline indices**, not just the first: otherwise a file with
+  several findings has only one reachable by the same-path tier, and the rest read `absent` while their
+  counterparts read `new`.
 - **`baselineOf` is a pure derivative of a SARIF log**, so no side channel is needed, and it skips
   `absent` results - otherwise a deletion would be re-reported on every subsequent run.
-- **A known limit, stated rather than left to be rediscovered.** A finding that **moves and is edited in
-  the same run** reads as one `new` plus one `absent`, not as an update at a new location. A content-only
-  identity cannot tell "this changed and went elsewhere" from "this was deleted and something else
-  appeared", and the two are genuinely indistinguishable from the two runs alone. Resolving it would need
-  a similarity match, which trades a false `new` for a false match - a worse trade in an audit, where a
-  false match can suppress a real finding. The limit is a consequence of choosing content over location as
-  the identity, and it is the price of move detection.
+- **A known limit, stated rather than rediscovered.** A finding that **moves and is edited in one run**
+  reads as one `new` plus one `absent`, not an update at a new location. A content-only identity cannot
+  tell "changed and moved" from "deleted and replaced"; resolving it needs a similarity match, trading a
+  false `new` for a false match - worse in an audit, where a false match suppresses a real finding. That
+  is the price of content over location as the identity.
 - The key bump from v1 to v2 is **breaking on purpose**. v1 and v2 are not comparable, and the
   version is how a changed derivation becomes visible rather than silently producing a wall of new
   findings.
