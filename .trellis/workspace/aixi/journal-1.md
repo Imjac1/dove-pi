@@ -1412,3 +1412,43 @@ An edit now has a target: a change is bound to the commit that embodies it, the 
 ### Next Steps
 
 - The corpus gap that four rounds of instruments have not touched: no failure, no manifest and no application exists in any recorded run, so the first real turn still has to be made rather than found.
+
+
+## Session 38: The corpus as a reading, and the preservation gap behind the empty fuel
+<!-- trellis-session: v=2 fp=0702dc385a8a7516 -->
+
+**Date**: 2026-09-28
+**Task**: The corpus as a reading, and the preservation gap behind the empty fuel
+**Branch**: `master`
+
+### Summary
+
+What the recorded corpus contains is now a reading rather than something rediscovered by hand each round - and it reports the finding this round research produced: the corpus is empty of failures because nothing preserves the ledgers of the paths that fail, not because nothing fails.
+
+### Main Changes
+
+- the scan: 174 ledgers, all but one from the blackbox runner, 0 non-completed terminals, 0 refusals, 0 manifests - while the host suite drives a convergence refusal, a fence refusal and a manifest on purpose and its state directory goes away with the run
+- every count in the summary comes from a rule that already exists: the axis classification, the failure reading and its skip accounting, and the refusal split exported as gateRefusalCounts so one rule serves the axis, the observation and the corpus
+- what is missing is part of the summary with its measured cause, because zero failures on its own reads as a healthy harness and is a statement about what was kept
+- the live reading agrees with the hand count - 174 ledgers, 0 failures, and the same split - which is the check that makes the reading worth keeping
+- two generator slips cost two tool calls and are worth noting as a pattern: a multi-line implicit string concatenation, and an edit that was inside a program which failed to parse so it silently never applied - the second is why every edit in this session is verified by reading the file back
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e5ca39d` | feat(corpus): read the recorded corpus as a whole, and say why it is empty |
+| `7b8b5cc` | docs(spec): record the corpus reading and the preservation gap it reports |
+| `05a42dd` | chore(task): record the corpus task, its live output and the agreement check |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 695 tests, 693 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The corpus reading exits 0 for the real corpus, an empty root and a nonexistent root.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn of the loop, which now has a way to show that it has no evidence rather than to assume it - or the preservation decision that would give it some.
