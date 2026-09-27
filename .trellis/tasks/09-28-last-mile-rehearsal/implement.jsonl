@@ -1,0 +1,2 @@
+{"file": "scripts/harness-rounds.mts", "reason": "The reading that resolves a commit in the harness root."}
+{"file": "tests/harness-readings.test.ts", "reason": "The suite the rehearsal joins."}
