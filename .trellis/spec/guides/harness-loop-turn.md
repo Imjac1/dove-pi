@@ -127,6 +127,15 @@ fixture was about the fixture, not about the harness.
 one a compile error. The readings suite does that now, and the other suites never had the problem because they build typed objects and
 let the type check the kind.
 
+**Widen the net before concluding.** Four measurements of mine were wrong in a row, and every one was too narrow: a pipeline that
+terminated the process it read, a filter that hid the line making the arithmetic add up, a record kind I invented, and a directory
+listing that missed the index it was looking for. The rule that came out of it: **measure the whole space first** - every markdown
+file, every ledger kind, every reader - and narrow only once the wide answer is in hand. The wide measurement that settled this one was
+139 markdown files and 61 links, with none broken and one stale index.
+
+**And use the right instrument for the file type.** A probe written as `.mjs` cannot call `require`, and a probe that imports a
+TypeScript module needs `.mts` under `--import tsx`. Both mistakes cost a round-trip each, and both were mine.
+
 **And the same discipline for the output**: read the whole reading, unfiltered. Two earlier rounds drew conclusions from a pipeline
 that terminated the process it read, and from a filter that hid the one line which made the arithmetic add up.
 

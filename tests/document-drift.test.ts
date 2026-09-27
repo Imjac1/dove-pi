@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -112,23 +113,61 @@ describe("the documents that name things", () => {
 		}
 	});
 
+	/**
+	 * The files in a specification directory that its own index does not mention, plus the names it gives that are not there.
+	 *
+	 * A directory with no index is reported as a missing index rather than skipped: the drift this looks for happened three times in
+	 * one directory because its table was not updated when a specification was added, and a directory that grew without any table
+	 * would be the same problem with nothing to update.
+	 */
+	function indexProblems(specRoot: string): readonly string[] {
+		const problems: string[] = [];
+		for (const entry of readdirSync(specRoot, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			const directory = join(specRoot, entry.name);
+			const indexPath = join(directory, "index.md");
+			if (!existsSync(indexPath)) {
+				problems.push(entry.name + " has no index.md");
+				continue;
+			}
+			const index = readFileSync(indexPath, "utf8");
+			const mentioned = new Set(index.match(/[A-Za-z0-9._-]+\.md/g) ?? []);
+			for (const name of readdirSync(directory)) {
+				if (name.endsWith(".md") && name !== "index.md" && !mentioned.has(name)) problems.push(entry.name + "/" + name + " is not listed");
+			}
+			for (const name of mentioned) {
+				if (name.endsWith(".md") && !existsSync(join(directory, name))) problems.push(entry.name + " lists " + name + " and it does not exist");
+			}
+		}
+		return problems;
+	}
+
 	it("lists every specification in the directory it indexes, and every row it lists exists", () => {
-		// **The front door, checked.** `AGENTS.md` points at the specs index, and a newcomer reads that index to find out what this
-		// project has - so an index that has drifted is worse than no index, because it teaches the reader that the documentation
-		// is stale. Measured when this check was written: the index listed eight personal-agent specifications and the directory
-		// held eleven, with `personal-agent-harness-loop.md` among the missing three.
-		//
-		// **What it does not check**: whether a description matches the file it names. A row that points at the wrong
-		// specification resolves, and no check can see that.
-		const indexPath = join(process.cwd(), ".trellis", "spec", "backend", "index.md");
-		const index = readFileSync(indexPath, "utf8");
-		const specDir = join(process.cwd(), ".trellis", "spec", "backend");
-		const onDisk = readdirSync(specDir).filter((name) => name.endsWith(".md") && name !== "index.md");
-		const mentioned = new Set(index.match(/personal-agent-[a-z-]+\.md/g) ?? []);
-		const unlisted = onDisk.filter((name) => name.startsWith("personal-agent-") && !mentioned.has(name));
-		assert.deepEqual(unlisted, [], "these specifications exist and the index does not list them");
-		const broken = [...mentioned].filter((name) => !existsSync(join(specDir, name)));
-		assert.deepEqual(broken, [], "the index names these files and they do not exist");
+		// **Widened from one directory to all of them, because of what a wide measurement found.** The rule was written after the
+		// backend index turned out to list eight personal-agent specifications while the directory held eleven, with the harness loop
+		// among the missing three. Measured across the repository: 139 markdown files, 61 links, none broken, and of the three
+		// specification indexes only that one was stale. So the drift happens where a specification is added and the table is not
+		// updated, and a check naming one directory leaves that open everywhere else.
+		assert.deepEqual(indexProblems(join(process.cwd(), ".trellis", "spec")), [], "a specification index and its directory disagree");
+
+		// **And the comparison is proved to fail**, because a check nobody has seen refuse is a check whose wiring is unproven: a
+		// seeded directory whose index omits a file must be reported, a name an index gives and the directory lacks must be reported,
+		// and a directory with no index at all must be reported rather than skipped.
+		const seed = mkdtempSync(join(tmpdir(), "dove-index-problems-"));
+		try {
+			mkdirSync(join(seed, "seeded"), { recursive: true });
+			writeFileSync(join(seed, "seeded", "index.md"), "# Index\n| [A](./a.md) |\n");
+			writeFileSync(join(seed, "seeded", "a.md"), "# A\n");
+			writeFileSync(join(seed, "seeded", "b.md"), "# B\n");
+			assert.deepEqual(indexProblems(seed), ["seeded/b.md is not listed"], "an omission is reported");
+			writeFileSync(join(seed, "seeded", "index.md"), "# Index\n| [A](./a.md) | [Gone](./gone.md) |\n");
+			assert.deepEqual(indexProblems(seed), ["seeded/b.md is not listed", "seeded lists gone.md and it does not exist"], "and so is a name that is not there");
+			mkdirSync(join(seed, "bare"), { recursive: true });
+			writeFileSync(join(seed, "bare", "only.md"), "# Only\n");
+			assert.ok(indexProblems(seed).includes("bare has no index.md"), "and a directory with no index at all");
+		} finally {
+			rmSync(seed, { recursive: true, force: true });
+		}
 	});
 
 	it("cites a thing and not a position, in the live code", () => {
