@@ -645,178 +645,51 @@ for whichever model runs it.
 
 AHE: "every edit [is] paired with a **self-declared prediction**, later verified against the next round's
 task-level outcomes" - the mechanism that turns an edit into "a falsifiable contract". Ours:
-`src/pi-adapter/extension.ts:548`'s `unresolvedAcceptanceEvidence` is **one resolver called from both** the pass
-path (`:1569`) and the D3 audit (`:1549`), returning `verified` / `unresolved_evidence` / `failed` /
-`waived` / `not_claimed`. The verification half of the contract already exists - so **D5 is not "a large new
-loop", it is D3's resolver plus two schema-sized additions**:
-
-1. **A `prediction` recorded beside a change**, which the next round's resolver checks - D3's audit *in front
-   of* a claim rather than beside it. It has no home today: `src/project-provider/contracts.ts:72-76` carries
-   `passed`/`failed`/`waived` with `evidenceRefs`, and `:84`'s `decide` carries a `nextAction` - which is a
-   *plan*, not a prediction with an expected outcome.
-2. **The two fields Self-Harness requires of a failure record** and `:81`'s finding shape does not have: a
-   causal-mechanism field **distinct from** the verifier-level cause (its point is that two runs can share a
-   verifier outcome - timeout, missing artifact - while differing in causal mechanism), and a record of the
-   **passing behaviours to preserve** that a proposal must not regress.
-
-**What this does not claim.** The risky half of D5 as first written was the *selection signal*; delta 1-5 show
-the detector and the verification halves are cheap, but neither is a judge - the audit still cannot catch a
-citation to a real record that does not actually decide the criterion. D5's build, if taken, still needs its own
-consent and its own oracle argument.
-
-### What this round does not change
-
-- **D1, D2, D4** recommendations and their built records stand; nothing here touches the sandbox block, the
-  approval stance, or the technique/intensity controls.
-- **D3** stands as built, and is now load-bearing for D5 as well as for D6.
-- **D7** stays closed - this round adds no prompt-economics evidence.
-- **D6** keeps its placement and its "not now".
-- The optimisation-object ladder in §9.3 (instruction prompt -> context -> workflow -> harness code -> optimizer
-  code) puts our mode/spec tree on the **declaration** rung, which is the rung the field's own AHE ablation says
-  is where the transfer is. No change is proposed there.
-
 ---
 
-## Round 12: what the community says that the papers do not (2026-09-27)
+## Round 14: what the built rounds shipped, and the one thing that cannot be built here (2026-09-28)
 
-Source: `research/rsi-community-landscape.md` - the community half of the self-improvement subject (curated
-lists, a practitioner's definition, framework READMEs, one HN thread), read because D5 and D6 are the one place
-where the papers and the people building the systems disagree. Three consequences, **one of which is a
-correction to something this file already recorded**.
+Rounds 10-13 were analysis. What follows is the outcome of the build that ran after them: sixteen rounds, one deliverable
+each, every one of them landed in this repository and archived as a task.
 
-### D5 is bounded self-improvement, and the label is load-bearing
+### What shipped, and what each claim is checked against
 
-The community's test is **which layer persists**: the output (iteration) -> the system (self-improvement) -> the
-system **and the verifier** (RSI). "[Current] systems work best when an external evaluator stays fixed ... the
-system can search because it has a ruler it doesn't control", and raising the ruler "without capturing the
-signal" is what no public system does - "public evidence for that remains thin". So:
+| Built | Where it is |
+|---|---|
+| the protected surface and the fence (D8) | `archive/2026-09/09-27-mode-protected-surface-fence`; the `fence` gate label |
+| the change manifest and its verdict (D5, first half) | `archive/2026-09/09-27-change-manifest-verdict`; `verdictFor` |
+| the resource observation, one writer | `archive/2026-09/09-27-resource-observation-producer`, repaired in `09-28-observation-single-writer` |
+| the SSM axis, the cheapest measurable step for D6 | `archive/2026-09/09-27-harness-axis-safety-stability`; `scripts/harness-axes.mts` |
+| the declared editable surface | `archive/2026-09/09-28-declared-editable-surface`; `.trellis/harness-surface.yaml` |
+| the failure reading (D5, second half) | `archive/2026-09/09-28-failure-reading`; `src/core/failure-reading.ts` |
+| the verdict as a record | `archive/2026-09/09-28-verdict-as-record`; the `change.decided` ledger record |
+| the applied commit, and the check that it stayed inside its surface | `archive/2026-09/09-28-applied-commit`; `operation=applied` |
+| the corpus as a reading | `archive/2026-09/09-28-harness-corpus-reading`; `scripts/harness-corpus.mts` |
+| the verifier declared, and the boundary stated | `archive/2026-09/09-28-verifier-map`, `09-28-verifier-boundary` |
+| the extraction that stopped the adapter embedding the verifier | `archive/2026-09/09-28-extract-verifier`; `src/core/harness-verifier.ts` |
+| the first real failure in the corpus | `archive/2026-09/09-28-mining-cannot-see`, and the ledger run it preserved |
+| the two readings that closed the loop ends | `archive/2026-09/09-28-citable-failure`, `09-28-preserve-behaviours` |
 
-- **D5 is renamed in intent: bounded self-improvement.** Its acceptance test is therefore *the system changed
-  and the verifier did not*, which is checkable; the RSI-level claim has no public demonstration and we will not
-  make it.
-- **Round 11's delta 2 gains a test rather than an argument.** "Permissions must live outside the loop" was two
-  sources' design advice; it is now the definitional boundary - the agent owns prompts, skills, tools, memory and
-  harness code, **humans own the held-out tasks and the hidden score**, and "if it can edit evaluation, it can
-  jailbreak itself".
-- **One guard D5 did not have: misevolution.** `2509.26354` evaluates it along four pathways - **model, memory,
-  tool, workflow** - and finds it widespread even on top-tier models, with two failures that are ours by
-  construction: alignment degradation **after memory accumulation**, and vulnerabilities introduced in **tool
-  creation and reuse**. D5's shape must name which pathway each proposed edit touches, or the loop has no
-  category for its own risk.
-- **A prior, so the cost is not wishful.** Karpathy's `autoresearch` kept ~20 of ~700 experiments (~3%), and
-  HarnessOpt-Bench's 111 runs "varied sharply by model and task". The gate is the cost, not the proposal.
+### D6: where it honestly stands
 
-### D6's reason is corrected a second time - and the correction is favourable
+Round 12 scoped the first version of D6 to "something measurable". That shipped: the SSM reading over our own execution
+ledger - a crash-free ratio, sandbox violations, and a declared list of the axes we cannot compute. What D6 actually wants -
+comparing harness variants under controlled conditions - still needs a task set and a held-out split, and neither exists.
+**Partly delivered is the honest word**: the instrument reads our own runs, and the comparison it was built for is not here.
+That is further than "not now" and short of "done", and the contract states the same thing at length.
 
-§15.4 recorded "**the frontier's top open problem, not the frontier's practice**", on `2609.00006` §17.2's
-future-work list. The community half is narrower and better: **the instrument exists for measuring
-self-improvement and does not exist for the verifier-raising axis.**
+### Two decisions the rounds made that belong in a plan rather than only in a contract
 
-- **RSI-Bench** is an open-source six-axis framework (self-modification depth L0-L4, improvement trajectory,
-  operator discovery, meta-adaptation, **safety & stability**, autonomous goal generation) whose stated purpose is
-  "to distinguish genuine self-improvement from **metric gaming**" - combined by a harmonic mean that "penalizes
-  systems that score zero on any dimension".
-- **HarnessOpt-Bench** is D6's held-in/held-out split already built: an agent edits its harness on development
-  feedback while "**a separate system tests the candidate on hidden tasks**", over 111 runs, 5 optimizer models,
-  4 tasks.
-- What is still missing is exactly the axis the community names as missing: a **rising, still-uncheatable bar**.
+- **The verifier is outside the loop.** An instrument change is a verifier change; self-improvement is defined by leaving the
+  verifier alone, and recursive self-improvement is the axis this project declines. The closed observable set is therefore
+  behaviour-shaped and is not widened to reach instruments - they are judged by their suites and a person.
+- **The third module was measured and declined.** The verification tail stays in the record module: 74 use sites of the
+  refusal constructor, and a movement vocabulary that could not be lifted without a value-level cycle. What would reopen it
+  is written down.
 
-So **D6's cheapest step changes from "flip the gap tests and invent a score" to "adopt a named axis"**. SSM and
-ITQ are the two we can already feed: SSM's `sandbox violations` is D1's build and `crash-free ratio` is our
-ledger's stop reasons; ITQ's `slope` and `stagnation escape rate` need per-round scores the convergence
-snapshot is one step from carrying. **Placement unchanged** (after D3), and "not now" unchanged - but the work
-is smaller than the cost column said and it should not be invented from scratch.
+### What is not built, and why that is a fact rather than a backlog
 
-### D8 is upgraded from candidate to the entry this landscape demands
-
-It was recorded in Round 11 on AHE's read-only set. The community supplies two more legs, one of which is about
-*our* runtime rather than a paper:
-
-- The curated map files **Pi** - our host - under **"Extensible Harness Substrates"**, with the category's own
-  warning: "**general extensibility alone is insufficient**; an RSI substrate should expose agent-relevant
-  runtime components ... as programmatically modifiable surfaces". The catalogue's framing is that **we are a
-  substrate, not an RSI system**, which is D5's label arriving a second time.
-- And the substrate's cost is stated in words aimed at us: Pi's "everything else is a TypeScript extension,
-  auto-discovered from `.pi/extensions/`. **An agent can write one, reload it, and continue with new tools**",
-  after which "**an agent gets more code it can improve, and more ways to break compatibility or weaken a
-  permission boundary**". Our `src/pi-adapter/extension.ts` **is** one of those extensions, and nothing in the
-  tree separates "the policy" from "any other file".
-
-**D8 (protect the policy, verifier and ledger from being written) therefore stops being a candidate awaiting
-taste.** It is the control our own substrate's documentation says is needed, with a third leg from
-`TamperBench` `2602.06911` and `2011.06275` (self-modification misaligns bounded-rational agents even when
-ideal ones would preserve their objectives - "self-modification can amplify errors"). It is still **not taken**:
-it needs its own consent, like every build (R4).
-
----
-
-## Round 13: how the decision record has to be shaped, from AHE's own method section (2026-09-27)
-
-Source: `2604.25850v2/v3` **read in the body**, not only the abstract - §3.3, Appendix B.2, C.3 and D. This round
-answers the shape question left open by Round 11/12's delta 5, and it answers it **against two shapes this file was
-about to adopt**.
-
-**What the manifest actually is.** "Each edit attaches a manifest entry that names the **failure evidence**, the
-**inferred root cause**, the **targeted fix**, and a **predicted impact comprising both expected fixes and at-risk
-regressions**; this manifest is the loop's evidence ledger." And the check: "In the next round, the loop
-**intersects the predicted-fix and predicted-regression sets with the observed task-level deltas** to produce a
-**per-edit verdict**." The stated purpose: "each edit thereby becomes falsifiable by the next evaluation, which
-**replaces rationale-driven self-justification with a measurable contract between rounds**." The prediction is at
-**task granularity** ("naming which Terminal-Bench 2 tasks it expects to fix"), each manifest also carries a
-**constraint level** (prompt / tool implementation / middleware / ...), and every entry is "subject to the same
-**automatic rollback if their predicted fixes do not appear**".
-
-**Three findings that change our answer.**
-
-1. **A prediction verified only by "the reference resolves" is the thing this design exists to replace.**
-   Resolvability is a claim that a record exists - guessable by whoever writes both the prediction and the record.
-   The verifiable form compares **predicted movements against observed movements**. Round 11 delta 5's draft
-   ("a `prediction` the next round's resolver checks") is therefore **too weak**, and the strengthening is not
-   optional decoration: it is the difference between a contract and a rationale.
-2. **The regression half does not work, and the field measured it.** Appendix D: across 9 rounds the agent issued
-   **43 unique regression predictions and only 5 landed (cumulative P = 11.6%)**, while **40 regressions it did not
-   foresee occurred (cumulative R = 11.1%)** - "regression predictions instead stay near the floor, below 25% on
-   most rounds". The paper's own conclusion: "the loop's self-attribution is reliable for fixes but **blind to
-   regressions**, pinpointing regression foresight as the clearest direction for future self-evolution loops". So:
-   **carry the field** (absence has to be stated, and the manifest's shape is the field's), but **do not build a
-   mechanism and claim it protects against regressions** - at P/R ≈ 11% it is a record, not a control. Regression
-   *detection* stays where it already is: held-out criteria, the gates, and the fence.
-3. **Attribution needs a baseline and a rollback, and both are cheap here.** "A seed already fitted to the target
-   benchmark would **contaminate every subsequent edit's attribution**" - so the comparison needs the previous
-   round, not an absolute score. And "each logical edit becomes **one commit** on the workspace's git history,
-   which yields file-level diffs and **rollback granularity for free**" - which is the shape our commits already
-   have. The limit to record: our loop has no authority to revert by itself; a rollback that moves a permission
-   boundary needs HITL (§3.5.3), and the fence is what keeps that boundary out of the loop's reach.
-
-**Answer to the shape question.** The record is a **change manifest with two-sided predicted movements over a
-closed, harness-read observable set**, plus a **per-edit verdict** produced by intersecting predicted against
-observed: `confirmed` / `contradicted` / `unobserved`, with "predicted fix did not appear" as the rollback
-trigger. The observable universe must be **a set the harness reads**, never prose the model supplies, or the
-contract is self-reported again. For this repository the closed set is small and already exists: criterion
-statuses and the D3 `verification` vector, gate refusals by label from the ledger (which now includes `fence`,
-`sandbox`, `technique`), typed stop reasons, and per-round counts.
-
-**And the honest weakness, before it is discovered.** AHE measured over a benchmark with k rollouts per task and
-9 rounds; **we have one task's run**, so an observed delta here is weak evidence and the record must say so rather
-than borrow AHE's confidence. That is D6's absence showing through this task: the record makes a change
-falsifiable, and D6 is what would make it *measurable*.
-
-**What this adds to `frontier-anatomy.md` §9.1.** That summary carries the abstract's words - "paired with a
-self-declared prediction, later verified against the next round's task-level outcomes" - which are correct, and which
-I read as weaker than they are. The body supplies the fields the abstract compresses: *what* is predicted (expected
-fixes **and** at-risk regressions), *against what* (the observed task-level deltas), *at what granularity* (per task,
-per constraint level), and *what happens on a miss* (automatic rollback). §9.1 is left as it stands; this round is
-its detail.
-
----
-
-## What is not on this list, and why
-
-- **A framework** (Rec 15): 0/11 harnesses use one; we are a hand-rolled extension of a hand-rolled runtime.
-- **RAG over code** (Rec 8/16): 0/11; our specs are routed by an index under an enforced size budget, which is the
-  JIT pattern the corpus converged on.
-- **Stuck detection** (Rec 18): we already ship more than the field's cheap caps, and the paper calls the elaborate
-  forms platform-tier. The one thing worth taking is Claude Code's **denial counter** and Codex's **per-turn
-  rejection circuit breaker**, both of which are cheap - folded into D2's work rather than a decision of their own.
-- **MCP** (Rec 13): our host "pointedly rejects" it; that is an inheritance, not a gap.
-- **Multi-agent protocol adoption**: Rec 12/13 say keep sub-agents in-process; the ACP question belongs to the host.
+**The first real turn of the loop.** Every instrument it needs exists and is exercised by tests, and the seven steps are in
+the contract. Running one needs a **Pi-hosted session with a formal native task**, and this workspace has no `.dove`
+directory - so no manifest can be recorded here at all. That is a property of the environment, not of the work: the turn
+happens where the harness runs, and it is the next thing this record expects.
