@@ -435,3 +435,42 @@ Probed four forms of an incomplete run: a decision naming a change the record do
 ### Next Steps
 
 - Which reading should own the resource record, since none does; and the first real turn, which needs a Pi host.
+
+
+## Session 63: Fixtures from the writer types, and the correction of a probe that measured itself
+<!-- trellis-session: v=2 fp=3523f4b717c44b54 -->
+
+**Date**: 2026-09-28
+**Task**: Fixtures from the writer types, and the correction of a probe that measured itself
+**Branch**: `master`
+
+### Summary
+
+A previous round recorded that nothing reads the resource record. Measured properly, that was wrong: the appender writes task.convergence.observed and the failure reading takes it into the failure resources field, while the ledger reads the last one for repair. The probe had invented a kind no writer defines, so it measured itself - and the durable fix is typing fixture kinds as ExecutionRecordKind.
+
+### Main Changes
+
+- one writer, two readers: the resource record was read all along, and an unknown kind is ignored by design, which is what let a fabricated fixture look like a finding
+- the readings suite hand-writes ledger lines, so its kind is typed as the union that owns kinds now, which makes an invented one a compile error rather than a silent no-op
+- and it found nothing, which is the answer to a question nobody had asked: every kind the suite hand-writes is real. No other suite has the problem, because they build typed objects and let the type check the kind - the string path was the only unchecked one
+- the correction is stated where the wrong claim was made, in the contract that describes the resource record, and the method lesson is in the guide a person follows: take a fixture kind from the writer, and read the whole reading unfiltered
+- that is the third measurement mistake in three rounds and all three were mine - a pipeline that terminated the process it read, a filter that hid the line which made the arithmetic add up, and a record kind I made up. The first two are now in the guide; this round put the third one there and removed the possibility from the suite
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2821f3c` | test(readings): a fixture kind comes from the union that owns kinds |
+| `95e5e8c` | docs(spec,guide): who reads the resource record, and the method lesson from getting it wrong |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 727 tests, 725 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the readings suite is 5 of 5 with its kinds checked.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the resource record name reading oddly for a resource observation, which costs nothing measured but is worth a look when a rename is already on the table.
