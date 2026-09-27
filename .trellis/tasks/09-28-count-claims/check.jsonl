@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The file the convention joins."}
+{"file": "tests/spec-context-budget.test.ts", "reason": "The gate that measures the loop specification."}
