@@ -58,10 +58,17 @@ that reports says so in a field a reader can check.
   - **The mechanism lives in two places, and the reading reads both.** The terminal carries Dove own name for what it
     observed; `provider.request.completed` and `provider.request.rejected` carry the provider own account
     (`stopReason`, `httpStatus`, a diagnostic), correlated by request id. A preflight failure is where the difference
-    is visible: the ledger terminal says `host-shutdown-preflight` - true, because Pi rejected the request before the
-    Dove lifecycle saw it - while the provider record says the request errored with a status. **The record keeps the two
+    is visible, and **it corrected an earlier version of this very sentence**: a preflight rejection is where the
+    provider records are **absent**, because Pi refuses the request before any Dove hook runs - so the terminal says
+    `host-shutdown-preflight` (true: it is what Dove observed) and the ledger holds no cause at all. **The record keeps the two
     apart and invents no third code**, because a merged name would claim a translation nobody performs; a later healthy
     call does not erase an earlier error, and an outcome reporting no trouble is not attached at all.
+  - **A failure whose cause is upstream declares what it cannot see.** When the terminal is `startup-failed` **and** no
+    provider outcome was recorded, the record carries `unseen`: the request ended before the agent loop started, whatever
+    rejected it did so upstream of every recording hook, and this ledger cannot name the cause. Both halves of the rule
+    matter - a closure *with* a provider outcome has its cause on the record, and any other terminal means the request
+    reached the loop. **It never imports the upstream name**: the ledger does not hold `provider-authorization-denied`,
+    the RPC did, and a record that borrowed it would claim an observation this process never made.
   - **The observable boundary, recorded because the loop needs it.** A manifest judges an edit by three observables - a
     criterion status, a criterion verification state, a refusal count - and **"this failure is now named correctly" is
     none of them**, so an improvement to an instrument cannot be predicted in the closed set and its verdict reads
@@ -177,7 +184,9 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
 | A touched file outside the declared paths | `outside`, with the files named |
 | A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
-| A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |ed |
+| A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |
+| A preflight failure with no provider record | `unseen` on the record, naming the boundary and not the cause |
+| A preflight failure whose provider outcome was recorded | No `unseen`: the cause is on the record |ed |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
