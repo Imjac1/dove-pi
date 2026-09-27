@@ -230,15 +230,19 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - `scope_change` and `serious_unexpected_risk` create one AC-bound checkpoint.
 - `ready_to_finish` is terminal for product mutation in the frozen revision.
 - **`request.observed` records what a request cost, and decides nothing.** The host writes one at the
-  request terminal (`appendRequestTerminal`), from the counters it already keeps, and the
-  **same object** goes to the ledger (`appendTaskResourceObservation`) and to the record - so the
-  two cannot disagree about a round. It adds `observedResources` and a revision and touches no
-  criterion, finding, completed step, state or checkpoint.
-- **Only the request whose counters are live is observed.** `settle()` terminalizes every lease
-  it holds, so more than one terminal can follow from one settle; the counters belong to the active
-  request alone. A superseded request that settles later records **nothing** here - its own
-  `request.terminal` record is still written, so a reader sees a terminal without an observation
-  rather than one request's cost attributed to another.
+  **end of a request** (the `agent_end` block, after the `request.terminal` record), from the counters it already
+  keeps, and the **same object** goes to the ledger (`appendTaskResourceObservation`) and to the record - so the two
+  cannot disagree about a round. It adds `observedResources` and a revision and touches no criterion, finding,
+  completed step, state or checkpoint.
+- **That block is the only writer of the kind, and the site is the design.** A producer on
+  `appendRequestTerminal` would fire once per terminal *transition*, and one `settle()` can terminalize several
+  leases - so it would record the active request's cost more than once and would need a guard against attributing
+  that cost to a superseded request. The `agent_end` block has exactly one current request, so it needs no guard.
+  **A second writer was added here once**, on the belief that this call did not exist, and a real ledger showed both
+  records for one request; that is why this contract now names the writer rather than describing the data.
+- **A request with no task is not observed at all.** The writer's guard is a current request plan and a task id, so a
+  fast-lane request produces nothing - a **known gap**, recorded rather than implied, because covering it is a
+  decision with its own evidence and not a detail of which site writes.
 - **When the record cannot take the observation, the skip is named rather than silent.** The event
   needs an existing `acceptanceId` and the record refuses events after `ready_to_finish` or while
   checkpointed or blocked, so the observation attaches to the criterion that is `in_progress` and
