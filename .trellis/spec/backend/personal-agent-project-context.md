@@ -229,12 +229,22 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - `follow_up` findings are retained but do not block current acceptance work.
 - `scope_change` and `serious_unexpected_risk` create one AC-bound checkpoint.
 - `ready_to_finish` is terminal for product mutation in the frozen revision.
-- `request.observed` records tool/provider/time/token observations only and
-  cannot change semantic state. **Declared, and inert end to end:** nothing emits the event
-  (`toConvergenceEvent` has no case for it) and `appendTaskResourceObservation`
-  (`execution-ledger.ts:374`) has no callers, so `observedResources` stays zero in a live run.
-  Recorded here so the gap is a known one; the change manifest's round boundary deliberately does
-  not depend on it.
+- **`request.observed` records what a request cost, and decides nothing.** The host writes one at the
+  request terminal (`appendRequestTerminal`), from the counters it already keeps, and the
+  **same object** goes to the ledger (`appendTaskResourceObservation`) and to the record - so the
+  two cannot disagree about a round. It adds `observedResources` and a revision and touches no
+  criterion, finding, completed step, state or checkpoint.
+- **Only the request whose counters are live is observed.** `settle()` terminalizes every lease
+  it holds, so more than one terminal can follow from one settle; the counters belong to the active
+  request alone. A superseded request that settles later records **nothing** here - its own
+  `request.terminal` record is still written, so a reader sees a terminal without an observation
+  rather than one request's cost attributed to another.
+- **When the record cannot take the observation, the skip is named rather than silent.** The event
+  needs an existing `acceptanceId` and the record refuses events after `ready_to_finish` or while
+  checkpointed or blocked, so the observation attaches to the criterion that is `in_progress` and
+  is skipped - with a typed `convergenceSkipReason` on the ledger record - when there is no active
+  criterion, the state will not take it, or there is no formal native task. "Never observed" and
+  "observed and discarded" must not look the same.
 - **A change manifest predicts movements, and the next read decides them.** `change.recorded`
   carries the failure evidence, the inferred root cause (distinct from the verifier-level cause),
   the fix, and a **closed-set** prediction: `criterion-status:<AC>=<status>`,
@@ -267,6 +277,8 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 | Two semantic no-progress reviews | Checkpoint with one criterion-bound next action |
 | All criteria pass with no open blocker | Enter `ready_to_finish`; reject further product mutation |
 | Missing resource usage | Keep the field unknown; never infer a stop |
+| A request terminal with no active criterion, or in a state that refuses events | Record the ledger observation with a `convergenceSkipReason`; offer nothing to the record |
+| A superseded request settling after the active one | Record no observation for it; its `request.terminal` record stands alone |
 | A change manifest with no predicted fix | Refused: a change with nothing predicted is a rationale, not a contract |
 | A prediction outside the closed set | Refused, naming the observables and the gate labels |
 | A caller-supplied `baseline` | Refused at the tool boundary: the baseline is the harness's read |
@@ -288,6 +300,9 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - Assert fast-lane requests create no convergence file or mutation guard.
 - Assert `ready_to_finish`, checkpoint, scope drift, and malformed-state paths
   fail closed at the Pi tool boundary.
+- From a request terminal, assert the ledger observation and the snapshot's `observedResources`
+  describe the **same** request (the record equals the snapshot delta), that the revision advanced
+  by exactly one, and that a settle of two leases records one observation rather than two.
 - Record a manifest and read the same revision (`pending`), then read after one event
   (`contradicted`, carrying the movement it compared); assert the stored baseline is the one the
   runtime read, and that a caller-supplied baseline is refused.
