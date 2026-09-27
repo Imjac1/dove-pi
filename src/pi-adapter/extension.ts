@@ -973,84 +973,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			policyAbort: transition.policyAbort,
 			terminal: { ...(transition.terminal ?? terminalForReason(transition.reason, transition.detail)), requestId: transition.logicalRequestId },
 		});
-		// **What this request cost, recorded where the record says it is.**
-		//
-		// The convergence record has had a resource-observation kind, a ledger writer for it and a specification
-		// describing it since before this line existed, and nothing produced any of them - so \`observedResources\` was
-		// zero in every live run and the diagnostics reader was always empty. This is the first producer.
-		//
-		// It runs **after** the terminal is written and **before** the counters reset (the resets are at the end of
-		// \`agent_settled\` and \`session_shutdown\`, and only on a new lease in the request-start path), which is what
-		// makes the numbers this request's rather than the next one's. An additive failure here must never surface as
-		// a terminal failure, so the convergence half is guarded and expressed as data rather than as a throw.
-		await recordRequestObservation(transition, metadata);
 		requestMetadata.delete(transition.logicalRequestId);
 	}
 
-	/**
-	 * Record the observation for the request that just ended, once, and use it twice.
-	 *
-	 * **Why the same object goes to both writers.** The ledger wants flat fields and the convergence event wants
-	 * \`TaskResourceObservation\`, and the second is a subset of the first with the same names - so one assembly
-	 * satisfies both. Two assemblies is how a field comes to be added to the ledger and forgotten in the snapshot,
-	 * which is the drift this record already carries elsewhere.
-	 *
-	 * **Why the convergence half can be skipped, and says so.** The event must name a criterion that exists
-	 * (\`requireKnownAcceptance\`) and is refused in a terminal or checkpointed state, so the observation is bound to
-	 * the criterion that is \`in_progress\` and dropped when there is none or the state will not take it. Every drop
-	 * carries a typed reason into the ledger record: an observation that was never taken and one that was silently
-	 * discarded must not look the same.
-	 */
-	async function recordRequestObservation(transition: RequestTerminalTransition, metadata: { readonly taskId: string; readonly mode: AgentMode; readonly sessionId?: string }): Promise<void> {
-		// **Only the request whose counters are live can be observed, and this is not an optimisation.**
-		// `settle()` terminalizes every lease it holds - the active request **and** an older superseded one - so this
-		// runs more than once for one settle. The counters belong to the active request alone; a superseded one that
-		// settles later has no cost of its own left to report, and reporting the active request's numbers under its id
-		// would be a **false attribution of one request's cost to another**. Such a terminal records nothing here:
-		// its own `request.terminal` record is still written, so a reader sees a terminal without an observation
-		// rather than an observation that lies.
-		if (currentRequestPlan?.requestId !== transition.logicalRequestId) return;
-		const observation: TaskResourceObservation = {
-			toolCalls: currentRequestToolCalls,
-			providerRounds: currentRequestProviderRounds,
-			elapsedMs: currentRequestStartedAt === undefined ? 0 : Math.max(0, Date.now() - currentRequestStartedAt),
-			...currentRequestResources,
-		};
-		const stopReasons = [...currentRequestStopReasons];
-		// A snapshot of the provider for this call, so narrowing survives the awaits below - and so the method is
-		// called **on the provider**, which is what keeps its own \`this\` intact.
-		const provider = projectProvider;
-		const task = provider.getCurrentTask();
-		let acceptanceId: string | undefined;
-		let skipReason: string | undefined;
-		if (task?.formal !== true || task.provider !== "native") skipReason = "no-formal-native-task";
-		else if (provider.readTaskConvergence === undefined) skipReason = "no-convergence-surface";
-		else {
-			const read = provider.readTaskConvergence(task.stableId);
-			if (read.kind !== "valid") skipReason = "no-readable-convergence-record";
-			else if (read.snapshot.state !== "working" && read.snapshot.state !== "verifying") skipReason = "state-" + read.snapshot.state;
-			else {
-				acceptanceId = read.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id;
-				if (acceptanceId === undefined) skipReason = "no-active-criterion";
-			}
-		}
-		await ledger.appendTaskResourceObservation({
-			taskId: metadata.taskId,
-			stepId: "observation:" + transition.logicalRequestId,
-			mode: metadata.mode,
-			requestId: transition.logicalRequestId,
-			sessionId: metadata.sessionId,
-			...observation,
-			...(stopReasons.length === 0 ? {} : { stopReasons }),
-			...(skipReason === undefined ? {} : { convergenceSkipReason: skipReason }),
-		});
-		if (acceptanceId === undefined || task === undefined || provider.mutateTaskConvergence === undefined) return;
-		try {
-			await provider.mutateTaskConvergence(task.stableId, { action: "observe", acceptanceId, resources: observation });
-		} catch {
-			/* The observation is additive evidence: a write that cannot land must not fail the request terminal. */
-		}
-	}
 	const progressGuard = new ProgressGuard({
 		consecutiveErrorThreshold: Number(process.env.DOVE_PI_PROGRESS_ERROR_THRESHOLD),
 		repeatedFailureThreshold: Number(process.env.DOVE_PI_PROGRESS_REPEAT_THRESHOLD),
@@ -2406,6 +2331,34 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				try {
 					const currentTask = currentRequestPlan.lane === "formal" ? projectProvider.resolveTask(currentRequestTaskId) : undefined;
 					const convergence = currentRequestPlan.lane === "formal" ? projectProvider.readTaskConvergence?.(currentRequestTaskId) : undefined;
+					// **The one writer for this record, and why it is this site rather than a terminal hook.**
+					// It runs once per request, with the counters still live (the resets are at `agent_settled` and at the
+					// next lease), and it already resolves the acceptance the ledger record names. A hook on
+					// `appendRequestTerminal` fires once per terminal *transition*, and one `settle()` can terminalize
+					// several leases - so a producer there records the active request's cost more than once and needs a
+					// guard to stop it attributing that cost to a superseded request. This site needs no guard, and
+					// **nothing else writes this kind**: a second one was added here once, on the belief that this call
+					// did not exist, and a real ledger showed both records for one request.
+					//
+					// The observation is assembled **once** and used twice: the ledger wants flat fields and the
+					// convergence event wants `TaskResourceObservation`, which is a subset with the same names. Two
+					// assemblies is how a field comes to be added to one and forgotten in the other.
+					const observation: TaskResourceObservation = {
+						toolCalls: currentRequestToolCalls,
+						providerRounds: currentRequestProviderRounds,
+						elapsedMs: currentRequestStartedAt ? Date.now() - currentRequestStartedAt : 0,
+						...currentRequestResources,
+					};
+					// The convergence side is reachable only when the record would take the event **and** a criterion is
+					// active to attach it to. Otherwise the ledger record carries a typed reason: "never observed" and
+					// "observed and discarded" must not look the same to a reader.
+					const takesEvent = convergence?.kind === "valid" && (convergence.snapshot.state === "working" || convergence.snapshot.state === "verifying");
+					const activeAcceptanceId = takesEvent && convergence?.kind === "valid"
+						? convergence.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id
+						: undefined;
+					const skipReason = convergence?.kind !== "valid"
+						? (currentRequestPlan.lane === "formal" ? "no-readable-convergence-record" : "no-formal-native-task")
+						: !takesEvent ? `state-${convergence.snapshot.state}` : activeAcceptanceId === undefined ? "no-active-criterion" : undefined;
 					await ledger.appendTaskResourceObservation({
 						taskId: currentRequestTaskId,
 						stepId: `request:${currentRequestPlan.requestId}`,
@@ -2414,17 +2367,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 						sessionId,
 						attemptId: completed.attemptId,
 						acceptanceId: convergence?.kind === "valid" ? convergence.snapshot.checkpoint?.nextAcceptanceId ?? convergence.snapshot.correctiveAction?.acceptanceId : currentTask?.convergence?.health === "valid" ? currentTask.convergence.activeAcceptanceId : undefined,
-						toolCalls: currentRequestToolCalls,
-						providerRounds: currentRequestProviderRounds,
-						elapsedMs: currentRequestStartedAt ? Date.now() - currentRequestStartedAt : 0,
+						...observation,
 						toolDurationMs: currentRequestToolDurationMs,
-						inputTokens: currentRequestResources.inputTokens,
-						cacheReadTokens: currentRequestResources.cacheReadTokens,
-						cacheWriteTokens: currentRequestResources.cacheWriteTokens,
-						outputTokens: currentRequestResources.outputTokens,
-						reasoningTokens: currentRequestResources.reasoningTokens,
-						stopReasons: currentRequestStopReasons,
+						...(currentRequestStopReasons.length === 0 ? {} : { stopReasons: currentRequestStopReasons }),
+						...(skipReason === undefined ? {} : { convergenceSkipReason: skipReason }),
 					});
+					// **The event that turns the ledger record into a round.** AHE's decision observability needs a moment
+					// the next read can compare against; this is it, and it is the only thing the previous task's claim
+					// was right about - the event had no producer, while this call always existed.
+					if (activeAcceptanceId !== undefined && projectProvider.mutateTaskConvergence !== undefined) {
+						await projectProvider.mutateTaskConvergence(currentRequestTaskId, { action: "observe", acceptanceId: activeAcceptanceId, resources: observation });
+					}
 				} catch { /* resource telemetry is observation-only */ }
 			}
 			lastAttemptOutcome = outcome;
