@@ -136,7 +136,16 @@ describe("the documents that name things", () => {
 				if (name.endsWith(".md") && name !== "index.md" && !mentioned.has(name)) problems.push(entry.name + "/" + name + " is not listed");
 			}
 			for (const name of mentioned) {
-				if (name.endsWith(".md") && !existsSync(join(directory, name))) problems.push(entry.name + " lists " + name + " and it does not exist");
+				if (!name.endsWith(".md")) continue;
+				// **A name may point at a sibling.** An index that says "the router is in the backend directory" is pointing at a real
+				// file, and a check that only looked in its own directory would fail on a true sentence - which is what happened on
+				// this check first run after the rule was widened. **Its limit**: a typo that happens to name a file in another
+				// specification directory passes, and no name-based check can tell the difference between a pointer and a mistake.
+				const here = existsSync(join(directory, name));
+				const sibling = readdirSync(specRoot, { withFileTypes: true }).some(
+					(other) => other.isDirectory() && other.name !== entry.name && existsSync(join(specRoot, other.name, name)),
+				);
+				if (!here && !sibling) problems.push(entry.name + " lists " + name + " and it is not in this directory or any sibling");
 			}
 		}
 		return problems;
@@ -154,6 +163,20 @@ describe("the documents that name things", () => {
 		// being kept, since the backend index was missing three specifications when the test was written.
 		assert.deepEqual(indexProblems(join(process.cwd(), ".trellis", "spec")), [], "a specification index and its directory disagree");
 
+		// **And the entry point names what the workflow promises.** `workflow.md` says a spec index is the entry point with a
+		// Pre-Development Checklist and a Quality Check, and `trellis-before-dev` sends every agent to read the files listed in
+		// that checklist - so an index that names neither is a pointer into nothing. Measured when this was written: neither index
+		// had either section, and the phrase appeared nowhere in the repository as a section of a specification.
+		//
+		// **What it cannot see**: whether the sections say anything useful, or point at the right files. Presence is what a check
+		// can hold; content is what a reader holds.
+		for (const directory of ["backend", "frontend"]) {
+			const index = readFileSync(join(process.cwd(), ".trellis", "spec", directory, "index.md"), "utf8");
+			for (const section of ["Pre-Development Checklist", "Quality Check"]) {
+				assert.ok(index.includes(section), directory + "/index.md does not name its " + section);
+			}
+		}
+
 		// **And the comparison is proved to fail**, because a check nobody has seen refuse is a check whose wiring is unproven: a
 		// seeded directory whose index omits a file must be reported, a name an index gives and the directory lacks must be reported,
 		// and a directory with no index at all must be reported rather than skipped.
@@ -165,7 +188,7 @@ describe("the documents that name things", () => {
 			writeFileSync(join(seed, "seeded", "b.md"), "# B\n");
 			assert.deepEqual(indexProblems(seed), ["seeded/b.md is not listed"], "an omission is reported");
 			writeFileSync(join(seed, "seeded", "index.md"), "# Index\n| [A](./a.md) | [Gone](./gone.md) |\n");
-			assert.deepEqual(indexProblems(seed), ["seeded/b.md is not listed", "seeded lists gone.md and it does not exist"], "and so is a name that is not there");
+			assert.deepEqual(indexProblems(seed), ["seeded/b.md is not listed", "seeded lists gone.md and it is not in this directory or any sibling"], "and so is a name that is not there");
 			mkdirSync(join(seed, "bare"), { recursive: true });
 			writeFileSync(join(seed, "bare", "only.md"), "# Only\n");
 			assert.ok(indexProblems(seed).includes("bare has no index.md"), "and a directory with no index at all");

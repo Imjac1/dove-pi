@@ -8,6 +8,12 @@
 
 This directory contains the frontend guidelines for this project.
 
+**Pre-Development Checklist**: read the guideline files below that apply to your task, and the router
+(`../backend/personal-agent-runtime.md`) for the subject-scoped specifications. This index is the list, not the guideline.
+
+**Quality Check**: `quality-guidelines.md` holds the forbidden patterns, the required patterns and the review checklist this
+repository enforces.
+
 ---
 
 ## Guidelines Index
