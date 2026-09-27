@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { surfaceFit } from "../src/core/harness-round.ts";
+import { surfaceFit, verifierFit } from "../src/core/harness-round.ts";
 
 /**
  * The check that an edit stayed inside the surface it declared. It reuses the fence rule rather than reimplementing it,
@@ -44,6 +44,28 @@ describe("did the edit stay inside the surface it declared", () => {
 
 	it("treats a commit that touched nothing as vacuously inside", () => {
 		assert.deepEqual(fit([], ["src"]), { fit: "inside", outside: [] });
+	});
+
+	it("answers definite, possible or none for whether an edit is a verifier change", () => {
+		// The boundary says a change that edits the verifier is not a loop turn. Two of the three answers are certainties
+		// and the middle one is a declaration of a limit: the code is in a file that is mostly harness, and naming the
+		// symbols makes the judgment it leaves an informed one.
+		const verifier = { paths: ["src/core/failure-reading.ts"], embedded: [{ path: "src/pi-adapter/extension.ts", symbols: ["unresolvedAcceptanceEvidence", "changeObservables"] }] };
+		const fit = (touchedFiles: readonly string[] | undefined) => verifierFit({ touchedFiles, verifier, workspaceRoot: ROOT });
+		assert.equal(fit(["src/core/failure-reading.ts"]).fit, "definite", "the file is verifier code");
+		const possible = fit(["src/pi-adapter/extension.ts"]);
+		assert.equal(possible.fit, "possible");
+		assert.deepEqual(possible.embedded, [{ path: "src/pi-adapter/extension.ts", symbols: ["unresolvedAcceptanceEvidence", "changeObservables"] }]);
+		assert.equal(fit(["src/core/action-policy.ts"]).fit, "none", "harness code is not a verifier change");
+		assert.equal(fit(["src/core/failure-reading.ts", "src/pi-adapter/extension.ts"]).fit, "definite", "a verifier file outranks an embedding one");
+	});
+
+	it("claims nothing about a commit it could not read", () => {
+		const verifier = { paths: ["src/core/failure-reading.ts"], embedded: [{ path: "src/pi-adapter/extension.ts", symbols: ["x"] }] };
+		// Unlike the surface fit, an unreadable commit is not a third state here: the question is whether the verifier is at
+		// stake, and nothing was read, so nothing is claimed.
+		assert.equal(verifierFit({ touchedFiles: undefined, verifier, workspaceRoot: ROOT }).fit, "none");
+		assert.equal(verifierFit({ touchedFiles: [], verifier, workspaceRoot: ROOT }).fit, "none");
 	});
 
 	it("normalizes the paths the way the fence does, so one rule serves both", () => {

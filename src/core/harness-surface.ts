@@ -42,9 +42,23 @@ export interface HarnessSurface {
 	 * with something plausible.
 	 */
 	readonly verifiedBy: Readonly<Partial<Record<ChangeSurface, readonly string[]>>>;
+	/**
+	 * **The verifier, declared in two parts.** A change that edits the verifier is not a loop turn, and which edits those are
+	 * was a reader judgment until this existed.
+	 *
+	 * `paths` are the files that are verifier code; `embedded` are files that contain it and are otherwise harness, named
+	 * with the symbols inside them because that code cannot be declared as a path until it is extracted.
+	 */
+	readonly verifier: HarnessVerifier;
 }
 
-const SURFACE_FIELDS = new Set(["version", "components", "verifiedBy"]);
+export interface HarnessVerifier {
+	readonly paths: readonly string[];
+	readonly embedded: readonly { readonly path: string; readonly symbols: readonly string[] }[];
+}
+
+const SURFACE_FIELDS = new Set(["version", "components", "verifiedBy", "verifier"]);
+const VERIFIER_FIELDS = new Set(["paths", "embedded"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -106,7 +120,39 @@ export function parseHarnessSurface(text: string): HarnessSurface {
 			});
 		}
 	}
-	return { version: 1, components: surface, verifiedBy };
+	const rawVerifier = parsed.verifier;
+	const verifier: { paths: string[]; embedded: { path: string; symbols: string[] }[] } = { paths: [], embedded: [] };
+	if (rawVerifier !== undefined) {
+		if (!isRecord(rawVerifier)) throw new HarnessSurfaceError("invalid-type", "verifier must be a mapping with 'paths' and 'embedded'.");
+		for (const key of Object.keys(rawVerifier)) {
+			if (!VERIFIER_FIELDS.has(key)) throw new HarnessSurfaceError("unknown-field", "the verifier block declares an unknown field " + key + ". Known fields: " + [...VERIFIER_FIELDS].join(", ") + ".");
+		}
+		const rawPaths = rawVerifier.paths;
+		if (rawPaths !== undefined) {
+			if (!Array.isArray(rawPaths) || rawPaths.length === 0) throw new HarnessSurfaceError("empty", "verifier.paths is declared but empty: a verifier with no paths is not a declaration.");
+			verifier.paths = rawPaths.map((entry, index) => {
+				if (typeof entry !== "string" || entry.trim() === "") throw new HarnessSurfaceError("invalid-type", "verifier.paths entry " + String(index + 1) + " must be a non-empty workspace-relative path.");
+				return entry.trim().replace(/\\/gu, "/").replace(/\/+$/u, "");
+			});
+		}
+		const rawEmbedded = rawVerifier.embedded;
+		if (rawEmbedded !== undefined) {
+			if (!Array.isArray(rawEmbedded) || rawEmbedded.length === 0) throw new HarnessSurfaceError("empty", "verifier.embedded is declared but empty: remove it if the verifier is fully separable.");
+			verifier.embedded = rawEmbedded.map((entry, index) => {
+				if (!isRecord(entry)) throw new HarnessSurfaceError("invalid-type", "verifier.embedded entry " + String(index + 1) + " must be a mapping with 'path' and 'symbols'.");
+				const pathValue = typeof entry.path === "string" ? entry.path.trim() : "";
+				if (pathValue === "") throw new HarnessSurfaceError("invalid-type", "verifier.embedded entry " + String(index + 1) + " must name a path.");
+				const rawSymbols = entry.symbols;
+				if (!Array.isArray(rawSymbols) || rawSymbols.length === 0) throw new HarnessSurfaceError("empty", "verifier.embedded " + pathValue + " names no symbols, so nothing says what inside it is verifier code. Remove the entry if nothing is.");
+				const symbols = rawSymbols.map((symbol, symbolIndex) => {
+					if (typeof symbol !== "string" || symbol.trim() === "") throw new HarnessSurfaceError("invalid-type", "verifier.embedded " + pathValue + " symbol " + String(symbolIndex + 1) + " must be a non-empty name.");
+					return symbol.trim();
+				});
+				return { path: pathValue.replace(/\\/gu, "/").replace(/\/+$/u, ""), symbols };
+			});
+		}
+	}
+	return { version: 1, components: surface, verifiedBy, verifier };
 }
 
 /**
@@ -129,6 +175,13 @@ export function unresolvedSurfaceEntries(surface: HarnessSurface, exists: (relat
 		for (const path of paths) {
 			if (!exists(path)) unresolved.push("verifiedBy:" + name + ":" + path);
 		}
+	}
+	// The verifier too: a declared verifier path that does not exist is a boundary drawn around nothing.
+	for (const path of surface.verifier.paths) {
+		if (!exists(path)) unresolved.push("verifier:" + path);
+	}
+	for (const entry of surface.verifier.embedded) {
+		if (!exists(entry.path)) unresolved.push("verifier.embedded:" + entry.path);
 	}
 	return unresolved;
 }

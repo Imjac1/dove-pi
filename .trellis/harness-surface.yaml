@@ -34,3 +34,16 @@ verifiedBy:
   tool-implementation: [tests/task-convergence.test.ts, tests/change-verdict.test.ts, tests/failure-reading.test.ts, tests/harness-corpus.test.ts, tests/harness-round.test.ts, tests/harness-axes.test.ts, tests/harness-surface.test.ts]
   middleware: [tests/action-policy.test.ts, tests/fence-drift.test.ts, tests/host-work-mode.test.ts]
   long-term-memory: [tests/spec-context-budget.test.ts]
+# The verifier: the code that produces the evidence the loop is judged by, and whose change is therefore not a loop turn.
+#
+# Two parts, because the verifier is not only files. `paths` are the files that *are* verifier code; `embedded` are files
+# that contain verifier code and are otherwise harness, which cannot be declared as paths until that code is extracted. The
+# symbols were read out of the source rather than remembered, and they are data rather than a comment because the reading
+# uses them.
+verifier:
+  paths: [src/core/harness-axes.ts, src/core/failure-reading.ts, src/core/harness-round.ts, src/core/harness-corpus.ts, src/core/execution-ledger.ts]
+  embedded:
+    - path: src/pi-adapter/extension.ts
+      symbols: [unresolvedAcceptanceEvidence, countGateRefusals, changeObservables, convergenceObservables]
+    - path: src/core/task-convergence.ts
+      symbols: [parsePredictedMovement, verificationStateOf, verdictFor, decidableChanges]

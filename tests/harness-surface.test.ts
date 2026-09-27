@@ -90,6 +90,21 @@ describe("the declared editable surface", () => {
 		assert.deepEqual(unresolvedSurfaceEntries(surface, (relative) => relative === ".agents/skills"), ["verifiedBy:skill:tests/nowhere.test.ts"]);
 	});
 
+	it("refuses a verifier block it cannot read: an unknown field, an empty paths list, an entry with no symbols", () => {
+		const base = "version: 1\ncomponents:\n  skill: [.agents/skills]\n";
+		assert.equal(expectRefusal(base + "verifier:\n  extras: [src]\n").code, "unknown-field");
+		assert.equal(expectRefusal(base + "verifier:\n  paths: []\n").code, "empty");
+		const noSymbols = expectRefusal(base + "verifier:\n  embedded:\n    - path: src/adapter.ts\n      symbols: []\n");
+		assert.equal(noSymbols.code, "empty");
+		assert.match(noSymbols.message, /names no symbols/);
+		assert.equal(expectRefusal(base + "verifier:\n  embedded:\n    - symbols: [x]\n").code, "invalid-type");
+	});
+
+	it("names a verifier path that does not resolve, in either part of the block", () => {
+		const surface = parseHarnessSurface("version: 1\ncomponents:\n  skill: [.agents/skills]\nverifier:\n  paths: [src/gone.ts]\n  embedded:\n    - path: src/also-gone.ts\n      symbols: [x]\n");
+		assert.deepEqual(unresolvedSurfaceEntries(surface, (relative) => relative === ".agents/skills"), ["verifier:src/gone.ts", "verifier.embedded:src/also-gone.ts"]);
+	});
+
 	it("names the entry, not the file, when something does not resolve", () => {
 		const surface = parseHarnessSurface("version: 1\ncomponents:\n  skill: [.agents/skills, nowhere/at/all]\n  middleware: [src]\n");
 		assert.deepEqual(unresolvedSurfaceEntries(surface, (relative) => relative === "src" || relative === ".agents/skills"), ["skill:nowhere/at/all"]);

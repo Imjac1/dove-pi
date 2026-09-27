@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
 import { parseHarnessSurface } from "../src/core/harness-surface.ts";
-import { surfaceFit } from "../src/core/harness-round.ts";
+import { surfaceFit, verifierFit } from "../src/core/harness-round.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
 import type { TaskChange } from "../src/core/task-convergence.ts";
 
@@ -63,10 +63,13 @@ function touchedFiles(commit: string): readonly string[] | undefined {
 
 const surfacePath = join(harnessRoot, ".trellis", "harness-surface.yaml");
 const declaredByComponent = new Map<string, readonly string[]>();
+let declaredVerifier: ReturnType<typeof parseHarnessSurface>["verifier"] | undefined;
 let surfaceIssue: string | undefined;
 if (existsSync(surfacePath)) {
 	try {
-		for (const component of parseHarnessSurface(readFileSync(surfacePath, "utf8")).components) declaredByComponent.set(component.name, component.paths);
+		const parsed = parseHarnessSurface(readFileSync(surfacePath, "utf8"));
+		for (const component of parsed.components) declaredByComponent.set(component.name, component.paths);
+		declaredVerifier = parsed.verifier;
 	} catch (error) {
 		surfaceIssue = error instanceof Error ? error.message : String(error);
 	}
@@ -106,6 +109,13 @@ for (const { change } of changes) {
 			const fit = surfaceFit({ touchedFiles: files, declaredPaths: declared, workspaceRoot: harnessRoot });
 			console.log("    applied:    " + commit + "   " + fit.fit + " " + change.surface + (files === undefined ? " (git could not resolve the commit)" : ""));
 			if (fit.outside.length > 0) console.log("    outside:    " + fit.outside.join(", "));
+			// Whether this edit is a verifier change: such a change is not a loop turn, and it is judged by its suites and a
+			// person rather than by the observables.
+			if (declaredVerifier !== undefined) {
+				const verifier = verifierFit({ touchedFiles: files, verifier: declaredVerifier, workspaceRoot: harnessRoot });
+				const atStake = verifier.paths.length > 0 ? verifier.paths.join(", ") : verifier.embedded.map((entry) => entry.path + " (" + entry.symbols.join(", ") + ")").join(" | ");
+				console.log("    verifier:   " + verifier.fit + (verifier.fit === "none" ? " (this edit is not a verifier change)" : " - " + atStake));
+			}
 		}
 	}
 	const decision = decisions.filter((record) => String(record.details?.changeId ?? "") === change.id).at(-1);

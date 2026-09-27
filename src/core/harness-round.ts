@@ -1,4 +1,5 @@
 import { declaredPrefixHit, workspaceRelativeTarget } from "./action-policy.ts";
+import type { HarnessVerifier } from "./harness-surface.ts";
 
 /**
  * **Did the edit stay inside the surface it declared?**
@@ -28,6 +29,39 @@ export interface SurfaceFitResult {
  * declared it would not" and "nobody could tell" are different facts. An empty list is a different thing again: a
  * commit that touched nothing, which is vacuously inside.
  */
+/** Whether an edit is a change to the verifier, which is not a loop turn. */
+export type VerifierFit = "definite" | "possible" | "none";
+
+export interface VerifierFitResult {
+	readonly fit: VerifierFit;
+	/** The verifier files the commit touched: the edit **is** a verifier change. */
+	readonly paths: readonly string[];
+	/** Files that **contain** verifier code, with the symbols at stake - the edit may be one, and a reader can look. */
+	readonly embedded: readonly { readonly path: string; readonly symbols: readonly string[] }[];
+}
+
+/**
+ * **Is this edit a verifier change?** The boundary contract says such a change is not a loop turn, and which edits those
+ * are was a reader judgment until the verifier could be pointed at.
+ *
+ * Three answers, because the evidence supports three: **`definite`** when a touched file is verifier code, **`possible`**
+ * when it is a file that embeds verifier code - named with the symbols, so the judgment it leaves is an informed one -
+ * and **`none`** otherwise. **An unreadable commit is `none`**, not `possible`: nothing could be read, so nothing is
+ * claimed, and the question here is whether the verifier is at stake rather than what the edit touched.
+ */
+export function verifierFit(input: { readonly touchedFiles: readonly string[] | undefined; readonly verifier: HarnessVerifier; readonly workspaceRoot: string }): VerifierFitResult {
+	if (input.touchedFiles === undefined) return { fit: "none", paths: [], embedded: [] };
+	const paths: string[] = [];
+	const embedded: { path: string; symbols: readonly string[] }[] = [];
+	for (const file of input.touchedFiles) {
+		const relative = workspaceRelativeTarget(input.workspaceRoot, file);
+		if (declaredPrefixHit(input.verifier.paths, relative) !== undefined) paths.push(file);
+		const hit = input.verifier.embedded.find((entry) => declaredPrefixHit([entry.path], relative) !== undefined);
+		if (hit !== undefined) embedded.push({ path: file, symbols: hit.symbols });
+	}
+	return { fit: paths.length > 0 ? "definite" : embedded.length > 0 ? "possible" : "none", paths, embedded };
+}
+
 export function surfaceFit(input: { readonly touchedFiles: readonly string[] | undefined; readonly declaredPaths: readonly string[]; readonly workspaceRoot: string }): SurfaceFitResult {
 	if (input.touchedFiles === undefined) return { fit: "unresolved", outside: [] };
 	const outside: string[] = [];
