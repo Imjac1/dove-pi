@@ -233,28 +233,27 @@ truth.
 project's founding defect; the choice is to make it real or remove it, never to leave it declared. Do **(c) only
 after** (a), because decomposition is what the benchmark measured and encoding is what the corpus guessed.
 
-**Cheapest falsifying step - executed 2026-09-27, and it confirmed the gap.** Written as a permanent test rather
-than a probe, so the fix has somewhere to land:
+**Cheapest falsifying step - executed 2026-09-27, confirmed the gap, then inverted by the fix.** Written as a
+permanent test rather than a probe, so the fix would have somewhere to land:
 
 ```text
 tests/host-work-mode.test.ts
-  ✔ does not enforce a forbidden technique, because nothing carries one to the authority  [KNOWN GAP: D4]
+  ✔ does not enforce a forbidden technique, because nothing carries one to the authority  [KNOWN GAP: D4]   (before)
+  ✔ refuses a technique the mode excludes, at the boundary, on a raw capability call  [D4]                  (after)
 ```
 
-The test declares `dos` as forbidden in **both** places it can be declared - the fixture mode's
-`gate.excluded_techniques` and the fixture engagement's grant `constraints.excluded_techniques` - and calls the
-capability with `technique: "dos"`. **The call is allowed.** The chain is exactly as read: the authority gate does
-refuse an excluded technique when the request carries one (`src/core/authority.ts:403`), and the policy's
-`toRequest` (`src/core/action-policy.ts:145`) builds `{ action, target, at, evidenceDigests }` and never supplies
-one. The mode-level declaration has no consumer at all.
+**Before:** the test declared `dos` as forbidden in both places it can be declared - the mode's
+`gate.excluded_techniques` and the grant's `constraints.excluded_techniques` - and the call was **allowed**, because
+`toRequest` built `{ action, target, at, evidenceDigests }` and never supplied a technique.
 
-The test asserts the defect **so that the fix is a one-line inversion rather than a new test**, and its name carries
-`[KNOWN GAP: D4]` so it cannot be mistaken for an endorsement. Full suite after adding it: 595 tests, 593 pass, 0 fail.
-
-**What this changes for the recommendation.** Nothing about (a) versus (b) - the declared-and-inert fields still have
-to be made real or removed. It does mean the *decomposition* half of the evasion paper's finding is worse than
-reading suggested: it is not that the accumulator is empty, it is that **no request can ever carry the facts a
-technique-scoped rule needs**.
+**After (2026-09-27, commit 1616a3d): (a) is built.** The policy reads `technique`/`phase`/`intensity` off the
+action's arguments, refuses a technique the mode excludes **before any allowing check**, meters a phase against its
+`gate.intensity` ceiling using an accumulator that counts actions actually run (`recordRun`/`counts`, carried into
+each invocation as `accumulatedIntensity`), and forwards all three in `toRequest` so a grant's `constraints` fire
+too. `gate.windows` is **deleted rather than implemented**: a calendar window outlives a session and is a property of
+the grant, which carries and checks its own - so the loader refuses a mode-level one with that reason, not as an
+unknown field. The inverted test also covers the case the authority cannot reach: a call that names no target builds
+no request, so only the mode's own list can refuse it.
 
 ---
 
