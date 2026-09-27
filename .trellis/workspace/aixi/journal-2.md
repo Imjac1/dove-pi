@@ -666,3 +666,42 @@ The tool hash file tracks 181 files - AGENTS.md, workflow.md, config.yaml, and t
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the remaining skill rules naming this repository, which the classification pass has not finished.
+
+
+## Session 69: The paths a specification names, and the version of the check that reported all of them
+<!-- trellis-session: v=2 fp=44922ca9bcf4f2a8 -->
+
+**Date**: 2026-09-28
+**Task**: The paths a specification names, and the version of the check that reported all of them
+**Branch**: `master`
+
+### Summary
+
+The tool own skill says .trellis/spec/ describes the project as it exists now, and its strongest mechanical part is that the paths a specification names exist - forty-two of them across twenty-eight files, and they all resolve. The first version of the rule resolved from the file alone and reported every one of them missing.
+
+### Main Changes
+
+- specifications write paths from the repository root and a handful from their own directory, so the rule tries both bases - resolving from the file alone flagged src/core/contracts.ts, which exists
+- that is the fifth measurement of mine in six rounds that was wrong before the data was, and it is the same class as the others: a rule narrow enough to miss what it was looking at, in this case the base a path is written from
+- scope is the specifications and not the guides: a guide gives examples, and scripts/path/file.py is a shape rather than a claim - a rule that read the guides would report two true sentences, and a check that fires on true sentences teaches people to ignore it
+- the checks outcome is a negative: nothing in the specifications names a path this repository lacks, so three rounds of auditing the docs have now found three index problems and no broken path
+- the limit is stated in the check: it can see that a path exists, never that the sentence around it is still true - which is the part a reader checks and a check cannot
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6d0022e` | test(spec): the paths a specification names resolve from the root or from the file |
+| `f434490` | chore: record journal |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 730 tests, 728 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 8 of 8 with the path check.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the two remaining skill rules naming this repository that the classification pass has not closed.
