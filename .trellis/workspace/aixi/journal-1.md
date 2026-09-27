@@ -1128,3 +1128,43 @@ Built D5 decision observability in AHE shape: a manifest names the failure evide
 ### Next Steps
 
 - D6 first axis, SSM and ITQ, which the ledger can already feed; and the missing resource-observation producer as its own defect, with the evidence already recorded.
+
+
+## Session 31: The resource observation, and the attribution guard it needed
+<!-- trellis-session: v=2 fp=e7f40cb66f3ae33e -->
+
+**Date**: 2026-09-27
+**Task**: The resource observation, and the attribution guard it needed
+**Branch**: `master`
+
+### Summary
+
+Wired a path that was inert in three disconnected pieces: the convergence record had a resource-observation kind, the ledger had a writer, and the spec described it as working, while nothing produced any of them. The host now records what a request cost at its terminal, from counters it already kept, and the spec annotation that claimed an observation existed has been replaced by the contract.
+
+### Main Changes
+
+- the request terminal writes the ledger observation and records request.observed, from one assembly of the same counters, so the two cannot disagree about a round
+- only the request whose counters are live is observed: settle terminalizes every lease it holds, and the first version attributed the active request cost to a superseded one, which the test caught as a revision that advanced by two
+- when the record cannot take the observation the ledger names why, with a typed reason: no formal native task, a state that refuses events, or no active criterion
+- step 0 confirmed the ordering the producer depends on: every terminal is written before the counters reset, and the reset at the request start only happens for a new lease
+- the test that asserted a ready_to_finish refusal was relying on a lease a real session would have settled; the observation is what made that visible, and the request it needs is now driven explicitly
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c57f4aa` | feat(convergence): record what a request cost, where the record says it does |
+| `f614bcb` | docs(spec): replace the inert resource-observation annotation with the live contract |
+| `70d1015` | chore(task): record the resource-observation task and the attribution guard it found |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 651 tests, 649 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- D6 first axis, SSM and ITQ, which now have real per-request numbers to score from; then the loop over the loop.
