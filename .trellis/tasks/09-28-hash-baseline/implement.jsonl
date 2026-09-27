@@ -1,0 +1,2 @@
+{"file": "tests/document-drift.test.ts", "reason": "The check that reads the hash file."}
+{"file": ".trellis/.template-hashes.json", "reason": "The baseline whose meaning the round measured."}

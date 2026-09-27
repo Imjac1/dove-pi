@@ -1,0 +1,2 @@
+{"file": ".trellis/.gitignore", "reason": "Which of the tracked-and-absent entries are ignored runtime state."}
+{"file": ".trellis/.version", "reason": "The tool version, against the hash file own format version."}
