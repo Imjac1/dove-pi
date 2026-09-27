@@ -55,6 +55,18 @@ that reports says so in a field a reader can check.
     mechanism must not read the same, which is the distinction Self-Harness says is usually missing.
   - **Which terminals count as failures is the SSM axis's rule** (`classifyTerminal`), not a second one, so the
     reading and the axis cannot disagree.
+  - **The mechanism lives in two places, and the reading reads both.** The terminal carries Dove own name for what it
+    observed; `provider.request.completed` and `provider.request.rejected` carry the provider own account
+    (`stopReason`, `httpStatus`, a diagnostic), correlated by request id. A preflight failure is where the difference
+    is visible: the ledger terminal says `host-shutdown-preflight` - true, because Pi rejected the request before the
+    Dove lifecycle saw it - while the provider record says the request errored with a status. **The record keeps the two
+    apart and invents no third code**, because a merged name would claim a translation nobody performs; a later healthy
+    call does not erase an earlier error, and an outcome reporting no trouble is not attached at all.
+  - **The observable boundary, recorded because the loop needs it.** A manifest judges an edit by three observables - a
+    criterion status, a criterion verification state, a refusal count - and **"this failure is now named correctly" is
+    none of them**, so an improvement to an instrument cannot be predicted in the closed set and its verdict reads
+    `unobserved`. That is a boundary of the instruments rather than a defect in them, and the question it raises -
+    widen the set, or accept that instrument improvements are judged by a person - is open.
   - **A refusal is attributed to a request by id, never by ledger position.** The four `appendGateRefused` sites
     pass the live `requestId`, and a refusal that carries none is **counted in `unrefused` rather than guessed
     at**: `issueRequestHostAbort` can settle a previous request after the next one has been received, so position
