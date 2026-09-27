@@ -105,10 +105,11 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
   simply outside both. `toRequest` forwards `technique`/`phase`/`intensity` so a grant's `constraints`
   fire too.
-- **A `sandbox` block is either honoured or refused, never ignored.** `network: none` and
-  `filesystem: read-only-source` are enforced at the tool boundary; `isolation: container`/`worktree`
-  and `network: allowlist` need an OS sandbox and refuse to load, naming an enforceable claim. Absent
-  axes mean the mode says nothing - not that a restriction exists.
+- **`sandbox` and `fence` are honoured or refused, never ignored.** `network: none` and `filesystem:
+  read-only-source` are enforced at the boundary; `isolation: container`/`worktree` and `network:
+  allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
+  no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
+  through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -126,8 +127,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
 | `gate.excluded_techniques` not a string list | Refused at load |
 | `gate.windows` declared | Refused: the grant carries the window |
-| `sandbox.isolation`/`network`/`filesystem` unrecognised | Refused, naming the axis |
-| `isolation: none` with `filesystem: ephemeral` | Refused: contradictory |
+| `sandbox` axis unrecognised, or `isolation: none` with `filesystem: ephemeral` | Refused, naming the axis or the contradiction |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |
 
