@@ -782,3 +782,41 @@ The question was whether the drift suite needs splitting. Measured: 375 lines, t
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the quality guidelines, which have grown a convention for headers and one for counts in three rounds.
+
+
+## Session 72: The gate names the owners of its rules, and keeps the one that has none
+<!-- trellis-session: v=2 fp=07241576fe6a2be4 -->
+
+**Date**: 2026-09-28
+**Task**: The gate names the owners of its rules, and keeps the one that has none
+**Branch**: `master`
+
+### Summary
+
+Three measurements first: the quality guidelines are 5 KB and not becoming a specification; four of the five rules in its gate section are already owned by routed specs; and every code-shaped identifier the guidelines and the convergence record name resolves in src. So the section was redundant rather than wrong, and one rule - only blocking and regression findings fixed in scope - appears nowhere else.
+
+### Main Changes
+
+- the rewrite keeps that rule as this repository own and turns the other four into pointers, because a rule with no owner is a rule nobody maintains and a rule stated twice is a maintenance debt
+- the resource rule turned out to be enforced rather than merely stated: the closed observable set carries no resource observable, which is the boundary decision of an earlier round doing the work
+- the rewrite is 420 bytes larger, which is the cost of naming four owners instead of restating them, and the file is still under the limit the task set for itself
+- and one tooling lesson: a sha ending in d was eaten by PowerShell numeric suffix parsing, so the journal took two attempts - quoting it fixed what no amount of care with the token would have
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `826fd2e` | docs(spec): the gate names the owners of its rules, and keeps the one rule that has no other home |
+| `610970d` | chore(task): record the three measurements behind the gate rewrite |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 731 tests, 729 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 9 of 9.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the last unclassified skill rules naming this repository.
