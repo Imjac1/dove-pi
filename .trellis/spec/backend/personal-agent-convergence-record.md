@@ -59,7 +59,12 @@ under `.dove/tasks/<goal-id>/convergence.json`.
   the fix, and a **closed-set** prediction: `criterion-status:<AC>=<status>`,
   `verification-state:<AC>=<state>`, or `gate-refusals:<label>=down|up`, where `<label>` is one of
   `deny`, `scope`, `registered`, `limit`, `conformance`, `sandbox`, `technique`, `fence`,
-  `ask`, `effect-claim`. At least one predicted fix is required; an empty regression set is a
+  `ask`, `effect-claim`, `intensity`. **The last of those was found by the typecheck and not by a hand count**: the label a
+refusal carries is typed as a member of the vocabulary, and the intensity ceiling refused with `intensity` while the set
+carried ten - so that refusal class was one no prediction could name, and three earlier rounds had verified the ten by hand.
+The vocabulary is declared once (a tuple, with the union and the set derived from it), the label a refusal carries and the
+effect boundary are typed against it, and the policy gate list is checked against it by a test. **A label nobody produces is
+checked by neither** - the type rejects new labels rather than unused ones. At least one predicted fix is required; an empty regression set is a
   declared claim of none rather than a blank field.
 - **The baseline is the harness's read, taken when the manifest is recorded** and stored with it.
   A caller-supplied baseline is refused at the tool boundary: one party must not write both sides
