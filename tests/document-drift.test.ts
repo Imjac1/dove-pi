@@ -290,6 +290,61 @@ describe("the documents that name things", () => {
 		}
 	});
 
+	/**
+	 * Owned paths that the front-door documents name and this repository does not have.
+	 *
+	 * The front door is `README.md`, this repository own section of `AGENTS.md`, and the tracked workflow document - the three things
+	 * a reader or an agent reads before anything else.
+	 */
+	function frontDoorProblems(root: string): readonly string[] {
+		const owns = /^(\.\/|\.\.\/)*(\.trellis|src|tests|scripts|\.agents|\.codex|modes|docs|AGENTS\.md|package\.json|tsconfig\.json)/;
+		const pathInCode = /[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+\.[a-z]{2,4}/g;
+		const problems: string[] = [];
+		for (const file of ["README.md", "AGENTS.md", ".trellis/workflow.md"]) {
+			const text = readFileSync(join(root, file), "utf8");
+			for (const code of text.matchAll(/`([^`\n]+)`/g)) {
+				for (const path of code[1].match(pathInCode) ?? []) {
+					if (!owns.test(path)) continue;
+					if (!existsSync(join(root, path)) && !existsSync(join(root, file, "..", path))) {
+						problems.push(file + ": " + path);
+					}
+				}
+			}
+		}
+		return problems.sort();
+	}
+
+	it("holds the front door to the paths it names, and knows which of them is not ours to fix", () => {
+		// **Our own documents pass the rule the specifications carry.** `README.md` and our section of `AGENTS.md` name only paths
+		// that exist - checked here rather than assumed, because the front door is what a newcomer reads first.
+		//
+		// **And the tracked workflow document does not, which is recorded rather than skipped.** `.trellis/workflow.md` calls itself
+		// the workflow source of truth and is what the Trellis block points every agent at, and it names
+		// `.trellis/scripts/inject-workflow-state.py`, which in this install ships as `.claude/hooks/inject-workflow-state.py` and
+		// `.codex/hooks/inject-workflow-state.py` - a path from an older layout. The mechanism it describes works: that document
+		// carries thirty `[workflow-state:...]` blocks.
+		//
+		// **The expected set is exact on purpose.** A check that skipped the tracked document would never say the day it stopped
+		// being broken, and the note this repository added to `AGENTS.md` is correct for exactly as long as these two paths are
+		// wrong - so an update that fixes the document makes this test fail, which is the reminder to remove the note.
+		//
+		// **One convention this check forced**: the note in AGENTS.md names the wrong path **without code marks**, because a note that
+		// dressed a wrong path as code read as a wrong path - the first run of this check reported AGENTS.md as well. A correction has
+		// to be able to name what it corrects, and the rule has to be able to tell prose from a claim.
+		const missing = frontDoorProblems(process.cwd());
+		// **Our own documents contribute nothing**, which is the part this repository is responsible for.
+		assert.deepEqual(missing.filter((entry) => !entry.startsWith(".trellis/workflow.md:")), [], "a document this repository owns names a path that is not there");
+		// **And the tracked document is still wrong about both paths.** Asserted as a containment rather than an exact set, because
+		// the two failure modes are equal in kind: an update that fixes the document drops an entry and fails here, and so does a
+		// document that grows a new wrong path.
+		for (const known of [
+			".trellis/workflow.md: .trellis/spec/cli/backend/workflow-state-contract.md",
+			".trellis/workflow.md: .trellis/scripts/inject-workflow-state.py",
+		]) {
+			assert.ok(missing.includes(known), "the tool document no longer names " + known + ", so the note in AGENTS.md can be revisited");
+		}
+	});
+
 	it("cites a thing and not a position, in the live code", () => {
 		// **A prohibition, which is the one thing a pattern check can honestly do.** A comment citing a line of this
 		// repository is wrong the moment somebody edits above it, and nothing notices: of the eighteen citations this round
