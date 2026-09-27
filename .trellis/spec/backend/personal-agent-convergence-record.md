@@ -3,6 +3,16 @@
 The convergence contract for a formal native task, and the records around it: what is frozen, what a request observed,
 what a change predicted, what the classifier of a failure said, what a round decided, and which commit embodies an edit.
 
+**The ledger line format has one reader, and a line the writer never finished is not a record.** The ledger is written one JSON
+object per line, one line per append, so a partial line can only be a crash - and the reading that mines failures was, until a
+round ago, one of two copies of the parse with the `try` removed: on a truncated ledger it printed nothing at all, which is
+blindness on exactly the run the harness exists to explain. `parseLedgerLines` in `src/core/execution-ledger.ts` is now the one
+implementation, used by the ledger class and by all four readings. **One reader is outside its reach**: the blackbox harness own
+script runs under plain node and cannot import a TypeScript module, so it keeps a tolerant copy of its own - which is why the
+check that counts the reader reports five callers and one exception, named. **A partial line anywhere but the end is a different
+question** and is recorded rather than answered: it would mean the append guarantee itself was broken, and nothing here says
+whether a reading should skip it, count it, or refuse the file.
+
 The state this is about is documented in `personal-agent-project-context.md`; the loop that reads these records is
 documented in `personal-agent-harness-loop.md`.
 
