@@ -1539,7 +1539,27 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				const mutationFields = ["acceptanceId", "acceptanceRevision", "criteria", "status", "evidenceRef", "evidenceRefs", "stepId", "findingId", "findingKind", "summary", "nextAction", "unblockCondition"] as const;
 				const suppliedMutationField = mutationFields.find((field) => typed[field] !== undefined);
 				if (suppliedMutationField) throw new Error(`agent_task_convergence status is read-only; remove ${suppliedMutationField} and use operation=progress with acceptanceId plus status=started|verification_started|evidence|passed|failed|waived|step_completed.`);
-				return { content: [{ type: "text", text: JSON.stringify(projectProvider.readTaskConvergence(target.stableId), null, 2) }], details: projectProvider.readTaskConvergence(target.stableId) };
+				const read = projectProvider.readTaskConvergence(target.stableId);
+				if (read.kind !== "valid") throw new Error(read.kind === "missing" ? "No convergence snapshot exists for this task; freeze acceptance criteria first." : `Convergence snapshot is unreadable: ${read.issue}`);
+				const snapshot = read.snapshot;
+				// **The outer verification loop's sensor.** A criterion's own status is a claim made by whoever wrote the
+				// snapshot; resolving every evidence ref against the ledger and the effect store turns "is this done?"
+				// into a reading. Same resolver the pass path refuses on, so an audit that says `verified` and a pass
+				// that was accepted cannot disagree about what counts as evidence.
+				const unresolvedByCriterion = await Promise.all(snapshot.criteria.map(async (criterion) => unresolvedAcceptanceEvidence(criterion.evidenceRefs, {
+					readLedger: () => ledger.read(),
+					effectsDirectory: join(resolveWorkspaceRoot(cwd), ".dove", "effects"),
+				})));
+				const verification = Object.fromEntries(snapshot.criteria.map((criterion, index) => {
+					const unresolved = unresolvedByCriterion[index] ?? [];
+					const state = criterion.status === "passed"
+						? (unresolved.length > 0 ? "unresolved_evidence" : "verified")
+						: criterion.status === "failed" ? "failed" : criterion.status === "waived" ? "waived" : "not_claimed";
+					return [criterion.id, { status: state, evidenceRefs: criterion.evidenceRefs.length, ...(unresolved.length > 0 ? { unresolved } : {}) }];
+				}));
+				// `details` keeps its `snapshot` key for the caller that compares across statuses; `verification`
+				// rides beside it so a consumer sees the audited vector without re-deriving it.
+				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification }, null, 2) }], details: { snapshot, verification } };
 			}
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "形式任务收敛元数据变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
 			const operation = convergenceOperationFromPiInput(typed);

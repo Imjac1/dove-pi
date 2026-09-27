@@ -604,6 +604,25 @@ describe("Pi adapter", () => {
 			await events.get("tool_call")?.({ type: "tool_call", toolCallId: "suite-run", toolName: "bash", input: { command: "git status --short" } }, context);
 			await events.get("tool_result")?.({ type: "tool_result", toolCallId: "suite-run", toolName: "bash", input: { command: "git status --short" }, content: [{ type: "text", text: "clean" }], isError: false }, context);
 			await convergenceTool!.execute("pass-convergence", { operation: "progress", acceptanceId: "AC-001", status: "passed", evidenceRefs: ["ledger:tool:suite-run"] }, undefined, undefined, context);
+			// **The audit is the mechanical answer to "is this criterion verified?"** A passed criterion whose ref
+			// resolves reads `verified`; the same status with a ref the harness never wrote would read
+			// `unresolved_evidence`. Both come from the one resolver, so the audit and the pass path cannot disagree.
+			const audited = await convergenceTool!.execute("audit-convergence", { operation: "status" }, undefined, undefined, context);
+			assert.equal((audited.details as { verification: Record<string, { status: string }> }).verification["AC-001"]?.status, "verified", "a passed criterion with a resolvable ref audits as verified");
+			assert.equal((audited.details as { verification: Record<string, { evidenceRefs: number }> }).verification["AC-001"]?.evidenceRefs, 1);
+			// **The negative half: a well-shaped ref the harness never wrote.** Written straight into the snapshot
+			// file, because the only honest way to get one past the pass path is to bypass the pass path - which is
+			// exactly the forgery the audit exists to surface after the fact.
+			const validSnapshot = readFileSync(convergencePath, "utf8");
+			const forged = JSON.parse(validSnapshot) as { criteria: Array<{ id: string; status: string; evidenceRefs: string[] }> };
+			forged.criteria = forged.criteria.map((criterion) => criterion.id === "AC-001"
+				? { ...criterion, status: "passed", evidenceRefs: ["ledger:tool:never-happened"] }
+				: criterion);
+			writeFileSync(convergencePath, JSON.stringify(forged), "utf8");
+			const auditedForgery = await convergenceTool!.execute("audit-forged-convergence", { operation: "status" }, undefined, undefined, context);
+			assert.equal((auditedForgery.details as { verification: Record<string, { status: string; unresolved: readonly string[] }> }).verification["AC-001"]?.status, "unresolved_evidence", "a pass citing a record the harness never wrote audits as unresolved, not verified");
+			assert.deepEqual((auditedForgery.details as { verification: Record<string, { unresolved: readonly string[] }> }).verification["AC-001"]?.unresolved, ["ledger:tool:never-happened"]);
+			writeFileSync(convergencePath, validSnapshot, "utf8");
 			const blockedAfterFinish = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "formal-write-after-finish", toolName: "write", input: { path: "should-not-write.txt", content: "blocked" } }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
 			assert.equal(blockedAfterFinish?.block, true);
 			assert.equal(blockedAfterFinish?.terminate, true);
