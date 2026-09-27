@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext, type ThemeColor } from "@earendil-works/pi-coding-agent";
@@ -51,6 +52,7 @@ import {
 	type TaskConvergenceSnapshot,
 	type TaskResourceObservation,
 } from "../core/task-convergence.ts";
+import { parseHarnessSurface, unresolvedSurfaceEntries } from "../core/harness-surface.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
 import { createActionPolicy, evidenceDigestsFor, type ActionPolicy } from "../core/action-policy.ts";
@@ -706,6 +708,42 @@ function changeBaseline(
 		if (value !== undefined) baseline[movementKey(movement)] = value;
 	}
 	return baseline;
+}
+
+/**
+ * The declared editable surface, as a bounded projection: component names and how many paths each owns.
+ *
+ * **Why the status read reports it.** AHE's component observability requires "a file-level representation" of every
+ * editable component "so the action space is explicit and revertible", and that representation is what a proposal is
+ * made from - AHE's own bounded proposal context opens with "the editable surfaces of the current harness". A map read
+ * only by its own test would be an **inert declaration**, which is the defect this whole project keeps finding; this is
+ * its consumer.
+ *
+ * **A missing or broken declaration is reported, not fatal.** `surfaceIssue` carries the reason and the rest of the
+ * read is unaffected: the map is evidence about the harness, not a precondition for reading a task's acceptance state.
+ * The paths themselves are not returned - a count is what a context budget can afford, and a caller who wants the
+ * paths can read the declaration.
+ */
+function readDeclaredSurface(): { readonly surface: Readonly<Record<string, number>> } | { readonly surfaceIssue: string } {
+	try {
+		// **The map belongs to the harness, not to the workspace it happens to run in.** The components it names are
+		// this extension own files - the adapter, the modes, the skills - so the declaration is resolved from the
+		// harness own root (this module two directories up) and not from the user project the run is working in.
+		// Reading it from `workspace` was the obvious first implementation and the host test refused it: a run in
+		// someone else project found no declaration and reported an issue for a map that was there all along. A
+		// project-level harness map would be a different declaration with its own paths, and is recorded, not built.
+		const harnessRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+		const declaration = join(harnessRoot, ".trellis", "harness-surface.yaml");
+		if (!existsSync(declaration)) return { surfaceIssue: "no declaration at .trellis/harness-surface.yaml" };
+		const parsed = parseHarnessSurface(readFileSync(declaration, "utf8"));
+		// The entries are the harness's own paths, so they resolve against the same root the declaration was read
+		// from - checking them against the user project is what made every entry look missing in a run elsewhere.
+		const unresolved = unresolvedSurfaceEntries(parsed, (relative) => existsSync(join(harnessRoot, relative)));
+		if (unresolved.length > 0) return { surfaceIssue: "entries that resolve to nothing: " + unresolved.join(", ") };
+		return { surface: Object.fromEntries(parsed.components.map((component) => [component.name, component.paths.length])) };
+	} catch (error) {
+		return { surfaceIssue: error instanceof Error ? error.message : String(error) };
+	}
 }
 
 export async function admitNonConversationalMessages<T>(payload: T, maxCharacters: number): Promise<{ payload: T; leftAlone: number }> {
@@ -1730,7 +1768,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// `details` keeps its `snapshot` key for the caller that compares across statuses; `verification` and
 				// `changes` ride beside it so a consumer sees the audited vector and every verdict without re-deriving
 				// either.
-				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification, changes }, null, 2) }], details: { snapshot, verification, changes } };
+				// The declared editable surface rides beside the two readings: it is the bounded context a proposal is made
+				// from, and reporting it here is what gives the declaration a consumer.
+				const declaredSurface = readDeclaredSurface();
+				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification, changes, ...declaredSurface }, null, 2) }], details: { snapshot, verification, changes, ...declaredSurface } };
 			}
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "形式任务收敛元数据变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
 			// **A caller-supplied baseline is refused before anything else happens.** The baseline is what a verdict

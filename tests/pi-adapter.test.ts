@@ -676,6 +676,13 @@ describe("Pi adapter", () => {
 			const audited = await convergenceTool!.execute("audit-convergence", { operation: "status" }, undefined, undefined, context);
 			assert.equal((audited.details as { verification: Record<string, { status: string }> }).verification["AC-001"]?.status, "verified", "a passed criterion with a resolvable ref audits as verified");
 			assert.equal((audited.details as { verification: Record<string, { evidenceRefs: number }> }).verification["AC-001"]?.evidenceRefs, 1);
+			// **The declared editable surface rides on the same read.** It is the bounded context a proposal is made from
+			// (AHE's "(1) the editable surfaces of the current harness"), and reporting it here is what makes the
+			// declaration a map rather than an inert file.
+			const declaredSurface = (audited.details as { surface?: Record<string, number> }).surface ?? {};
+			assert.deepEqual(Object.keys(declaredSurface).sort(), ["long-term-memory", "middleware", "skill", "subagent-config", "system-prompt", "tool-description", "tool-implementation"], "the status read names every declared component - issue: " + ((audited.details as { surfaceIssue?: string }).surfaceIssue ?? "none"));
+			assert.ok(Object.values(declaredSurface).every((count) => count > 0), "and each owns at least one path");
+			assert.equal((audited.details as { surfaceIssue?: string }).surfaceIssue, undefined, "and the declaration resolved, so there is no issue to report");
 			// **The negative half: a well-shaped ref the harness never wrote.** Written straight into the snapshot
 			// file, because the only honest way to get one past the pass path is to bypass the pass path - which is
 			// exactly the forgery the audit exists to surface after the fact.

@@ -1,0 +1,22 @@
+version: 1
+# The editable harness components, as paths in this repository.
+#
+# AHE (2604.25850 §3.3) requires that "every editable harness component [has] a file-level representation so the
+# action space is explicit and revertible", and enumerates the seven components below. This file is what binds those
+# names to files; the names themselves live in one place in the code (CHANGE_SURFACES, src/core/task-convergence.ts)
+# and a test asserts the two agree in both directions.
+#
+# A path may appear under two components - src/pi-adapter/extension.ts *is* both a tool description and middleware -
+# because this describes what a component is, not a partition of the tree. Forcing a partition would make the map
+# lie about one of them.
+#
+# Every entry must resolve to something that exists; a path that matches nothing is refused when the map is loaded,
+# because a map whose entries are not real is the defect this project keeps finding in its own declarations.
+components:
+  system-prompt: [AGENTS.md, modes]
+  tool-description: [src/pi-adapter/extension.ts]
+  tool-implementation: [src]
+  middleware: [src/core/action-policy.ts, src/pi-adapter/extension.ts]
+  skill: [.agents/skills]
+  subagent-config: [src/pi-adapter/subagent-provider.ts, .codex/agents]
+  long-term-memory: [.trellis/spec, .trellis/workspace, .trellis/tasks]
