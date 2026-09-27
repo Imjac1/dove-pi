@@ -268,6 +268,26 @@ under `.dove/tasks/<goal-id>/convergence.json`.
   an observed delta here is weak evidence; and the regression predictions are a **record, not a
   control** - AHE measured P 11.6% / R 11.1% over 9 rounds, so regression detection stays with the
   held-out criteria, the gates, and the fence.
+- **The declared editable surface** (`.trellis/harness-surface.yaml`, `src/core/harness-surface.ts`) is the
+  file-level representation of the harness's own components: AHE's requirement that "every editable harness
+  component [has] a file-level representation so the action space is explicit and **revertible**". The seven
+  components are the ones `CHANGE_SURFACES` names, and the declaration binds each to workspace-relative paths.
+  It is recorded here because it is the bounded context a proposal is made from and because the evidence-plane
+  specification in `personal-agent-framework-core.md` is near its cap.
+  - **Every entry must resolve**, refused as `component:path` when it matches nothing: a map whose entries are not
+    real names an action space that is not there.
+  - **It is not a partition.** One path may belong to two components (`extension.ts` is a tool description *and*
+    middleware); forcing a partition would make the map lie about one of them.
+  - **One vocabulary**: the parser refuses a component outside `CHANGE_SURFACES`, and a test asserts they agree in
+    **both** directions.
+  - **It belongs to the harness, not to the workspace a run happens to be in**, so it is resolved from the
+    extension's own root and its entries resolve against the same root. Reading it from the current workspace was
+    the first implementation, and a host test in another project refused it: every entry looked missing for a map
+    that was there all along. A project-level map is a different declaration, not built.
+  - **A missing or broken map is reported, not fatal**: the status read returns `surfaceIssue` with the reason and
+    the rest of the read is unaffected.
+  - **`revertible` is a convention here, stated rather than assumed**: one logical harness edit is one commit,
+    which is what gives an edit a revert and what a change manifest's `fix` describes.
 - Trellis calls the shared TypeScript reducer through its narrow helper; Dove
   never imports or executes Trellis scripts.
 
@@ -281,6 +301,9 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 | Two semantic no-progress reviews | Checkpoint with one criterion-bound next action |
 | All criteria pass with no open blocker | Enter `ready_to_finish`; reject further product mutation |
 | Missing resource usage | Keep the field unknown; never infer a stop |
+| A surface entry that resolves to nothing | Refused, naming the entry as `component:path` |
+| A component outside `CHANGE_SURFACES`, or one with no paths | Refused, naming the components there are |
+| A missing or unreadable surface declaration | `surfaceIssue` on the status read; the read itself is unaffected |
 | A request terminal with no active criterion, or in a state that refuses events | Record the ledger observation with a `convergenceSkipReason`; offer nothing to the record |
 | A superseded request settling after the active one | Record no observation for it; its `request.terminal` record stands alone |
 | A change manifest with no predicted fix | Refused: a change with nothing predicted is a rationale, not a contract |
@@ -301,6 +324,8 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 
 - Replay every shared trace incrementally and from its complete event list.
 - Assert `task.py convergence apply/status` round-trips an atomic snapshot.
+- The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
+  directions, and lets one path belong to two components; the status read reports it.
 - Assert fast-lane requests create no convergence file or mutation guard.
 - Assert `ready_to_finish`, checkpoint, scope drift, and malformed-state paths
   fail closed at the Pi tool boundary.
