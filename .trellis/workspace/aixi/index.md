@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 29
+- **Total Sessions**: 30
 - **Last Active**: 2026-09-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1089 | Active |
+| `journal-1.md` | ~1130 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 30 | 2026-09-27 | The change manifest, and the two defects that wiring it found | `fbf87bb`, `57da5d6`, `166036b` | `master` |
 | 29 | 2026-09-27 | The fence, and what the community says that the papers do not | `58668d3`, `f5ebaf7`, `529555e`, `4ee1470`, `c6376fc`, `9cc571a` | `master` |
 | 28 | 2026-09-27 | Refuse isolation the runtime cannot honour, and enforce what it can | `2ece003`, `011abac`, `bf26954` | `master` |
 | 27 | 2026-09-27 | Audit every criterion evidence in the convergence status read | `4e684a0`, `e672463` | `master` |

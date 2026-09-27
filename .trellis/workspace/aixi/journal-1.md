@@ -1087,3 +1087,44 @@ Read the RSI community (a curated map, a practitioner definition of iteration ve
 ### Next Steps
 
 - The decision record: a prediction recorded beside a change, plus the two failure-record fields Self-Harness requires. Then D6 first axis, SSM and ITQ, which the ledger can already feed.
+
+
+## Session 30: The change manifest, and the two defects that wiring it found
+<!-- trellis-session: v=2 fp=d44f34014050e241 -->
+
+**Date**: 2026-09-27
+**Task**: The change manifest, and the two defects that wiring it found
+**Branch**: `master`
+
+### Summary
+
+Built D5 decision observability in AHE shape: a manifest names the failure evidence, the inferred root cause, the fix and a two-sided prediction over a closed observable set, and the status read intersects it with what the next round observed. The observable set was verified against its writers before it was frozen - which changed it - and wiring the record found two defects.
+
+### Main Changes
+
+- the manifest and its verdict live in core (task-convergence.ts), the operation travels through the provider, the tool parses the compact prediction grammar, and the status read returns a changes vector beside verification
+- the observable set is criterion-status, verification-state and gate-refusals: ten gate labels rather than the eight first claimed, a composite label the reader splits on the plus sign so a refusal class cannot hide, and stop-reasons removed because it is three vocabularies meeting in one field
+- the baseline is read by the harness when the manifest is recorded and stored with it; a caller-supplied baseline is refused, because one party must not write both sides of the contract a verdict is computed from
+- a verdict is pending until an event lands after the manifest revision, then confirmed, contradicted or unobserved; a movement already true at the baseline is contradicted rather than counted, because it is not evidence for the change
+- defect one: request.observed has no producer and appendTaskResourceObservation has no callers, so the round boundary first designed depended on an event nothing emits. The field was deleted and the boundary taken from the read revision itself; the spec now marks that path inert rather than assuming it
+- defect two: the manifest had one shape where the codebase allows one. The event carries parsed movements as every other event kind does, text arrives only at the tool input, and the text door that would have had no producer was deleted
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fbf87bb` | feat(convergence): record a change manifest, and decide its prediction against what was observed |
+| `57da5d6` | docs(spec): record the change manifest, and mark the resource-observation path inert |
+| `166036b` | chore(task): record the change-manifest task, its plan and the probe that redirected it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 651 tests, 649 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- D6 first axis, SSM and ITQ, which the ledger can already feed; and the missing resource-observation producer as its own defect, with the evidence already recorded.
