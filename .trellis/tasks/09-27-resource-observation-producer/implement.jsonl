@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-project-context.md", "reason": "The convergence contract this task completes: the observation kind, the resource policy, and the inert annotation it replaces."}
+{"file": ".trellis/spec/backend/personal-agent-request-runtime.md", "reason": "The request lifecycle whose terminal this task hooks: stable provider schemas, request budgeting and stop-reason normalization."}

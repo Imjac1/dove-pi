@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate and the testing requirements the check step must run."}
+{"file": ".trellis/spec/backend/personal-agent-request-runtime.md", "reason": "Evidence that the observation must not change semantic state or the request lifecycle."}
