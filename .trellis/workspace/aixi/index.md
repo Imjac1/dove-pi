@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 36
+- **Total Sessions**: 37
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1373 | Active |
+| `journal-1.md` | ~1413 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 37 | 2026-09-28 | The applied commit, and the check that found the map defect on its first run | `43b44d1`, `dddff86`, `9050d38` | `master` |
 | 36 | 2026-09-28 | The verdict as a record, and the specification the loop finally got | `908fc99`, `dddff86`, `9050d38` | `master` |
 | 35 | 2026-09-28 | The failure reading, and the request id a refused action never carried | `7b9099c`, `cd626ed`, `43eaf16` | `master` |
 | 34 | 2026-09-28 | The declared editable surface, and the two corrections the tests forced | `4b45f99`, `35aaac3`, `ba9655a` | `master` |

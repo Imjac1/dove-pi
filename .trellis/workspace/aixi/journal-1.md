@@ -1371,3 +1371,43 @@ The validation half of the loop now has memory: the round boundary records what 
 ### Next Steps
 
 - The loop procedure itself, piece 4c, which is what will use these records: the turn from a mined failure to a manifest, to a decision, to a keep-or-revert - and the corpus gap it still reads around.
+
+
+## Session 37: The applied commit, and the check that found the map defect on its first run
+<!-- trellis-session: v=2 fp=b8fe59142dbb1054 -->
+
+**Date**: 2026-09-28
+**Task**: The applied commit, and the check that found the map defect on its first run
+**Branch**: `master`
+
+### Summary
+
+An edit now has a target: a change is bound to the commit that embodies it, the runtime records the claim and a script checks it against the declared surface using the fence own rule - and on its first real run the check found that the surface map excluded tests, which would have made every real edit read outside.
+
+### Main Changes
+
+- the claim is a ledger record rather than a convergence event: the ledger holds what happened, the convergence record holds goal state, and an application is not goal state
+- three refusals keep the claim answerable: an unknown change id, a second application naming the commit already recorded, and an empty commit
+- the check reuses declaredPrefixHit rather than reimplementing the fence rule, and answers inside, outside with the offenders named, or unresolved - which is not a nicer word for outside
+- the surface declaration is now load-bearing rather than context: it is what the check is against, which is why the map defect mattered and why a component implementation surface includes its tests
+- the loop has a procedure in its specification: seven steps from mining to keeping or reverting, with the last one a person holding the reading
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43b44d1` | feat(loop): bind a change to the commit that embodies it, and check it stayed inside its surface |
+| `dddff86` | docs(spec): give the loop its own specification instead of compressing two full ones |
+| `9050d38` | chore(task): record the verdict task and the split it forced |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 689 tests, 687 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The rounds reading exits 0 with a fixture workspace and with none.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The corpus gap that four rounds of instruments have not touched: no failure, no manifest and no application exists in any recorded run, so the first real turn still has to be made rather than found.
