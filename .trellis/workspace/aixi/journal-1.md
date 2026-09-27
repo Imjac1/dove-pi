@@ -1572,3 +1572,43 @@ The question round 7 left open is answered and acted on: no hook fires in the pr
 ### Next Steps
 
 - The first real turn, which now has citable evidence in the corpus and a mining half that names the cause - and still needs an edit whose prediction the closed observable set can express.
+
+
+## Session 42: A mined failure carries a citable reference, and a manifest resolves what it cites
+<!-- trellis-session: v=2 fp=38490ae5a27f9126 -->
+
+**Date**: 2026-09-28
+**Task**: A mined failure carries a citable reference, and a manifest resolves what it cites
+**Branch**: `master`
+
+### Summary
+
+The loop first step and third step were joined at neither end - the failure record produced no reference and the change operation never resolved the one it was given - so a manifest could cite a failure that never happened while a criterion pass with the same reference was refused one path over.
+
+### Main Changes
+
+- the reference is taken from the record rather than rebuilt: the resolver matches ledger:<stepId> by equality, so carrying the record own step id avoids a second copy of the writer naming convention
+- the change operation now calls the same resolver the pass path calls and refuses an unresolved reference by naming it: one rule, two callers, and the shape rule stays where it is
+- the readings print the reference, because the consumer the loop actually has is a person copying it into a manifest
+- and the negative test had to be fixed to assert the rule it names: without a prediction the call was refused a layer earlier by the shape rule, so the failure read like a missing feature. A test that asserts a refusal must first prove which refusal it asserts
+- this workspace has no .dove directory, so no formal native task, so no manifest can be recorded here at all: the turn is a Pi-hosted act, and what this environment can do is make the instruments agree and prove it in the host harness
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ffa3a55` | feat(loop): a mined failure carries a citable reference, and a manifest resolves what it cites |
+| `fc2cd2f` | docs(spec): record the reference form and the resolve rule that joins mining to prediction |
+| `bef34ab` | chore(task): record the citable-failure task and what the negative case taught |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 705 tests, 703 pass, 0 fail, 2 skipped (one earlier run reported a single failure that did not reproduce; the suite has timing-sensitive spawned-process cases and the observation is recorded rather than dismissed). Installer tests and doctor pass. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The observable boundary is now the only thing between the loop and its first real turn: the evidence is citable, the mining names the cause and attributes what it cannot see, and what is missing is a prediction the closed set can express.
