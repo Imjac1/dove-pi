@@ -1209,3 +1209,43 @@ Adopted the field named Safety and Stability axis and computed the parts this ha
 ### Next Steps
 
 - The loop over the loop, the four-piece scaffold last item, which needs this axis to judge whether a harness edit helped or hurt.
+
+
+## Session 33: One writer for the observation, and the false premise behind the duplicate
+<!-- trellis-session: v=2 fp=1a7210f3cec17ea7 -->
+
+**Date**: 2026-09-28
+**Task**: One writer for the observation, and the false premise behind the duplicate
+**Branch**: `master`
+
+### Summary
+
+Repaired a defect the previous task introduced on a false premise: the ledger resource observation already had a writer in the agent_end block, and the task added a second one because it searched for the ledger kind and two guessed method names instead of the real method. The duplicate is gone, the request.observed event moved beside the surviving writer, and the spec now names the writer instead of describing data.
+
+### Main Changes
+
+- the deleted producer sat on appendRequestTerminal, which fires per terminal transition while one settle can terminalize several leases - so it recorded the active request cost more than once and needed a guard against attributing it to a superseded request. The surviving site has one current request and needs none
+- the event, its operation and its mapping stay: the event was the half that genuinely had no producer, which is why observedResources stayed zero while the ledger filled up
+- two narrowings are recorded rather than hidden: a request with no task is no longer observed at all - the previous hook covered it, the surviving guard does not - and the ledger record and the event still resolve acceptanceId by different rules
+- the host assertions moved to the single-writer shape, and the invariant replacing the delta is stronger: the convergence record holds exactly the observations that were accepted
+- an incident, recorded because it is the kind of thing a guide should carry: a stitched read of a 3486-line file returned 824 lines, and writing that back destroyed the file. It was restored from git because the prior state was committed, and the second attempt asserted its own line boundaries before deleting - which then caught two boundary errors the first would have shipped
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5c26d4a` | fix(convergence): one writer for the resource observation, at the site that always had it |
+| `d569dbd` | docs(spec): name the observation writer, and record the coverage gap it has |
+| `f822a0b` | chore(task): record the repair, the false premise, and how it got through |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 660 tests, 658 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The ledger was also checked by hand: one terminal, one observation, no duplicate request id.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The loop over the loop, the four-piece scaffold last item, now planned against a record that has one writer and a spec that says what it does.
