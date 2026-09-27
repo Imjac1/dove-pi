@@ -79,6 +79,11 @@ under `.dove/tasks/<goal-id>/convergence.json`.
   `ask`, `effect-claim`, `intensity`. **The last of those was found by the typecheck and not by a hand count**: the label a
 refusal carries is typed as a member of the vocabulary, and the intensity ceiling refused with `intensity` while the set
 carried ten - so that refusal class was one no prediction could name, and three earlier rounds had verified the ten by hand.
+**The field name belongs to the arm of a movement.** A status observable names its target `to`; a refusal count names it
+`direction` - because `to` reads right for a status and wrong for a count. The decoder enforces the pairing and **names the field
+in its refusal**, since the earlier message offered both names with an `or` and a fixture satisfied it while carrying the wrong
+field for two rounds. A movement whose arm and field disagree is not normalised; it is refused.
+
 The vocabulary is declared once (a tuple, with the union and the set derived from it), the label a refusal carries and the
 effect boundary are typed against it, and the policy gate list is checked against it by a test. **A label nobody produces is
 checked by neither** - the type rejects new labels rather than unused ones.
