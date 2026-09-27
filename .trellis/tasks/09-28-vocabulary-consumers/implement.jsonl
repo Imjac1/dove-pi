@@ -1,0 +1,2 @@
+{"file": "src/core/task-convergence.ts", "reason": "The vocabulary both consumers are typed against."}
+{"file": "src/core/execution-ledger.ts", "reason": "The decision channel that carries a verdict."}

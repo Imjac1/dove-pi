@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-convergence-record.md", "reason": "The contract that lists the labels."}
+{"file": "tests/harness-axes.test.ts", "reason": "The axis suite that would silently keep passing on a rename."}
