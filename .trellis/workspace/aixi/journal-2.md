@@ -705,3 +705,42 @@ The tool own skill says .trellis/spec/ describes the project as it exists now, a
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the two remaining skill rules naming this repository that the classification pass has not closed.
+
+
+## Session 70: The source of truth names two artifacts that are not there
+<!-- trellis-session: v=2 fp=75dfeeef7c5cabec -->
+
+**Date**: 2026-09-28
+**Task**: The source of truth names two artifacts that are not there
+**Branch**: `master`
+
+### Summary
+
+The front-door sweep found that .trellis/workflow.md - which calls itself the workflow source of truth and is what the Trellis block points every agent at - names a script that ships under .claude/hooks and .codex/hooks in this install, and a specification under a spec/cli tree this repository does not have. Our own documents pass the rule that found it.
+
+### Main Changes
+
+- the tool own bookkeeping settled where the script is: it is tracked at .claude/hooks/inject-workflow-state.py and .codex/hooks/inject-workflow-state.py, and nothing under .trellis/scripts matches the name - so the document describes an older layout rather than this install being broken
+- the correction lives on our side of the boundary: workflow.md is tracked tool content with no managed block, so a local edit may be overwritten, while the AGENTS.md section is after the end marker and a test holds its position
+- the assertion is a containment rather than an exact set, because an update that fixes the document drops an entry and a document that grows a new wrong path adds one - both mean the note should be revisited
+- and the check forced a convention on the note itself: it first reported AGENTS.md, because a sentence describing a wrong path dressed it as code and the checks read code spans. The wrong path is written in plain text now, with the reason stated where the rule lives
+- that is the second time in this audit that writing about a defect made the check fire on the writing - which is the check doing its job on a sentence that had not been written carefully
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e8b0c86` | test(docs): the front door names only paths that exist, and the tracked document is recorded |
+| `ca6cd33` | chore(task): record the two stale paths in the tracked workflow document |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 731 tests, 729 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 9 of 9.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the drift suite at nine cases, whose size is worth measuring before it grows again.

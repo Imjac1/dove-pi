@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 69
+- **Total Sessions**: 70
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~707 | Active |
+| `journal-2.md` | ~746 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 70 | 2026-09-28 | The source of truth names two artifacts that are not there | `e8b0c86`, `ca6cd33` | `master` |
 | 69 | 2026-09-28 | The paths a specification names, and the version of the check that reported all of them | `6d0022e`, `3d8bae2` | `master` |
 | 68 | 2026-09-28 | What an update may overwrite, measured from the tool own bookkeeping | `885c370`, `f928e56` | `master` |
 | 67 | 2026-09-28 | The entry points name the checklist and the quality check the workflow promises | `cdbc9f1`, `64520d9` | `master` |
