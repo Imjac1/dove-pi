@@ -397,3 +397,41 @@ The decoder read movement.to ?? movement.direction, so a gate-refusals movement 
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the other probe forms - a half-written observation, an anomalous resource observation - which have not been tried.
+
+
+## Session 62: A decision the record no longer carries still happened
+<!-- trellis-session: v=2 fp=744a6b1a48ca79c4 -->
+
+**Date**: 2026-09-28
+**Task**: A decision the record no longer carries still happened
+**Branch**: `master`
+
+### Summary
+
+Probed four forms of an incomplete run: a decision naming a change the record does not carry produced no line anywhere, and the change beside it printed a true sentence about the wrong thing. The record is bounded and the ledger is append-only, so the disagreement is designed - and the reading now names the orphans.
+
+### Main Changes
+
+- the orphan is not corruption: the record drops a change whose verdict is still pending while the ledger keeps what happened, and the contract already said so in the record module own words
+- the reading names the orphans by id in its own line, which is the same rule as the unreadable record of two rounds ago: report what you cannot place rather than folding it into nothing
+- the change own line keeps its meaning, and the test asserts both halves: the orphan reported, and chg-1 still reading as pending
+- three negative results are recorded too, because a probe that finds nothing wrong is still a result: all four fixtures exited 0, the decoder refusing a negative resource count and the reading saying so is a previous round working on a case it was not written for, and a negative count in a resource record is read by no reading at all - a question about ownership rather than a defect
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `50c2bd0` | fix(reading): a decision the record no longer carries still happened |
+| `8fceb25` | docs(spec,task): the ledger keeps what the bounded record drops, and the reading says which |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 727 tests, 725 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the readings suite is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Which reading should own the resource record, since none does; and the first real turn, which needs a Pi host.
