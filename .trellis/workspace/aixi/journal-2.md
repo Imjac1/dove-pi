@@ -280,3 +280,42 @@ A ledger whose last append a crash cut short made the two mining readings exit 1
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the middle-of-file question, which needs an observed corruption to settle.
+
+
+## Session 59: Decode the record instead of casting it, and report what cannot be read
+<!-- trellis-session: v=2 fp=d2177da743ae9c0a -->
+
+**Date**: 2026-09-28
+**Task**: Decode the record instead of casting it, and report what cannot be read
+**Branch**: `master`
+
+### Summary
+
+The turn reading cast a record into a shape instead of decoding it, so a record carrying changes: none counted four characters as four changes, printed changes recorded: 4 and died. It decodes through the decoder that owns the format now, and reports what it cannot read - which also repaired the fixture it had been tested against, a record that was never valid.
+
+### Main Changes
+
+- the fix argues for itself: with a decoder, the fixture used since round 19 turned out to carry a literal acceptance revision, an empty criteria list and a criterion state without evidenceRefs - a test validating a fiction, which passed for two rounds because the reading cast instead of decoding
+- and the report is the point of the change: saying no turn has been recorded here would be false when a record exists that this build cannot read, and those are different facts with only one of them about the workspace
+- the axis half of this round was withdrawn: the core counts unclassifiable terminals, the printer prints them, the suite asserts them, and the hole I measured was a line my own output filter hid by searching for unclassifiable while the line says unclassified
+- that is the second measurement mistake in two rounds and both were mine - a pipeline that terminated the process it read, then a filter that hid a line - so the lesson is written where the next probe will read it: do not filter the output you are judging
+- and the round own tooling mistakes are recorded too: an insertion into a class body, three refused boundary checks, and a probe written as .cjs that could not load a TypeScript module - which cost more calls than the fix did
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42f91bb` | fix(readings): decode the record instead of casting it, and report what cannot be read |
+| `05af129` | docs(spec,task): one decoder for the record, and the finding that was my filter rather than the code |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 725 tests, 723 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the readings suite is 4 of 4 including the repaired fixture.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the probe hygiene lesson, which belongs in the loop guide.
