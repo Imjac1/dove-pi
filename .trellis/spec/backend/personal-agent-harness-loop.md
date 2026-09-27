@@ -48,6 +48,15 @@ that reports says so in a field a reader can check.
       `execution-ledger.ts` is in the first with no suite of its own.
     - **Extracting the embedded code is the prerequisite that would turn `possible` into `definite`** for those files, and
       it is its own change: one of the symbols is exported and used by tests, so the blast radius is real.
+    - **The adapter half of that extraction is done.** The five functions that produced the evidence - the ref resolver, the
+      refusal counts, the observable read, the assembled observables and the baseline a verdict compares against - moved
+      verbatim into `src/core/harness-verifier.ts`, which is now a verifier path. The only change inside the move is that
+      the four that were module-private are exported, because their new home is a module rather than the file that called
+      them. An edit to the adapter alone is no longer a `possible` verifier change; an edit to that module is
+      `definite`.
+    - **The record module half stays embedded**, with its four symbols still named: those functions are entangled with the
+      record reducer rather than sitting in a block, and pretending the two extractions are one change would make the
+      blast radius of the easy one and the hard one indistinguishable.
 - **The failure reading (`src/core/failure-reading.ts`) is the mining half of the loop: a pure function of the
   ledger that turns an unsuccessful request into a bounded record.** It reads; it clusters nothing, ranks nothing and
   proposes nothing.
@@ -219,7 +228,7 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A second application for one change | Refused, naming the commit already recorded |
 | A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
 | A touched file outside the declared paths | `outside`, with the files named |
-| A change that edits the verifier | Not a loop turn: judged by its suites and a person. The reading answers `definite`, `possible` (naming the symbols) or `none` |
+| A change that edits the verifier | Not a loop turn: judged by its suites and a person. The reading answers `definite`, `possible` (naming the symbols) or `none` - and an edit to the adapter alone is no longer `possible` |
 | A commit the reading cannot resolve | `verifier: none` - nothing was read, so nothing is claimed |
 | A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
 | A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |
