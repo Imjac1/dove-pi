@@ -358,6 +358,37 @@ describe("the documents that name things", () => {
 		}
 	});
 
+	/** Which of the three shape counts differ between the two front doors - empty when they are in step. */
+	function frontDoorDrift(zh: string, en: string): readonly string[] {
+		const shape = (text: string) => ({
+			headings: (text.match(/^#{2,3} .*/gm) ?? []).length,
+			fences: (text.match(/```/g) ?? []).length,
+			tableRows: (text.match(/^\|/gm) ?? []).length,
+		});
+		const a = shape(zh);
+		const b = shape(en);
+		return Object.keys(a).filter((key) => a[key as keyof typeof a] !== b[key as keyof typeof b]);
+	}
+
+	it("keeps the two front doors in step, in shape if not in meaning", () => {
+		// **The only pair of user-facing documents in this repository, and nothing connected them.** A census of the tree found no
+		// orphan - every directory is named in the specifications or is tool content - and one thing with no guard: `README.md` and
+		// `README.en.md`, 26 KB each, structurally identical by hand. Measured when this check was written: 31 headings, 33 code
+		// fences and 14 table rows in each, the headings differing only as translations, and a five percent byte difference which
+		// is the language itself.
+		//
+		// **What it cannot do**: it compares shape, not meaning. A section translated badly, or a command changed in one language
+		// and not the other, passes - and saying so is the point, because a reader who trusted this for content would be wrong.
+		const read = (name: string): string => readFileSync(join(process.cwd(), name), "utf8");
+		assert.deepEqual(frontDoorDrift(read("README.md"), read("README.en.md")), [], "the two READMEs drifted in shape, so one language is missing a section");
+
+		// **Seeded both ways**: two matching documents are not reported, and an added section, then an added code block, are.
+		const base = "# R\n\n## A\n\n```sh\nx\n```\n";
+		assert.deepEqual(frontDoorDrift(base, base), [], "a matching pair");
+		assert.deepEqual(frontDoorDrift(base, base + "\n## B\n"), ["headings"], "a section in one language only");
+		assert.deepEqual(frontDoorDrift(base, base + "\n## B\n\n```sh\ny\n```\n"), ["headings", "fences"], "and a code block with it");
+	});
+
 	it("cites a thing and not a position, in the live code", () => {
 		// **A prohibition, which is the one thing a pattern check can honestly do.** A comment citing a line of this
 		// repository is wrong the moment somebody edits above it, and nothing notices: of the eighteen citations this round
