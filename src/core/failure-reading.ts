@@ -56,6 +56,14 @@ export interface ClientAccount {
 
 export interface FailureRecord {
 	readonly requestId: string;
+	/**
+	 * **The reference a manifest can cite**, taken from the record rather than reconstructed.
+	 *
+	 * The evidence resolver matches `ledger:<stepId>` by equality, and the ledger writer names a terminal
+	 * `request:<requestId>` - so `ledger:request:<requestId>` would resolve today, and would also be a second copy of a
+	 * naming rule the writer owns. This carries the actual step id of the record the failure came from.
+	 */
+	readonly evidenceRef: string;
 	/** Always `failure`: this is the classification the SSM axis applies, not a second one. */
 	readonly class: "failure";
 	readonly reason: string;
@@ -166,7 +174,7 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 	const providers = new Map<string, ProviderOutcome>();
 	let unrefused = 0;
 	let toolObservations = 0;
-	const terminals: { requestId: string; reason: string; mechanism: FailureMechanism }[] = [];
+	const terminals: { requestId: string; stepId: string; reason: string; mechanism: FailureMechanism }[] = [];
 
 	for (const record of records) {
 		const id = requestIdOf(record);
@@ -181,6 +189,7 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 			if (id !== undefined) {
 				terminals.push({
 					requestId: id,
+					stepId: record.stepId,
 					reason,
 					mechanism: {
 						code: stringField(envelope ?? {}, "code") ?? reason,
@@ -253,6 +262,7 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 		const decided = convergence.get(terminal.requestId);
 		failures.push({
 			requestId: terminal.requestId,
+			evidenceRef: "ledger:" + terminal.stepId,
 			class: "failure",
 			reason: terminal.reason,
 			mechanism: terminal.mechanism,

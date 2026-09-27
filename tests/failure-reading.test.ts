@@ -45,6 +45,14 @@ describe("the failure reading", () => {
 		assert.equal(reading.failures[0]?.class, "failure");
 	});
 
+	it("carries the reference a manifest can cite, taken from the record", () => {
+		// The resolver matches ledger:<stepId> by equality, so the reference has to be the record own step id rather than a
+		// string rebuilt from the naming convention - which is the writer rule, not a contract a reader should copy.
+		const terminalRecord: ExecutionRecord = { taskId: "t", stepId: "request:req-real", kind: "request.terminal", timestamp: AT, mode: "standard", correlation: { requestId: "req-real" }, details: { logicalRequestId: "req-real", reason: "startup-failed", terminal: { origin: "session", code: "host-shutdown-preflight", retryable: false } } };
+		const reading = readFailures([received("req-real"), terminalRecord]);
+		assert.equal(reading.failures[0]?.evidenceRef, "ledger:request:req-real", "the reference is the record step id with the prefix the resolver looks for");
+	});
+
 	it("counts only the terminals the axis calls failures", () => {
 		// The SSM axis owns the classification; the reader must not disagree with it about what a failure is.
 		const reading = readFailures([

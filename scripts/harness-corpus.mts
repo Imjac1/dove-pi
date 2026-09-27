@@ -115,6 +115,7 @@ for (const failure of summary.failures.slice(0, 20)) {
 	console.log("      because: " + failure.componentEvidence);
 	if (failure.provider !== undefined) console.log("      provider: " + failure.provider.stopReason + (failure.provider.httpStatus === undefined ? "" : " (http " + failure.provider.httpStatus + ")"));
 	if (failure.client !== undefined) console.log("      client:   " + failure.client.code + "  (" + failure.client.source + ")");
+	console.log("      cite:     " + failure.evidenceRef);
 	if (failure.unseen !== undefined) console.log("      unseen:   " + failure.unseen);
 }
 if (summary.failures.length > 20) console.log("    ... and " + (summary.failures.length - 20) + " more");

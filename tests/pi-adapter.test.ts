@@ -572,7 +572,13 @@ describe("Pi adapter", () => {
 			// **The change manifest, at the boundary a session reaches.** A prediction is pre-registered: the shape
 			// rules first, then the record - and the baseline is read by the runtime, which is why the caller cannot
 			// send one.
-			const manifest = { operation: "change", acceptanceId: "AC-001", changeId: "chg-1", surface: "tool-implementation", failureEvidenceRef: "ledger:tool:freeze-convergence", rootCause: "the read path re-resolved what it had already resolved", fix: "resolve once and carry the result", predictedRegressions: [] };
+			// **The reference comes from the ledger, which is what the mining half now hands over.** A citation has to resolve,
+			// and the only way to know which references do is to read the records: a well-shaped ref to a record nobody wrote
+			// is the assertion the evidence rule exists to refuse, and this test cited one until the rule reached the
+			// manifest path.
+			const citedRef = "ledger:" + String((readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { stepId?: string }).find((record) => String(record.stepId ?? "").startsWith("request:"))?.stepId) ?? "");
+			assert.match(citedRef, /^ledger:request:/, "the fixture cites a request record, because that is what exists at this point in the run");
+			const manifest = { operation: "change", acceptanceId: "AC-001", changeId: "chg-1", surface: "tool-implementation", failureEvidenceRef: citedRef, rootCause: "the read path re-resolved what it had already resolved", fix: "resolve once and carry the result", predictedRegressions: [] };
 			await assert.rejects(
 				() => convergenceTool!.execute("change-no-prediction", { ...manifest, predictedFixes: [] }, undefined, undefined, context),
 				/at least 1 predictedFixes/,
@@ -592,6 +598,13 @@ describe("Pi adapter", () => {
 				() => convergenceTool!.execute("status-with-manifest-field", { operation: "status", predictedFixes: ["criterion-status:AC-001=passed"] }, undefined, undefined, context),
 				/status is read-only.*predictedFixes/,
 				"and the read stays a read",
+			);
+			// The prediction is part of the case: a manifest with nothing predicted is refused a layer earlier, and a test
+			// that omitted it would be asserting the shape rule while believing it asserted the evidence rule.
+			await assert.rejects(
+				() => convergenceTool!.execute("change-unresolvable-evidence", { ...manifest, changeId: "chg-unresolvable", failureEvidenceRef: "ledger:request:req_never-happened", predictedFixes: ["criterion-status:AC-001=passed"] }, undefined, undefined, context),
+				/resolves to nothing in this ledger/,
+				"a manifest naming a failure the harness never recorded is refused, rather than recorded with a shape that looks right",
 			);
 			const recorded = await convergenceTool!.execute("record-change", { ...manifest, predictedFixes: ["criterion-status:AC-001=passed", "gate-refusals:fence=down"] }, undefined, undefined, context);
 			assert.equal(recorded.details.changes.length, 1, "the manifest is recorded on the native formal task");

@@ -87,6 +87,7 @@ for (const failure of reading.failures) {
 	// The third account, attributed to whoever produced it: a client name is not the ledger own reading.
 	if (failure.client !== undefined) console.log("    client:     " + failure.client.code + "  (" + failure.client.source + ")");
 	// The second place the mechanism lives: the provider own account of the same failure, printed beside Dove own.
+	console.log("    cite:       " + failure.evidenceRef + "   (what a manifest cites as the failure evidence)");
 	if (failure.provider !== undefined) console.log("    provider:   " + failure.provider.stopReason + (failure.provider.httpStatus === undefined ? "" : " (http " + failure.provider.httpStatus + ")") + (failure.provider.diagnostic === undefined ? "" : " - " + failure.provider.diagnostic));
 	console.log("    refusals:   " + (failure.refusals.length === 0 ? "(none)" : failure.refusals.map((entry) => entry.gate + ": " + entry.reason).join(" | ")));
 	if (failure.convergence !== undefined) console.log("    convergence: " + JSON.stringify(failure.convergence));

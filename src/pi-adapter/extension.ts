@@ -1845,6 +1845,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				const manifest = changeManifestFromPiInput(typed);
 				const read = projectProvider.readTaskConvergence(target.stableId);
 				if (read.kind !== "valid") throw new Error(read.kind === "missing" ? "No convergence snapshot exists for this task; freeze acceptance criteria first." : `Convergence snapshot is unreadable: ${read.issue}`);
+				// **The evidence rule, one operation over from where it was written.** A criterion pass already refuses a ref
+				// the harness never recorded, and the comment there says why: a well-shaped ref to a record nobody wrote is
+				// the same assertion in the right costume. A manifest naming a failure that does not exist is exactly that,
+				// so the same resolver answers here - one rule, two callers.
+				const unresolvedFailureEvidence = await unresolvedAcceptanceEvidence([manifest.failureEvidenceRef], {
+					readLedger: () => ledger.read(),
+					effectsDirectory: join(resolveWorkspaceRoot(cwd), ".dove", "effects"),
+				});
+				if (unresolvedFailureEvidence.length > 0) {
+					throw new Error("a change manifest must cite failure evidence the harness recorded: " + unresolvedFailureEvidence.join(", ") + " resolves to nothing in this ledger. A failure record carries the reference that resolves it - see the reading that mined it.");
+				}
 				const unresolved = await Promise.all(read.snapshot.criteria.map((criterion) => unresolvedAcceptanceEvidence(criterion.evidenceRefs, {
 					readLedger: () => ledger.read(),
 					effectsDirectory: join(resolveWorkspaceRoot(cwd), ".dove", "effects"),
