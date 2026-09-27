@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 63
+- **Total Sessions**: 64
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~476 | Active |
+| `journal-2.md` | ~514 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 64 | 2026-09-28 | The entrance lists every specification, and a check keeps it listing them | `eeaf611`, `ea0cfd4` | `master` |
 | 63 | 2026-09-28 | Fixtures from the writer types, and the correction of a probe that measured itself | `2821f3c`, `95e5e8c` | `master` |
 | 62 | 2026-09-28 | A decision the record no longer carries still happened | `50c2bd0`, `8fceb25` | `master` |
 | 61 | 2026-09-28 | The arm of a movement decides the field, and the tolerance only a hand-written record needed | `a57e1b6`, `5235749` | `master` |

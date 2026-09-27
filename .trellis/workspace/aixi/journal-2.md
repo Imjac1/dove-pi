@@ -474,3 +474,41 @@ A previous round recorded that nothing reads the resource record. Measured prope
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the resource record name reading oddly for a resource observation, which costs nothing measured but is worth a look when a rename is already on the table.
+
+
+## Session 64: The entrance lists every specification, and a check keeps it listing them
+<!-- trellis-session: v=2 fp=f7006681244504d6 -->
+
+**Date**: 2026-09-28
+**Task**: The entrance lists every specification, and a check keeps it listing them
+**Branch**: `master`
+
+### Summary
+
+The specs index existed and listed eight personal-agent specifications while the directory held eleven - missing the mode format, the convergence record, and the harness loop itself. So the entrance to the documentation did not lead to the loop; the index is repaired, AGENTS.md points at it from outside the Trellis block, and a check runs both directions.
+
+### Main Changes
+
+- the cause was not the one I first wrote down: my first measurement listed two directories and concluded there was no index at all, when the index existed and had drifted - the fourth measurement mistake in four rounds and the fourth that was mine
+- which is why the fix is a check rather than an edit: an index that drifts silently is the defect, and an edit repairs one instance of it. Both directions are checked, and the limit is stated: a row pointing at the wrong specification resolves, and no check can see that
+- the pointer in AGENTS.md sits outside the Trellis-managed block, in the area its own footer says a tool update preserves, because an entrance a tool update can delete is not an entrance
+- and the round own honesty: the earlier rounds recorded that the resource record is read by nobody and that the specs directory has no index, and both were wrong in the same way - a measurement narrow enough to miss the thing it was looking for
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eeaf611` | docs(index): the entrance lists every specification, and a check keeps it listing them |
+| `ea0cfd4` | chore(task): record the stale index, the correction, and the check that replaces the edit |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 728 tests, 726 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 6 of 6 with the index case.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and a review of what other generated-looking index or template file has drifted the same way.
