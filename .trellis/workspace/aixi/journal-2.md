@@ -122,3 +122,42 @@ GATE_LABELS is the closed set a manifest prediction is validated against, and th
 ### Next Steps
 
 - The rest of the survey: which other vocabularies in this repository have producers that share no type with them.
+
+
+## Session 55: The vocabulary consumers, typed: the axis keeps printing a number that would have quietly gone wrong
+<!-- trellis-session: v=2 fp=f71c5208af1d77c1 -->
+
+**Date**: 2026-09-28
+**Task**: The vocabulary consumers, typed: the axis keeps printing a number that would have quietly gone wrong
+**Branch**: `master`
+
+### Summary
+
+The survey finished: no live drift is left after the eleventh label, and two couplings were still untyped. The verdict a decision record carries was a string, and the axis isolation set was a set of strings holding sandbox and fence - so a renamed label would have left the reading printing an isolation refusal count that had quietly stopped counting fence refusals, with the axis own test still passing.
+
+### Main Changes
+
+- the second coupling is the one worth finding: the axis test asserts its own two literals, so nothing connected the set to the vocabulary it came from
+- both are typed against the vocabulary now, and the check was seen to fire rather than assumed: renaming fence in the vocabulary reports five errors - four in the producers, which is the previous round typing the label a refusal carries, and one in the axis - and zero after the revert
+- the reader of a decision record stays a string on purpose: an append-only ledger holds what it holds, and a reader that insists on today vocabulary breaks on yesterday records. The writer is the party that must not invent a value
+- and the refusal channel itself must stay a string, which the contract now says: a gate may be a composite such as deny+scope+registered+ask, which the axis splits into atoms, so a typo in a computed label is covered by neither the typecheck nor the reader
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8a08534` | fix(convergence): type the two consumers of the refusal vocabulary |
+| `8953cc3` | docs(spec): the typed consumers, the reader that stays a string, and the channel that cannot be typed |
+| `22f67df` | chore(task): record the survey, the two typings and the rename that proved them |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 722 tests, 720 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and no test needed changing - which is what a typing that only narrows a channel should look like.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The survey of vocabularies is answered: the remaining ones are typed or are free text, and the mode file fields have their loader refusals as their check. The first real turn still needs a Pi host.
