@@ -8,27 +8,34 @@ import { convergenceOperationFromPiInput } from "../src/pi-adapter/extension.ts"
 import * as record from "../src/core/task-convergence.ts";
 
 /**
- * **Two documents that name things, and the check that executes the names.**
+ * **What the documents name, checked against what exists.**
  *
- * The turn guide tells a person which tool call to make and which fields to send; the declaration `embedded` list says which
- * symbols inside a mostly-harness file are verifier code. Nothing kept either claim true, so a rename or a field change would
- * leave both pointing at something that is gone - and a reader would follow the guide into a refusal, or look up a symbol that
- * no longer exists.
+ * Six kinds of naming live here, and they share one shape: a document says a thing is called something, and the thing is asked what it
+ * is actually called.
  *
- * **What this checks**: the declaration symbols are exported functions of the module their entry names, the fields the guide
- * lists are accepted by the mapper that consumes them, `status` refuses as read-only because the guide says it is, and the
- * scripts the guide quotes exist and are quoted.
+ * - **Declaration symbols** - `verifier.embedded` names symbols inside a mostly-harness file, so the module is imported and each
+ *   symbol asserted to be an exported function.
+ * - **Guide fields** - the turn guide tells a person which tool call to make with which fields, so the mapper is called with exactly
+ *   those fields, and `status` is asserted to refuse as read-only because the guide says it is a read.
+ * - **Indexes** - a specification index lists every file in its own directory, names a Pre-Development Checklist and a Quality Check,
+ *   and every name it gives exists.
+ * - **Boundaries** - this repository content in `AGENTS.md` sits outside the Trellis-managed block, and no specification is tracked
+ *   by the tool, so a version that starts tracking them is noticed rather than discovered by losing an edit.
+ * - **Paths** - the paths the specifications name, and the ones the front door names, resolve from the repository root or from the
+ *   file own directory.
+ * - **Citations** - a comment in the live code names a thing rather than a line, because a line drifts the moment somebody edits
+ *   above it.
  *
- * **What this does not check, stated rather than left to be assumed:**
+ * **What this does not check, and every case below carries its own limit.** They share one: a check holds that a name resolves, never
+ * that the sentence around it is still true. Two are worth repeating because a reader is most likely to assume they are covered:
  *
- * - **`operation=applied` is not mapped.** The mapper union has ten operations and `applied` is not among them: the tool
- *   execute handles it before the mapper, which is where its refusals live and where `tests/pi-adapter.test.ts` exercises
- *   them. A drift test cannot call the mapper for it, so it does not claim to.
- * - **The guide prose is not checked.** Which surface to choose, what to predict, whether to keep or revert - those are the
- *   judgments the guide exists to leave visible, and a test that "checked" them would check nothing.
+ * - **`operation=applied` is not mapped.** The mapper union has ten operations and `applied` is not among them: the tool execute
+ *   handles it before the mapper, which is where its refusals live and where `tests/pi-adapter.test.ts` exercises them.
+ * - **The guide prose is not checked.** Which surface to choose, what to predict, whether to keep or revert - the judgments the guide
+ *   exists to leave visible.
  *
- * A drift check keeps names true and says nothing about meaning; one that reads as complete would be worse than one that
- * says where it stops.
+ * **Why nine cases in one file rather than four files**: they are one shape and the helpers are the rules. Splitting by subject would
+ * produce files of two cases each, which is more surface for no gain. The measurement is in the task that wrote this header.
  */
 
 const DECLARATION = join(process.cwd(), ".trellis", "harness-surface.yaml");

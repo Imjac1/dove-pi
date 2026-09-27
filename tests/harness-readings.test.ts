@@ -9,13 +9,21 @@ import type { ExecutionRecordKind } from "../src/core/contracts.ts";
 import { computeAcceptanceRevision } from "../src/core/task-convergence.ts";
 
 /**
- * **The layer only a hand had run.** Each reading has unit tests over constructed records; until this file, no test spawned
- * a reading as a **script** - the walk over roots, the load of the declaration from the harness own root, the state-directory
- * resolution, the printing and the exit code were exercised by hand in a working session and nowhere else.
+ * **The readings, run as scripts and pushed until they break.**
  *
- * That layer is not incidental: `handbook` aside, these four invocations **are** the first and last steps of the turn, and
- * the guide a person follows quotes them. A script that dies on a missing ledger, or that prints a reading with the wrong
- * shape, is a turn that stops at step one.
+ * The first case is the layer nobody had exercised: each reading has unit tests over constructed records, and no test spawned one as a
+ * **script** - the walk over roots, the load of the declaration from the harness own root, the state-directory resolution, the printing
+ * and the exit code. That layer is not incidental: these four invocations **are** the first and last steps of a turn, and the guide a
+ * person follows quotes them.
+ *
+ * **The rest are the failure modes of that layer**, each measured before it was tested:
+ *
+ * - a ledger whose last append a crash cut short - the mining readings used to print nothing at all on it,
+ * - a task record the decoder refuses, which used to be cast into a shape and counted as four characters,
+ * - a decision the record no longer carries, which used to be dropped without a line,
+ * - a path that is not there, which each reading is expected to describe rather than die on.
+ *
+ * **What it does not check**: what a reading means. A reading that prints a number for the wrong reason passes every case here.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));

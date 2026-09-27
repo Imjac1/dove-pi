@@ -42,6 +42,12 @@ The project uses strict TypeScript, Node's test runner through `tsx`, and focuse
   and bounded counters, but never persist raw prompts, tool arguments,
   credentials, or absolute local paths.
 
+- **A test file header that stopped describing the file.** A header is a cursor, not a summary: a reader arrives at a file to
+  answer one question, whether the defect they care about is caught here. So it names **what class of defect the file holds and what it
+  does not**, and it does not restate the cases below it. Two files in this repository drifted from that - the drift suite grew from two
+  kinds of naming to six while its header still said two, and the readings suite grew four failure modes while its header described only
+  the script layer - and both were files whose whole subject is a declaration that stopped being true.
+
 ## Testing Requirements
 
 Run:
