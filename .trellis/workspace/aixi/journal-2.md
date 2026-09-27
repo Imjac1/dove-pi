@@ -692,7 +692,7 @@ The tool own skill says .trellis/spec/ describes the project as it exists now, a
 | Hash | Message |
 |------|---------|
 | `6d0022e` | test(spec): the paths a specification names resolve from the root or from the file |
-| `f434490` | chore: record journal |
+| `3d8bae2` | chore(task): record the path measurement and the version that reported forty-two false positives |
 
 ### Testing
 

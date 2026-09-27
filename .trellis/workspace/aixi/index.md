@@ -30,7 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 69 | 2026-09-28 | The paths a specification names, and the version of the check that reported all of them | `6d0022e`, `f434490` | `master` |
+| 69 | 2026-09-28 | The paths a specification names, and the version of the check that reported all of them | `6d0022e`, `3d8bae2` | `master` |
 | 68 | 2026-09-28 | What an update may overwrite, measured from the tool own bookkeeping | `885c370`, `f928e56` | `master` |
 | 67 | 2026-09-28 | The entry points name the checklist and the quality check the workflow promises | `cdbc9f1`, `64520d9` | `master` |
 | 66 | 2026-09-28 | The bootstrap instruction this project never needed, and the tool rule the check implements | `513c8d1`, `778fa2a` | `master` |
