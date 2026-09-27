@@ -79,6 +79,12 @@ under `.dove/tasks/<goal-id>/convergence.json`.
   `ask`, `effect-claim`, `intensity`. **The last of those was found by the typecheck and not by a hand count**: the label a
 refusal carries is typed as a member of the vocabulary, and the intensity ceiling refused with `intensity` while the set
 carried ten - so that refusal class was one no prediction could name, and three earlier rounds had verified the ten by hand.
+**Who reads a resource observation.** `appendTaskResourceObservation` writes kind `task.convergence.observed`, and that name
+reads oddly for a resource observation - but the record is read: the failure reading takes it into the failure `resources` field for
+the request that failed, and the ledger reads the last one for repair. **One writer, two readers.** An earlier round recorded that
+nothing read it, and that was wrong in a way worth naming: the probe had written `task.resource.observed`, a kind no writer defines,
+so the measurement was of the fixture. A record kind is a union member; a fixture that hand-writes one is checked now.
+
 **The ledger may hold decisions the record no longer carries, and the reading says which.** The record is bounded and drops a
 change whose verdict is still pending; the ledger is append-only and keeps what happened. So the two disagree by design, and the turn
 reading names the orphans by id rather than printing nothing - because an operator reading "the next round has not been observed"

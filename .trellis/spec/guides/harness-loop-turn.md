@@ -117,6 +117,19 @@ git revert <the commit step 5 named>
 - **The record reports and a person decides.** Nothing in the loop reverts anything; the decision record carries
   `verdictOnly: true` for exactly that reason, and the revert above is yours to make.
 
+## When you build a fixture, take the kinds from the writer
+
+A probe of mine invented `kind: "task.resource.observed"`. Nothing writes it and nothing reads it, and every reading was silent about
+it - correctly, because the ledger additive-kinds rule says a reader ignores what it does not know. The conclusion drawn from that
+fixture was about the fixture, not about the harness.
+
+**So**: a ledger line you write by hand carries a kind from the union that owns kinds (`ExecutionRecordKind`), which makes an invented
+one a compile error. The readings suite does that now, and the other suites never had the problem because they build typed objects and
+let the type check the kind.
+
+**And the same discipline for the output**: read the whole reading, unfiltered. Two earlier rounds drew conclusions from a pipeline
+that terminated the process it read, and from a filter that hid the one line which made the arithmetic add up.
+
 ## When a step does not produce its reading
 
 | Missing | What it means |

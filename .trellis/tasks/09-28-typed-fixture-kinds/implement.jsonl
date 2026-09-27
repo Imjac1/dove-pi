@@ -1,0 +1,2 @@
+{"file": "src/core/contracts.ts", "reason": "The union that owns record kinds."}
+{"file": "tests/harness-readings.test.ts", "reason": "The one hand-written ledger-line builder."}
