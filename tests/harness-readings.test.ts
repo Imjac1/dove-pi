@@ -63,7 +63,7 @@ describe("the readings, exercised as scripts", () => {
 				// into a shape instead of decoding it - a fixture that could not exist is not a fixture.
 				schemaVersion: 1, taskId: "t1", revision: 7, acceptanceRevision: computeAcceptanceRevision(CRITERIA), state: "working",
 				criteria: [{ ...CRITERIA[0], status: "pending", evidenceRefs: [] }], findings: [], completedStepIds: [], consecutiveNoProgress: 0, meaningfulProgressSinceReview: true,
-				changes: [{ id: "chg-1", surface: "tool-implementation", failureEvidenceRef: "ledger:request:req-1", rootCause: "x", fix: "y", predictedFixes: [{ observable: "gate-refusals", subject: "fence", to: "down" }], predictedRegressions: [], baseline: { "gate-refusals:fence": 3 }, recordedAtRevision: 6 }],
+				changes: [{ id: "chg-1", surface: "tool-implementation", failureEvidenceRef: "ledger:request:req-1", rootCause: "x", fix: "y", predictedFixes: [{ observable: "gate-refusals", subject: "fence", direction: "down" }], predictedRegressions: [], baseline: { "gate-refusals:fence": 3 }, recordedAtRevision: 6 }],
 				observedResources: { toolCalls: 0, providerRounds: 0, elapsedMs: 0 },
 			}));
 			const env = { DOVE_PI_STATE_DIR: state };
@@ -95,6 +95,10 @@ describe("the readings, exercised as scripts", () => {
 			assert.match(turn.stdout, /applied:\s+abc1234\s+(inside|outside|unresolved)/);
 			assert.match(turn.stdout, /verifier:\s+(definite|possible|none)/);
 			assert.match(turn.stdout, /decision:\s+contradicted at revision 7/);
+			// **The observable the verdict machinery is built around, printed as a movement rather than as undefined.** The
+			// reading read `.to` for every arm of the union while a refusal count names its target `direction`, and printed
+			// `gate-refusals:fence=undefined` in every turn output until the scripts entered the type gate.
+			assert.match(turn.stdout, /predicted:\s+gate-refusals:fence=down/, "the prediction prints its direction");
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

@@ -7,7 +7,7 @@ import { parseLedgerLines } from "../src/core/execution-ledger.ts";
 import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import { surfaceFit, verifierFit } from "../src/core/harness-round.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
-import { decodeTaskConvergenceSnapshot } from "../src/core/task-convergence.ts";
+import { decodeTaskConvergenceSnapshot, type PredictedMovement } from "../src/core/task-convergence.ts";
 import type { TaskChange } from "../src/core/task-convergence.ts";
 
 /**
@@ -28,6 +28,12 @@ import type { TaskChange } from "../src/core/task-convergence.ts";
  * that claim is only checkable if something states which files belong to the component - which is what
  * `.trellis/harness-surface.yaml` is for. Without it this would be a claim about a claim.
  */
+
+/** A movement as text, by its arm: `to` for a status, `direction` for a refusal count. */
+function movementText(movement: PredictedMovement): string {
+	const target = movement.observable === "gate-refusals" ? movement.direction : movement.to;
+	return movement.observable + ":" + movement.subject + "=" + target;
+}
 
 const workspace = resolve(process.argv[2] ?? process.cwd());
 const harnessRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -117,7 +123,11 @@ for (const { change } of changes) {
 	console.log("  " + change.id + "   surface " + change.surface);
 	console.log("    evidence:   " + change.failureEvidenceRef);
 	console.log("    fix:        " + change.fix);
-	console.log("    predicted:  " + change.predictedFixes.map((movement) => movement.observable + ":" + movement.subject + "=" + movement.to).join(", "));
+	// **A movement is printed by its arm.** The union names the target `to` for the two status observables and `direction` for
+			// a refusal count, and reading `.to` for every arm printed `gate-refusals:fence=undefined` - in every turn output, for
+			// the observable the whole verdict machinery was built around. The type system said so the moment this file entered
+			// the gate.
+			console.log("    predicted:  " + change.predictedFixes.map(movementText).join(", "));
 	if (commit === undefined) {
 		console.log("    applied:    (none recorded) - no commit names this edit, so nothing can be reverted by id");
 	} else {

@@ -9,7 +9,11 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", ".pi/**/*.ts"],
+  // `scripts/` is included on purpose: these are the commands a person runs and the readings the loop is judged by, and
+  // they were outside this gate until a probe found a reading printing `undefined` for the observable the whole verdict
+  // machinery is built around - `Property 'to' does not exist on type 'PredictedMovement'`, in a file nobody had asked the
+  // type system about. `scripts/**/*.mjs` stays out: the blackbox harness is plain JavaScript and has no types to check.
+  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mts", ".pi/**/*.ts"],
   // Fixtures under tests/fixtures are audit input, not project source: some of them are deliberately
   // incomplete (a missing import, an undeclared global) because a scanner has to cope with real code
   // that does not compile. Type-checking them would make a fixture unable to represent what it exists

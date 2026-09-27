@@ -108,7 +108,7 @@ async function replay(fixturePath: string, traceName?: string): Promise<void> {
 			if (JSON.stringify(comparable(snapshot)) !== JSON.stringify(step.expected)) throw new Error(`Fixture mismatch in ${trace.name} at revision ${snapshot.revision}`);
 		}
 		// Keep the full replay path exercised as well as the incremental path.
-		replayTaskConvergence(trace.steps.map((step) => step.event));
+		replayTaskConvergence(trace.steps.map((step: { readonly event: unknown }) => step.event));
 	}
 	process.stdout.write(`${JSON.stringify({ ok: true, fixture: resolve(fixturePath), traces: traces.map((trace) => trace.name) }, null, 2)}\n`);
 }
