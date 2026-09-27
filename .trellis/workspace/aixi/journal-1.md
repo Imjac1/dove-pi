@@ -1532,3 +1532,43 @@ The corpus now holds a real failure - produced by running the black-box harness 
 ### Next Steps
 
 - The question the run leaves open: whether Pi exposes a preflight rejection to an extension at all, which is the only way the ledger could ever name that cause - and the first real turn, which now has evidence in the corpus to cite.
+
+
+## Session 41: Three accounts of one failure, each attributed to the boundary that made it
+<!-- trellis-session: v=2 fp=92fe2bd2be1213fd -->
+
+**Date**: 2026-09-28
+**Task**: Three accounts of one failure, each attributed to the boundary that made it
+**Branch**: `master`
+
+### Summary
+
+The question round 7 left open is answered and acted on: no hook fires in the preflight window, so Dove ledger can never name that cause, and the name a person gets comes from the client own classifier - so the failure record now carries the client account, keyed by request id, with its source required and never merged into the mechanism.
+
+### Main Changes
+
+- the answer: Pi own extension documentation shows input going straight through skill expansion to before_agent_start with nothing in between, and the failing run agrees - two records and no provider record at all, which is why Dove authorization branch is unreachable on that path
+- the name is the client own: provider-authorization-denied comes from classifyRpcFailure, a regex over the provider error text in the black-box runner - so the record carries the code AND how it was reached, because a regex is not the same evidence as a recorded status code
+- client accounts are keyed by request id and attached only when the match is exactly one: an account that could belong to more than one request is evidence about none, and a ledger with two failures must not have one run account smeared across them
+- the failure script pairs explicitly with --client-summary and reports why it attached nothing when the match is not exactly one; the corpus reading pairs by the layout the runner itself defines and produced its client line with no flag at all
+- the readings now show three accounts side by side for the real failing run: what Dove observed, what the ledger cannot see, and what the client called it - with no merged name, because which boundary a name came from is part of the claim
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8302cb7` | feat(loop): carry the client account, attributed, never merged into the mechanism |
+| `cc12da9` | docs(spec): record the answered question, the three accounts, and the never-merge rule |
+| `6accf75` | chore(task): record the client-account task, the answered question and both live readings |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 704 tests, 702 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. Both readings were run on the real failing run and print all three accounts.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which now has citable evidence in the corpus and a mining half that names the cause - and still needs an edit whose prediction the closed observable set can express.
