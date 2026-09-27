@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { ExecutionRecordKind } from "../src/core/contracts.ts";
 import { computeAcceptanceRevision } from "../src/core/task-convergence.ts";
 
 /**
@@ -36,7 +37,12 @@ function run(script: string, args: readonly string[], env: Record<string, string
 }
 
 const AT = "2026-09-28T16:00:00.000Z";
-function record(kind: string, stepId: string, details: Record<string, unknown>, requestId = "req-1"): string {
+/**
+ * A ledger line, with its kind typed as **the union that owns kinds**. A probe written from memory invented
+ * `task.resource.observed`, which nothing writes and nothing reads, and the conclusion drawn from it was about the fixture rather
+ * than about the code. A hand-written literal is not checked; this one is.
+ */
+function record(kind: ExecutionRecordKind, stepId: string, details: Record<string, unknown>, requestId = "req-1"): string {
 	return JSON.stringify({ taskId: "t1", stepId, kind, timestamp: AT, mode: "standard", correlation: { requestId }, details });
 }
 
