@@ -239,3 +239,44 @@ Thirty-three countable claims in prose were found, every one about a declared en
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and what remains of the drift survey is the class no check can reach - prose about meaning, which is read by people or not at all.
+
+
+## Session 58: One reader for the ledger, because two of the five disagreed about a truncated line
+<!-- trellis-session: v=2 fp=92d408374e9eec82 -->
+
+**Date**: 2026-09-28
+**Task**: One reader for the ledger, because two of the five disagreed about a truncated line
+**Branch**: `master`
+
+### Summary
+
+A ledger whose last append a crash cut short made the two mining readings exit 1 with no output at all - blind on exactly the run the harness exists to explain. Five readers parsed one line format, two of them copies with the try removed; there is one reader now, used by the ledger class and all four readings.
+
+### Main Changes
+
+- the rule the one reader encodes: a line which does not parse is not a record, because the append guarantee is one line per call, so a line the writer never finished was never written
+- the regression test hands all four readings the truncated ledger and asserts exit 0, the complete records still read, and no phantom record from the half line
+- the first measurement was polluted by my own pipeline - Select-Object -First 6 terminates the process it reads, so those exit codes were the pipeline own - and the re-measurement is the one the fix rests on
+- the first insertion put the function inside the class, and the fix took three refused attempts, each refusing because the script own boundary check was wrong rather than half-applying anything: brace depth zero and a clean typecheck on the fourth
+- and the PRD was wrong about the blackbox script: it reads the same ledger and keeps a tolerant copy because it runs under plain node and cannot import a TypeScript module - so the contract names the exception rather than the count hiding it
+- a partial line anywhere but the end stays open and recorded rather than answered: it would mean the append guarantee itself was broken, and nothing here says whether a reading should skip it, count it, or refuse the file
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2008cba` | fix(ledger): one reader, because two of the five disagreed about a truncated line |
+| `15a4f93` | docs(spec): one reader for the ledger, the rule it encodes, and the partial line that is left open |
+| `d1945e9` | chore(task): record the one-reader fix, the polluted first measurement and the three refused attempts |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 724 tests, 722 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the middle-of-file question, which needs an observed corruption to settle.
