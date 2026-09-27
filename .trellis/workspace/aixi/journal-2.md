@@ -627,3 +627,42 @@ Measured: workflow.md says a spec index is the entry point with a Pre-Developmen
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the other skill checklist rules that assert a state this repository could check mechanically.
+
+
+## Session 68: What an update may overwrite, measured from the tool own bookkeeping
+<!-- trellis-session: v=2 fp=6fcc456ba96a4571 -->
+
+**Date**: 2026-09-28
+**Task**: What an update may overwrite, measured from the tool own bookkeeping
+**Branch**: `master`
+
+### Summary
+
+The tool hash file tracks 181 files - AGENTS.md, workflow.md, config.yaml, and the tool directories - and not one .trellis/spec/** path. So the specifications are project content, which two rounds of reasoning had only guessed at, and the managed block is the region an update owns. Two checks hold both arrangements now.
+
+### Main Changes
+
+- the marker check holds that this repository content in AGENTS.md is outside the managed block, and it is proved against a seeded document that puts the same section inside the markers
+- the ownership check holds that no specification is tracked, so a future tool version that starts tracking them is noticed rather than discovered by losing an edit; on a fresh clone the bookkeeping is absent and no ownership claim is made, stated rather than silently passed
+- and the round corrected its own assumption mid-flight: the first reading of the tracked set suggested AGENTS.md and the .trellis files were untracked, and the exact query showed AGENTS.md tracked and 74 .trellis paths tracked - of which scripts 68, .runtime 2, agents 2, config.yaml and workflow.md, and no specification
+- the mechanism matters more than the list: a tracked file is one the tool knows, and the hash lets it notice an edit rather than clobber it, which is why the footer promise about the block holds and why our section sits outside it
+- so this round edit to AGENTS.md makes the file user-modified in the tool own bookkeeping, which is exactly the state the block footer is written for
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `885c370` | test(docs): hold the managed-block boundary and the ownership of the specifications |
+| `f928e56` | chore(task): record what an update may overwrite, measured from the tool own bookkeeping |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 729 tests, 727 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 7 of 7 with the marker and ownership checks.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the remaining skill rules naming this repository, which the classification pass has not finished.
