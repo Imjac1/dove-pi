@@ -927,3 +927,42 @@ Built the fix for the last of the three inert-declaration defects: a mode's perm
 ### Next Steps
 
 - D4: make gate.intensity, gate.windows and gate.excluded_techniques real or delete them
+
+
+## Session 26: Make the gate enforce the excluded techniques and intensity a mode declares
+<!-- trellis-session: v=2 fp=db7e8b9c58589c34 -->
+
+**Date**: 2026-09-27
+**Task**: Make the gate enforce the excluded techniques and intensity a mode declares
+**Branch**: `master`
+
+### Summary
+
+Built D4: the policy reads technique, phase and intensity off the action arguments, refuses an excluded technique before any allowing check, meters a phase against gate.intensity with an accumulator of actions actually run, and forwards all three so a grant constraints fire too.
+
+### Main Changes
+
+- the policy reads technique / phase / intensity off the call, and refuses an excluded technique before any check that could allow it
+- gate.intensity is metered against actions actually run, carried into each invocation as accumulatedIntensity
+- gate.windows is deleted rather than implemented: a calendar window outlives a session and belongs to the grant, so the loader refuses a mode-level one with that reason
+- the gap test is inverted: a technique the mode excludes is now refused at the boundary, including on a call that names no target
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1616a3d` | feat(gate): enforce excluded techniques and intensity ceilings, and carry them to the authority |
+| `bfd6fda` | docs(spec): record the technique and intensity controls, and the windows refusal |
+| `9f08855` | docs(task): record D4 built, and the gap test inverted by it |
+
+### Testing
+
+- [OK] Backfilled from the commits; the counts of that session were not captured. The suite is green as of the entry written after it.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- D3: the outer verification loop, whose sensor half was built next
