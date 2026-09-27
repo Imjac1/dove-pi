@@ -1452,3 +1452,43 @@ What the recorded corpus contains is now a reading rather than something redisco
 ### Next Steps
 
 - The first real turn of the loop, which now has a way to show that it has no evidence rather than to assume it - or the preservation decision that would give it some.
+
+
+## Session 39: The mining half reads the provider outcome, and the boundary that cannot judge it
+<!-- trellis-session: v=2 fp=c8a29ea3924c7b8c -->
+
+**Date**: 2026-09-28
+**Task**: The mining half reads the provider outcome, and the boundary that cannot judge it
+**Branch**: `master`
+
+### Summary
+
+A measured blind spot in the mining half is closed: the suite asserts that a preflight failure reaches the client as provider-authorization-denied while the ledger terminal says host-shutdown-preflight, and the mechanism turned out to be in the ledger all along under the provider records the mining never read.
+
+### Main Changes
+
+- chasing the gap changed the answer twice: the terminal is honest about what Dove observed - Pi rejected the request before the lifecycle saw it - and the mechanism is recorded by provider.request.completed and .rejected, correlated by request id
+- the failure record now carries the provider outcome beside the mechanism, matched by request id rather than position, keeping the last outcome that reported trouble so a later healthy call does not erase an earlier error, and attaching nothing when the provider reported no trouble
+- two vocabularies stay two: a merged code would claim a translation nobody performs, and the true statement is that the ledger holds two facts about one failure, each from the boundary that saw it
+- the corpus could not show any of this: every ledger that contains a failure is created with mkdtemp and removed in finally, while the ledgers the corpus keeps are from runs that did not fail - so the task was planned from the suite assertion, which is the preservation gap the corpus reading reports
+- and the finding it raises: a manifest judges an edit by three observables - criterion status, verification state, refusal counts - and this failure is now named correctly is none of them, so an instrument improvement reads unobserved. Widening the set, or accepting that a person judges these, is the open question
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `428ab37` | feat(loop): the mining half reads what the provider said, not only what the terminal named |
+| `86e8d24` | docs(spec): record the second place the mechanism lives, and the observable boundary it exposes |
+| `7aa03e5` | chore(task): record the mining task and the demonstration built to the measured shape |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 699 tests, 697 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The reading was run on a ledger built to the measured shape and prints both names.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The open question the boundary raises: widen the observable set so an instrument improvement is judgeable, or accept that a person judges them - and the first real turn, which still needs a corpus that contains a failure.
