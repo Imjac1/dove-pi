@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate this must pass."}
+{"file": ".trellis/spec/guides/harness-loop-turn.md", "reason": "The guide whose quoted invocations this test verifies."}

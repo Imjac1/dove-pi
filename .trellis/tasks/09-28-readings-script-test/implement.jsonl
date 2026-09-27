@@ -1,0 +1,2 @@
+{"file": "scripts/harness-failures.mts", "reason": "One of the four scripts whose layer is under test."}
+{"file": "tests/harness-effect-claim.test.ts", "reason": "The spawn shape this test follows."}
