@@ -301,7 +301,6 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 
 - Replay every shared trace incrementally and from its complete event list.
 - Assert `task.py convergence apply/status` round-trips an atomic snapshot.
-  do not determine a component.
 - Assert fast-lane requests create no convergence file or mutation guard.
 - Assert `ready_to_finish`, checkpoint, scope drift, and malformed-state paths
   fail closed at the Pi tool boundary.

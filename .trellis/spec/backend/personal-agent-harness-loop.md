@@ -30,9 +30,9 @@ that reports says so in a field a reader can check.
     rule the observation reader applies, so the axis and the record agree about what a refusal is.
   - **The reading is printed, never asserted**: `scripts/harness-axes.mts`, exit status 0 in every case,
     including "no ledger found". A threshold is a decision with its own evidence.
-- **This contract lives here because the loop has its own specification**, and because the file that documents
-    `request.terminal` (`personal-agent-request-runtime.md:332`) is at its 24 KiB cap. If the specifications
-\t`request.terminal` is at its 24 KiB cap.
+  - **This contract lives in this document because the loop has its own specification now.** It was filed in the
+    evidence plane only because the specification that documents `request.terminal`
+    (`personal-agent-request-runtime.md:332`) had reached its 24 KiB cap, and it moved when the loop contracts did.
 - **`change.decided` is the validation half of the loop, written at the round boundary.** A verdict existed only as
   a function computed on read and discarded, which reports and does not accumulate: the manifest is bounded and lives
   in one task, so a change whose verdict is still `pending` falls out and stops being recomputable. So the round that
@@ -93,7 +93,49 @@ that reports says so in a field a reader can check.
   - **`revertible` is a convention here, stated rather than assumed**: one logical harness edit is one commit,
     which is what gives an edit a revert and what a change manifest's `fix` describes.
 
-### 4. Validation & Error Matrix
+- **`change.applied` binds a change to the commit that embodies it, and is what makes an edit revertible.**
+  AHE requires the action space to be explicit **and** revertible; the surface declaration made it explicit, and until
+  this record existed nothing gave a revert a target - "which commit was change X" was unanswerable. It is a **ledger**
+  record, not a convergence event: the ledger holds what happened, the convergence record holds goal state, and an
+  application is not goal state.
+  - **The runtime records the claim and a script checks it.** The runtime cannot reach git, and a process spawn on the
+    request path to check one claim would be a control where a reading belongs. `scripts/harness-rounds.mts` checks,
+    where git and this project evidence readings already live.
+  - **Three refusals, each naming what is wrong**: an unknown change id (a prediction must be pre-registered, so a
+    commit naming no change is an edit nobody predicted); a second application for the same change, naming the commit
+    already recorded (one commit per logical edit is what gives the revert its granularity); an empty commit.
+  - **The check is `surfaceFit`, against the declared paths of the surface the manifest named**, using the fence own
+    rule through `declaredPrefixHit` rather than a second implementation of it. It answers **`inside`**,
+    **`outside`** with the offending files named, or **`unresolved`** when the commit cannot be resolved - a third
+    answer and not a nicer word for `outside`, because "the edit went somewhere it declared it would not" and "nobody
+    could tell" are different facts and only one of them is about the edit.
+  - **A file outside the declared component reads `outside`, and that is information rather than a violation.** A
+    manifest names one component; an edit that also changes the specification, the declaration, or another component is
+    a fact worth seeing, not something to hide by widening the claim - and a component implementation surface includes
+    its own tests, or every real edit would read `outside`.
+
+### 4. The Turn, in Order
+
+The steps a turn is made of, because instruments only become a loop when someone runs them in this order:
+
+1. **Mine.** `scripts/harness-failures.mts` over the ledger. A failure record names the class, the mechanism, the
+   refusals that preceded it, and the component the evidence points at - or says it cannot tell.
+2. **Choose a surface, and check it is one.** The seven components of `.trellis/harness-surface.yaml`, reported by
+   the convergence status read. An edit outside the surface is not bounded, whatever its merit.
+3. **Record the prediction first**, with `operation=change`: the surface, the failure evidence ref, the root cause
+   **distinct from the verifier-level cause**, the fix, and at least one predicted movement from the closed set. The
+   runtime reads the baseline itself, which is why a caller cannot supply one. A change with nothing predicted is a
+   rationale.
+4. **Make the edit as one commit.** One logical edit is one commit, which is what gives step 6 a target.
+5. **Record the application** with `operation=applied`, naming the commit.
+6. **Let the next round decide.** `change.decided` is written at the round boundary, once per change, with the verdict
+   the movements support - and `contradicted` is recorded as readily as `confirmed`, because an edit that failed to do
+   what it predicted is what the loop most needs to learn from.
+7. **Print the turn** with `scripts/harness-rounds.mts`, then keep or revert **as a person with that output in front
+   of them**. Nothing here acts: the record reports, the reading prints, and reverting is
+   `git revert <applied commit>`.
+
+### 5. Validation & Error Matrix
 
 | Condition | Required behavior |
 |---|---|
@@ -104,21 +146,28 @@ that reports says so in a field a reader can check.
 | A refusal with no request id | Counted as unrefused by the failure reading; never attributed by position |
 | A terminal whose mechanism is unfamiliar | Emitted with the mechanism carried through; never dropped |
 | A request whose converged state will not take an event | The ledger names the state; the convergence record is untouched |
+| An application naming a change the record does not carry | Refused, naming the id; the manifest comes first |
+| A second application for one change | Refused, naming the commit already recorded |
+| A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
+| A touched file outside the declared paths | `outside`, with the files named |ed |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
 
-### 5. Tests Required
+### 6. Tests Required
 
 - The axis classifies every terminal reason the type defines, reports `undefined` ratios for an empty ledger,
   and splits a composite refusal label into its atoms.
 - A round records one decision per decidable change and never a `pending` one, and a second round adds none.
+- An application is recorded once per change, and a second one, an unknown change and an empty commit are each refused.
+- The surface check answers inside, outside with the offenders named, and unresolved for a commit nobody could read.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
   directions, and lets one path belong to two components; the status read reports it.
 - The failure reading keeps the mechanism beside the class, counts only the terminals the axis calls failures,
   attributes refusals by id, reports an empty corpus as a finding, and returns `unattributed` where the records
+  do not determine a component.
 
-### 6. Wrong vs Correct
+### 7. Wrong vs Correct
 
 Wrong: let a record act on its own reading, so that an instrument becomes a control nobody voted for. Or write a
 verdict on every round for every change, so that "not yet" and "decided" read the same. Or attribute a failure to a
