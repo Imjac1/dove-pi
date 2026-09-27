@@ -895,3 +895,41 @@ A census of the repository tree found no orphan - every top-level entry is named
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and with the audit converged - four measured-clean results in a row - the next round should ask what else the loop itself still lacks rather than look for another document class.
+
+
+## Session 75: The last mile of the guide, rehearsed on a real commit
+<!-- trellis-session: v=2 fp=dff25310e39c2978 -->
+
+**Date**: 2026-09-28
+**Task**: The last mile of the guide, rehearsed on a real commit
+**Branch**: `master`
+
+### Summary
+
+Every script step of the turn guide runs against fixtures and every tool step needs the host, so the chain the guide promises at step 7 had only ever been read by hand. It is a test now, against the root commit resolved at runtime, with the outside list, the verifier answer and the decision asserted.
+
+### Main Changes
+
+- the subject choice is the test design: a hard-coded sha would pass here and be wrong in a clone with a different history, a recent commit would be absent from a shallow one, and the root commit answers in any full clone while touching every top-level directory - so it is outside every surface and the answer names the files
+- a commit that does not exist is the second subject and reads unresolved, which is the third answer rather than a politer outside
+- two assertions were wrong while writing it and both for one reason: the outside list is what is *not* in the declared surface, so it names the skill and tool files and correctly omits src/ and tests/. Asserting a source path there would have been asserting a bug - and the failure message now carries the line it saw, which is how the mistake became visible in one run
+- and the guide gained the sentence it was missing: a run should leave behind the ledger and the convergence record, because they are what let it be read here afterwards
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c1b8c7c` | test(readings): rehearse the last mile of the guide on a real commit, and say what a run leaves behind |
+| `3a7e672` | chore(task): record the last-mile rehearsal, its two subjects and the assertion that was wrong twice |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 733 tests, 731 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the readings suite is 6 of 6.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task - the only step left that this environment cannot take.

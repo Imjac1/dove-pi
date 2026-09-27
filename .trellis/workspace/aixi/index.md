@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 74
+- **Total Sessions**: 75
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~897 | Active |
+| `journal-2.md` | ~935 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 75 | 2026-09-28 | The last mile of the guide, rehearsed on a real commit | `c1b8c7c`, `3a7e672` | `master` |
 | 74 | 2026-09-28 | The two front doors stay in step, in shape if not in meaning | `a2b758b`, `6725c63` | `master` |
 | 73 | 2026-09-28 | What the template hashes can and cannot say | `994a908`, `8ec25d8` | `master` |
 | 72 | 2026-09-28 | The gate names the owners of its rules, and keeps the one that has none | `826fd2e`, `610970d` | `master` |
