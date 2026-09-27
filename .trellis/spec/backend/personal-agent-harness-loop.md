@@ -34,6 +34,20 @@ that reports says so in a field a reader can check.
     which holds **both** the harness and the verifier, so "is this edit a verifier change?" is a **reader judgment** today.
     A finer map - harness code and verifier code separated at file level - is the prerequisite that would settle it, and it
     is not a footnote to this contract.
+  - **The verifier is declared in two parts, and the turn reading answers in three.** `verifier.paths` names the files that
+    **are** verifier code; `verifier.embedded` names the files that **contain** it and are otherwise harness, each with the
+    symbols inside. Every path in both must resolve, like every other path in the declaration.
+    - **`definite`** when a commit touched a verifier path - the edit **is** a verifier change; **`possible`** when it
+      touched a file that embeds verifier code, **with the symbols at stake named**, so the judgment it leaves is an
+      informed one; **`none`** otherwise. The middle state exists because the evidence does not support the first, and
+      collapsing it into `none` would be the false assurance this boundary is about.
+    - **An unreadable commit is `none`, not `possible`** - unlike the surface fit, where "nobody could tell" is its own
+      answer. The question here is whether the verifier is at stake, and nothing was read, so nothing is claimed.
+    - **`verifier.paths` and `verifiedBy` are different relations and are not merged**: one says what *implements* the
+      verification, the other what *verifies* a component. A suite is in the second, a reading in the first, and
+      `execution-ledger.ts` is in the first with no suite of its own.
+    - **Extracting the embedded code is the prerequisite that would turn `possible` into `definite`** for those files, and
+      it is its own change: one of the symbols is exported and used by tests, so the blast radius is real.
 - **The failure reading (`src/core/failure-reading.ts`) is the mining half of the loop: a pure function of the
   ledger that turns an unsuccessful request into a bounded record.** It reads; it clusters nothing, ranks nothing and
   proposes nothing.
@@ -205,7 +219,8 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A second application for one change | Refused, naming the commit already recorded |
 | A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
 | A touched file outside the declared paths | `outside`, with the files named |
-| A change that edits the verifier | Not a loop turn: judged by its suites and a person - and which edits those are is a judgment the map cannot make yet |
+| A change that edits the verifier | Not a loop turn: judged by its suites and a person. The reading answers `definite`, `possible` (naming the symbols) or `none` |
+| A commit the reading cannot resolve | `verifier: none` - nothing was read, so nothing is claimed |
 | A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
 | A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |
 | A preflight failure with no provider record | `unseen` on the record, naming the boundary and not the cause |
@@ -228,6 +243,8 @@ The steps a turn is made of, because instruments only become a loop when someone
   alone.
 - A failure record reference is the record step id with the prefix the resolver looks for, and a manifest citing a
   reference the ledger does not hold is refused with the reference named.
+- The verifier fit answers definite for a verifier file, possible with the symbols for a file that embeds one, and none
+  for harness code - and an unreadable commit is none rather than possible.
 - A failure pointing at a component carries the suites the declaration states for it, an unattributed one carries none,
   and the map refuses a `verifiedBy` entry for a component that does not exist or a suite that does not resolve.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
