@@ -319,3 +319,42 @@ The turn reading cast a record into a shape instead of decoding it, so a record 
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the probe hygiene lesson, which belongs in the loop guide.
+
+
+## Session 60: The instruments enter the type gate, and it immediately pays for itself
+<!-- trellis-session: v=2 fp=18b8c42422a94221 -->
+
+**Date**: 2026-09-28
+**Task**: The instruments enter the type gate, and it immediately pays for itself
+**Branch**: `master`
+
+### Summary
+
+tsconfig included src, tests and .pi - not scripts - so the four readings and every command the guide tells a person to run were never type-checked. Widening it reports exactly two errors, and the first is a live defect: a gate-refusals prediction printed as =undefined in every turn output, for the observable the whole verdict machinery is built around.
+
+### Main Changes
+
+- the printer read .to for every arm of the movement union while a refusal count names its target direction, and the type system had known all along - the gate was pointed everywhere except at the instruments
+- the fixture and the printer agreed with each other and neither agreed with the union, so the test covered the one case that looked right: fixing the printer alone would have failed the test and fixing the fixture alone would have hidden the defect again
+- the second error was a typing gap rather than a defect: an implicit any in a trellis helper, fixed by naming the parameter type, and the round reports two errors rather than saying the scripts were nearly clean
+- and one thing is recorded rather than fixed: the decoder tolerates a movement carrying to for a gate-refusals observable, which the union does not name - that tolerance is how the fixture could be wrong in the first place, and how strict the decoder should be is its own decision
+- the round also closed the loop on its own method: the probe that found the defect printed unfiltered output, which is the lesson from the two measurement mistakes of the previous round
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `546d393` | fix(scripts): the instruments enter the type gate, which immediately pays for itself |
+| `e320ce0` | docs(spec,task): a new script is a new file inside the type gate, with the two errors it found |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors with scripts/**/*.mts inside the gate. npm test: 725 tests, 723 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the readings suite is 4 of 4 with the new assertion.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- How strict the decoder should be about a movement carrying a field its arm does not name; and the first real turn, which needs a Pi host.
