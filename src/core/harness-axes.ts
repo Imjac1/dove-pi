@@ -52,6 +52,27 @@ export function classifyTerminal(reason: RequestTerminalReason): TerminalClass {
 	return TERMINAL_CLASSES[reason];
 }
 
+/**
+ * The counts, per **atom**, of the refusals a ledger holds.
+ *
+ * **A recorded label may be composite**: the refusal path falls back to `gates.join("+")`, so an entry can read
+ * `deny+scope+registered+ask`. Splitting here is the same rule the observation reader applies, so the axis, the
+ * observation and the corpus summary agree about what a refusal is - one rule, three readers.
+ */
+export function gateRefusalCounts(records: readonly ExecutionRecord[]): Readonly<Record<string, number>> {
+	const counts: Record<string, number> = {};
+	for (const record of records) {
+		if (record.kind !== "gate.refused") continue;
+		const gate = record.details?.gate;
+		if (typeof gate !== "string") continue;
+		for (const atom of gate.split("+")) {
+			const label = atom.trim();
+			if (label !== "") counts[label] = (counts[label] ?? 0) + 1;
+		}
+	}
+	return counts;
+}
+
 export interface SafetyAndStability {
 	readonly axis: "SSM";
 	/** One per `request.terminal` record, which is the denominator: several terminals can follow from one settle. */
@@ -84,8 +105,8 @@ export function safetyAndStability(records: readonly ExecutionRecord[]): SafetyA
 	const terminals: Record<TerminalClass, number> = { clean: 0, recovered: 0, interrupted: 0, failure: 0 };
 	let requests = 0;
 	let unclassifiedTerminals = 0;
-	let refusalTotal = 0;
-	const byLabel: Record<string, number> = {};
+	const byLabel = gateRefusalCounts(records);
+	const refusalTotal = Object.values(byLabel).reduce((sum, count) => sum + count, 0);
 	for (const record of records) {
 		if (record.kind === "request.terminal") {
 			requests += 1;
@@ -93,18 +114,6 @@ export function safetyAndStability(records: readonly ExecutionRecord[]): SafetyA
 			if (typeof reason === "string" && reason in TERMINAL_CLASSES) terminals[TERMINAL_CLASSES[reason as RequestTerminalReason]] += 1;
 			else unclassifiedTerminals += 1;
 			continue;
-		}
-		if (record.kind !== "gate.refused") continue;
-		const gate = record.details?.gate;
-		if (typeof gate !== "string") continue;
-		// **A recorded label may be composite**: the refusal path falls back to `gates.join("+")`, so an entry can read
-		// `deny+scope+registered+ask`. Splitting here is the same rule the observation reader applies, so the axis and
-		// the record agree about what a refusal is.
-		for (const atom of gate.split("+")) {
-			const label = atom.trim();
-			if (label === "") continue;
-			byLabel[label] = (byLabel[label] ?? 0) + 1;
-			refusalTotal += 1;
 		}
 	}
 	const decided = terminals.clean + terminals.failure;

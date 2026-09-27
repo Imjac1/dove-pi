@@ -71,6 +71,10 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// is a script by design - a process spawn on the request path to check one claim would be a control where a reading
 	// belongs. If the runtime ever checks it, that is the decision, and this entry comes out.
 	"src/core/harness-round.ts": { reason: "a reading, consumed by scripts/harness-rounds.mts and its test; deliberately not reached by the harness", wiredBy: null },
+	// The fourth reading and the same shape: the corpus summary is consumed by scripts/harness-corpus.mts and its test.
+	// It answers a question a person asks (what do we have), not one the harness asks while serving a request - and a
+	// summary the harness acted on would be a control.
+	"src/core/harness-corpus.ts": { reason: "a reading, consumed by scripts/harness-corpus.mts and its test; deliberately not reached by the harness", wiredBy: null },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
