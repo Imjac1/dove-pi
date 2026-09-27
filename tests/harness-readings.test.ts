@@ -222,6 +222,23 @@ describe("the readings, exercised as scripts", () => {
 		const rev = execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
 		assert.match(rev, /^[0-9a-f]{40}$/, "the root commit of this repository resolves at runtime");
 
+		// **An inside subject, found at runtime.** The commits that stay within one surface are all recent, so a hard-coded sha would
+		// depend on history depth; scanning thirty of them costs about half a second and finds one in this repository. A checkout with
+		// none takes the fallback below and says why, rather than passing silently or failing about its history.
+		const inside = (() => {
+			const surfaces: readonly (readonly [string, RegExp])[] = [
+				["tool-implementation", /^(src|tests)\//],
+				["long-term-memory", /^\.trellis\/(spec|workspace|tasks)\//],
+			];
+			const gitOut = (args: readonly string[]): readonly string[] =>
+				execFileSync("git", [...args], { cwd: REPO, encoding: "utf8" }).split(/\r?\n/).filter(Boolean);
+			for (const rev of gitOut(["log", "--format=%H", "--max-count=30"])) {
+				const files = gitOut(["show", "--name-only", "--format=", rev]);
+				if (files.length === 0) continue;
+				for (const [surface, pattern] of surfaces) if (files.every((file) => pattern.test(file))) return { commit: rev, surface };
+			}
+			return undefined;
+		})();
 		const root = mkdtempSync(join(tmpdir(), "dove-rehearsal-"));
 		try {
 			const state = join(root, "state");
@@ -238,13 +255,14 @@ describe("the readings, exercised as scripts", () => {
 				record("request.received", "request:req-1", { logicalRequestId: "req-1" }),
 				record("change.applied", "applied:chg-real", { changeId: "chg-real", commit: rev }),
 				record("change.applied", "applied:chg-ghost", { changeId: "chg-ghost", commit: "0".repeat(40) }),
+				record("change.applied", "applied:chg-inside", { changeId: "chg-inside", commit: inside?.commit ?? rev }),
 				record("change.decided", "change:chg-real", { changeId: "chg-real", verdict: "confirmed", observed: [], decidedAtRevision: 9, verdictOnly: true }),
 			].join("\n"));
 			writeFileSync(join(project, ".dove", "tasks", "t1", "convergence.json"), JSON.stringify({
 				schemaVersion: 1, taskId: "t1", revision: 9, acceptanceRevision: computeAcceptanceRevision(CRITERIA), state: "working",
 				criteria: [{ ...CRITERIA[0], status: "pending", evidenceRefs: [] }], findings: [], completedStepIds: [],
 				consecutiveNoProgress: 0, meaningfulProgressSinceReview: true,
-				changes: [change("chg-real", "tool-implementation", rev), change("chg-ghost", "tool-implementation", "0".repeat(40))],
+				changes: [change("chg-real", "tool-implementation", rev), change("chg-ghost", "tool-implementation", "0".repeat(40)), change("chg-inside", inside?.surface ?? "tool-implementation", inside?.commit ?? rev)],
 				observedResources: { toolCalls: 0, providerRounds: 0, elapsedMs: 0 },
 			}));
 			const result = run("harness-rounds.mts", [project], { DOVE_PI_STATE_DIR: state });
@@ -264,6 +282,14 @@ describe("the readings, exercised as scripts", () => {
 			// The verifier answer and the decision, which are the rest of step 7.
 			assert.match(result.stdout, /verifier:\s+(definite|possible|none)/, "the verifier answer is printed");
 			assert.match(result.stdout, /decision:\s+confirmed at revision 9/, "and the decision the record carries");
+			// **The inside answer, or an honest account of why it is not here.** The fourth answer the reading can print - "surface not
+			// declared" - is unreachable from a valid record: the decoder validates a surface against the union the code carries, so it
+			// would take a declaration that lags the code for it to fire.
+			if (inside === undefined) {
+				assert.match(result.stdout, /changes recorded: 3/, "no commit in this history stays within one surface, so the fixture is read and the inside answer is not asserted");
+			} else {
+				assert.match(result.stdout, new RegExp("applied:\\s+[0-9a-f]{7,}\\s+inside " + inside.surface), "a commit within one surface reads inside it: " + inside.surface + " " + inside.commit.slice(0, 9));
+			}
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
