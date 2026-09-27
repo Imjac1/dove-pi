@@ -1691,3 +1691,41 @@ The question three rounds carried is closed with the answer the field already ga
 ### Next Steps
 
 - Nothing in this environment: every instrument AHE names exists, the boundary is stated, a turn is documented as seven steps, and running one is a Pi-hosted act. What remains is for a Pi session with a formal native task to make the first turn.
+
+
+## Session 45: The verifier, declared where it can be and named where it cannot
+<!-- trellis-session: v=2 fp=81c9ce52390b15d5 -->
+
+**Date**: 2026-09-28
+**Task**: The verifier, declared where it can be and named where it cannot
+**Branch**: `master`
+
+### Summary
+
+The boundary limit from the previous round became a reading: the declaration now states the verifier in two parts - the files that are verifier code and the files that contain it - and the turn reading answers definite, possible with the symbols at stake, or none.
+
+### Main Changes
+
+- the research decided the shape: the verifier is not only files, because its read paths live inside the adapter and its verification logic inside the record module, so a finer map could not be made by re-declaring paths
+- the four readings were already identified by the reachability allow-list, which is a verifier inventory that has nothing to do with the declaration - a fact worth knowing rather than reading as the declaration
+- verifier.embedded names the symbols inside the mostly-harness files, which turns a reader judgment into an informed one: the live answer on a real commit is possible - src/pi-adapter/extension.ts (unresolvedAcceptanceEvidence, countGateRefusals, changeObservables, convergenceObservables)
+- an unreadable commit is none rather than possible, unlike the surface fit where nobody could tell is its own answer: the question here is whether the verifier is at stake, and nothing was read so nothing is claimed
+- and a defect this round produced: the loader edit dropped the function closing brace, and tsc named a line rather than a place, so a per-line brace-depth script located it in one run - recorded because a 130-line insertion that looks complete is exactly the kind of change the eye misses
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `63a028a` | feat(loop): the verifier is declared where it can be and named where it cannot |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the turn reading prints the verifier answer on a fixture whose commit touched extension.ts.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Extracting the embedded verifier code would turn possible into definite for those files, and it is its own change with a real blast radius: unresolvedAcceptanceEvidence is exported and used by tests.

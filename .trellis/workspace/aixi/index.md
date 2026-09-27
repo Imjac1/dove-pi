@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 44
+- **Total Sessions**: 45
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1693 | Active |
+| `journal-1.md` | ~1731 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 45 | 2026-09-28 | The verifier, declared where it can be and named where it cannot | `63a028a` | `master` |
 | 44 | 2026-09-28 | The verifier is outside the loop, and the split that made room to say it | `3681e8f`, `57b6a81` | `master` |
 | 43 | 2026-09-28 | The behaviours a fix must not regress, and the suites nobody had stated | `42fbe3f`, `ddddc97`, `f9301dc` | `master` |
 | 42 | 2026-09-28 | A mined failure carries a citable reference, and a manifest resolves what it cites | `ffa3a55`, `fc2cd2f`, `bef34ab` | `master` |
