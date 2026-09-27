@@ -235,6 +235,61 @@ describe("the documents that name things", () => {
 		assert.deepEqual(specs, [], "a tool update tracks a specification now, so editing one may be reverted by it");
 	});
 
+	/**
+	 * Paths this repository owns, named in a specification, which do not resolve - from the repository root or from the file own
+	 * directory.
+	 *
+	 * **Two bases, and the first version of this rule used one.** Specifications write `src/core/execution-ledger.ts` from the
+	 * repository root and a handful write `../backend/personal-agent-runtime.md` from their own directory; resolving from the file
+	 * alone reported all forty-two paths missing, including files that exist. A check that fires on true sentences teaches people to
+	 * ignore it.
+	 *
+	 * **Scope: the specifications, not the guides.** A guide gives examples - `scripts/path/file.py` is a shape rather than a claim -
+	 * and a rule that read them would report two true sentences.
+	 */
+	function specPathProblems(root: string, directories: readonly string[]): readonly string[] {
+		const owns = /^(\.\/|\.\.\/)*(\.trellis|src|tests|scripts|AGENTS\.md|package\.json|tsconfig\.json)/;
+		const pathInCode = /[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+\.[a-z]{2,4}/g;
+		const problems: string[] = [];
+		for (const directory of directories) {
+			const specDir = join(root, ".trellis", "spec", directory);
+			if (!existsSync(specDir)) continue;
+			for (const name of readdirSync(specDir).filter((entry) => entry.endsWith(".md"))) {
+				const text = readFileSync(join(specDir, name), "utf8");
+				for (const code of text.matchAll(/`([^`\n]+)`/g)) {
+					for (const path of code[1].match(pathInCode) ?? []) {
+						if (!owns.test(path)) continue;
+						if (!existsSync(join(root, path)) && !existsSync(join(specDir, path))) problems.push(directory + "/" + name + ": " + path);
+					}
+				}
+			}
+		}
+		return problems;
+	}
+
+	it("names only paths that exist, in the specifications that describe this repository", () => {
+		// The rule comes from the tool own skill: `.trellis/spec/` describes the project as it exists now. Its strongest mechanical
+		// part is that the paths a specification names exist.
+		//
+		// **What it cannot see**: whether the sentence around a path is still true. A specification may cite a real file for behaviour
+		// it no longer has, and no path check can tell - which is the part a reader checks and a check cannot.
+		assert.deepEqual(specPathProblems(process.cwd(), ["backend", "frontend"]), [], "a specification names a path this repository does not have");
+
+		// **Seeded both ways**: a specification naming a missing file is reported, and one naming a file that is there is not.
+		const seed = mkdtempSync(join(tmpdir(), "dove-spec-paths-"));
+		try {
+			mkdirSync(join(seed, ".trellis", "spec", "backend"), { recursive: true });
+			mkdirSync(join(seed, "src", "core"), { recursive: true });
+			writeFileSync(join(seed, "src", "core", "contracts.ts"), "export const present = true;\n");
+			writeFileSync(join(seed, ".trellis", "spec", "backend", "a.md"), "# A\n\nSee `src/core/contracts.ts`.\n");
+			assert.deepEqual(specPathProblems(seed, ["backend"]), [], "an existing path is not reported");
+			writeFileSync(join(seed, ".trellis", "spec", "backend", "b.md"), "# B\n\nSee `src/core/gone.ts`.\n");
+			assert.deepEqual(specPathProblems(seed, ["backend"]), ["backend/b.md: src/core/gone.ts"], "a missing path is");
+		} finally {
+			rmSync(seed, { recursive: true, force: true });
+		}
+	});
+
 	it("cites a thing and not a position, in the live code", () => {
 		// **A prohibition, which is the one thing a pattern check can honestly do.** A comment citing a line of this
 		// repository is wrong the moment somebody edits above it, and nothing notices: of the eighteen citations this round
