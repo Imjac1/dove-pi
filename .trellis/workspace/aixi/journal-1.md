@@ -1652,3 +1652,42 @@ The second field Self-Harness requires of a failure record - the passing behavio
 ### Next Steps
 
 - The loop now has every instrument AHE names - a mining half that names class, mechanism, attribution, what it cannot see, a citable reference and what must not regress; a manifest that resolves its evidence; a round boundary that decides; and a surface that makes an edit bounded and revertible. What remains is the turn itself, which is a Pi-hosted act.
+
+
+## Session 44: The verifier is outside the loop, and the split that made room to say it
+<!-- trellis-session: v=2 fp=00fab206de3d071f -->
+
+**Date**: 2026-09-28
+**Task**: The verifier is outside the loop, and the split that made room to say it
+**Branch**: `master`
+
+### Summary
+
+The question three rounds carried is closed with the answer the field already gave: a verdict is read against the next round task-level outcomes, and an instrument change is a verifier change - self-improvement is the system changing while the verifier does not - so the closed observable set is not widened to reach instruments, and they are judged by their suites and a person.
+
+### Main Changes
+
+- judging an instrument with the instrument own output would make the verifier its own judge: the only observable such a change moves is the instrument output, and a subject that produces its own verdict is not verified
+- what judges one instead is its suites and a person, and the suites are stated data now rather than a recollection, because the declaration says which suites verify each component
+- the limit is named rather than glossed: tool-implementation is bound to the whole of src, which holds both the harness and the verifier, so which edits are verifier changes is a reader judgment until a finer map separates them at file level
+- room came from moving rather than compressing: the terminal classification and the decision record are records, so they moved to the records specification with their matrix rows and test lines - the loop specification went from 24,232 bytes to 20,749, then 22,688 with the boundary written, where it had 344 bytes of headroom
+- the split script refuses on an ambiguous marker and on a line that looks like an orphaned continuation, which is the exact failure the previous split produced; and it reads the line ending from the file, because splitting on a bare newline left a carriage return on every line and a strict equality matched nothing
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3681e8f` | docs(spec): the verifier is outside the loop, and the split that made room to say it |
+| `57b6a81` | chore(task): record the boundary task, the split, and the two things it taught |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 709 tests, 707 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and all three readings still run.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Nothing in this environment: every instrument AHE names exists, the boundary is stated, a turn is documented as seven steps, and running one is a Pi-hosted act. What remains is for a Pi session with a formal native task to make the first turn.
