@@ -114,6 +114,20 @@ that reports says so in a field a reader can check.
     a fact worth seeing, not something to hide by widening the claim - and a component implementation surface includes
     its own tests, or every real edit would read `outside`.
 
+- **`scripts/harness-corpus.mts` summarises the recorded corpus, and says why it is empty when it is.** Mining needs a
+  corpus rather than one ledger, and this is the reading that answers "what do we have" once instead of per round.
+  - **Every count comes from a rule that already exists**: the terminal classes are the axis classification, the
+    failures are the failure reading, and the refusal labels are the axis refusal split (exported as
+    `gateRefusalCounts`, one rule for three readers). A corpus summary that derived any of them again could disagree
+    with the instrument it is summarising, and a reader would have no way to tell which was right.
+  - **What is missing is part of the summary, with its measured cause.** A corpus with no failure record says so **and**
+    names why: the paths that produce one are driven by host tests whose state directories are created with
+    `mkdtempSync` and go away with the run, while the blackbox runner keeps the ledgers of runs that did not fail. The
+    surviving corpus is skewed by **which runner keeps its ledgers**, so "zero failures" is a statement about what was
+    kept rather than about the harness.
+  - **It walks and says what it walked**, skipping `node_modules` and `.git`, counting an unparseable ledger as empty
+    rather than stopping, and printing rather than asserting - exit 0 in every case, including a root that does not exist.
+
 ### 4. The Turn, in Order
 
 The steps a turn is made of, because instruments only become a loop when someone runs them in this order:
@@ -149,7 +163,9 @@ The steps a turn is made of, because instruments only become a loop when someone
 | An application naming a change the record does not carry | Refused, naming the id; the manifest comes first |
 | A second application for one change | Refused, naming the commit already recorded |
 | A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
-| A touched file outside the declared paths | `outside`, with the files named |ed |
+| A touched file outside the declared paths | `outside`, with the files named |
+| A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
+| A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |ed |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
@@ -161,6 +177,8 @@ The steps a turn is made of, because instruments only become a loop when someone
 - A round records one decision per decidable change and never a `pending` one, and a second round adds none.
 - An application is recorded once per change, and a second one, an unknown change and an empty commit are each refused.
 - The surface check answers inside, outside with the offenders named, and unresolved for a commit nobody could read.
+- The corpus summary counts each terminal class with the axis rule, splits a composite refusal label, and says why a
+  corpus with no failure has none - and does not say it when the corpus holds one.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
   directions, and lets one path belong to two components; the status read reports it.
 - The failure reading keeps the mechanism beside the class, counts only the terminals the axis calls failures,
