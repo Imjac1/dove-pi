@@ -744,3 +744,41 @@ The front-door sweep found that .trellis/workflow.md - which calls itself the wo
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the drift suite at nine cases, whose size is worth measuring before it grows again.
+
+
+## Session 71: A header that stopped describing its file, in the two files whose subject is exactly that
+<!-- trellis-session: v=2 fp=651c805496418cac -->
+
+**Date**: 2026-09-28
+**Task**: A header that stopped describing its file, in the two files whose subject is exactly that
+**Branch**: `master`
+
+### Summary
+
+The question was whether the drift suite needs splitting. Measured: 375 lines, the eighth largest test file, nine cases of one shape, four helpers that are the four rules - so it stays, and the measurement is the reason. And the measurement found that both headers had drifted from their files, in the two files whose subject is a declaration that stopped being true.
+
+### Main Changes
+
+- the drift suite header still said two kinds of naming while the file holds six; the readings suite header described the script layer while the file also holds four failure modes of the readings
+- both headers now name the kinds they hold and point at the limits, which is the convention the guidelines carry: a header is a cursor, not a summary - a reader arrives at a file to answer one question, whether the defect they care about is caught here
+- the split decision is recorded with its measurement, so the next person to wonder gets the number instead of the wondering
+- and no case changed: the suite passes with the same counts, which is the evidence that this round edited prose about tests and nothing else
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dd82767` | docs(tests): a header that stopped describing its file, in the two files whose subject is exactly that |
+| `ca45096` | chore(task): record the split measurement and the two stale headers it found |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 731 tests, 729 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 9 of 9.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the quality guidelines, which have grown a convention for headers and one for counts in three rounds.
