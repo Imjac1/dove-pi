@@ -148,6 +148,10 @@ describe("the documents that name things", () => {
 		// among the missing three. Measured across the repository: 139 markdown files, 61 links, none broken, and of the three
 		// specification indexes only that one was stale. So the drift happens where a specification is added and the table is not
 		// updated, and a check naming one directory leaves that open everywhere else.
+		//
+		// **And the rule is the tool own, not a preference of mine.** `.agents/skills/trellis-spec-bootstrap/SKILL.md` says, in its
+		// checklist: "index.md files match the final spec file set." This test is that sentence made mechanical - and it was not
+		// being kept, since the backend index was missing three specifications when the test was written.
 		assert.deepEqual(indexProblems(join(process.cwd(), ".trellis", "spec")), [], "a specification index and its directory disagree");
 
 		// **And the comparison is proved to fail**, because a check nobody has seen refuse is a check whose wiring is unproven: a

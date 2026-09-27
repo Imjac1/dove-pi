@@ -6,7 +6,7 @@
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+This directory contains the backend guidelines for this project.
 
 ---
 
@@ -30,19 +30,6 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Personal Agent Mode Format](./personal-agent-mode-format.md) | Work-mode layout and validation, the fields a mode declares, and the refusals for the rest | Active |
 | [Bounded Harness Improvement](./personal-agent-harness-loop.md) | The instruments the harness uses to improve itself from its own evidence, and the boundaries that keep that improvement bounded | Active |
 | [Convergence Record](./personal-agent-convergence-record.md) | The convergence contract for a formal native task, and the records around it: observations, manifests, terminal classification, decisions and applied commits | Active |
-
----
-
-## How to Fill These Guidelines
-
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
 
 ---
 
