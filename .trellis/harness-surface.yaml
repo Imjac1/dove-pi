@@ -22,3 +22,15 @@ components:
   skill: [.agents/skills]
   subagent-config: [src/pi-adapter/subagent-provider.ts, .codex/agents]
   long-term-memory: [.trellis/spec, .trellis/workspace, .trellis/tasks]
+# Which suites verify each component: the passing behaviours a fix must not regress.
+#
+# A key must be a component declared above, and a path must resolve - a list of suites that do not exist verifies nothing,
+# the same defect as a component whose paths are not real. A component with no entry here means nobody has stated what
+# verifies it, which is a fact about our knowledge: `skill` and `subagent-config` are deliberately unstated rather than
+# filled with something plausible.
+verifiedBy:
+  system-prompt: [tests/work-mode.test.ts, tests/host-work-mode.test.ts, tests/pentest-mode.test.ts, tests/code-audit-mode.test.ts, tests/trading-mode.test.ts]
+  tool-description: [tests/pi-adapter.test.ts]
+  tool-implementation: [tests/task-convergence.test.ts, tests/change-verdict.test.ts, tests/failure-reading.test.ts, tests/harness-corpus.test.ts, tests/harness-round.test.ts, tests/harness-axes.test.ts, tests/harness-surface.test.ts]
+  middleware: [tests/action-policy.test.ts, tests/fence-drift.test.ts, tests/host-work-mode.test.ts]
+  long-term-memory: [tests/spec-context-budget.test.ts]

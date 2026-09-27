@@ -89,6 +89,17 @@ export interface FailureRecord {
 	 */
 	readonly unseen?: string;
 	readonly component: ChangeSurface | "unattributed";
+	/**
+	 * **The passing behaviours a fix must not regress**, as Self-Harness requires of a failure record.
+	 *
+	 * The suites that verify the component the evidence points at, taken from the declaration the harness states. **Empty
+	 * when the attribution is `unattributed`**: the evidence then names no component, and a list derived from nothing
+	 * would be an invention dressed as a requirement - `componentEvidence` already says why beside it.
+	 *
+	 * It is a list, not a test run: running it is a person or a round, and a record that ran tests would be a process
+	 * rather than evidence.
+	 */
+	readonly preserve: readonly string[];
 	/** The rule that decided the component, or the reason none could be. Never empty. */
 	readonly componentEvidence: string;
 }
@@ -164,7 +175,7 @@ export function componentForFailure(input: { readonly refusalLabels: readonly st
  * whose request it describes. The reading never goes looking for a summary file: pairing two artifacts is a decision
  * about them, and the caller is the one who knows they belong together.
  */
-export function readFailures(records: readonly ExecutionRecord[], options: { readonly clientAccounts?: ReadonlyMap<string, ClientAccount> } = {}): FailureReading {
+export function readFailures(records: readonly ExecutionRecord[], options: { readonly clientAccounts?: ReadonlyMap<string, ClientAccount>; readonly verifiedBy?: Readonly<Partial<Record<ChangeSurface, readonly string[]>>> } = {}): FailureReading {
 	const requestIds = new Set<string>();
 	const refusals = new Map<string, { gate: string; reason: string }[]>();
 	const convergence = new Map<string, { state?: string; acceptanceId?: string }>();
@@ -277,6 +288,7 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 				? { unseen: "the request ended before the agent loop started: whatever rejected it did so upstream of every recording hook, so this ledger cannot name the cause" }
 				: {}),
 			component: attribution.component,
+			preserve: attribution.component === "unattributed" ? [] : (options.verifiedBy?.[attribution.component] ?? []),
 			componentEvidence: attribution.evidence,
 		});
 	}

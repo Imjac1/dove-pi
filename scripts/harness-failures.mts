@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
 import { readFailures, type ClientAccount } from "../src/core/failure-reading.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
@@ -67,7 +69,18 @@ if (clientSummaryPath === undefined) {
 		clientNote = "the client summary could not be read: " + (error instanceof Error ? error.message : String(error));
 	}
 }
-const reading = readFailures(records, clientAccounts.size === 0 ? {} : { clientAccounts });
+/**
+ * What a fix must not regress: the suites the declaration states for each component.
+ *
+ * Read from the harness own declaration, which is the only place that relation is stated - and when the file is missing or
+ * broken the list is simply absent, because the reading is not the place to guess what verifies what.
+ */
+let verifiedBy: ReturnType<typeof parseHarnessSurface>["verifiedBy"] | undefined;
+const surfaceFile = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), ".trellis", "harness-surface.yaml");
+if (existsSync(surfaceFile)) {
+	try { verifiedBy = parseHarnessSurface(readFileSync(surfaceFile, "utf8")).verifiedBy; } catch { verifiedBy = undefined; }
+}
+const reading = readFailures(records, { ...(clientAccounts.size === 0 ? {} : { clientAccounts }), ...(verifiedBy === undefined ? {} : { verifiedBy }) });
 
 console.log("Failures - " + ledgerPath);
 console.log("");
@@ -94,6 +107,8 @@ for (const failure of reading.failures) {
 	if (failure.resources !== undefined) console.log("    cost:       " + JSON.stringify(failure.resources));
 	console.log("    component:  " + failure.component);
 	console.log("    because:    " + failure.componentEvidence);
+	// What a fix must not regress: empty when the evidence names no component, and the reason is on the line above.
+	console.log("    preserve:   " + (failure.preserve.length === 0 ? "(none named: the evidence points at no component)" : failure.preserve.join(", ")));
 	console.log("");
 }
 console.log("What this corpus does not contain:");

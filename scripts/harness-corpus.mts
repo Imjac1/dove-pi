@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
 import { summarizeCorpus, type CorpusLedger } from "../src/core/harness-corpus.ts";
 import type { ClientAccount } from "../src/core/failure-reading.ts";
@@ -88,7 +90,13 @@ const ledgers: CorpusLedger[] = [...found.values()].flat().map((file) => {
 	const clientAccounts = clientAccountsFor(file);
 	return { path: file, records: readRecords(file), ...(clientAccounts === undefined ? {} : { clientAccounts }) };
 });
-const summary = summarizeCorpus(ledgers);
+// The declared behaviours to preserve, per component: the harness own statement of what verifies what.
+let verifiedBy: ReturnType<typeof parseHarnessSurface>["verifiedBy"] | undefined;
+const surfaceFile = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), ".trellis", "harness-surface.yaml");
+if (existsSync(surfaceFile)) {
+	try { verifiedBy = parseHarnessSurface(readFileSync(surfaceFile, "utf8")).verifiedBy; } catch { verifiedBy = undefined; }
+}
+const summary = summarizeCorpus(ledgers.map((ledger) => (verifiedBy === undefined ? ledger : { ...ledger, verifiedBy })));
 
 console.log("Harness corpus");
 console.log("");
@@ -116,6 +124,7 @@ for (const failure of summary.failures.slice(0, 20)) {
 	if (failure.provider !== undefined) console.log("      provider: " + failure.provider.stopReason + (failure.provider.httpStatus === undefined ? "" : " (http " + failure.provider.httpStatus + ")"));
 	if (failure.client !== undefined) console.log("      client:   " + failure.client.code + "  (" + failure.client.source + ")");
 	console.log("      cite:     " + failure.evidenceRef);
+	if (failure.preserve.length > 0) console.log("      preserve: " + failure.preserve.join(", "));
 	if (failure.unseen !== undefined) console.log("      unseen:   " + failure.unseen);
 }
 if (summary.failures.length > 20) console.log("    ... and " + (summary.failures.length - 20) + " more");

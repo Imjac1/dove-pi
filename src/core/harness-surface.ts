@@ -34,9 +34,17 @@ export interface HarnessComponent {
 export interface HarnessSurface {
 	readonly version: 1;
 	readonly components: readonly HarnessComponent[];
+	/**
+	 * Which suites verify each component: **the passing behaviours a fix must not regress.**
+	 *
+	 * Self-Harness requires a failure record to carry them, and this is where the harness states them, per component. A
+	 * component with no entry means nobody has stated what verifies it - a fact about what we know, not a gap to fill
+	 * with something plausible.
+	 */
+	readonly verifiedBy: Readonly<Partial<Record<ChangeSurface, readonly string[]>>>;
 }
 
-const SURFACE_FIELDS = new Set(["version", "components"]);
+const SURFACE_FIELDS = new Set(["version", "components", "verifiedBy"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -81,7 +89,24 @@ export function parseHarnessSurface(text: string): HarnessSurface {
 		});
 		surface.push({ name: name as ChangeSurface, paths });
 	}
-	return { version: 1, components: surface };
+	const rawVerifiedBy = parsed.verifiedBy;
+	const verifiedBy: Partial<Record<ChangeSurface, readonly string[]>> = {};
+	if (rawVerifiedBy !== undefined) {
+		if (!isRecord(rawVerifiedBy)) throw new HarnessSurfaceError("invalid-type", "verifiedBy must be a mapping of component name to test paths, or absent.");
+		for (const [name, raw] of Object.entries(rawVerifiedBy)) {
+			if (!CHANGE_SURFACES.has(name as ChangeSurface)) {
+				throw new HarnessSurfaceError("unknown-component", "verifiedBy names " + name + ", which is not an editable harness component. The components are: " + [...CHANGE_SURFACES].join(", ") + ".");
+			}
+			if (!Array.isArray(raw) || raw.length === 0) {
+				throw new HarnessSurfaceError("empty", "verifiedBy declares no suites for " + name + ", so nothing verifies it. Remove the entry if nobody has stated what does.");
+			}
+			verifiedBy[name as ChangeSurface] = raw.map((entry, index) => {
+				if (typeof entry !== "string" || entry.trim() === "") throw new HarnessSurfaceError("invalid-type", "verifiedBy " + name + " entry " + String(index + 1) + " must be a non-empty workspace-relative path.");
+				return entry.trim().replace(/\\/gu, "/").replace(/\/+$/u, "");
+			});
+		}
+	}
+	return { version: 1, components: surface, verifiedBy };
 }
 
 /**
@@ -96,6 +121,13 @@ export function unresolvedSurfaceEntries(surface: HarnessSurface, exists: (relat
 	for (const component of surface.components) {
 		for (const path of component.paths) {
 			if (!exists(path)) unresolved.push(component.name + ":" + path);
+		}
+	}
+	// The same rule for the suites: a list of tests that do not exist verifies nothing. Named with the mapping it came
+	// from, so a reader knows which of the two relations is broken.
+	for (const [name, paths] of Object.entries(surface.verifiedBy)) {
+		for (const path of paths) {
+			if (!exists(path)) unresolved.push("verifiedBy:" + name + ":" + path);
 		}
 	}
 	return unresolved;

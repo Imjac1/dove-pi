@@ -53,6 +53,23 @@ describe("the failure reading", () => {
 		assert.equal(reading.failures[0]?.evidenceRef, "ledger:request:req-real", "the reference is the record step id with the prefix the resolver looks for");
 	});
 
+	it("carries the behaviours a fix must not regress, from the component the evidence points at", () => {
+		// Self-Harness requires this of a failure record: a proposal must not regress behaviours that were passing. The
+		// suites come from the declaration, so what the record carries is what the harness states - not a guess.
+		const verifiedBy = { middleware: ["tests/action-policy.test.ts"] } as const;
+		const reading = readFailures([received("req-1"), refused("req-1", "fence"), terminal("req-1", "failed", { origin: "session", code: "host-shutdown-preflight", retryable: false })], { verifiedBy });
+		const failure = reading.failures[0]!;
+		assert.equal(failure.component, "middleware", "a refusal points at the policy");
+		assert.deepEqual(failure.preserve, ["tests/action-policy.test.ts"], "and the suites that verify it ride with the record");
+	});
+
+	it("carries none when the evidence points at no component, rather than inventing a list", () => {
+		const verifiedBy = { middleware: ["tests/action-policy.test.ts"] } as const;
+		const reading = readFailures([received("req-1"), terminal("req-1", "failed", { origin: "provider", code: "provider-x", retryable: true })], { verifiedBy });
+		assert.deepEqual(reading.failures[0]?.preserve, [], "no component named, so nothing to preserve is named either");
+		assert.match(String(reading.failures[0]?.componentEvidence ?? ""), /outside the harness/, "and the record still says why: a provider outcome is not one of our components");
+	});
+
 	it("counts only the terminals the axis calls failures", () => {
 		// The SSM axis owns the classification; the reader must not disagree with it about what a failure is.
 		const reading = readFailures([

@@ -2,6 +2,7 @@ import type { ExecutionRecord } from "./contracts.ts";
 import { readFailures, type ClientAccount, type FailureRecord } from "./failure-reading.ts";
 import { classifyTerminal, gateRefusalCounts, TERMINAL_CLASSES, type TerminalClass } from "./harness-axes.ts";
 import type { RequestTerminalReason } from "./request-lifecycle.ts";
+import type { ChangeSurface } from "./task-convergence.ts";
 
 /**
  * **What the recorded corpus contains, as one summary.**
@@ -23,6 +24,8 @@ export interface CorpusLedger {
 	readonly path: string;
 	readonly records: readonly ExecutionRecord[];
 	readonly clientAccounts?: ReadonlyMap<string, ClientAccount>;
+	/** The declared behaviours to preserve, per component - the same option the reading takes. */
+	readonly verifiedBy?: Readonly<Partial<Record<ChangeSurface, readonly string[]>>>;
 }
 
 export interface CorpusSummary {
@@ -66,7 +69,7 @@ export function summarizeCorpus(ledgers: readonly CorpusLedger[]): CorpusSummary
 			if (typeof reason === "string" && reason in TERMINAL_CLASSES) terminalClasses[classifyTerminal(reason as RequestTerminalReason)] += 1;
 		}
 		for (const [label, count] of Object.entries(gateRefusalCounts(ledger.records))) byLabel[label] = (byLabel[label] ?? 0) + count;
-		const reading = readFailures(ledger.records, ledger.clientAccounts === undefined ? {} : { clientAccounts: ledger.clientAccounts });
+		const reading = readFailures(ledger.records, { ...(ledger.clientAccounts === undefined ? {} : { clientAccounts: ledger.clientAccounts }), ...(ledger.verifiedBy === undefined ? {} : { verifiedBy: ledger.verifiedBy }) });
 		requests += reading.requests;
 		unrefused += reading.unrefused;
 		failures.push(...reading.failures);

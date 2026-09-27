@@ -76,6 +76,20 @@ describe("the declared editable surface", () => {
 		assert.match(escaping.message, /escapes the workspace/);
 	});
 
+	it("refuses verifiedBy that names a component the map does not declare, or an empty list", () => {
+		// The second mapping has the same discipline as the first: a list of suites for a component nobody declared verifies
+		// nothing, and an empty list is a component someone forgot to state.
+		const unknown = expectRefusal("version: 1\ncomponents:\n  skill: [.agents/skills]\nverifiedBy:\n  vibes: [tests/work-mode.test.ts]\n");
+		assert.equal(unknown.code, "unknown-component");
+		assert.match(unknown.message, /verifiedBy names vibes/);
+		assert.equal(expectRefusal("version: 1\ncomponents:\n  skill: [.agents/skills]\nverifiedBy:\n  skill: []\n").code, "empty");
+	});
+
+	it("names a suite that does not resolve with the mapping it came from", () => {
+		const surface = parseHarnessSurface("version: 1\ncomponents:\n  skill: [.agents/skills]\nverifiedBy:\n  skill: [tests/nowhere.test.ts]\n");
+		assert.deepEqual(unresolvedSurfaceEntries(surface, (relative) => relative === ".agents/skills"), ["verifiedBy:skill:tests/nowhere.test.ts"]);
+	});
+
 	it("names the entry, not the file, when something does not resolve", () => {
 		const surface = parseHarnessSurface("version: 1\ncomponents:\n  skill: [.agents/skills, nowhere/at/all]\n  middleware: [src]\n");
 		assert.deepEqual(unresolvedSurfaceEntries(surface, (relative) => relative === "src" || relative === ".agents/skills"), ["skill:nowhere/at/all"]);
