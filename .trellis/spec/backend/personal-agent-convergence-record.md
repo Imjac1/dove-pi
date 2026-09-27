@@ -64,7 +64,15 @@ refusal carries is typed as a member of the vocabulary, and the intensity ceilin
 carried ten - so that refusal class was one no prediction could name, and three earlier rounds had verified the ten by hand.
 The vocabulary is declared once (a tuple, with the union and the set derived from it), the label a refusal carries and the
 effect boundary are typed against it, and the policy gate list is checked against it by a test. **A label nobody produces is
-checked by neither** - the type rejects new labels rather than unused ones. At least one predicted fix is required; an empty regression set is a
+checked by neither** - the type rejects new labels rather than unused ones.
+
+  **Three more couplings are typed, and one channel cannot be.** The decision record carries a `ChangeVerdict` rather than a
+string, and the axis isolation set is a `ReadonlySet<GateLabel>` - proven by renaming `fence` in the vocabulary and watching the
+typecheck report five errors, four in the producers and **one in the axis**, which would otherwise have kept printing a
+number that had quietly stopped counting fence refusals. The **reader** of a decision record stays a string, because an
+append-only ledger holds what it holds and a reader that insists on today vocabulary breaks on yesterday records. And the
+refusal channel itself must stay a string: a gate may be a **composite** (`deny+scope+registered+ask` is a legal value that the
+axis splits), so a label typo in a *computed* label is covered by neither the typecheck nor the reader. At least one predicted fix is required; an empty regression set is a
   declared claim of none rather than a blank field.
 - **The baseline is the harness's read, taken when the manifest is recorded** and stored with it.
   A caller-supplied baseline is refused at the tool boundary: one party must not write both sides
