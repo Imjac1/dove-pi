@@ -1062,3 +1062,36 @@ export function verdictFor(change: TaskChange, current: ChangeObservables): Chan
 	return { verdict: "confirmed", observed };
 }
 
+/** A verdict that has been read against a round and is worth keeping. */
+export interface DecidedChange {
+	readonly changeId: string;
+	readonly verdict: Exclude<ChangeVerdict, "pending">;
+	readonly observed: readonly string[];
+	readonly revision: number;
+}
+
+/**
+ * **The validation half, as memory.** A change is decidable once a later round has been observed, so this returns the
+ * changes whose next read has happened and which carry no decision yet.
+ *
+ * **It never returns a `pending` verdict.** Pending means the next round has not happened, and writing "not yet" on
+ * every round for every change would turn the record into noise. It **does** return `unobserved`, which is a real
+ * answer - the prediction named something the record does not carry - and returning it is the difference between no
+ * decision and a decision that reads `unobserved`.
+ *
+ * **Why a set of already-decided ids is passed in rather than derived here.** The caller owns the ledger, and the
+ * ledger is the memory: a process-local set would re-decide every change on the next start.
+ */
+export function decidableChanges(snapshot: TaskConvergenceSnapshot, current: ChangeObservables, decided: ReadonlySet<string>): readonly DecidedChange[] {
+	const out: DecidedChange[] = [];
+	for (const change of snapshot.changes ?? []) {
+		if (decided.has(change.id)) continue;
+		// The verdict is `verdictFor` and never a second derivation, so a decision and the status read cannot disagree
+		// about what a movement did.
+		const result = verdictFor(change, current);
+		if (result.verdict === "pending") continue;
+		out.push({ changeId: change.id, verdict: result.verdict, observed: result.observed, revision: current.currentRevision });
+	}
+	return out;
+}
+

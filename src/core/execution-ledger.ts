@@ -375,6 +375,20 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "task.convergence.observed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, taskId: input.taskId }, details: { observationOnly: true, ...(input.convergenceSkipReason === undefined ? {} : { convergenceSkipReason: input.convergenceSkipReason }), ...(input.acceptanceId ? { acceptanceId: input.acceptanceId } : {}), toolCalls: input.toolCalls, providerRounds: input.providerRounds, elapsedMs: Math.max(0, Math.round(input.elapsedMs)), ...(input.toolDurationMs === undefined ? {} : { toolDurationMs: Math.max(0, Math.round(input.toolDurationMs)) }), ...(input.inputTokens === undefined ? {} : { inputTokens: input.inputTokens }), ...(input.cacheReadTokens === undefined ? {} : { cacheReadTokens: input.cacheReadTokens }), ...(input.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: input.cacheWriteTokens }), ...(input.outputTokens === undefined ? {} : { outputTokens: input.outputTokens }), ...(input.reasoningTokens === undefined ? {} : { reasoningTokens: input.reasoningTokens }), ...(input.stopReasons === undefined ? {} : { stopReasons: input.stopReasons.slice(0, 64) }) } });
 	}
 
+	/**
+	 * **The validation half of the loop, written down.** A verdict exists in one place today: computed on read by the
+	 * convergence status path and then discarded, which is enough to report and not enough to learn from - the manifest
+	 * is bounded and lives in one task, so a change whose verdict is still pending falls out of the record and stops
+	 * being recomputable at all.
+	 *
+	 * **`verdictOnly` says what this records and what it does not.** It reports a verdict; it never reverts an edit,
+	 * mutates a criterion, or refuses a call. Same convention as the observation, for the same reason: a reader must be
+	 * able to tell a record that reports from a record that acted.
+	 */
+	public async appendChangeDecided(input: { taskId: string; stepId: string; mode: AgentMode; changeId: string; verdict: string; observed: readonly string[]; revision: number; requestId?: string; sessionId?: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "change.decided", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { changeId: input.changeId, verdict: input.verdict, observed: input.observed, decidedAtRevision: input.revision, verdictOnly: true } });
+	}
+
 	/** Read the append-only ledger for startup recovery and diagnostics. */
 	public async read(): Promise<readonly ExecutionRecord[]> {
 		try {

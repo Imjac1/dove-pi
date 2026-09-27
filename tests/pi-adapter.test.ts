@@ -656,6 +656,15 @@ describe("Pi adapter", () => {
 			assert.equal(afterObservation.observedResources.toolCalls, accepted.reduce((sum, entry) => sum + Number(entry.details?.toolCalls ?? 0), 0), "the convergence record holds exactly the accepted observations");
 			assert.equal(afterObservation.observedResources.providerRounds, accepted.reduce((sum, entry) => sum + Number(entry.details?.providerRounds ?? 0), 0));
 			assert.equal(ledgerObservation.toolCalls, Number(record?.details?.toolCalls ?? -1), "read back from disk, not from the object that wrote it");
+			// **The validation half of the loop, written at the round boundary.** Everything above reports what the
+			// movements say *now*; this is the part that survives the bounded manifest and the task that recorded it,
+			// because a verdict computed on read is gone as soon as newer changes push the manifest out.
+			const decisions = ledgerRecords().filter((entry) => entry.kind === "change.decided");
+			assert.equal(decisions.length, 1, "the round boundary decides the change, exactly once");
+			assert.equal(decisions[0]?.stepId, "change:chg-1", "addressable by the change it decides");
+			assert.equal(decisions[0]?.details?.verdict, "contradicted", "the verdict the movements support, not a hopeful one");
+			assert.equal(decisions[0]?.details?.verdictOnly, true, "reporting a verdict rather than acting on one");
+			assert.ok(Number(decisions[0]?.details?.decidedAtRevision ?? 0) > 0, "and it freezes the revision it was read against");
 			const progressedNativeTask = JSON.parse(readFileSync(join(root, ".dove", "state.json"), "utf8")) as { currentGoalId?: string; goals?: Array<{ id?: string; nextStep?: string }> };
 			assert.equal(progressedNativeTask.goals?.find((goal) => goal.id === progressedNativeTask.currentGoalId)?.nextStep, "Review evidence and decide the next action for AC-001.", "native continuation must preserve the reducer-owned AC-bound corrective action");
 			const convergencePath = join(root, ".dove", "tasks", formalTask!.providerTaskId, "convergence.json");
@@ -717,6 +726,10 @@ describe("Pi adapter", () => {
 			// events after `ready_to_finish`, so the producer does not offer one - and the ledger says which state
 			// refused it, because "no observation" and "observation discarded" must not look the same.
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+			// **A second round does not decide it again**, and the check is the ledger rather than a process-local set: a
+			// set would re-decide every change after a restart, and the record would then claim two revisions for one
+			// decision - which is the kind of claim this project keeps finding in its own files.
+			assert.equal(ledgerRecords().filter((entry) => entry.kind === "change.decided").length, 1, "the decision is recorded once, and later rounds do not repeat it");
 			const skipped = ledgerRecords().filter((record) => record.kind === "task.convergence.observed").at(-1) === undefined ? [] : [ledgerRecords().filter((record) => record.kind === "task.convergence.observed").at(-1)];
 			assert.equal(skipped.length, 1, "the ledger still records what the request cost");
 			assert.equal((skipped[0]?.details ?? {}).convergenceSkipReason, "state-ready_to_finish", "and names the state that would not take it");

@@ -41,6 +41,7 @@ import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.t
 import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
 import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import {
+	decidableChanges,
 	movementKey,
 	parsePredictedMovement,
 	verificationStateOf,
@@ -686,6 +687,23 @@ function changeObservables(
 		verificationState[criterion.id] = verificationStateOf(criterion.status, (unresolvedByCriterion[index] ?? []).length);
 	});
 	return { currentRevision: snapshot.revision, criterionStatus, verificationState, gateRefusals };
+}
+
+/**
+ * The observables a verdict is read against, assembled **once** for both of its consumers.
+ *
+ * The status read reports verdicts and the round boundary records them, and both need the same three inputs: the
+ * snapshot, the per-criterion unresolved refs, and the refusal counts. Assembling them twice is how a field comes to be
+ * added to one and forgotten in the other - the drift this record has already paid for once, when a decoder served two
+ * doors. The I/O is injected rather than closed over so the rule stays in one place and the caller owns the filesystem.
+ */
+async function convergenceObservables(
+  snapshot: TaskConvergenceSnapshot,
+  readLedger: () => Promise<readonly ExecutionRecord[]>,
+  effectsDirectory: string,
+): Promise<{ readonly observables: ChangeObservables; readonly unresolvedByCriterion: readonly (readonly string[])[] }> {
+  const unresolvedByCriterion = await Promise.all(snapshot.criteria.map((criterion) => unresolvedAcceptanceEvidence(criterion.evidenceRefs, { readLedger, effectsDirectory })));
+  return { observables: changeObservables(snapshot, unresolvedByCriterion, countGateRefusals(await readLedger())), unresolvedByCriterion };
 }
 
 /**
@@ -1742,10 +1760,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// snapshot; resolving every evidence ref against the ledger and the effect store turns "is this done?"
 				// into a reading. Same resolver the pass path refuses on, so an audit that says `verified` and a pass
 				// that was accepted cannot disagree about what counts as evidence.
-				const unresolvedByCriterion = await Promise.all(snapshot.criteria.map(async (criterion) => unresolvedAcceptanceEvidence(criterion.evidenceRefs, {
-					readLedger: () => ledger.read(),
-					effectsDirectory: join(resolveWorkspaceRoot(cwd), ".dove", "effects"),
-				})));
+				// One read of the ledger for the whole status path: the observables resolve against it and the recorded
+				// decisions are taken from the same array, so the answer cannot be assembled from two different ledgers.
+				const ledgerRecords = await ledger.read();
+				const readLedger = async (): Promise<readonly ExecutionRecord[]> => ledgerRecords;
+				const { observables: changeRead, unresolvedByCriterion } = await convergenceObservables(snapshot, readLedger, join(resolveWorkspaceRoot(cwd), ".dove", "effects"));
 				const verification = Object.fromEntries(snapshot.criteria.map((criterion, index) => {
 					const unresolved = unresolvedByCriterion[index] ?? [];
 					// The derivation is `verificationStateOf`'s, shared with the baseline a change records, so an audit
@@ -1756,7 +1775,6 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// **Decision observability's read, and the only place a verdict exists.** Each manifest's predicted
 				// movements are intersected with what the next round observed; nothing is written back, so `status`
 				// stays read-only and a verdict can never become a claim the record makes about itself.
-				const changeRead = changeObservables(snapshot, unresolvedByCriterion, countGateRefusals(await ledger.read()));
 				const changes = (snapshot.changes ?? []).map((change) => ({
 					id: change.id,
 					surface: change.surface,
@@ -1770,8 +1788,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// either.
 				// The declared editable surface rides beside the two readings: it is the bounded context a proposal is made
 				// from, and reporting it here is what gives the declaration a consumer.
+				// **The durable half of decision observability.** What the movements say *now* is computed from the
+				// snapshot; what a round boundary already wrote down is what survives the bounded manifest and the task it
+				// was recorded in. A loop turn needs the second, and could not previously ask for it at all.
+				const decided = ledgerRecords
+					.filter((record) => record.kind === "change.decided")
+					.map((record) => ({ changeId: String(record.details?.changeId ?? ""), verdict: String(record.details?.verdict ?? ""), revision: Number(record.details?.decidedAtRevision ?? 0) }))
+					.filter((entry) => entry.changeId !== "");
 				const declaredSurface = readDeclaredSurface();
-				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification, changes, ...declaredSurface }, null, 2) }], details: { snapshot, verification, changes, ...declaredSurface } };
+				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification, changes, decided, ...declaredSurface }, null, 2) }], details: { snapshot, verification, changes, decided, ...declaredSurface } };
 			}
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "形式任务收敛元数据变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
 			// **A caller-supplied baseline is refused before anything else happens.** The baseline is what a verdict
@@ -2418,6 +2443,34 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					// was right about - the event had no producer, while this call always existed.
 					if (activeAcceptanceId !== undefined && projectProvider.mutateTaskConvergence !== undefined) {
 						await projectProvider.mutateTaskConvergence(currentRequestTaskId, { action: "observe", acceptanceId: activeAcceptanceId, resources: observation });
+					}
+					// **The validation half of the loop, and this is the only place it happens.** The revision advanced when
+					// the observation landed, so a change recorded before this round is decidable *now* and read as pending
+					// until this line. Deciding at the round boundary rather than in the status read is what keeps that read
+					// read-only - and the memory lives in the ledger rather than in a set, because a set would re-decide
+					// every change after a restart and the record would then claim two revisions for one decision.
+					if (currentRequestPlan.lane === "formal" && projectProvider.readTaskConvergence !== undefined) {
+						const decided = new Set((await ledger.read())
+							.filter((record) => record.kind === "change.decided")
+							.map((record) => String(record.details?.changeId ?? ""))
+							.filter((id) => id !== ""));
+						const afterRound = projectProvider.readTaskConvergence(currentRequestTaskId);
+						if (afterRound.kind === "valid" && (afterRound.snapshot.changes?.length ?? 0) > 0) {
+							const { observables } = await convergenceObservables(afterRound.snapshot, () => ledger.read(), join(resolveWorkspaceRoot(cwd), ".dove", "effects"));
+							for (const decision of decidableChanges(afterRound.snapshot, observables, decided)) {
+								await ledger.appendChangeDecided({
+									taskId: currentRequestTaskId,
+									stepId: "change:" + decision.changeId,
+									mode: currentRequestPlan.mode,
+									changeId: decision.changeId,
+									verdict: decision.verdict,
+									observed: decision.observed,
+									revision: decision.revision,
+									requestId: currentRequestPlan.requestId,
+									sessionId,
+								});
+							}
+						}
 					}
 				} catch { /* resource telemetry is observation-only */ }
 			}

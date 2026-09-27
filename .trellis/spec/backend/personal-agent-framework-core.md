@@ -280,6 +280,19 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
   - This entry sits in this scenario because the request-runtime specification that documents
     `request.terminal` (`personal-agent-request-runtime.md:332`) is at its 24 KiB cap. If the specifications
     are reorganised, that is the axis's more natural home.
+- **`change.decided` is the validation half of the loop, written at the round boundary.** A verdict existed only as
+  a function computed on read and discarded, which reports and does not accumulate: the manifest is bounded and lives
+  in one task, so a change whose verdict is still `pending` falls out and stops being recomputable. So the round that
+  makes a verdict readable records it, **once per change**, with `verdictOnly: true`.
+  - **The round boundary is the only writer**, and the status read stays read-only; deciding in a read would make
+    `status` a mutation.
+  - **The memory is the ledger**, not a process-local set: a set would re-decide every change after a restart and the
+    record would claim two revisions for one decision.
+  - **`pending` is never recorded.** It means the next round has not happened; writing "not yet" every round for every
+    change is noise. `unobserved` **is** recorded, because it is an answer - the prediction named something the record
+    does not carry - and it is not the same as no decision.
+  - **The record reports and never acts.** Nothing on that path reverts an edit, mutates a criterion or refuses a call,
+    and `verdictOnly` is what lets a reader tell a reporting record from an acting one.
 
 ### 4. Validation & Error Matrix
 
@@ -297,6 +310,8 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 | Tool set or gate changed since the checkpoint | Refused |
 | Empty or headerless ledger read for the axis | Ratios `undefined`; never a perfect score from no evidence |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
+| A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
+| A change already carrying a decision | Never decided again, however many rounds follow |
 
 ### 5. Tests Required
 
@@ -309,6 +324,7 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 - Restore refuses a mode-version, tool-set, or gate change.
 - The axis classifies every terminal reason the type defines, reports `undefined` ratios for an empty ledger,
   and splits a composite refusal label into its atoms.
+- A round records one decision per decidable change and never a `pending` one, and a second round adds none.
 
 ### 6. Wrong vs Correct
 

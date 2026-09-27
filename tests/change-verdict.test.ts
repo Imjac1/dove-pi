@@ -1,13 +1,72 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+	decidableChanges,
 	parsePredictedMovement,
 	verdictFor,
 	TaskConvergenceValidationError,
 	type ChangeObservables,
 	type PredictedMovement,
 	type TaskChange,
+	type TaskConvergenceSnapshot,
 } from "../src/core/task-convergence.ts";
+
+function snapshot(overrides: Partial<TaskConvergenceSnapshot> = {}): TaskConvergenceSnapshot {
+	return {
+		schemaVersion: 1,
+		taskId: "task-1",
+		revision: AT_REVISION + 1,
+		acceptanceRevision: "acc-1",
+		state: "working",
+		criteria: [{ id: "AC-003", text: "the boundary reads the target", status: "passed", evidenceRefs: [] }],
+		findings: [],
+		completedStepIds: [],
+		consecutiveNoProgress: 0,
+		meaningfulProgressSinceReview: true,
+		observedResources: { toolCalls: 0, providerRounds: 0, elapsedMs: 0 },
+		...overrides,
+	};
+}
+
+describe("a verdict is decided once, at the round boundary that makes it readable", () => {
+	it("returns the change whose next read has happened, with the revision frozen against it", () => {
+		const decided = decidableChanges(snapshot({ changes: [change()] }), read(), new Set());
+		assert.deepEqual(decided, [{ changeId: "chg-1", verdict: "confirmed", observed: ["criterion-status:AC-003: pending -> passed (predicted)"], revision: AT_REVISION + 1 }]);
+	});
+
+	it("returns nothing while the round has not happened", () => {
+		// A verdict of `pending` means the next read has not occurred; writing "not yet" on every round for every change
+		// would turn the record into noise.
+		assert.deepEqual(decidableChanges(snapshot({ changes: [change()] }), read({ currentRevision: AT_REVISION }), new Set()), []);
+	});
+
+	it("returns nothing for a change that already carries a decision", () => {
+		// The caller supplies the decided set from the ledger; a process-local set would re-decide after a restart.
+		assert.deepEqual(decidableChanges(snapshot({ changes: [change()] }), read(), new Set(["chg-1"])), []);
+	});
+
+	it("records a contradicted prediction as readily as a confirmed one", () => {
+		// The case that matters most: an edit that did not do what it predicted is the one the loop has to learn from.
+		const unmet = decidableChanges(snapshot({ changes: [change()] }), read({ criterionStatus: { "AC-003": "in_progress" } }), new Set());
+		assert.equal(unmet[0]?.verdict, "contradicted");
+		assert.match(unmet[0]?.observed.join(" | ") ?? "", /prediction not met/);
+	});
+
+	it("returns unobserved rather than skipping it, because it is a real answer", () => {
+		// A prediction naming something the record does not carry is a decision that reads `unobserved`, which is not the
+		// same as no decision at all.
+		const unreadable = decidableChanges(snapshot({ changes: [change()] }), read({ criterionStatus: {} }), new Set());
+		assert.equal(unreadable[0]?.verdict, "unobserved");
+		assert.match(unreadable[0]?.observed.join(" | ") ?? "", /unreadable/);
+	});
+
+	it("decides each change independently, and says nothing about a snapshot with none", () => {
+		const decided = decidableChanges(snapshot({ changes: [change(), change({ id: "chg-2", baseline: { "criterion-status:AC-003": "passed" } })] }), read(), new Set(["chg-1"]));
+		assert.deepEqual(decided.map((entry) => entry.changeId), ["chg-2"], "the decided one is skipped and the other is not");
+		assert.deepEqual(decidableChanges(snapshot(), read(), new Set()), [], "no changes, no decisions");
+	});
+});
+
 
 /**
  * The pure half of the change manifest: what a prediction may name, and what verdict it earns.
