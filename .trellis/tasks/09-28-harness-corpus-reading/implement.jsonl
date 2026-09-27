@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-harness-loop.md", "reason": "The loop contracts, and where the corpus reading belongs."}
+{"file": "src/core/failure-reading.ts", "reason": "The failure reading the corpus aggregates rather than re-deriving."}

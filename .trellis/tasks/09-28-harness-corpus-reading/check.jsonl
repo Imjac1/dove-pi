@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate this must pass."}
+{"file": "src/core/harness-axes.ts", "reason": "The terminal classification and the refusal rule the summary reuses."}
