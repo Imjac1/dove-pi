@@ -595,10 +595,16 @@ function storedMovements(value: unknown, path: string, minimum: number): readonl
 		const movement = requireRecord(entry, `${path}[${index}]`);
 		const observable = requireString(movement.observable, `${path}[${index}].observable`, 64);
 		const subject = requireString(movement.subject, `${path}[${index}].subject`, 128);
-		// `to` and `direction` are two shapes in the union and one place in the record, so read whichever the
-		// observable takes and let the shared validator refuse a mismatch by naming what that observable accepts.
-		const target = movement.to ?? movement.direction;
-		if (typeof target !== "string") throw invalid(`${path}[${index}] needs 'to' or 'direction'.`);
+		// `to` and `direction` are two shapes in the union and one place in the record, so read **the field the
+		// observable takes** - and refuse a mismatch by naming the field that arm needs. The earlier version read
+		// `to ?? direction` and offered both names with an `or`, which let a caller satisfy the message while still
+		// writing the wrong field: a test fixture did exactly that for two rounds, and the arm vocabulary was the only
+		// thing that disagreed.
+		const field = observable === "gate-refusals" ? "direction" : "to";
+		const target = movement[field];
+		if (typeof target !== "string") {
+			throw invalid(`${path}[${index}] is a ${observable} movement and needs its "${field}" field.`);
+		}
 		return movementFromParts(observable, subject, target);
 	});
 }
@@ -896,6 +902,10 @@ export type ChangeObservable = (typeof CHANGE_OBSERVABLES)[number];
 
 /**
  * One predicted movement: a subject that moves **into** a state, or a count that moves **down** or **up**.
+ *
+ * **The field name belongs to the arm**: the two status observables name their target `to` and a refusal count names it
+ * `direction`, because `to` reads right for a status and wrong for a count. The decoder enforces the pairing and names the
+ * field in its refusal.
  *
  * A movement rather than a sentence, because a sentence is checked by reading it and a movement is checked by
  * comparing two reads - which is the whole difference between a contract and a rationale.

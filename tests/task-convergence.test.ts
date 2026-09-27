@@ -315,6 +315,25 @@ describe("the change record", () => {
 		assert.deepEqual(decoded.changes, snapshot.changes);
 	});
 
+	it("refuses a movement whose arm does not name its target the way that arm does", () => {
+		// A `gate-refusals` movement names its target `direction` and a status movement names it `to`, and the decoder used to
+		// accept either for either - which is how a fixture came to carry `to` on a refusal count for two rounds while looking
+		// right. The refusal names the field the arm needs, because a message offering both names with an `or` is a message a
+		// reader can satisfy while still writing the wrong one.
+		const snapshot = reduceTaskConvergence(freezeSingleCriterion("record-arm"), changeEvent());
+		const wrong = structuredClone(snapshot) as unknown as { changes: { predictedFixes: Record<string, unknown>[] }[] };
+		wrong.changes[0]!.predictedFixes[0] = { observable: "gate-refusals", subject: "fence", to: "down" };
+		const error = expectError(() => decodeTaskConvergenceSnapshot(wrong));
+		assert.match(error, /is a gate-refusals movement and needs its "direction" field/);
+
+		// **And the right pairing still decodes**, which is what keeps this a tightening rather than a removal: the untested
+		// direction of a rule is the direction nobody has seen work.
+		const right = structuredClone(snapshot) as unknown as { changes: { predictedFixes: Record<string, unknown>[] }[] };
+		right.changes[0]!.predictedFixes[0] = { observable: "gate-refusals", subject: "fence", direction: "down" };
+		const decoded = decodeTaskConvergenceSnapshot(right);
+		assert.equal(decoded.changes?.[0]?.predictedFixes[0]?.observable, "gate-refusals");
+	});
+
 	it("decodes a snapshot written before this field existed, which is why it is optional", () => {
 		const snapshot = freezeSingleCriterion("record-legacy");
 		const legacy = structuredClone(snapshot) as unknown as Record<string, unknown>;
