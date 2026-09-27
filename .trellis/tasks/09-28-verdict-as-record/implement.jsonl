@@ -1,0 +1,2 @@
+{"file": "src/core/task-convergence.ts", "reason": "verdictFor and changeObservables: the verdict this task persists, and the observables it is read against."}
+{"file": "src/core/execution-ledger.ts", "reason": "The record shapes and the appenders the decision joins."}
