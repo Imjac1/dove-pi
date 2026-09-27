@@ -1330,3 +1330,44 @@ Delivered the mining half of the loop in the smallest honest form: a pure readin
 ### Next Steps
 
 - The loop itself, piece 4c: the proposal and validation halves over this record, which is a procedure rather than only runtime code - and the corpus gap it still reads around.
+
+
+## Session 36: The verdict as a record, and the specification the loop finally got
+<!-- trellis-session: v=2 fp=ef9fd2d9f42dfd9e -->
+
+**Date**: 2026-09-28
+**Task**: The verdict as a record, and the specification the loop finally got
+**Branch**: `master`
+
+### Summary
+
+The validation half of the loop now has memory: the round boundary records what the last change predicted and what the next read found, once per change, with the ledger as the memory - and the four loop contracts moved into their own specification because the two carrying them had reached their caps.
+
+### Main Changes
+
+- a verdict existed only as a function computed on read and discarded, which reports and does not accumulate: the manifest is bounded at 50 changes and lives in one task, so a change still pending falls out and stops being recomputable at all
+- the round boundary is the only writer, because it is where the revision advances; the status read stays read-only, and the memory is the ledger rather than a process-local set, which would re-decide every change after a restart and claim two revisions for one decision
+- pending is never recorded - the round has not happened - while unobserved is, because it is an answer and not an absence; and verdictOnly says the record reports rather than acts
+- the observables are assembled once for both consumers, and the status path now reads the ledger once instead of three times
+- the split: framework core 24,437 -> 21,005 and project context 24,030 -> 18,348, with the new harness-loop specification at 10,758. Fourteen bullets, ten matrix rows and seven test lines moved - relocated, not compressed - and the router, its selection rules and the budget test all updated so the split is enforced
+- one stale sentence in the moved text was replaced rather than carried: a note saying the axis would move if the specifications were reorganised now says what is true
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `908fc99` | feat(loop): the round boundary records what the last change predicted |
+| `dddff86` | docs(spec): give the loop its own specification instead of compressing two full ones |
+| `9050d38` | chore(task): record the verdict task and the split it forced |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 683 tests, 681 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, including the new specification and its heading.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The loop procedure itself, piece 4c, which is what will use these records: the turn from a mined failure to a manifest, to a decision, to a keep-or-revert - and the corpus gap it still reads around.
