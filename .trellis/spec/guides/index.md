@@ -22,7 +22,8 @@ These guides help you **ask the right questions before coding**.
 | Guide | Purpose | When to Use |
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
-| [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Feat
+| [Running a Turn of the Harness Loop](./harness-loop-turn.md) | A procedure, not a thinking guide: seven steps from a mined failure to a keep-or-revert, with the fields and the reading each step should produce | When you are about to improve the harness from its own evidence |ures spanning multiple layers |
 
 ---
 
