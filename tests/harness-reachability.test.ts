@@ -56,6 +56,11 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// `src/core/context-admission.ts` left this list when the host's tool-result compaction began delegating to
 	// it - the fifth shrink, and the first module to leave because it *replaced* an implementation rather than
 	// gaining a consumer.
+	// **The Safety & Stability axis is unreachable on purpose, and this is the entry that says so.** It is read by
+	// `scripts/harness-axes.mts` and by its own test, and by nothing in the harness: a measurement the harness acted
+	// on would be a control, and a control is what the mode files and the fence are for. If it ever gains a runtime
+	// consumer, that consumer is a decision - and the entry comes out.
+	"src/core/harness-axes.ts": { reason: "a reading, consumed by scripts/harness-axes.mts and its test; deliberately not reached by the harness", wiredBy: null },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
