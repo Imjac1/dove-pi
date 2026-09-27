@@ -12,6 +12,16 @@ The project uses strict TypeScript, Node's test runner through `tsx`, and focuse
 - Silent last-write-wins synchronization or silent provider downgrade.
 - Plaintext secrets in tests, fixtures, logs, snapshots, or public docs.
 
+- **A count of something the code declares.** "The three observables are X, Y and Z" is worse than "the observables are
+  X, Y and Z", because the second cannot be wrong about a number the reader can count. A count is a claim with no reader: the
+  code changes, the sentence does not, and nothing connects them. That is how `GATE_LABELS` came to be documented as ten labels
+  when the tenth plus the intensity ceiling made eleven. **Name the declaration, or name the members.**
+  - **This one is a convention, not a control, and it is the only entry here that is.** Prose cannot be checked: the labels are
+    kept true by the typecheck, the surface by its loader, the citations by a prohibition, and this is what remains. A
+    convention that read as a control would be the defect the other entries exist to prevent.
+  - **Structural numbers stay.** "One path may belong to two components" is a rule about the map rather than a count of an
+    enumeration, and deleting the number would delete the rule.
+
 ## Required Patterns
 
 - Use typed contracts at layer boundaries.

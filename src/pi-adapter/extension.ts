@@ -1678,7 +1678,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// `details` keeps its `snapshot` key for the caller that compares across statuses; `verification` and
 				// `changes` ride beside it so a consumer sees the audited vector and every verdict without re-deriving
 				// either.
-				// The declared editable surface rides beside the two readings: it is the bounded context a proposal is made
+				// The declared editable surface rides beside those readings: it is the bounded context a proposal is made
 				// from, and reporting it here is what gives the declaration a consumer.
 				// **The durable half of decision observability.** What the movements say *now* is computed from the
 				// snapshot; what a round boundary already wrote down is what survives the bounded manifest and the task it

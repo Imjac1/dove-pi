@@ -126,7 +126,7 @@ that reports says so in a field a reader can check.
       would promote a text heuristic to the standing of a recorded status code.
     - **Pairing is the caller decision, keyed by request id, and only when the match is exactly one.** The reading never
       goes looking for a summary file, and an account that could belong to more than one request is evidence about none.
-  - **The observable boundary, recorded because the loop needs it.** A manifest judges an edit by three observables - a
+  - **The observable boundary, recorded because the loop needs it.** A manifest judges an edit by its observables - a
     criterion status, a criterion verification state, a refusal count - and **"this failure is now named correctly" is
     none of them**, so an improvement to an instrument cannot be predicted in the closed set and its verdict reads
     `unobserved`. That is a boundary of the instruments rather than a defect in them, and the question it raises -
@@ -190,7 +190,7 @@ The steps a turn is made of, because instruments only become a loop when someone
 
 1. **Mine.** `scripts/harness-failures.mts` over the ledger. A failure record names the class, the mechanism, the
    refusals that preceded it, and the component the evidence points at - or says it cannot tell.
-2. **Choose a surface, and check it is one.** The seven components of `.trellis/harness-surface.yaml`, reported by
+2. **Choose a surface, and check it is one.** The components of `.trellis/harness-surface.yaml`, reported by
    the convergence status read. An edit outside the surface is not bounded, whatever its merit.
 3. **Record the prediction first**, with `operation=change`: the surface, the failure evidence ref, the root cause
    **distinct from the verifier-level cause**, the fix, and at least one predicted movement from the closed set. The

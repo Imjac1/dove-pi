@@ -16,7 +16,7 @@ import type { GateLabel } from "./task-convergence.ts";
  * of which is "better" without a floor someone chose.
  */
 
-/** The four kinds of ending this harness distinguishes. */
+/** The kinds of ending this harness distinguishes. */
 export type TerminalClass = "clean" | "recovered" | "interrupted" | "failure";
 
 /**

@@ -17,7 +17,7 @@
 | A workspace that can hold the record | the task has `.dove/tasks/<id>/convergence.json`. This repository does not, which is the measured reason no turn has been run here |
 | The harness repository, for the scripts | they run from it and read `.trellis/harness-surface.yaml` |
 
-## The seven steps
+## The steps
 
 ### 1. Mine
 
@@ -39,7 +39,7 @@ node --import tsx scripts/harness-rounds.mts [workspace]
 
 and, in the session, `operation=status` - which reports the same surface per component.
 
-**Expected reading**: the seven components with their path counts. A component with no `verifiedBy` entry means **nobody has
+**Expected reading**: the components with their path counts. A component with no `verifiedBy` entry means **nobody has
 stated what verifies it**, which is different from a component that nothing verifies.
 
 ### 3. Record the prediction first
@@ -56,12 +56,12 @@ operation=change
   predictedRegressions: [...]                                   <- may be empty; empty is a claim of none
 ```
 
-The three observables are `criterion-status`, `verification-state` and `gate-refusals`. The runtime reads the baseline
+The observables are `criterion-status`, `verification-state` and `gate-refusals`. The runtime reads the baseline
 itself, which is why a caller cannot supply one.
 
 **Expected reading**: the snapshot carries the change with its `recordedAtRevision` and a baseline the runtime read. **Two
 refusals mean the manifest is not yet answerable**: a `failureEvidenceRef` that resolves to nothing in this ledger, and a
-prediction outside the three observables.
+prediction outside the three it names.
 
 ### 4. Make the edit as one commit
 
