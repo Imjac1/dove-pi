@@ -1397,8 +1397,9 @@ An edit now has a target: a change is bound to the commit that embodies it, the 
 | Hash | Message |
 |------|---------|
 | `43b44d1` | feat(loop): bind a change to the commit that embodies it, and check it stayed inside its surface |
-| `dddff86` | docs(spec): give the loop its own specification instead of compressing two full ones |
-| `9050d38` | chore(task): record the verdict task and the split it forced |
+| `f0e9684` | feat(loop): print a turn of the loop, from the evidence to the decision |
+| `f6ce958` | docs(spec): record the applied contract, the check, and the turn itself in order |
+| `460512c` | chore(task): record the applied-commit task, the check first run and the split defects |
 
 ### Testing
 
