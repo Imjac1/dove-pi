@@ -389,6 +389,17 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "change.decided", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { changeId: input.changeId, verdict: input.verdict, observed: input.observed, decidedAtRevision: input.revision, verdictOnly: true } });
 	}
 
+	/**
+	 * **The claim that binds a change to the commit that embodies it.** AHE requires the action space to be explicit
+	 * and revertible; the surface declaration made it explicit and nothing gave the revert a target. This is the
+	 * target, and it is a claim: the runtime cannot reach git, and putting a process spawn on the request path to check
+	 * one would be a control where a reading belongs. The check runs in `scripts/harness-rounds.mts`, where git and
+	 * this project evidence readings already live.
+	 */
+	public async appendChangeApplied(input: { taskId: string; stepId: string; mode: AgentMode; changeId: string; commit: string; requestId?: string; sessionId?: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "change.applied", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { changeId: input.changeId, commit: input.commit } });
+	}
+
 	/** Read the append-only ledger for startup recovery and diagnostics. */
 	public async read(): Promise<readonly ExecutionRecord[]> {
 		try {

@@ -15,8 +15,10 @@ version: 1
 components:
   system-prompt: [AGENTS.md, modes]
   tool-description: [src/pi-adapter/extension.ts]
-  tool-implementation: [src]
-  middleware: [src/core/action-policy.ts, src/pi-adapter/extension.ts]
+  # A component implementation surface includes its tests: the check that an edit stayed inside a surface would
+  # otherwise report every real edit as outside, and the tests of a component are part of its implementation.
+  tool-implementation: [src, tests]
+  middleware: [src/core/action-policy.ts, src/pi-adapter/extension.ts, tests/action-policy.test.ts, tests/host-work-mode.test.ts]
   skill: [.agents/skills]
   subagent-config: [src/pi-adapter/subagent-provider.ts, .codex/agents]
   long-term-memory: [.trellis/spec, .trellis/workspace, .trellis/tasks]

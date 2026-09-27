@@ -1710,7 +1710,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		promptSnippet: "Use only for a formal task when recording evidence or a convergence decision tied to an existing AC-* criterion",
 		promptGuidelines: ["Select an existing acceptanceId before product work. To mark work started, call operation=progress with acceptanceId and status=started; operation=status only reads the snapshot and must not carry mutation fields. Follow-up findings are recorded without fixing them in the current task. If a finding already exists, use update_finding with the same findingId instead of repeating finding. Resource observations never decide convergence."],
 		parameters: Type.Object({
-			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume"), Type.Literal("change")]),
+			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume"), Type.Literal("change"), Type.Literal("applied")]),
 			acceptanceId: Type.Optional(Type.String()),
 			acceptanceRevision: Type.Optional(Type.String()),
 			criteria: Type.Optional(Type.Array(Type.Object({ id: Type.String(), text: Type.String() }))),
@@ -1734,17 +1734,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			fix: Type.Optional(Type.String()),
 			predictedFixes: Type.Optional(Type.Array(Type.String(), { description: "At least one: '<observable>:<subject>=<target>', e.g. 'criterion-status:AC-003=passed'." })),
 			predictedRegressions: Type.Optional(Type.Array(Type.String(), { description: "May be empty; an empty list is recorded as an explicit claim of none." })),
+			// The commit that embodies a recorded change, for operation=applied. The runtime records the claim and the
+			// script checks it against the surface the manifest declared.
+			commit: Type.Optional(Type.String({ description: "The commit that embodies the change: recorded by operation=applied, checked against the declared surface by scripts/harness-rounds.mts." })),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const typed = params as {
-				operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume" | "change";
+				operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume" | "change" | "applied";
 				acceptanceId?: string; acceptanceRevision?: string; criteria?: readonly { id: string; text: string }[];
 				status?: "started" | "evidence" | "passed" | "failed" | "waived" | "step_completed" | "verification_started";
 				evidenceRef?: string; evidenceRefs?: readonly string[]; stepId?: string; findingId?: string;
 				findingKind?: "blocking" | "regression" | "follow_up" | "scope_change" | "serious_unexpected_risk"; summary?: string;
 				nextAction?: string; unblockCondition?: string; task?: string;
 				changeId?: string; surface?: string; failureEvidenceRef?: string; rootCause?: string; fix?: string;
-				predictedFixes?: readonly string[]; predictedRegressions?: readonly string[];
+				predictedFixes?: readonly string[]; predictedRegressions?: readonly string[]; commit?: string;
 			};
 			if (!projectProvider.readTaskConvergence || !projectProvider.mutateTaskConvergence) throw new Error("Dove task convergence is unavailable for this provider.");
 			const target = typed.task?.trim() ? projectProvider.resolveTask(typed.task.trim()) : projectProvider.getCurrentTask();
@@ -1775,6 +1778,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// **Decision observability's read, and the only place a verdict exists.** Each manifest's predicted
 				// movements are intersected with what the next round observed; nothing is written back, so `status`
 				// stays read-only and a verdict can never become a claim the record makes about itself.
+				// The applied commit rides beside the verdict: the prediction, the edit that answers it and what the next
+				// round found are one turn, and a caller that had to read the ledger by hand to see the middle of it would
+				// be reading a different turn than the one reported here.
+				const appliedByChange = new Map(ledgerRecords.filter((record) => record.kind === "change.applied").map((record) => [String(record.details?.changeId ?? ""), String(record.details?.commit ?? "")]));
 				const changes = (snapshot.changes ?? []).map((change) => ({
 					id: change.id,
 					surface: change.surface,
@@ -1782,6 +1789,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					...verdictFor(change, changeRead),
 					predictedFixes: change.predictedFixes,
 					predictedRegressions: change.predictedRegressions,
+					...(appliedByChange.has(change.id) ? { appliedCommit: appliedByChange.get(change.id) } : {}),
 				}));
 				// `details` keeps its `snapshot` key for the caller that compares across statuses; `verification` and
 				// `changes` ride beside it so a consumer sees the audited vector and every verdict without re-deriving
@@ -1809,6 +1817,29 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			// runtime reads those observables itself and hands them to the operation mapper, which parses the same
 			// input again through the same function - one set of rules, applied once to the model's text and once to
 			// the runtime's read.
+			// **The claim that binds a change to the edit that embodies it**, and the three refusals that keep the claim
+			// answerable. It writes a **ledger** record rather than a convergence event: the ledger holds what happened
+			// and the convergence record holds goal state, and an application is not goal state.
+			if (typed.operation === "applied") {
+				const changeId = typed.changeId?.trim();
+				if (changeId === undefined || changeId === "") throw new Error("agent_task_convergence applied requires a changeId: the application is the edit half of a manifest, and a commit naming no change cannot be judged against a prediction.");
+				const commit = typed.commit?.trim();
+				if (commit === undefined || commit === "") throw new Error("agent_task_convergence applied requires a commit: an empty one records the shape of a claim with none of its content.");
+				const read = projectProvider.readTaskConvergence(target.stableId);
+				if (read.kind !== "valid") throw new Error(read.kind === "missing" ? "No convergence snapshot exists for this task; freeze acceptance criteria first." : `Convergence record unavailable: ${read.kind}.`);
+				// A prediction is pre-registered; an application is not. A commit naming a change nobody recorded is an
+				// edit nobody predicted, which is the failure the manifest exists to prevent.
+				if (!(read.snapshot.changes ?? []).some((change) => change.id === changeId)) {
+					throw new Error(`agent_task_convergence applied names a change the record does not carry: ${changeId}. Record the manifest with operation=change first, so the edit has a prediction to be judged against.`);
+				}
+				const alreadyApplied = (await ledger.read()).find((record) => record.kind === "change.applied" && record.details?.changeId === changeId);
+				if (alreadyApplied !== undefined) {
+					throw new Error(`change ${changeId} already points at commit ${String(alreadyApplied.details?.commit ?? "")}: one commit per logical edit is what gives a revert its granularity, so a second application is refused.`);
+				}
+				const sessionId = (ctx.sessionManager as { getSessionId?: () => string }).getSessionId?.();
+				await ledger.appendChangeApplied({ taskId: target.stableId, stepId: "applied:" + changeId, mode: mode.current, changeId, commit, requestId: currentRequestPlan?.requestId, sessionId });
+				return { content: [{ type: "text", text: `Change ${changeId} is applied by commit ${commit}. The runtime records the claim; scripts/harness-rounds.mts checks it against the surface the manifest declared.` }], details: { operation: "applied", changeId, commit } };
+			}
 			let runtimeBaseline: Readonly<Record<string, string | number>> | undefined;
 			if (typed.operation === "change") {
 				const manifest = changeManifestFromPiInput(typed);
@@ -1820,7 +1851,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				})));
 				runtimeBaseline = changeBaseline(manifest, changeObservables(read.snapshot, unresolved, countGateRefusals(await ledger.read())));
 			}
-			const operation = convergenceOperationFromPiInput(typed, runtimeBaseline);
+			// The cast is required by what the awaits above do to TypeScript, not by a gap in the checks: `applied` returned
+			// from the branch at the top with its three refusals, so no applied input reaches the mapper - but the narrowing
+			// of a property does not survive the calls in between, and saying so here is better than an unreachable branch
+			// inside the mapper that would exist only to satisfy a type.
+			const operation = convergenceOperationFromPiInput(typed as Parameters<typeof convergenceOperationFromPiInput>[0], runtimeBaseline);
 		// The companion to the shape rule one layer down: a well-shaped ref to a record the harness never wrote is the
 		// same assertion in the right costume, and only the layer that can read the ledger can tell the difference.
 		if (operation.action === "progress" && operation.progress.kind === "passed") {

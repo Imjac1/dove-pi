@@ -113,7 +113,7 @@ function labelled(decision: GateDecision, gate: string): GateDecision {
  * Lowercasing is a Windows-first choice and it fails closed: on a case-insensitive filesystem a differently-cased
  * spelling addresses the same file, so a case-sensitive comparison would let `MODES/x.yaml` through the fence.
  */
-function workspaceRelativeTarget(workspaceRoot: string, target: string): string | undefined {
+export function workspaceRelativeTarget(workspaceRoot: string, target: string): string | undefined {
 	const resolved = isAbsolute(target) ? resolve(target) : resolve(workspaceRoot, target);
 	const inside = relative(workspaceRoot, resolved);
 	if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return undefined;
@@ -121,7 +121,7 @@ function workspaceRelativeTarget(workspaceRoot: string, target: string): string 
 }
 
 /** The protected prefix a target falls under, or `undefined`. A prefix matches a file exactly and a subtree. */
-function fencePrefixHit(prefixes: readonly string[], target: string | undefined): string | undefined {
+export function declaredPrefixHit(prefixes: readonly string[], target: string | undefined): string | undefined {
 	if (target === undefined) return undefined;
 	return prefixes.find((prefix) => {
 		const normalized = normalizeFencePath(prefix).toLowerCase();
@@ -383,7 +383,7 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 					} else {
 						for (const target of resolved.targets) {
 							const relativeTarget = workspaceRelativeTarget(workspaceRoot, target);
-							const hit = fencePrefixHit(fence.paths, relativeTarget);
+							const hit = declaredPrefixHit(fence.paths, relativeTarget);
 							if (hit === undefined) continue;
 							return labelled(
 								{

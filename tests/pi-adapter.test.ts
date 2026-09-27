@@ -599,6 +599,28 @@ describe("Pi adapter", () => {
 			assert.deepEqual(recorded.details.changes[0].baseline, { "criterion-status:AC-001": "pending" }, "with the baseline the runtime read, which the caller never supplied");
 			const atManifest = await convergenceTool!.execute("status-at-manifest", { operation: "status" }, undefined, undefined, context);
 			assert.equal(atManifest.details.changes[0].verdict, "pending", "and nothing has happened yet, so nothing is decided");
+			// **The claim that binds a change to the edit that embodies it.** A ledger record rather than a convergence
+			// event: the ledger holds what happened and the convergence record holds goal state, and an application is not
+			// goal state. Its three refusals are what keep the claim answerable - and the check that the commit stayed
+			// inside the declared surface runs in scripts/harness-rounds.mts, where git is, not here.
+			await convergenceTool!.execute("apply-change", { operation: "applied", changeId: "chg-1", commit: "4b45f99" }, undefined, undefined, context);
+			await assert.rejects(
+				() => convergenceTool!.execute("apply-again", { operation: "applied", changeId: "chg-1", commit: "deadbee" }, undefined, undefined, context),
+				/change chg-1 already points at commit 4b45f99/,
+				"one commit per logical edit is what gives a revert its granularity, so a second application is refused",
+			);
+			await assert.rejects(
+				() => convergenceTool!.execute("apply-unknown", { operation: "applied", changeId: "chg-nope", commit: "deadbee" }, undefined, undefined, context),
+				/does not carry: chg-nope/,
+				"a commit naming a change nobody recorded is an edit nobody predicted, which is what the manifest exists to prevent",
+			);
+			await assert.rejects(
+				() => convergenceTool!.execute("apply-empty", { operation: "applied", changeId: "chg-1", commit: "   " }, undefined, undefined, context),
+				/requires a commit/,
+				"an empty commit records the shape of a claim with none of its content",
+			);
+			const applied = await convergenceTool!.execute("status-applied", { operation: "status" }, undefined, undefined, context);
+			assert.equal(applied.details.changes[0].appliedCommit, "4b45f99", "and the status read shows the middle of the turn: which commit answers the prediction");
 			await convergenceTool!.execute("start-convergence", { operation: "progress", acceptanceId: "AC-001", status: "started" }, undefined, undefined, context);
 			const afterOneEvent = await convergenceTool!.execute("status-after-one-event", { operation: "status" }, undefined, undefined, context);
 			assert.equal(afterOneEvent.details.changes[0].verdict, "contradicted", "the predicted pass did not happen, and the record says so rather than staying silent");

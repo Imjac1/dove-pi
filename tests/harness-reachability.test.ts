@@ -66,6 +66,11 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// is the ledger, which the harness writes; its output is a report, which a person or the loop's proposal half
 	// reads. If a runtime consumer appears, that consumer is the decision, and this entry comes out.
 	"src/core/failure-reading.ts": { reason: "a reading, consumed by scripts/harness-failures.mts and its test; deliberately not reached by the harness", wiredBy: null },
+	// The third reading, and the same shape again: the surface check is consumed by scripts/harness-rounds.mts and its
+	// test. The harness records the *claim* (operation=applied); the check that the claim holds runs where git is, which
+	// is a script by design - a process spawn on the request path to check one claim would be a control where a reading
+	// belongs. If the runtime ever checks it, that is the decision, and this entry comes out.
+	"src/core/harness-round.ts": { reason: "a reading, consumed by scripts/harness-rounds.mts and its test; deliberately not reached by the harness", wiredBy: null },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
