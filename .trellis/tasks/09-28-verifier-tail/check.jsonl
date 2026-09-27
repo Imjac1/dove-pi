@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate this must pass."}
+{"file": "tests/change-verdict.test.ts", "reason": "The suite that exercises the moved verification code."}
