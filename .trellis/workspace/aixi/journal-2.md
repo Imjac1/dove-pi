@@ -589,3 +589,41 @@ Measured: the boilerplate phrase lives in exactly two files and nowhere else, no
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the trellis-update-spec and trellis-check skills, which may state rules this repository already enforces mechanically.
+
+
+## Session 67: The entry points name the checklist and the quality check the workflow promises
+<!-- trellis-session: v=2 fp=53b978d489089bf1 -->
+
+**Date**: 2026-09-28
+**Task**: The entry points name the checklist and the quality check the workflow promises
+**Branch**: `master`
+
+### Summary
+
+Measured: workflow.md says a spec index is the entry point with a Pre-Development Checklist and a Quality Check, and trellis-before-dev sends every agent to read the files listed in that checklist - while neither index had either section. Both name them now, pointing at the table and at quality-guidelines.md, and the index check asserts the presence.
+
+### Main Changes
+
+- nothing new was written: the checklist points at the table that already holds the content and the quality check points at the file that already is one - the broken part was the pointer between the tool own docs and this repository entry points
+- and the check caught the inconsistency its own change introduced: the new sentence pointed at the router in another directory, and the rule only looked in its own, so a true sentence was called false. The rule resolves against sibling directories now, with its limit stated: a typo naming a file in another directory passes, and no name-based check can tell a pointer from a mistake
+- the seed text, which is the check own test, was updated in the same change - a rule refinement that leaves its proof behind is a proof of the old rule
+- two measurements recorded: the phrase appears nowhere else in the repository as a section of a specification, and the two .trellis/.backup-2026-09-25 trees are gitignored local copies rather than content, which a wide sweep has to skip
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cdbc9f1` | docs(spec): the entry points name the checklist and the quality check the workflow promises |
+| `64520d9` | chore(task): record the promised entry point, the sibling rule, and the two measurements |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 728 tests, 726 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 6 of 6 with the presence assertion.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the other skill checklist rules that assert a state this repository could check mechanically.
