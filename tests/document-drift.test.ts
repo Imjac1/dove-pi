@@ -112,6 +112,25 @@ describe("the documents that name things", () => {
 		}
 	});
 
+	it("lists every specification in the directory it indexes, and every row it lists exists", () => {
+		// **The front door, checked.** `AGENTS.md` points at the specs index, and a newcomer reads that index to find out what this
+		// project has - so an index that has drifted is worse than no index, because it teaches the reader that the documentation
+		// is stale. Measured when this check was written: the index listed eight personal-agent specifications and the directory
+		// held eleven, with `personal-agent-harness-loop.md` among the missing three.
+		//
+		// **What it does not check**: whether a description matches the file it names. A row that points at the wrong
+		// specification resolves, and no check can see that.
+		const indexPath = join(process.cwd(), ".trellis", "spec", "backend", "index.md");
+		const index = readFileSync(indexPath, "utf8");
+		const specDir = join(process.cwd(), ".trellis", "spec", "backend");
+		const onDisk = readdirSync(specDir).filter((name) => name.endsWith(".md") && name !== "index.md");
+		const mentioned = new Set(index.match(/personal-agent-[a-z-]+\.md/g) ?? []);
+		const unlisted = onDisk.filter((name) => name.startsWith("personal-agent-") && !mentioned.has(name));
+		assert.deepEqual(unlisted, [], "these specifications exist and the index does not list them");
+		const broken = [...mentioned].filter((name) => !existsSync(join(specDir, name)));
+		assert.deepEqual(broken, [], "the index names these files and they do not exist");
+	});
+
 	it("cites a thing and not a position, in the live code", () => {
 		// **A prohibition, which is the one thing a pattern check can honestly do.** A comment citing a line of this
 		// repository is wrong the moment somebody edits above it, and nothing notices: of the eighteen citations this round

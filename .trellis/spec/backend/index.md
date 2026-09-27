@@ -27,6 +27,9 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Personal Agent Managed Installation](./personal-agent-managed-install.md) | Managed install, release, launcher, update, and repair contracts | Active |
 | [Personal Agent Code Audit Vertical](./personal-agent-audit-vertical.md) | Deterministic seed scanning, coverage receipt, and the finding claim schema | Active |
 | [Personal Agent Framework Core](./personal-agent-framework-core.md) | Loop ownership, gate boundary, work modes, authority graph, effect identity, evidence, admission, capability scoping | Active |
+| [Personal Agent Mode Format](./personal-agent-mode-format.md) | Work-mode layout and validation, the fields a mode declares, and the refusals for the rest | Active |
+| [Bounded Harness Improvement](./personal-agent-harness-loop.md) | The instruments the harness uses to improve itself from its own evidence, and the boundaries that keep that improvement bounded | Active |
+| [Convergence Record](./personal-agent-convergence-record.md) | The convergence contract for a formal native task, and the records around it: observations, manifests, terminal classification, decisions and applied commits | Active |
 
 ---
 
