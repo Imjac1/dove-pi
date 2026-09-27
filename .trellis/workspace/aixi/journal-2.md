@@ -358,3 +358,42 @@ tsconfig included src, tests and .pi - not scripts - so the four readings and ev
 ### Next Steps
 
 - How strict the decoder should be about a movement carrying a field its arm does not name; and the first real turn, which needs a Pi host.
+
+
+## Session 61: The arm of a movement decides the field, and the tolerance only a hand-written record needed
+<!-- trellis-session: v=2 fp=de869c6c5292f2b2 -->
+
+**Date**: 2026-09-28
+**Task**: The arm of a movement decides the field, and the tolerance only a hand-written record needed
+**Branch**: `master`
+
+### Summary
+
+The decoder read movement.to ?? movement.direction, so a gate-refusals movement carrying to was accepted and normalised - which is how the fixture from round 27 came to carry a field its arm does not name for two rounds while looking right. The arm decides now, and the refusal names the field that arm needs.
+
+### Main Changes
+
+- the earlier message offered both names with an or, so a reader could satisfy it while still writing the wrong field, and a fixture did exactly that
+- and the comment it fixes was already claiming the guarantee: storedMovements said the shared validator would refuse a mismatch by naming what that observable accepts, while the code offered both names - a declaration describing a refusal that did not exist
+- the suite is the check on the blast radius and it found none: 726 tests pass unchanged apart from the new case, so no record this build wrote ever carried the wrong field for its arm
+- the rule is tested in both directions, because a rule tested only where it passes is a rule nobody has seen refuse: the mismatch is refused with the field named, and the correct pairing still decodes
+- what is left recorded rather than built: refusing extra fields beyond the target, which is a general strictness pass with its own blast radius, and the question of whether to unify the two field names, which is a migration rather than a fix
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a57e1b6` | fix(record): the arm of a movement decides the field that names its target |
+| `5235749` | docs(spec,task): the field name belongs to the arm, and a tolerance only a hand-written record needed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 726 tests, 724 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the decoder suite is 26 of 26.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the other probe forms - a half-written observation, an anomalous resource observation - which have not been tried.

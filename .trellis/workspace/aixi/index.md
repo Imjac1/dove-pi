@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 60
+- **Total Sessions**: 61
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~360 | Active |
+| `journal-2.md` | ~399 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 61 | 2026-09-28 | The arm of a movement decides the field, and the tolerance only a hand-written record needed | `a57e1b6`, `5235749` | `master` |
 | 60 | 2026-09-28 | The instruments enter the type gate, and it immediately pays for itself | `546d393`, `e320ce0` | `master` |
 | 59 | 2026-09-28 | Decode the record instead of casting it, and report what cannot be read | `42f91bb`, `05af129` | `master` |
 | 58 | 2026-09-28 | One reader for the ledger, because two of the five disagreed about a truncated line | `2008cba`, `15a4f93`, `d1945e9` | `master` |
