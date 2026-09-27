@@ -1168,3 +1168,44 @@ Wired a path that was inert in three disconnected pieces: the convergence record
 ### Next Steps
 
 - D6 first axis, SSM and ITQ, which now have real per-request numbers to score from; then the loop over the loop.
+
+
+## Session 32: The Safety and Stability axis, and the axes we cannot read
+<!-- trellis-session: v=2 fp=27c7cabded7f0eb9 -->
+
+**Date**: 2026-09-28
+**Task**: The Safety and Stability axis, and the axes we cannot read
+**Branch**: `master`
+
+### Summary
+
+Adopted the field named Safety and Stability axis and computed the parts this harness can read from records it already wrote, then declared - with file and line - the axis it cannot: Improvement Trajectory Quality, because no per-round score is persisted.
+
+### Main Changes
+
+- the axis module is pure: crash-free ratio over the nine request.terminal reasons and sandbox violations over gate.refused labels, with the classification keyed by the reason union so a new reason fails the typecheck rather than defaulting
+- no data is not no failures: an empty ledger yields undefined ratios and never 1.0, because a perfect score from no evidence is the defect this project keeps finding in its own files
+- a recorded refusal label may be composite (gates.join plus) and is split into atoms, the same rule the observation reader applies, so the axis and the record agree about what a refusal is
+- Improvement Trajectory and Pareto preservation are declared as data with their evidence and what would change that, so a reader never mistakes a shorter report for a complete one
+- the reachability gate caught the new module as unreachable and unlisted - which is correct - and the allow-list now records why it is unreachable on purpose: a reading the harness acted on would be a control
+- the reading was run on a real host-written ledger and on no ledger at all; both exit 0, and no live session ledger exists on this machine, which is itself the reason the axis matters
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f6986db` | feat(axes): read the field Safety and Stability axis from the ledger, and declare the axes we cannot read |
+| `4400855` | docs(spec): record the Safety and Stability reading, and what it cannot compute |
+| `378bf55` | chore(task): record the axis task and the reading it printed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 660 tests, 658 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. scripts/harness-axes.mts exits 0 with and without a ledger.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The loop over the loop, the four-piece scaffold last item, which needs this axis to judge whether a harness edit helped or hurt.
