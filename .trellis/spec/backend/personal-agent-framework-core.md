@@ -34,16 +34,15 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 - The loop owns the model-to-tool cycle; `LoopProvider` is caller-supplied, so no loop implementation
   selects a provider.
 - `LoopOptions.mode` (id + version + governance version) is stamped on every gate invocation.
-- Three rules are enforced by the loop, not delegated to a gate: the gate is invoked for **every**
-  action including allowed ones; a throwing gate or an unrecognised decision shape is a **block**; a
-  `target`/`displayTarget` mismatch is blocked **before** the gate is consulted.
+- Three rules the loop enforces itself: the gate runs for **every** action including allowed ones; a
+  throwing gate or unrecognised shape is a **block**; a `target`/`displayTarget` mismatch blocks before
+  the gate is consulted.
 - A block carries `remediation` as well as `reason`; both reach the tool result.
-- **`ask` is a requirement, not a judgement.** A mode may declare an action as needing the operator's
-  consent, and consent is a fact about the *host*, which owns the dialog. A consumer that cannot ask must
-  **refuse**.
-- Two implementations exist and must agree: `src/core/loop-runner.ts` (reference) and
-  `src/adapters/loop-pi-agent-core.ts` (external). `AgentLoop` is the interface, not the provider;
-  **both call `normalizeGateDecision`** - a rule copied into two loops differs in one of them.
+- **`ask` is a requirement, not a judgement.** Consent is a fact about the *host*, which owns the
+  dialog; a consumer that cannot ask must **refuse**.
+- Two implementations must agree: `src/core/loop-runner.ts` (reference) and
+  `src/adapters/loop-pi-agent-core.ts` (external). `AgentLoop` is the interface, not the provider; both
+  call `normalizeGateDecision` - a rule copied into two loops differs in one of them.
 
 ### 4. Validation & Error Matrix
 
@@ -99,14 +98,17 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   assumed satisfied.
 - `never_allow` wins over `always_allow`, over `ask_before`, and over any mode setting. An unlisted
   action gets the declared `unlisted` stance; `always_allow` outranks it.
-- **`ask` has two causes, and the mode declares both.** `ask_before` names an action that needs consent;
-  `unlisted: ask` says the same for everything unnamed. Separate them with
-  `matchesPermission(p.ask_before, action)` when the reason must be exact. The host asks through its
-  dialog and records `gate.approved`/`gate.refused`; a host with no dialog refuses.
+- **`ask` has two declared causes.** `ask_before` names an action; `unlisted: ask` covers everything
+  unnamed. Separate them with `matchesPermission(p.ask_before, action)` when the reason must be exact.
+  The host asks through its dialog and records both answers; a host with no dialog refuses.
 - **The gate reads every field a mode declares.** `excluded_techniques` is checked against the call's
   `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
   simply outside both. `toRequest` forwards `technique`/`phase`/`intensity` so a grant's `constraints`
   fire too.
+- **A `sandbox` block is either honoured or refused, never ignored.** `network: none` and
+  `filesystem: read-only-source` are enforced at the tool boundary; `isolation: container`/`worktree`
+  and `network: allowlist` need an OS sandbox and refuse to load, naming an enforceable claim. Absent
+  axes mean the mode says nothing - not that a restriction exists.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -124,6 +126,8 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
 | `gate.excluded_techniques` not a string list | Refused at load |
 | `gate.windows` declared | Refused: the grant carries the window |
+| `sandbox.isolation`/`network`/`filesystem` unrecognised | Refused, naming the axis |
+| `isolation: none` with `filesystem: ephemeral` | Refused: contradictory |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |
 
@@ -138,9 +142,9 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - A mode declaring a gate it does not supply is refused; `none` builds no gate.
 - An excluded technique is refused at the boundary, including on a call that names no target; a phase over
   its `gate.intensity` ceiling is refused, and the ceiling counts actions actually run.
-- An `ask_before` action returns `ask` and an unlisted one returns the declared stance; a host with a
-  dialog runs it on consent and one without refuses it. A limit declared without `tools` is evaluated against
-  every action, so a mode names the action its threshold belongs to.
+- An `ask_before` action returns `ask`; an unlisted one returns the declared stance; a host with a dialog
+  runs the first on consent and refuses it without. A limit without `tools` evaluates against every action,
+  so a mode names the action its threshold belongs to.
 
 ### 6. Wrong vs Correct
 
@@ -287,10 +291,9 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 
 ### 3. Contracts
 
-- **Two hashes, not one.** A hash over `path | category | code` cannot tell a move from an edit, the
-  path being in it. `contentHashOf` is **path-free**, which makes a move observable as a move;
-  `fingerprintOf` is content plus an **occurrence index**. Semgrep ships six identity hashes for this
-  reason; `github/codeql-action` hashes content only - no path, no rule id, no message.
+- **Two hashes, not one.** A hash over `path | category | code` cannot tell a move from an edit.
+  `contentHashOf` is **path-free**, making a move observable; `fingerprintOf` adds an **occurrence
+  index**. Semgrep ships six identity hashes; `github/codeql-action` hashes content only.
 - **The occurrence index is inside the identity.** Without it, two findings of one category on
   identical code in one file collapse into one and a real defect is lost. It counts earlier findings
   sharing the same `(category, normalizedCode)`, in path, start-line, end-line order.
@@ -319,11 +322,10 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
   counterparts read `new`.
 - **`baselineOf` is a pure derivative of a SARIF log**, so no side channel is needed, and it skips
   `absent` results - otherwise a deletion would be re-reported on every subsequent run.
-- **A known limit, stated rather than rediscovered.** A finding that **moves and is edited in one run**
-  reads as one `new` plus one `absent`, not an update at a new location. A content-only identity cannot
-  tell "changed and moved" from "deleted and replaced"; resolving it needs a similarity match, trading a
-  false `new` for a false match - worse in an audit, where a false match suppresses a real finding. That
-  is the price of content over location as the identity.
+- **A known limit, stated.** A finding that **moves and is edited in one run** reads as one `new` plus
+  one `absent`. Resolving it needs a similarity match, trading a false `new` for a false match - worse in
+  an audit, where a false match suppresses a real finding. That is the price of content-over-location
+  identity.
 - The key bump from v1 to v2 is **breaking on purpose**. v1 and v2 are not comparable, and the
   version is how a changed derivation becomes visible rather than silently producing a wall of new
   findings.
