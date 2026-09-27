@@ -14,6 +14,7 @@ const routedSpecNames = [
 	"personal-agent-framework-core.md",
 	"personal-agent-mode-format.md",
 	"personal-agent-audit-vertical.md",
+	"personal-agent-harness-loop.md",
 ] as const;
 const expectedHeadingsBySpec = {
 	"personal-agent-request-runtime.md": [
@@ -58,6 +59,7 @@ const expectedHeadingsBySpec = {
 		"Scenario: Capability Scoping",
 	],
 	"personal-agent-mode-format.md": ["Scenario: Work-Mode Layout and Validation"],
+	"personal-agent-harness-loop.md": ["Scenario: Bounded Harness Improvement"],
 	"personal-agent-audit-vertical.md": [
 		"Scenario: Deterministic Seeds and the Coverage Receipt",
 		"Scenario: The Finding Claim Schema",

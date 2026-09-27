@@ -14,6 +14,7 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 | [Framework core](./personal-agent-framework-core.md) | Execution loop ownership, the gate boundary, the authority grant graph, effect identity and exactly-once, the evidence plane, context admission, and capability scoping |
 | [Mode format](./personal-agent-mode-format.md) | Work-mode layout and validation, the fields a mode declares, and the boundary controls whose claims are kept at the tool boundary |
 | [Code audit vertical](./personal-agent-audit-vertical.md) | Deterministic seed scanning, the coverage receipt, and the finding claim schema |
+| [Bounded harness improvement](./personal-agent-harness-loop.md) | The instruments the harness uses to improve itself from its own evidence, and the boundaries that keep that improvement bounded |
 
 ## Selection rules
 
@@ -24,6 +25,7 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 - Use managed installation for installer, release, launcher, update, and repair work.
 - Use framework core for the loop, the gate boundary, authority contracts, effect identity, evidence, context admission, and capability scoping.
 - Use mode format for a mode's three files, the fields it declares, and what a declaration is allowed to claim.
+- Use bounded harness improvement for the SSM reading, the failure reading, the change manifest and its verdicts, the recorded decisions, and the declared editable surface.
 - When a change crosses ownership boundaries, include each affected routed specification explicitly in the task manifest.
 
 ## Context budget contract
