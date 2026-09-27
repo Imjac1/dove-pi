@@ -76,6 +76,7 @@ console.log("  failures: " + summary.failures.length);
 for (const failure of summary.failures.slice(0, 20)) {
 	console.log("    " + failure.requestId + "  " + failure.reason + " / " + failure.mechanism.code + "  -> " + failure.component);
 	console.log("      because: " + failure.componentEvidence);
+	if (failure.provider !== undefined) console.log("      provider: " + failure.provider.stopReason + (failure.provider.httpStatus === undefined ? "" : " (http " + failure.provider.httpStatus + ")"));
 }
 if (summary.failures.length > 20) console.log("    ... and " + (summary.failures.length - 20) + " more");
 console.log("");

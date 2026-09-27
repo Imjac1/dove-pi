@@ -25,6 +25,21 @@ export interface FailureMechanism {
 	readonly summary?: string;
 }
 
+/**
+ * Where the **provider** itself landed, when the ledger holds it.
+ *
+ * **A second vocabulary, kept separate on purpose.** The terminal code is Dove own name for what it observed
+ * (`host-shutdown-preflight` for an input Pi rejected in preflight); this is the provider own (`stopReason: "error"`,
+ * `httpStatus: 401`). One merged code would claim a translation nobody performs, and the true statement is that the
+ * ledger holds **two facts about one failure**, each from the boundary that saw it. Keeping them apart also leaves the
+ * next reader free to decide which one answers their question.
+ */
+export interface ProviderOutcome {
+	readonly stopReason: string;
+	readonly httpStatus?: number;
+	readonly diagnostic?: string;
+}
+
 export interface FailureRecord {
 	readonly requestId: string;
 	/** Always `failure`: this is the classification the SSM axis applies, not a second one. */
@@ -34,6 +49,8 @@ export interface FailureRecord {
 	readonly refusals: readonly { readonly gate: string; readonly reason: string }[];
 	readonly convergence?: { readonly state?: string; readonly acceptanceId?: string };
 	readonly resources?: TaskResourceObservation;
+	/** The provider outcome for this request, when the ledger holds one that reports trouble. */
+	readonly provider?: ProviderOutcome;
 	readonly component: ChangeSurface | "unattributed";
 	/** The rule that decided the component, or the reason none could be. Never empty. */
 	readonly componentEvidence: string;
@@ -110,6 +127,9 @@ export function readFailures(records: readonly ExecutionRecord[]): FailureReadin
 	const refusals = new Map<string, { gate: string; reason: string }[]>();
 	const convergence = new Map<string, { state?: string; acceptanceId?: string }>();
 	const resources = new Map<string, TaskResourceObservation>();
+	// Only a provider outcome that reports trouble is worth attaching to a failure: a healthy provider call on a request
+	// that failed elsewhere says nothing about the failure, and reporting it would be worse than reporting nothing.
+	const providers = new Map<string, ProviderOutcome>();
 	let unrefused = 0;
 	let toolObservations = 0;
 	const terminals: { requestId: string; reason: string; mechanism: FailureMechanism }[] = [];
@@ -148,6 +168,18 @@ export function readFailures(records: readonly ExecutionRecord[]): FailureReadin
 			const list = refusals.get(id) ?? [];
 			list.push({ gate, reason: stringField(detailsOf(record), "reason") ?? "" });
 			refusals.set(id, list);
+			continue;
+		}
+		if (record.kind === "provider.request.completed" || record.kind === "provider.request.rejected") {
+			if (id === undefined) continue;
+			const providerDetails = detailsOf(record);
+			const stopReason = stringField(providerDetails, "stopReason") ?? "rejected";
+			const usage = providerDetails.usage as Record<string, unknown> | undefined;
+			const httpStatus = typeof usage?.httpStatus === "number" ? usage.httpStatus : undefined;
+			const diagnostic = stringField(providerDetails, "diagnostic");
+			if (record.kind === "provider.request.rejected" || stopReason === "error") {
+				providers.set(id, { stopReason, ...(httpStatus === undefined ? {} : { httpStatus }), ...(diagnostic === undefined ? {} : { diagnostic }) });
+			}
 			continue;
 		}
 		if (record.kind === "tool.observed") {
@@ -193,6 +225,7 @@ export function readFailures(records: readonly ExecutionRecord[]): FailureReadin
 			refusals: requestRefusals,
 			...(decided === undefined ? {} : { convergence: decided }),
 			...(observed === undefined ? {} : { resources: observed }),
+			...(providers.has(terminal.requestId) ? { provider: providers.get(terminal.requestId) as ProviderOutcome } : {}),
 			component: attribution.component,
 			componentEvidence: attribution.evidence,
 		});

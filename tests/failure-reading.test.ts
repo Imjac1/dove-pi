@@ -126,4 +126,57 @@ describe("the failure reading", () => {
 		assert.equal(failure.component, "middleware", "a refusal is stronger evidence than the provider origin");
 		assert.match(failure.componentEvidence, /action-policy\.ts/);
 	});
+
+	it("carries what the provider said as well, without inventing a third name for it", () => {
+		// The measured case, from the black-box suite: Pi rejected the request in preflight, so the ledger terminal says
+		// host-shutdown-preflight while the provider call recorded an error with a status. Both are true, they come from
+		// different boundaries, and a merged code would claim a translation nobody performs.
+		const reading = readFailures([
+			received("req-1"),
+			record("provider.request.started", "req-1", { providerCallId: "call-1" }),
+			record("provider.request.completed", "req-1", { providerCallId: "call-1", stopReason: "error", usage: { httpStatus: 401 } }),
+			terminal("req-1", "startup-failed", { origin: "session", code: "host-shutdown-preflight", retryable: false }),
+		]);
+		const failure = reading.failures[0]!;
+		assert.equal(failure.mechanism.code, "host-shutdown-preflight", "the terminal keeps Dove own name for what it observed");
+		assert.deepEqual(failure.provider, { stopReason: "error", httpStatus: 401 }, "and the provider outcome rides beside it");
+		assert.notEqual(failure.provider?.stopReason, failure.mechanism.code, "two vocabularies, never one merged code");
+	});
+
+	it("carries a rejected provider call diagnostic", () => {
+		const reading = readFailures([
+			received("req-1"),
+			record("provider.request.rejected", "req-1", { providerCallId: "call-1", diagnostic: "the model refused the request shape" }),
+			terminal("req-1", "failed", { origin: "model-budget", code: "model-budget-rejected", retryable: true }),
+		]);
+		assert.deepEqual(reading.failures[0]?.provider, { stopReason: "rejected", diagnostic: "the model refused the request shape" });
+	});
+
+	it("says nothing about the provider when the ledger holds no trouble from it", () => {
+		// A healthy provider call on a request that failed elsewhere says nothing about the failure, and reporting it
+		// would be worse than reporting nothing.
+		const healthy = readFailures([
+			received("req-1"),
+			record("provider.request.completed", "req-1", { providerCallId: "call-1", stopReason: "end_turn" }),
+			terminal("req-1", "failed", { origin: "progress-guard", code: "progress-guard-stalled", retryable: false }),
+		]);
+		assert.equal(healthy.failures[0]?.provider, undefined);
+		const absent = readFailures([received("req-1"), terminal("req-1", "failed", { origin: "provider", code: "provider-x", retryable: true })]);
+		assert.equal(absent.failures[0]?.provider, undefined, "and a request with no provider record is unchanged");
+	});
+
+	it("matches the provider record by request id, never by position", () => {
+		const reading = readFailures([
+			received("req-1"),
+			record("provider.request.completed", "req-2", { providerCallId: "call-other", stopReason: "error", usage: { httpStatus: 500 } }),
+			terminal("req-1", "failed", { origin: "session", code: "host-shutdown-preflight", retryable: false }),
+			received("req-2"),
+			record("provider.request.completed", "req-2", { providerCallId: "call-2", stopReason: "end_turn" }),
+			terminal("req-2", "failed", { origin: "session", code: "host-shutdown-preflight", retryable: false }),
+		]);
+		assert.equal(reading.failures.find((failure) => failure.requestId === "req-1")?.provider, undefined, "the other request error is not borrowed");
+		// And the request the error belongs to keeps it, even though a healthy call followed: the last outcome that
+		// reported trouble is the one worth attaching, and a later success does not erase what went wrong earlier.
+		assert.deepEqual(reading.failures.find((failure) => failure.requestId === "req-2")?.provider, { stopReason: "error", httpStatus: 500 });
+	});
 });
