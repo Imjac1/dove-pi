@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate and the testing requirements the check step must run."}
+{"file": "src/core/execution-ledger.ts", "reason": "The two record shapes the reading is computed from: gate.refused details and request.terminal details."}
