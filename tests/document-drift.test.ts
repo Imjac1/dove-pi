@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -37,6 +37,23 @@ const GUIDE = join(process.cwd(), ".trellis", "spec", "guides", "harness-loop-tu
 const EMBEDDING_MODULES: Readonly<Record<string, Record<string, unknown>>> = {
 	"src/core/task-convergence.ts": record as unknown as Record<string, unknown>,
 };
+
+/** Every TypeScript file under the given roots, for the two checks that read the live code. */
+function walk(roots: readonly string[]): readonly string[] {
+	const found: string[] = [];
+	for (const root of roots) {
+		const stack = [root];
+		while (stack.length > 0) {
+			const dir = stack.pop() as string;
+			for (const entry of readdirSync(dir, { withFileTypes: true })) {
+				const path = join(dir, entry.name);
+				if (entry.isDirectory()) stack.push(path);
+				else if (/\.(ts|mts)$/.test(path)) found.push(path);
+			}
+		}
+	}
+	return found;
+}
 
 describe("the documents that name things", () => {
 	it("names only symbols that are exported functions, in every embedded entry", () => {
@@ -93,5 +110,33 @@ describe("the documents that name things", () => {
 			assert.ok(existsSync(join(process.cwd(), "scripts", script)), script + " is quoted by the guide and does not exist");
 			assert.ok(guide.includes(script), script + " exists and the guide no longer quotes it");
 		}
+	});
+
+	it("cites a thing and not a position, in the live code", () => {
+		// **A prohibition, which is the one thing a pattern check can honestly do.** A comment citing a line of this
+		// repository is wrong the moment somebody edits above it, and nothing notices: of the eighteen citations this round
+		// found, two were already stale, and one of those went stale when an extraction moved every line of the adapter. So a
+		// citation names what it points at - a file, a symbol, a tool - and the position is not written down.
+		//
+		// **Two allowances, named rather than implied.** \`types.d.ts\` is the Pi host own type file, pinned by version and not
+		// ours to keep in sync, so a citation into it is left alone. \`scripts/mode-behaviour-map.mts\` is the withdrawn map,
+		// whose citations **are** its evidence - its finding is that specific lines did not mean what it claimed - so this
+		// check reads the live code, which is \`src\` and \`tests\`.
+		//
+		// **What it cannot do**: it forbids a pattern, so it cannot tell whether the file a citation names is the right one. A
+		// prohibition is a floor, not a proof, and a check that read as proof would be worse than none.
+		const offenders: string[] = [];
+		for (const file of walk(["src", "tests"])) {
+			const lines = readFileSync(file, "utf8").split(/\r?\n/);
+			lines.forEach((line, index) => {
+				if (!/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+				for (const match of line.matchAll(/[A-Za-z0-9_./-]+\.(?:ts|mts):\d+/g)) {
+					const name = match[0].slice(0, match[0].lastIndexOf(":"));
+					if (name.endsWith("types.d.ts")) continue;
+					offenders.push(file + ":" + String(index + 1) + "  " + match[0]);
+				}
+			});
+		}
+		assert.deepEqual(offenders, [], "a comment cites a line of this repository, which drifts: name the thing instead");
 	});
 });

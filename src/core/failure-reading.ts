@@ -10,7 +10,7 @@ import type { RequestTerminalReason } from "./request-lifecycle.ts";
  * ledger - records the harness itself wrote - and emits, per request that ended in a failure, what the evidence
  * holds: the **class** (`reason`) and, separately, the **mechanism** (`code` + `origin` from the terminal envelope).
  *
- * That separation is the point. `terminalForFailure` (`pi-adapter/extension.ts:565-573`) builds codes that name the
+ * That separation is the point. `terminalForFailure` (`pi-adapter/extension.ts`) builds codes that name the
  * cause exactly - `provider-attempt-limit`, `retry-refused-after-effect`, `model-budget-rejected` - while `reason`
  * collapses them all to `failed`. Self-Harness's own requirement is that the record distinguish "two runs that share
  * a verifier outcome and differ in causal mechanism"; a record that kept only the reason would throw that away.

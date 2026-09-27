@@ -849,7 +849,7 @@ export const CHANGE_SURFACES: ReadonlySet<ChangeSurface> = new Set([
 	"system-prompt", "tool-description", "tool-implementation", "middleware", "skill", "subagent-config", "long-term-memory",
 ]);
 
-/** What the D3 audit reports per criterion (`extension.ts:1553-1558`), as a nameable target. */
+/** What the D3 audit reports per criterion (`extension.ts`), as a nameable target. */
 export type VerificationState = "verified" | "unresolved_evidence" | "failed" | "waived" | "not_claimed";
 export const VERIFICATION_STATES: ReadonlySet<VerificationState> = new Set([
 	"verified", "unresolved_evidence", "failed", "waived", "not_claimed",
@@ -858,11 +858,11 @@ export const VERIFICATION_STATES: ReadonlySet<VerificationState> = new Set([
 /**
  * The gate labels the ledger actually records, verified against every writer rather than assumed.
  *
- * `deny` (`pi-adapter/extension.ts:2292`), the policy's own labels (`action-policy.ts:334-518`), `ask`
- * (`extension.ts:2412`) and `effect-claim` (`:2450`). Two of these were missing from the first draft of this
+ * `deny` (`pi-adapter/extension.ts`), the policy's own labels (`action-policy.ts`), `ask`
+ * (`extension.ts`) and `effect-claim`. Two of these were missing from the first draft of this
  * set - `ask` and `effect-claim` - which is exactly the class of error the closed set exists to make visible.
  *
- * **A recorded label may be composite.** `extension.ts:2377` falls back to `gates.join("+")` when a reason carries
+ * **A recorded label may be composite.** the adapter falls back to `gates.join("+")` when a reason carries
  * no `[label]` prefix, so `deny+scope+registered+ask` is a legal ledger value. The read therefore splits on `+`
  * and counts atoms; the composite itself is not nameable here, because predicting a composite would be predicting
  * the absence of a label.

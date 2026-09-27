@@ -830,8 +830,8 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		// **This asserts the defect, so that the fix has somewhere to land.** Both declarations below forbid the technique
 		// `dos`: the mode's `gate.excluded_techniques`, and the engagement document's `constraints.excluded_techniques`.
 		// The call carries the technique in its arguments. It is allowed, because the authority request the policy builds
-		// carries only `{ action, target, at, evidenceDigests }` (`src/core/action-policy.ts:145`) while
-		// `src/core/authority.ts:403` needs `request.technique` to be present before it can refuse. The mode's own
+		// carries only `{ action, target, at, evidenceDigests }` (`src/core/action-policy.ts`) while
+		// `src/core/authority.ts` needs `request.technique` to be present before it can refuse. The mode's own
 		// `gate.excluded_techniques` is worse still: `src/` has no consumer for it at all.
 		//
 		// When either half is wired, this test must be **inverted rather than deleted** - it is the only mechanical
@@ -1074,7 +1074,7 @@ describe("the fence at the host boundary  [D8]", () => {
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
 			// **A request lease is required for the argument-reading half of the policy to run at all**
-			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// (`extension.ts`, without an active lease the handler returns after the name-only denial). So a case
 			// about a control that reads arguments opens a request the way the host does, or it would be asserting
 			// against a call path the fence never sees.
 			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
@@ -1109,7 +1109,7 @@ describe("the fence at the host boundary  [D8]", () => {
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
 			// **A request lease is required for the argument-reading half of the policy to run at all**
-			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// (`extension.ts`, without an active lease the handler returns after the name-only denial). So a case
 			// about a control that reads arguments opens a request the way the host does, or it would be asserting
 			// against a call path the fence never sees.
 			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
@@ -1134,7 +1134,7 @@ describe("the fence at the host boundary  [D8]", () => {
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
 			// **A request lease is required for the argument-reading half of the policy to run at all**
-			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// (`extension.ts`, without an active lease the handler returns after the name-only denial). So a case
 			// about a control that reads arguments opens a request the way the host does, or it would be asserting
 			// against a call path the fence never sees.
 			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
@@ -1165,7 +1165,7 @@ describe("the fence at the host boundary  [D8]", () => {
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
 			// **A request lease is required for the argument-reading half of the policy to run at all**
-			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// (`extension.ts`, without an active lease the handler returns after the name-only denial). So a case
 			// about a control that reads arguments opens a request the way the host does, or it would be asserting
 			// against a call path the fence never sees.
 			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);

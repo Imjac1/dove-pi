@@ -741,7 +741,7 @@ describe("Pi adapter", () => {
 			assert.deepEqual((auditedForgery.details as { verification: Record<string, { unresolved: readonly string[] }> }).verification["AC-001"]?.unresolved, ["ledger:tool:never-happened"]);
 			writeFileSync(convergencePath, validSnapshot, "utf8");
 			// **A request has to be open for this assertion to be about the gate.** The convergence refusal sits after
-			// the lease check (`extension.ts:2301`), and a real session settles a request when the agent does - the
+			// the lease check (`extension.ts`), and a real session settles a request when the agent does - the
 			// observation above is what made that visible here, because it settles the request this one used to hold
 			// open. So the next request is driven the way the host drives it, rather than relying on a lease that a
 			// settled session would not have.
