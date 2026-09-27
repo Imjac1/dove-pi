@@ -61,6 +61,30 @@ the modes already state one - but whether to **enforce it or delete it**. Both a
   because it is the claim the host's own documentation warns against: "easy to misunderstand as a security
   boundary".
 
+**Built (2026-09-27, commits 2ece003/011abac) - the fail-honest + enforce-what-is-enforceable path, not (a).** The
+`sandbox` block is now validated at load (typed axes, a contradiction check), carried on the mode, and consumed in
+two places:
+
+- **The host refuses to load a mode whose claims it cannot honour**: `isolation: container`/`worktree` and
+  `network: allowlist` need an OS sandbox and an egress control the runtime does not have, and the refusal names an
+  enforceable claim as the way out. This is D1's own "delete the block" option applied automatically per axis, so a
+  mode author sees the refusal instead of a reviewer seeing a guarantee.
+- **The policy enforces the two claims that need no OS sandbox**: `network: none` refuses every network-capable host
+  tool, and `filesystem: read-only-source` refuses every filesystem-mutating one, both labelled `[sandbox]` in the
+  reason. Absent axes mean the mode says nothing - the validator refuses only wrong values, not missing ones, because
+  "delete what you cannot honour" requires omission to be legal.
+
+The three shipped modes were rewritten accordingly: code-audit keeps `network: none` + `filesystem:
+read-only-source` (1.8.0); pentest and trading declare `isolation: none`, `network: unrestricted`, `filesystem:
+unrestricted` with comments naming what actually contains them (1.4.0/1.3.0). Two host tests pin the behaviour: one
+refuses the overpromising fixture at load, one proves the enforced claims block `web_search` and `write`.
+
+**What was deliberately not built.** (a)'s OS-sandbox half - a restricted-token process on Windows, per Rec 10 and
+Omnigent's Job Objects. The seam is real (`*Operations`/`spawnHook`), but wrapping a command is not the same as
+proving the wrapped command satisfies the read-only-vs-mutating classification, and D6's measurement would be needed
+to claim the enforcement buys what an OS sandbox buys. The declaration now matches reality; extending reality to match
+the stronger declarations is a platform decision, recorded here as open.
+
 **And the shell still comes first.** Whatever happens to the `sandbox` block, the measured losses are at the shell
 (D4), and that is policy we can write today.
 
