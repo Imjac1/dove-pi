@@ -24,6 +24,11 @@ The project uses strict TypeScript, Node's test runner through `tsx`, and focuse
 
 ## Required Patterns
 
+- **A new script is a new file inside the type gate.** `scripts/**/*.mts` is in `tsconfig.json` include, because these are the
+  commands a person runs and the readings the loop is judged by. They were outside it from the beginning, and the first thing the
+  gate found when they entered was a reading printing `undefined` for the observable the whole verdict machinery is built around.
+  `scripts/**/*.mjs` is the one exception, because plain JavaScript has no types to check.
+
 - Use typed contracts at layer boundaries.
 - Keep provider-qualified task IDs and execution IDs correlated but separate.
 - Make mutations recoverable and lock concurrent provider writes.

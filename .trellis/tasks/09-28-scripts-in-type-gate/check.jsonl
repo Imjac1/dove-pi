@@ -1,0 +1,2 @@
+{"file": "tests/harness-readings.test.ts", "reason": "Where the assertion belongs."}
+{"file": "src/core/task-convergence.ts", "reason": "The union whose arms differ."}
