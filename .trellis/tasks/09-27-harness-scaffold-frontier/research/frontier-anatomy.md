@@ -144,14 +144,25 @@ extensibility) rather than in completion rate**."
 The evidence it cites is the argument for this project's whole approach **[FETCHED]**:
 
 - Mini-SWE-Agent: ~74%+ on SWE-bench Verified with a deliberately minimal scaffold.
-- Lin et al.'s **Agentic Harness Engineering (AHE)**, evolving a bash-only seed with observability-driven
-  feedback: 71.9% on SWE-bench Verified, and a component-level ablation finding that **structural** elements
-  carry the improvement - **tools +3.3 pp, middleware +2.2 pp, long-term memory +5.6 pp** - while **the system
-  prompt alone regresses performance (-2.3 pp)**; the evolved harness also transfers across four model families.
+- Lin et al.'s **Agentic Harness Engineering (AHE)** `2604.25850`, whose own abstract reports **ten iterations
+  lifting pass@1 on Terminal-Bench 2 from 69.7% to 77.0%**, above the human-designed **Codex-CLI (71.9%)** and the
+  self-evolving baselines ACE and TF-GRPO; frozen, it then tops aggregate success on **SWE-bench-verified at 12%
+  fewer tokens** than the seed, with **+5.1 to +10.1 pp** across three alternate model families. Its ablation
+  localizes the gain to **tools, middleware and long-term memory rather than the system prompt**, which the survey
+  states as **tools +3.3 pp, middleware +2.2 pp, long-term memory +5.6 pp, system prompt -2.3 pp**.
 - The paper's reading: "**structural scaffold is more portable than prose-level prompt strategy**."
 
 That is the academic form of "前 Harness 时代是对 AI 如何更好驾驭的思考,现在则是技术前沿的集大成者": the prose
 half of steering is where the regression is, and the structural half is where the transfer is.
+
+**Correction to this bullet (2026-09-27, after reading the primary source).** It previously read "Lin et al.'s
+Agentic Harness Engineering (AHE) `2603.03329`, evolving a bash-only seed ... 71.9% on SWE-bench Verified". Three
+things were wrong. (1) **The ID**: `2603.03329` is **AutoHarness**, already recorded as such in §9's table; AHE is
+**`2604.25850`**. (2) **The number**: 71.9% is **Codex-CLI's Terminal-Bench 2 pass@1** - the score AHE *surpasses*
+- not AHE's SWE-bench figure. (3) "**Evolving a bash-only seed**" does not appear in AHE's abstract and has been
+dropped rather than reworded. **Not established:** whether the survey's §15.5 or this file's transcription
+introduced (1) and (2) - the survey's HTML did not load within our fetch budget and we hold no captured copy. The
+ablation *direction* (structure transfers, prose regresses) is unaffected and is what the section rests on.
 
 ## 5. The recommendations that apply to subsystem 5 (§16.6, §16.9) **[FETCHED]**
 
@@ -312,7 +323,7 @@ for us.
 
 ## 9. The harness is now the thing being optimised, and its traces are the signal **[FETCHED]**
 
-Four papers, all read as abstracts. Together they answer what "the harness as the synthesis of the frontier"
+Six papers, read as abstracts (AHE and `2605.30621` added 2026-09-27; see §9.1-9.2). Together they answer what "the harness as the synthesis of the frontier"
 means operationally: **the harness is no longer only a scaffold a human engineers; it is an artifact the agent
 improves from its own execution traces, with regression tests as the acceptance gate.**
 
@@ -322,6 +333,8 @@ improves from its own execution traces, with regression tests as the acceptance 
 | **RHO** `2606.05922` | self-supervised, **no external grading**: re-solve a coreset of past challenging tasks in parallel, judge the rollouts by **self-validation, self-consistency and the agent's own pairwise self-preference**, then propose harness updates | SWE-Bench Pro **59% → 78% in one round** |
 | **RHI** `2607.15524` | the harness as "a **prompt-level specification of the agent loop**", refined by pairwise feedback over its own revision history | a few iterations let **low-reasoning-effort** agents exceed the max-effort setting while cutting inference cost **up to 60%**; the gain is attributed to **context management and inter-agent information flow**, not longer reasoning |
 | **AutoHarness** `2603.03329` | the model synthesises a code harness from environment feedback; at the limit, **the whole policy moves into code** and the LLM leaves the decision loop | prevents **all** illegal moves across 145 TextArena games; the code-policy beats much larger models |
+| **AHE** `2604.25850` | a closed loop over **three matched observability pillars** (§9.1): component, experience and decision observability. "Together, these pillars turn **every edit into a falsifiable contract**" | ten iterations lift Terminal-Bench 2 pass@1 **69.7% -> 77.0%**, above Codex-CLI (71.9%), ACE and TF-GRPO; frozen, it tops SWE-bench-verified at **12% fewer tokens**; **+5.1 to +10.1 pp** across three alternate model families |
+| **Harness Updating Is Not Harness Benefit** `2605.30621` | disentangles the two axes of self-evolution: *harness-updating* (producing useful persistent harness edits from execution evidence) and *harness-benefit* (profiting from them while solving) | updating is **flat in base capability** - `Qwen3.5-9B`'s edits gain as much as `Claude Opus 4.6`'s; benefit is **non-monotonic** - weak tier least, **mid tier most**, strong tier below mid. Weak-tier failure modes: not **activating** the relevant artifact, or activating it and not **following it faithfully** |
 
 **The AutoHarness motivation is the sharpest statement of why a harness exists at all**: "models often try to
 perform actions that are not just suboptimal for a given state, but are **strictly prohibited by the external
@@ -359,6 +372,63 @@ cross-module interactions".
 **That is this project's recurring defect, named.** Every finding this session had the same shape - a declaration
 with no consumer, a field nothing reads, a rule that never fires - and each was found by hand. Behaviour
 localization is the technique that would find them systematically.
+
+### 9.1 What AHE's three pillars require of a harness `2604.25850` **[FETCHED]**
+
+The abstract names the three, and each is a requirement rather than a technique:
+
+1. **Component observability** - every editable harness **component** gets "a file-level representation so the
+   action space is **explicit and revertible**". The components it enumerates are the system prompt, tool
+   *description*, tool *implementation*, middleware, skill, sub-agent configuration and long-term memory - and
+   **permissions are not among them** (§9.3).
+2. **Experience observability** - "millions of raw trajectory tokens" distilled "into a layered, drill-down
+   evidence corpus that an evolving agent can actually consume".
+3. **Decision observability** - every edit "paired with a **self-declared prediction**, later verified against
+   the next round's task-level outcomes".
+
+**What this is not.** None of the three is a reader scan over source. The map is a **declaration** (a file-level
+representation of each editable component), the evidence comes from **trajectories**, and the verification comes
+from **the next round's outcomes**. Recorded because the Harness Handbook half above had suggested the opposite
+shape - static analysis over source - and D5's first draft followed it. See `decisions.md` Round 11, delta 1.
+
+### 9.2 The axis we do not sense: activating a declaration vs following it `2605.30621` **[FETCHED]**
+
+Both findings of the paper are about us, because **our sensors are all of the first kind**:
+
+- **Updating capability is flat**: a 9B model produces harness edits whose gains match `Claude Opus 4.6`'s. The
+  *authoring* half of an evolution loop therefore does not need a frontier model.
+- **Benefit is non-monotonic**: the weak tier fails in two distinct ways - it "may fail to **activate** relevant
+  harness artifacts, or activate them but fail to **follow them faithfully**".
+
+Mapping to this project's existing gates: `tests/harness-reachability.test.ts` asks whether anything **reaches**
+a module; the mode behaviour map asks whether anything **reads** a declared field. Both are *activation* sensors.
+**Nothing here senses faithful following** - whether the declaration, once activated, actually governed the
+action. That is a different question from "does a consumer exist", and it is the observable D6's cheapest step
+was looking for when it asked whether anything distinguishes "the mode loaded" from "the mode loaded and its
+declarations were honoured". See `decisions.md` Round 11, delta 4.
+
+### 9.3 A frame source, and why it is not a paper **[FETCHED, blog]**
+
+**Lilian Weng, "Harness Engineering for Self-Improvement", Lil'Log, 2026-07-04**
+(`https://lilianweng.github.io/posts/2026-07-04-harness/`) - read in full. It is a **blog post, not a paper**,
+and is cited as such: a map of the field (harness design patterns; the optimisation-object ladder instruction
+prompt -> structured context -> workflow -> harness code -> optimizer code; and the self-improvement lineage
+STOP / AlphaEvolve / DGM / GEPA / ACE / MCE / Meta-Harness), not a primary result. The two claims load-bearing
+enough to matter are traced to their primaries above (§9.1-9.2).
+
+Its own contribution to our decisions is a **constraint**, in its discussion of Self-Harness: "if a program is
+allowed to edit the OS system, abstraction boundaries are broken. The editable surface needs to be properly
+designed and **the permission control and security layers need to live outside this loop**." That is the second,
+independent statement of a rule AHE's component list already implies - see `decisions.md` Round 11, delta 2.
+
+**Read through the post but not fetched at primary - recorded so a later round does not treat them as verified:**
+**Meta-Harness** `2603.28052` (the optimised object is the *code* that decides what is stored, retrieved and
+presented; the proposer is itself a coding agent; the output is a Pareto frontier of candidates), **MCE**
+`2601.21557`, **ACE** `2510.04618`, **STOP** `2310.02304`, **AlphaEvolve** `2506.13131`, **DGM** `2505.22954`,
+**SIA** `2605.27276`, **Continual Harness** `2605.09998`. Two of the post's claims are worth keeping even
+second-hand because they bound expectations: STOP's own ablation **degraded** with weaker base models ("the base
+model must be capable enough to improve the mechanism"), and the field's ranked bottlenecks lead with **weak and
+fuzzy evaluators** with reward hacking immediately behind - both D6's subject.
 
 ## 10. A second frame, the field's own list of open problems, and the hardest empirical result **[FETCHED]**
 

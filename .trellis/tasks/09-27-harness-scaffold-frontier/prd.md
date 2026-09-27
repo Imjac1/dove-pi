@@ -16,8 +16,11 @@ where the remaining headroom is.
 
 ## Background
 
-`research/frontier-anatomy.md` is the artifact. It was written from fetched sources, not from recall, and every
-claim in it is tagged **[FETCHED]** (read from the source) or **[LOCAL]** (read from this repository).
+`research/frontier-anatomy.md` is the paper-side artifact. It was written from fetched sources, not from
+recall, and every claim in it is tagged **[FETCHED]** (read from the source) or **[LOCAL]** (read from this
+repository). `research/rsi-community-landscape.md` is the community half of the self-improvement subject -
+curated lists, a practitioner's definition, framework READMEs, one forum thread - read because D5 and D6 turn on
+self-improvement, which is the one subject where the papers and the builders disagree.
 
 The finding that reframes this project's self-image: **Pi is the corpus's only system that documents the absence
 of safety infrastructure as a design principle**, and supplies instead two seams - the `tool_call` event with

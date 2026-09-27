@@ -1,13 +1,21 @@
 # The six decisions, with their evidence, cost and cheapest first step
 
 - Date: 2026-09-27
-- Basis: `research/frontier-anatomy.md` (sources tagged [FETCHED] / [LOCAL]) plus the local reading recorded there.
+- Basis: `research/frontier-anatomy.md` (sources tagged [FETCHED] / [LOCAL]) plus the local reading recorded there,
+  plus `research/rsi-community-landscape.md` (Round 12 - the community half, tagged [PRIMARY] / [COMMUNITY] /
+  [BLOG] / [THREAD]).
 - Shape: each decision states the question, the field's evidence, our state, the options, what it costs, how
-  reversible it is, a recommendation, and **the cheapest step that would falsify the recommendation**. Nothing here
-  is built; this is the artifact that makes the scaffold decidable.
+  reversible it is, a recommendation, and **the cheapest step that would falsify the recommendation**. This is the
+  artifact that makes the scaffold decidable; what happened to each decision afterwards is recorded under that
+  decision, and the status line below is the index to it.
 - D1-D5 are the decisions the local reading produced; **D6** is the one the survey adds (`2605.18747` §3.4.4) and it
   arrives with the frame that orders all six - see "The frame that groups D1-D5" below, which also **corrects the
   ordering**: D5 is downstream of D1/D2, not parallel to them.
+- Status (2026-09-27): **D1**, **D2** and **D4** are built, and **D3** is built as a sensor (`4e684a0`) with its
+  loop unfinished - each records its own commits in place. **D5** has a detector draft and no loop. **D6** is
+  deferred, and **Rounds 10-12 revise D5, D6 and D8 rather than any decision already shipped**, so no shipped
+  behaviour depends on them. **D8** (protect the policy, verifier and ledger from being written) is a candidate
+  that Round 12 upgraded but did not take.
 
 ---
 
@@ -537,6 +545,209 @@ is already recorded per request as `providerToolSchemaBytes` (`execution-ledger.
 session whenever we want it. (2) One of our thirteen schemas is five times the size of its siblings, which is a
 prompt-economics observation about a single tool rather than a decision. **D7 does not enter the decision list**; it
 is recorded as a measured non-finding, which is what the cheapest step was for.
+---
+
+## Round 11: what the harness-optimisation literature changes (2026-09-27, after D1/D3/D4 shipped)
+
+Source: Lilian Weng's *Harness Engineering for Self-Improvement* (Lil'Log, 2026-07-04) - **a blog post, not a
+paper** - read in full, plus the two primary abstracts it cites where a claim is load-bearing: **AHE**
+`2604.25850` and **Harness Updating Is Not Harness Benefit** `2605.30621`. Recorded in `frontier-anatomy.md`
+§9.1-9.3. **This round also corrected a citation error this file's companion had carried** - AHE is
+`2604.25850`, not `2603.03329` (which is AutoHarness), and §4's 71.9% was Codex-CLI's score, not AHE's - so the
+evidence base moved before the deltas below were taken.
+
+Five deltas. **Two change a recommendation**, one adds a candidate, and two narrow what was already open.
+
+### delta 1 - D5's detector half is re-scoped: the map is a declaration, not a reader scan
+
+D5's option (c) said "build only the *detector* half - behaviour localization". The draft built for it
+(`tests/mode-behaviour-map.test.ts`) took the Harness Handbook's shape from §9: static analysis over source -
+for each declared field, look for its member name anywhere in `src/` outside the parser that fills it. Measured
+against that draft and **it does not work**:
+
+- It reports two orphans and **both are false**. `permissions.unlisted`'s consumer is
+  `src/core/work-mode.ts:588` (`return permissions.unlisted;`, in `evaluatePermission`) and
+  `authority.grant`'s is `:727` - both **inside the one file the scan excludes wholesale**, because that file
+  both fills and consumes. Removing the exclusion makes every row match trivially, since the parser names every
+  member.
+- Three more rows are vacuous: `sandbox`, `limits` and `capabilities` match unrelated code
+  (`src/core/model-gateway.ts:166` for `limits`; `src/runtime.ts:15` for `capabilities`), so deleting the real
+  consumer would still pass. **That is the vocabulary-proxy failure this file already recorded in D3's Result 2,
+  one level down** - and the draft's own docstring claimed to have solved it.
+
+AHE's three pillars answer the same question in a different shape (**§9.1**): the editable surface is
+**declared** (component observability - "a file-level representation", "explicit and revertible", with each
+failure pattern mapped to one component), the evidence is mined from **trajectories** (experience observability),
+and each change carries a **prediction verified next round** (decision observability). **None of the three is a
+scan over source.**
+
+**Recommendation revised.** (c) keeps its justification, but its deliverable is **(i)** a declared
+editable-surface inventory whose entries must resolve to real files, **(ii)** a failure-pattern -> component map,
+and **(iii)** the prediction contract of delta 5 - **not** a reader scan. The 30-line scan that produced this
+measurement is evidence for the bounded version, and it belongs as a **reporting tool** rather than a test: as a
+gate it would read as coverage it does not provide.
+
+### delta 2 - the permission layer lives outside the loop: a precondition on D5, stated twice
+
+Two independent sources, and the agreement is what makes this a precondition rather than a preference:
+
+- Weng, on Self-Harness: "if a program is allowed to edit the OS system, abstraction boundaries are broken. The
+  editable surface needs to be properly designed and **the permission control and security layers need to live
+  outside this loop**."
+- AHE's seven editable components (**§9.1**): system prompt, tool *description*, tool *implementation*,
+  middleware, skill, sub-agent configuration, long-term memory. **Permissions are not among them.**
+
+Ours is exactly that fence: we are subsystem 5, and §13.4's §3.5.3 quote already required HITL approval for
+changes that "alter permission boundaries". So **if a D5 loop is ever built**: `modes/**`,
+`src/core/work-mode.ts`, `src/core/action-policy.ts`, and the tests that gate the harness
+(`tests/harness-reachability.test.ts`, the spec-context budget test) are **read-only**. Recorded as a
+precondition, not as a decision - it constrains D5's shape rather than competing with anything.
+
+### delta 3 - the read-only set that makes gains attributable, and the one we do not have
+
+AHE keeps its recorded gains attributable by construction: edits apply only to the harness workspace, and the
+**runs directory, tracer, verifier and LLM configuration are read-only** - which "disables a set of reward
+hacking (e.g. disabling the verifier, swapping the model, or raising the reasoning budget)".
+
+Ours is not a set at all. A field-level reader scan for `protected|immutable|tamper` over `src/` returns
+**nothing**, and the only self-protection is coarse: `src/core/action-policy.ts:19`'s `FILESYSTEM_MUTATORS`
+plus `:275`'s `filesystem: read-only-source` refuses **every** filesystem-mutating tool, or none. So we cannot
+protect the policy, the verifier and the ledger while letting the agent write anywhere else.
+
+**New candidate, not taken - D8. Do we protect the harness's own policy, verifier and ledger from being
+written?** It does not need D5 to exist (it is worth having under any mode, and it is our subsystem's work); the
+cheapest falsifying step is a mode that permits writes everywhere while a write to `modes/**/governance.yaml` is
+refused. Left for its own consent, like every other build (R4).
+
+### delta 4 - activation is sensed, faithful following is not: D6's subject sharpens
+
+`2605.30621` splits self-evolution into two axes and finds them different: **harness-updating is flat in base
+capability** (`Qwen3.5-9B`'s edits gain as much as `Claude Opus 4.6`'s), while **harness-benefit is
+non-monotonic** (weak tier least, **mid tier most**, strong tier below mid). The weak tier fails in two distinct
+ways: it "may fail to **activate** relevant harness artifacts, or activate them but fail to **follow them
+faithfully**" (**§9.2**).
+
+That is an axis, and **all of our sensors are on the first side of it**. `tests/harness-reachability.test.ts`
+asks whether anything *reaches* a module; the behaviour map asks whether anything *reads* a declared field. Both
+are activation sensors; nothing senses following.
+
+**So D6's cheapest step is answered by inversion, and its cost grows by one sensor.** D6 asked whether any
+observable distinguishes "the mode loaded" from "the mode loaded and its declarations were honoured" - and the
+distinguishing observable is precisely a *following* sensor, which does not exist here. A flipped gap test
+measures that a declaration **got activated** (an effect appeared); it does not measure that the declaration
+**governed the run**. So D6's first scoring function is the flipped gap tests **plus** one following sensor.
+**Placement unchanged** (after D3, for delta 5's reason) and **"not now" unchanged**; the cost column grows.
+Two expectation bounds are recorded without being load-bearing, both second-hand: STOP's own ablation *degraded*
+with weaker base models, and `2605.30621` finds the benefit half non-monotonic - so the instrument is not free
+for whichever model runs it.
+
+### delta 5 - D3 already *is* D5's decision observability, which narrows what D5 was waiting for
+
+AHE: "every edit [is] paired with a **self-declared prediction**, later verified against the next round's
+task-level outcomes" - the mechanism that turns an edit into "a falsifiable contract". Ours:
+`src/pi-adapter/extension.ts:548`'s `unresolvedAcceptanceEvidence` is **one resolver called from both** the pass
+path (`:1569`) and the D3 audit (`:1549`), returning `verified` / `unresolved_evidence` / `failed` /
+`waived` / `not_claimed`. The verification half of the contract already exists - so **D5 is not "a large new
+loop", it is D3's resolver plus two schema-sized additions**:
+
+1. **A `prediction` recorded beside a change**, which the next round's resolver checks - D3's audit *in front
+   of* a claim rather than beside it. It has no home today: `src/project-provider/contracts.ts:72-76` carries
+   `passed`/`failed`/`waived` with `evidenceRefs`, and `:84`'s `decide` carries a `nextAction` - which is a
+   *plan*, not a prediction with an expected outcome.
+2. **The two fields Self-Harness requires of a failure record** and `:81`'s finding shape does not have: a
+   causal-mechanism field **distinct from** the verifier-level cause (its point is that two runs can share a
+   verifier outcome - timeout, missing artifact - while differing in causal mechanism), and a record of the
+   **passing behaviours to preserve** that a proposal must not regress.
+
+**What this does not claim.** The risky half of D5 as first written was the *selection signal*; delta 1-5 show
+the detector and the verification halves are cheap, but neither is a judge - the audit still cannot catch a
+citation to a real record that does not actually decide the criterion. D5's build, if taken, still needs its own
+consent and its own oracle argument.
+
+### What this round does not change
+
+- **D1, D2, D4** recommendations and their built records stand; nothing here touches the sandbox block, the
+  approval stance, or the technique/intensity controls.
+- **D3** stands as built, and is now load-bearing for D5 as well as for D6.
+- **D7** stays closed - this round adds no prompt-economics evidence.
+- **D6** keeps its placement and its "not now".
+- The optimisation-object ladder in §9.3 (instruction prompt -> context -> workflow -> harness code -> optimizer
+  code) puts our mode/spec tree on the **declaration** rung, which is the rung the field's own AHE ablation says
+  is where the transfer is. No change is proposed there.
+
+---
+
+## Round 12: what the community says that the papers do not (2026-09-27)
+
+Source: `research/rsi-community-landscape.md` - the community half of the self-improvement subject (curated
+lists, a practitioner's definition, framework READMEs, one HN thread), read because D5 and D6 are the one place
+where the papers and the people building the systems disagree. Three consequences, **one of which is a
+correction to something this file already recorded**.
+
+### D5 is bounded self-improvement, and the label is load-bearing
+
+The community's test is **which layer persists**: the output (iteration) -> the system (self-improvement) -> the
+system **and the verifier** (RSI). "[Current] systems work best when an external evaluator stays fixed ... the
+system can search because it has a ruler it doesn't control", and raising the ruler "without capturing the
+signal" is what no public system does - "public evidence for that remains thin". So:
+
+- **D5 is renamed in intent: bounded self-improvement.** Its acceptance test is therefore *the system changed
+  and the verifier did not*, which is checkable; the RSI-level claim has no public demonstration and we will not
+  make it.
+- **Round 11's delta 2 gains a test rather than an argument.** "Permissions must live outside the loop" was two
+  sources' design advice; it is now the definitional boundary - the agent owns prompts, skills, tools, memory and
+  harness code, **humans own the held-out tasks and the hidden score**, and "if it can edit evaluation, it can
+  jailbreak itself".
+- **One guard D5 did not have: misevolution.** `2509.26354` evaluates it along four pathways - **model, memory,
+  tool, workflow** - and finds it widespread even on top-tier models, with two failures that are ours by
+  construction: alignment degradation **after memory accumulation**, and vulnerabilities introduced in **tool
+  creation and reuse**. D5's shape must name which pathway each proposed edit touches, or the loop has no
+  category for its own risk.
+- **A prior, so the cost is not wishful.** Karpathy's `autoresearch` kept ~20 of ~700 experiments (~3%), and
+  HarnessOpt-Bench's 111 runs "varied sharply by model and task". The gate is the cost, not the proposal.
+
+### D6's reason is corrected a second time - and the correction is favourable
+
+§15.4 recorded "**the frontier's top open problem, not the frontier's practice**", on `2609.00006` §17.2's
+future-work list. The community half is narrower and better: **the instrument exists for measuring
+self-improvement and does not exist for the verifier-raising axis.**
+
+- **RSI-Bench** is an open-source six-axis framework (self-modification depth L0-L4, improvement trajectory,
+  operator discovery, meta-adaptation, **safety & stability**, autonomous goal generation) whose stated purpose is
+  "to distinguish genuine self-improvement from **metric gaming**" - combined by a harmonic mean that "penalizes
+  systems that score zero on any dimension".
+- **HarnessOpt-Bench** is D6's held-in/held-out split already built: an agent edits its harness on development
+  feedback while "**a separate system tests the candidate on hidden tasks**", over 111 runs, 5 optimizer models,
+  4 tasks.
+- What is still missing is exactly the axis the community names as missing: a **rising, still-uncheatable bar**.
+
+So **D6's cheapest step changes from "flip the gap tests and invent a score" to "adopt a named axis"**. SSM and
+ITQ are the two we can already feed: SSM's `sandbox violations` is D1's build and `crash-free ratio` is our
+ledger's stop reasons; ITQ's `slope` and `stagnation escape rate` need per-round scores the convergence
+snapshot is one step from carrying. **Placement unchanged** (after D3), and "not now" unchanged - but the work
+is smaller than the cost column said and it should not be invented from scratch.
+
+### D8 is upgraded from candidate to the entry this landscape demands
+
+It was recorded in Round 11 on AHE's read-only set. The community supplies two more legs, one of which is about
+*our* runtime rather than a paper:
+
+- The curated map files **Pi** - our host - under **"Extensible Harness Substrates"**, with the category's own
+  warning: "**general extensibility alone is insufficient**; an RSI substrate should expose agent-relevant
+  runtime components ... as programmatically modifiable surfaces". The catalogue's framing is that **we are a
+  substrate, not an RSI system**, which is D5's label arriving a second time.
+- And the substrate's cost is stated in words aimed at us: Pi's "everything else is a TypeScript extension,
+  auto-discovered from `.pi/extensions/`. **An agent can write one, reload it, and continue with new tools**",
+  after which "**an agent gets more code it can improve, and more ways to break compatibility or weaken a
+  permission boundary**". Our `src/pi-adapter/extension.ts` **is** one of those extensions, and nothing in the
+  tree separates "the policy" from "any other file".
+
+**D8 (protect the policy, verifier and ledger from being written) therefore stops being a candidate awaiting
+taste.** It is the control our own substrate's documentation says is needed, with a third leg from
+`TamperBench` `2602.06911` and `2011.06275` (self-modification misaligns bounded-rational agents even when
+ideal ones would preserve their objectives - "self-modification can amplify errors"). It is still **not taken**:
+it needs its own consent, like every build (R4).
+
 ---
 
 ## What is not on this list, and why
