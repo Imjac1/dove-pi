@@ -966,3 +966,40 @@ Built D4: the policy reads technique, phase and intensity off the action argumen
 ### Next Steps
 
 - D3: the outer verification loop, whose sensor half was built next
+
+
+## Session 27: Audit every criterion evidence in the convergence status read
+<!-- trellis-session: v=2 fp=b21fdc4aea96d7b8 -->
+
+**Date**: 2026-09-27
+**Task**: Audit every criterion evidence in the convergence status read
+**Branch**: `master`
+
+### Summary
+
+Built the D3 sensor half: agent_task_convergence status returns a verification vector beside the snapshot, resolving every criterion evidence refs through the same resolver the pass path refuses on, so an audit that says verified and a pass that was accepted cannot disagree about what counts as evidence.
+
+### Main Changes
+
+- the status read resolves each criterion evidence refs against the ledger and the effect store, and reports verified, unresolved_evidence, failed, waived or not_claimed
+- one snapshot forged on disk to cite ledger:tool:never-happened audits as unresolved_evidence with the ref named, which is the forgery the pass path cannot see because it bypasses the pass path
+- the recorded conclusion is that D3 is smaller than its name suggests: the refusal machinery already existed in two layers, and what is missing is a prediction in front of it
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e684a0` | feat(convergence): audit every criterion's evidence in the status read |
+| `e672463` | docs(task): record the convergence audit as D3's sensor half |
+
+### Testing
+
+- [OK] Backfilled from the commits; the counts of that session were not captured. Two tests pin the vector, and the suite is green as of the entry written after it.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- D1: refuse an isolation claim the runtime cannot honour
