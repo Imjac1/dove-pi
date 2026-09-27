@@ -637,8 +637,8 @@ describe("Pi adapter", () => {
 			// the record's resource kind finally receives anything. Read from disk, because a claim about a record
 			// that the record itself does not show is the class of assertion this project refuses.
 			const observationPath = join(root, ".dove", "tasks", formalTask!.providerTaskId, "convergence.json");
-			const ledgerRecords = (): Array<{ kind?: string; stepId?: string; details?: Record<string, unknown> }> =>
-				readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; stepId?: string; details?: Record<string, unknown> });
+			const ledgerRecords = (): Array<{ kind?: string; stepId?: string; correlation?: { requestId?: string }; details?: Record<string, unknown> }> =>
+				readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; stepId?: string; correlation?: { requestId?: string }; details?: Record<string, unknown> });
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 			// The observation is written at `agent_end`, which has already run for this request, so the shape is asserted
 			// rather than a delta - and the shape is the point: **one writer**, the one that was always there.
@@ -721,6 +721,17 @@ describe("Pi adapter", () => {
 			assert.equal(skipped.length, 1, "the ledger still records what the request cost");
 			assert.equal((skipped[0]?.details ?? {}).convergenceSkipReason, "state-ready_to_finish", "and names the state that would not take it");
 			assert.equal((JSON.parse(readFileSync(observationPath, "utf8")) as { revision: number }).revision, revisionBeforeSkip, "while the convergence record is untouched");
+			// **A convergence refusal is a terminal, not a gate refusal**, and this assertion exists because that fact was
+			// learned the hard way: it aborts the request (`issueRequestHostAbort`) rather than refusing one tool call
+			// inside it, so the ledger holds a `request.terminal` with `origin: convergence` and **no**
+			// `gate.refused` record at all - none of the four refusal sites is on that path. The failure reading
+			// therefore attributes from the terminal's own origin as well as from refusals, which is why its table has a
+			// `convergence` row; an assertion that looked for a refusal here would have accused the code of a defect
+			// this test had.
+			const terminalsAfterRefusal = ledgerRecords().filter((record) => record.kind === "request.terminal");
+			const refusalTerminal = terminalsAfterRefusal.at(-1)?.details?.terminal as { origin?: string; code?: string } | undefined;
+			assert.equal(refusalTerminal?.origin, "convergence", "the convergence refusal is recorded as the request's terminal");
+			assert.match(String(refusalTerminal?.code ?? ""), /ready_to_finish/, "and names what the record would not take");
 
 			await events.get("input")?.({ type: "input", text: "创建一个项目任务：缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
 			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建一个项目任务：缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };

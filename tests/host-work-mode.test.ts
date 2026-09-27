@@ -516,6 +516,20 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 				: [];
 			const recorded = records.find((record) => record.kind === "gate.refused" && record.details?.gate === "registered" && record.details?.action === "order.submit");
 			assert.ok(recorded !== undefined, "the refusal is in the ledger with its gate and its action");
+			// **AC1: the refusal names the request it refused.** The ledger contract always accepted this field at
+			// `appendGateRefused` and no call site passed one, so a refusal could only be attributed by ledger
+			// *position* - and position is wrong whenever a previous request settles late, which
+			// `issueRequestHostAbort` does by design. The failure reading attributes by id and refuses to fall back to
+			// position, so this assertion is what keeps that promise honest.
+			const refusalCorrelations = readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as { kind?: string; correlation?: { requestId?: string }; details?: { logicalRequestId?: string; gate?: string } });
+			// **Filtered by this test's gate**, because the ledger this harness writes accumulates across the tests in
+			// this file: the first `gate.refused` record in it belongs to an earlier test that drove no request, and
+			// asserting on that one would have accused the code of a defect the test had.
+			const registeredRefusals = refusalCorrelations.filter((record) => record.kind === "gate.refused" && record.details?.gate === "registered");
+			assert.ok(registeredRefusals.length > 0, "the refusal above is in the ledger");
+			assert.ok(registeredRefusals.every((record) => typeof record.correlation?.requestId === "string"), "every refusal for this action names the request it belongs to");
+			const requestIds = refusalCorrelations.filter((record) => record.kind === "request.received").map((record) => String(record.details?.logicalRequestId ?? ""));
+			assert.ok(requestIds.includes(String(registeredRefusals[0]?.correlation?.requestId)), "and it names a request this ledger saw");
 		} finally {
 			host.restoreCwd();
 		}

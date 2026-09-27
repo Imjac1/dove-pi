@@ -2550,6 +2550,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					tool: event.toolName,
 					action: identity.action,
 					viaCapability: identity.viaCapability,
+					// **The request this refusal belongs to.** The ledger contract always accepted this; the call site never
+					// passed it, so a refusal could only be attributed by ledger position - and position is wrong whenever a
+					// previous request settles late (`issueRequestHostAbort`), which is why the reading insists on the id.
+					requestId: currentRequestPlan?.requestId,
 					gate: "deny",
 					reason: denial.reason,
 					remediation: denial.remediation,
@@ -2643,6 +2647,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					tool: event.toolName,
 					action: identity.action,
 					viaCapability: identity.viaCapability,
+					requestId: currentRequestPlan?.requestId,
 					gate,
 					reason: decision.reason,
 					remediation: decision.remediation,
@@ -2670,6 +2675,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					tool: event.toolName,
 					action: identity.action,
 					viaCapability: identity.viaCapability,
+					requestId: currentRequestPlan?.requestId,
 					gate: "ask",
 					reason: decision.reason,
 					toolCallId: event.toolCallId,
@@ -2708,6 +2714,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					viaCapability: identity.viaCapability,
 					// `gate` names which check refused it; the effect boundary is one of them, and its own details below
 					// carry the class, so a reader can tell an at-most-once refusal from a scope refusal.
+					requestId: currentRequestPlan?.requestId,
 					gate: "effect-claim",
 					reason: effect.refusal ?? `effect '${identity.action}' was already claimed`,
 					remediation: "Report the ambiguity to the operator. Re-running the action is the one answer that is wrong both when the effect landed and when it did not.",

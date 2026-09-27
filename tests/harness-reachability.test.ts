@@ -61,6 +61,11 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// on would be a control, and a control is what the mode files and the fence are for. If it ever gains a runtime
 	// consumer, that consumer is a decision - and the entry comes out.
 	"src/core/harness-axes.ts": { reason: "a reading, consumed by scripts/harness-axes.mts and its test; deliberately not reached by the harness", wiredBy: null },
+	// The failure reading rides beside the axis for the same reason and with the same consumer shape: a script and a
+	// test read it, and **nothing in the harness does** - a reading the harness acted on would be a control. Its input
+	// is the ledger, which the harness writes; its output is a report, which a person or the loop's proposal half
+	// reads. If a runtime consumer appears, that consumer is the decision, and this entry comes out.
+	"src/core/failure-reading.ts": { reason: "a reading, consumed by scripts/harness-failures.mts and its test; deliberately not reached by the harness", wiredBy: null },
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
