@@ -762,7 +762,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
-	it("does not enforce a forbidden technique, because nothing carries one to the authority  [KNOWN GAP: D4]", async () => {
+	it("refuses a technique the mode excludes, at the boundary, on a raw capability call  [D4]", async () => {
 		// **This asserts the defect, so that the fix has somewhere to land.** Both declarations below forbid the technique
 		// `dos`: the mode's `gate.excluded_techniques`, and the engagement document's `constraints.excluded_techniques`.
 		// The call carries the technique in its arguments. It is allowed, because the authority request the policy builds
@@ -787,13 +787,29 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
 			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
 
+			// The mode excludes `dos`, and the call now carries the technique in its arguments - which is where
+			// `resolveActionIdentity` leaves the action's own facts, and where the policy reads them from.
 			const forbidden = await callTool(
 				host,
 				"agent_run_capability",
 				{ name: "workspace.inspect", args: { target: engagement.target, technique: "dos", phase: "discovery", intensity: 99 } },
 				"c-forbidden",
 			);
-			assert.notEqual(forbidden?.block, true, "KNOWN GAP: a forbidden technique is allowed, because no request carries one: " + (forbidden?.reason ?? "(no reason)"));
+			assert.equal(forbidden?.block, true, "a technique the mode excludes is refused, not waved through");
+			assert.match(forbidden?.reason ?? "", /\[technique\]/, "and the refusal names the check that refused it");
+			assert.match(forbidden?.reason ?? "", /dos/, "and the technique it refused");
+
+			// **The mode's list decides on its own.** This call names no target, so no authority request can be built
+			// and the document's constraint never sees it - which is exactly why the mode carries its own list rather
+			// than relying on a grantor to have written one.
+			const unverifiable = await callTool(
+				host,
+				"agent_run_capability",
+				{ name: "workspace.inspect", args: { technique: "dos" } },
+				"c-unverifiable",
+			);
+			assert.equal(unverifiable?.block, true, "a forbidden technique is refused even when no authority request can be built");
+			assert.match(unverifiable?.reason ?? "", /\[technique\]/);
 		} finally {
 			host.restoreCwd();
 		}

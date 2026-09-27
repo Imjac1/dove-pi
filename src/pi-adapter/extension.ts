@@ -2305,7 +2305,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// saw at the top of the handler would have permitted something other than what runs.
 		if (activeActionPolicy !== undefined && activeWorkMode !== undefined) {
 			const identity = resolveActionIdentity(event.toolName, event.input);
-			const decision = activeActionPolicy.evaluate({
+			// The policy's own accumulator is carried into the invocation, so an intensity ceiling counts the actions
+			// this run has already taken rather than starting from zero on every call - which is the whole difference
+			// between a ceiling and a decoration.
+			const invocation = {
 				tool: identity.action,
 				arguments: identity.arguments,
 				// A work mode carries one version today (its governance version). Inventing a second here would be a
@@ -2313,8 +2316,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				mode: { id: activeWorkMode.id, version: activeWorkMode.governanceVersion, governanceVersion: activeWorkMode.governanceVersion },
 				at: new Date().toISOString(),
 				elapsedMs: 0,
-				accumulatedIntensity: {},
-			}, { viaCapability: identity.viaCapability });
+				accumulatedIntensity: activeActionPolicy.counts(),
+			};
+			const decision = activeActionPolicy.evaluate(invocation, { viaCapability: identity.viaCapability });
 			if (decision.outcome === "block") {
 				// The gate is named in the reason by the policy itself (`[limit]`/`[conformance]`), so the ledger and the
 				// refusal text agree about which check refused the action without a second mapping here.
@@ -2369,6 +2373,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				}
 				await ledger.appendGateApproved(record);
 			}
+			// **Counted once the action is permitted**, after an ask that was approved as well as after a straight
+			// allow. The next call's intensity check therefore sees every action this run has actually taken.
+			activeActionPolicy.recordRun(invocation);
 		}
 		// The effect boundary, after the policy and on the final input, because the effect identity is derived from
 		// the arguments that will actually be dispatched.

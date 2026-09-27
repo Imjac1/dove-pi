@@ -65,6 +65,9 @@ export function createPiAgentLoop(options: PiAgentLoopOptions): AgentLoop {
 	const blockedActions: { tool: string; reason: string }[] = [];
 	let executedActions = 0;
 	const startedAt = Date.now();
+	// Actions run per phase, keyed by the `phase` argument an action carries: what an intensity ceiling needs is the
+	// count over the run, not the count since the last call.
+	const accumulatedIntensity: Record<string, number> = {};
 
 	const decide = async (invocation: GateInvocation): Promise<GateDecision> => {
 		if (invocation.target !== undefined && invocation.displayTarget !== undefined && invocation.target !== invocation.displayTarget) {
@@ -96,7 +99,8 @@ export function createPiAgentLoop(options: PiAgentLoopOptions): AgentLoop {
 				mode: options.mode,
 				at: new Date().toISOString(),
 				elapsedMs: Date.now() - startedAt,
-				accumulatedIntensity: {},
+				// Carried so an intensity ceiling is checked against what this run has already done, not reset per call.
+				accumulatedIntensity,
 			};
 			const decision = await decide(invocation);
 			options.onGateInvoked?.(invocation, decision);
@@ -105,6 +109,9 @@ export function createPiAgentLoop(options: PiAgentLoopOptions): AgentLoop {
 				return { block: true, reason: `${decision.reason} Do this instead: ${decision.remediation}` };
 			}
 			executedActions += 1;
+			// Here, at the point of dispatch: a blocked action must not spend the phase's budget.
+			const phase = (context.args as Record<string, unknown> | undefined)?.phase;
+			if (typeof phase === "string" && phase.trim() !== "") accumulatedIntensity[phase] = (accumulatedIntensity[phase] ?? 0) + 1;
 			return undefined;
 		},
 	});

@@ -34,6 +34,10 @@ export function createAgentLoop(options: LoopOptions): AgentLoop {
 	const blockedActions: { tool: string; reason: string }[] = [];
 	const refusedEffects: { tool: string; reason: string }[] = [];
 	let executedActions = 0;
+	// Actions run per phase, keyed by the `phase` argument an action carries. This is what an intensity ceiling is
+	// checked against: a ceiling counts *what has run*, so it must outlive a single call while staying scoped to the
+	// run that owns it.
+	const accumulatedIntensity: Record<string, number> = {};
 
 	const decide = async (invocation: GateInvocation): Promise<GateDecision> => {
 		// Rule 3: the two representations of the same resource must agree.
@@ -113,7 +117,9 @@ export function createAgentLoop(options: LoopOptions): AgentLoop {
 					mode: options.mode,
 					at: new Date().toISOString(),
 					elapsedMs: Date.now() - startedAt,
-					accumulatedIntensity: {},
+					// The counts this run has accumulated so far, so an intensity ceiling is checked against what has
+					// actually happened rather than restarted on every call.
+					accumulatedIntensity,
 				};
 				const decision = await decide(invocation);
 				// Rule 1: record the invocation whether it was allowed or blocked.
@@ -156,6 +162,10 @@ export function createAgentLoop(options: LoopOptions): AgentLoop {
 				}
 
 				executedActions += 1;
+				// Counted here, where the action has actually been dispatched - not at the gate, where a decision is
+				// only a decision. The phase comes from the same argument the ceiling is keyed by.
+				const phase = (call.arguments as Record<string, unknown> | undefined)?.phase;
+				if (typeof phase === "string" && phase.trim() !== "") accumulatedIntensity[phase] = (accumulatedIntensity[phase] ?? 0) + 1;
 				try {
 					const raw = await options.executeTool(call, signal);
 					const result = options.afterToolCall ? options.afterToolCall(call, raw) : raw;

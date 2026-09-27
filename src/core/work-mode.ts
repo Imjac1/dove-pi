@@ -108,6 +108,22 @@ export interface WorkMode {
 	readonly capabilities: readonly string[];
 	readonly limits: readonly LimitSpec[];
 	/**
+	 * The techniques this mode forbids outright, from `gate.excluded_techniques`.
+	 *
+	 * Enforced here in addition to any authority document, because a technique can be named on a call that no
+	 * document constrains - a mode is the one place the operator can forbid something without depending on a
+	 * third party having written it down.
+	 */
+	readonly excludedTechniques?: readonly string[];
+	/**
+	 * How many actions this mode permits per phase, from `gate.intensity`, e.g. `{ discovery: 2 }`.
+	 *
+	 * A **ceiling on a count**, not a threshold on an argument: a limit says an order may not exceed a notional,
+	 * and this says a phase may not exceed a number of actions. The two fail differently, which is why this is not
+	 * a `limits` entry.
+	 */
+	readonly intensityCeilings?: Readonly<Record<string, number>>;
+	/**
 	 * The effect class of each tool the mode names, consumed by the claim at the dispatch line (design 5.1).
 	 *
 	 * A tool this map does not name is `non-idempotent`: an omission must not silently grant the right to
@@ -122,7 +138,9 @@ const PERMISSION_FIELDS = new Set(["unlisted", "always_allow", "ask_before", "ne
 const UNLISTED_STANCES = new Set(["allow", "ask"]);
 const SCOPE_FIELDS = new Set(["targets", "environment", "exclusions", "ownership_evidence"]);
 const AUTHORITY_FIELDS = new Set(["grant", "grant_graph", "capabilities", "expires"]);
-const GATE_FIELDS = new Set(["semantics", "limits", "target_argument", "intensity", "excluded_techniques", "windows", "approval"]);
+// `windows` is deliberately absent: a mode that declares one is refused with an explanation rather than an
+// unknown-field error, because the reason it is refused is the design point (see parseMode).
+const GATE_FIELDS = new Set(["semantics", "limits", "target_argument", "intensity", "excluded_techniques", "approval"]);
 const GATE_SEMANTICS = new Set(["none", "limit", "conformance", "both"]);
 const LIMIT_FIELDS = new Set(["argument", "max", "min", "unit", "required", "tools"]);
 const EFFECTS_FIELDS = new Set(["classes"]);
@@ -405,6 +423,51 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	const limits = parseLimits("governance.gate.limits", gate.limits);
 	const effectClasses = parseEffectClasses("governance.effects", governance.effects);
 
+	// `gate.intensity` is a map of phase name to a ceiling, and a ceiling that is not a finite positive number is a
+	// declaration that reads as a bound while bounding nothing. Validated at load for the same reason a limit with
+	// neither `max` nor `min` is: this has to be a load error naming the mode, not a throw inside a gate.
+	const intensityCeilings: Record<string, number> = {};
+	if (gate.intensity !== undefined) {
+		if (!isRecord(gate.intensity)) {
+			throw new WorkModeError("invalid-type", "governance.gate.intensity must be a mapping of phase name to a finite positive number.");
+		}
+		for (const [phase, ceiling] of Object.entries(gate.intensity)) {
+			if (typeof ceiling !== "number" || !Number.isFinite(ceiling) || ceiling < 1) {
+				throw new WorkModeError(
+					"invalid-type",
+					`governance.gate.intensity.${phase} must be a finite number of at least 1 (got ${JSON.stringify(ceiling)}): a ceiling below one permits no action at all, and one that is not a number never compares.`,
+				);
+			}
+			intensityCeilings[phase] = ceiling;
+		}
+	}
+	// `gate.excluded_techniques` is a list of names, and a name that is not a string cannot be matched against an
+	// action's technique - so an entry like that would read as a prohibition while prohibiting nothing.
+	const excludedTechniques: string[] = [];
+	if (gate.excluded_techniques !== undefined) {
+		if (!Array.isArray(gate.excluded_techniques)) {
+			throw new WorkModeError("invalid-type", "governance.gate.excluded_techniques must be a list of technique names.");
+		}
+		for (const technique of gate.excluded_techniques) {
+			if (typeof technique !== "string" || technique.trim() === "") {
+				throw new WorkModeError("invalid-type", `governance.gate.excluded_techniques entries must be non-empty strings (got ${JSON.stringify(technique)}).`);
+			}
+			excludedTechniques.push(technique);
+		}
+	}
+	// `gate.windows` is refused outright, and the reason is not "unimplemented" but "unenforceable here": the
+	// runtime has no clock over a calendar that outlives a session, while the **authority document** - the thing a
+	// window constrains - carries its own `window` field and is checked against it at pre-flight and per action. A
+	// mode repeating that claim would be a second, less-verifiable copy of a control that already exists one level
+	// down. Keeping the field in `GATE_FIELDS` means a mode that writes one is told precisely this, rather than
+	// being told the key is unknown.
+	if (gate.windows !== undefined) {
+		throw new WorkModeError(
+			"invalid-type",
+			"governance.gate.windows is not enforceable by the runtime: a calendar window outlives a session and is a property of the authority document, which carries and checks its own 'window' field. Declare the window on the grant instead.",
+		);
+	}
+
 	// **A declaration that cannot decide anything is refused, at the level it is declared.** The rule one level down
 	// already exists: a limit with neither `max` nor `min` is rejected because it "can never decide anything". The
 	// same argument applies to the field that says *which* gate the mode has, and there was no rule - so a mode could
@@ -437,6 +500,8 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		gateSemantics: gate.semantics as "none" | "limit" | "conformance" | "both",
 		...(targetArgument === undefined ? {} : { targetArgument: targetArgument as string }),
 		...(grant === undefined ? {} : { authorityGrant: grant as string }),
+		...(excludedTechniques.length === 0 ? {} : { excludedTechniques }),
+		...(Object.keys(intensityCeilings).length === 0 ? {} : { intensityCeilings }),
 		permissions,
 		limits,
 		effectClasses,
