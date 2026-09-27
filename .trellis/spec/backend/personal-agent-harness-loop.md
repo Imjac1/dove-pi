@@ -69,6 +69,18 @@ that reports says so in a field a reader can check.
     matter - a closure *with* a provider outcome has its cause on the record, and any other terminal means the request
     reached the loop. **It never imports the upstream name**: the ledger does not hold `provider-authorization-denied`,
     the RPC did, and a record that borrowed it would claim an observation this process never made.
+  - **Three accounts of one failure, never merged.** Dove terminal says what the runtime observed
+    (`host-shutdown-preflight`); the provider records say what the provider did, when the request reached it; and a
+    **client** may say what it called the failure. Each is attributed to the boundary that produced it.
+    - **The question round 7 left open is answered: no hook fires in that window.** Pi own extension documentation
+      (`pi-coding-agent/docs/extensions.md:285-291`) shows `input` going straight through skill expansion to
+      `before_agent_start`, so a request Pi refuses in preflight is never seen by the extension at all - which is why
+      Dove own `authorization-denied` branch is unreachable on that path and why the ledger holds only the closure.
+    - **`client` requires its source.** The account this was built for comes from a regex over a provider error text
+      (`scripts/real-dove-blackbox.mjs` `classifyRpcFailure`); recording the code without saying how it was reached
+      would promote a text heuristic to the standing of a recorded status code.
+    - **Pairing is the caller decision, keyed by request id, and only when the match is exactly one.** The reading never
+      goes looking for a summary file, and an account that could belong to more than one request is evidence about none.
   - **The observable boundary, recorded because the loop needs it.** A manifest judges an edit by three observables - a
     criterion status, a criterion verification state, a refusal count - and **"this failure is now named correctly" is
     none of them**, so an improvement to an instrument cannot be predicted in the closed set and its verdict reads
@@ -186,7 +198,9 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
 | A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |
 | A preflight failure with no provider record | `unseen` on the record, naming the boundary and not the cause |
-| A preflight failure whose provider outcome was recorded | No `unseen`: the cause is on the record |ed |
+| A preflight failure whose provider outcome was recorded | No `unseen`: the cause is on the record |
+| A client account supplied for a request | Carried with its source, and never merged into the mechanism |
+| A summary whose ledger terminal matches several requests | No account attached, and the reason reported |ed |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
@@ -200,6 +214,8 @@ The steps a turn is made of, because instruments only become a loop when someone
 - The surface check answers inside, outside with the offenders named, and unresolved for a commit nobody could read.
 - The corpus summary counts each terminal class with the axis rule, splits a composite refusal label, and says why a
   corpus with no failure has none - and does not say it when the corpus holds one.
+- A client account lands only on the failure whose request it names, and leaves the other failures in the same ledger
+  alone.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
   directions, and lets one path belong to two components; the status read reports it.
 - The failure reading keeps the mechanism beside the class, counts only the terminals the axis calls failures,
