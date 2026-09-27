@@ -165,6 +165,10 @@ export function normalizeGateDecision(decision: unknown, gateId: string): GateDe
  * it must never return allow because it could not decide.
  */
 export interface ActionGate {
+	// **A gate id is not a refusal label, and typing it as one was wrong.** The loop gate is a general abstraction - the
+	// loop gate suite drives it with test doubles whose ids are `test-gate`, `throwing`, `broken` - while the *policy* gates
+	// are the ones whose ids reach the ledger. The coupling belongs on the label a refusal carries, which is where it now
+	// is (`labelled`), and on the policy gate list, which a test checks at runtime.
 	readonly id: string;
 	evaluate(invocation: GateInvocation): GateDecision | Promise<GateDecision>;
 }
