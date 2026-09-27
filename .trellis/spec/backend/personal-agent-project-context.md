@@ -230,7 +230,30 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - `scope_change` and `serious_unexpected_risk` create one AC-bound checkpoint.
 - `ready_to_finish` is terminal for product mutation in the frozen revision.
 - `request.observed` records tool/provider/time/token observations only and
-  cannot change semantic state.
+  cannot change semantic state. **Declared, and inert end to end:** nothing emits the event
+  (`toConvergenceEvent` has no case for it) and `appendTaskResourceObservation`
+  (`execution-ledger.ts:374`) has no callers, so `observedResources` stays zero in a live run.
+  Recorded here so the gap is a known one; the change manifest's round boundary deliberately does
+  not depend on it.
+- **A change manifest predicts movements, and the next read decides them.** `change.recorded`
+  carries the failure evidence, the inferred root cause (distinct from the verifier-level cause),
+  the fix, and a **closed-set** prediction: `criterion-status:<AC>=<status>`,
+  `verification-state:<AC>=<state>`, or `gate-refusals:<label>=down|up`, where `<label>` is one of
+  `deny`, `scope`, `registered`, `limit`, `conformance`, `sandbox`, `technique`, `fence`,
+  `ask`, `effect-claim`. At least one predicted fix is required; an empty regression set is a
+  declared claim of none rather than a blank field.
+- **The baseline is the harness's read, taken when the manifest is recorded** and stored with it.
+  A caller-supplied baseline is refused at the tool boundary: one party must not write both sides
+  of the contract a verdict is computed from.
+- **The verdict is computed in the status read and never written back.** `pending` until any event
+  has landed after the manifest's revision, then `confirmed` / `contradicted` / `unobserved`.
+  `unobserved` answers for an observable that cannot be read and can never be `confirmed`; a
+  predicted movement that was already true at the baseline is `contradicted`, because it is not
+  evidence for the change.
+- **Two limits, stated rather than left to be discovered.** One task's run is not a benchmark, so
+  an observed delta here is weak evidence; and the regression predictions are a **record, not a
+  control** - AHE measured P 11.6% / R 11.1% over 9 rounds, so regression detection stays with the
+  held-out criteria, the gates, and the fence.
 - Trellis calls the shared TypeScript reducer through its narrow helper; Dove
   never imports or executes Trellis scripts.
 
@@ -244,6 +267,10 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 | Two semantic no-progress reviews | Checkpoint with one criterion-bound next action |
 | All criteria pass with no open blocker | Enter `ready_to_finish`; reject further product mutation |
 | Missing resource usage | Keep the field unknown; never infer a stop |
+| A change manifest with no predicted fix | Refused: a change with nothing predicted is a rationale, not a contract |
+| A prediction outside the closed set | Refused, naming the observables and the gate labels |
+| A caller-supplied `baseline` | Refused at the tool boundary: the baseline is the harness's read |
+| A manifest field on `operation=status` | Refused, and the refusal names the operation that records one |
 
 ### 5. Good/Base/Bad Cases
 
@@ -261,6 +288,9 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - Assert fast-lane requests create no convergence file or mutation guard.
 - Assert `ready_to_finish`, checkpoint, scope drift, and malformed-state paths
   fail closed at the Pi tool boundary.
+- Record a manifest and read the same revision (`pending`), then read after one event
+  (`contradicted`, carrying the movement it compared); assert the stored baseline is the one the
+  runtime read, and that a caller-supplied baseline is refused.
 
 ### 7. Wrong vs Correct
 
