@@ -299,6 +299,27 @@ under `.dove/tasks/<goal-id>/convergence.json`.
   - **The record reports and never acts.** Nothing on that path reverts an edit, mutates a criterion or refuses a call,
     and `verdictOnly` is what lets a reader tell a reporting record from an acting one.
 
+- **`change.applied` binds a change to the commit that embodies it, and is what makes an edit revertible.**
+  AHE requires the action space to be explicit **and** revertible; the surface declaration made it explicit, and until
+  this record existed nothing gave a revert a target - "which commit was change X" was unanswerable. It is a **ledger**
+  record, not a convergence event: the ledger holds what happened, the convergence record holds goal state, and an
+  application is not goal state.
+  - **The runtime records the claim and a script checks it.** The runtime cannot reach git, and a process spawn on the
+    request path to check one claim would be a control where a reading belongs. `scripts/harness-rounds.mts` checks,
+    where git and this project evidence readings already live.
+  - **Three refusals, each naming what is wrong**: an unknown change id (a prediction must be pre-registered, so a
+    commit naming no change is an edit nobody predicted); a second application for the same change, naming the commit
+    already recorded (one commit per logical edit is what gives the revert its granularity); an empty commit.
+  - **The check is `surfaceFit`, against the declared paths of the surface the manifest named**, using the fence own
+    rule through `declaredPrefixHit` rather than a second implementation of it. It answers **`inside`**,
+    **`outside`** with the offending files named, or **`unresolved`** when the commit cannot be resolved - a third
+    answer and not a nicer word for `outside`, because "the edit went somewhere it declared it would not" and "nobody
+    could tell" are different facts and only one of them is about the edit.
+  - **A file outside the declared component reads `outside`, and that is information rather than a violation.** A
+    manifest names one component; an edit that also changes the specification, the declaration, or another component is
+    a fact worth seeing, not something to hide by widening the claim - and a component implementation surface includes
+    its own tests, or every real edit would read `outside`.
+
 ### 4. Validation & Error Matrix
 
 | Condition | Required behavior |
@@ -319,6 +340,11 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
+
+| An application naming a change the record does not carry | Refused, naming the id; the manifest comes first |
+| A second application for one change | Refused, naming the commit already recorded |
+| A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
+| A touched file outside the declared paths | `outside`, with the files named |
 
 ### 5. Good/Base/Bad Cases
 
@@ -346,6 +372,8 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - The axis classifies every terminal reason the type defines, reports `undefined` ratios for an empty ledger,
   and splits a composite refusal label into its atoms.
 - A round records one decision per decidable change and never a `pending` one, and a second round adds none.
+
+- An application is recorded once per change, and a second one, an unknown change and an empty commit are each refused.
 
 ### 7. Wrong vs Correct
 

@@ -157,26 +157,6 @@ that reports says so in a field a reader can check.
   - **`revertible` is a convention here, stated rather than assumed**: one logical harness edit is one commit,
     which is what gives an edit a revert and what a change manifest's `fix` describes.
 
-- **`change.applied` binds a change to the commit that embodies it, and is what makes an edit revertible.**
-  AHE requires the action space to be explicit **and** revertible; the surface declaration made it explicit, and until
-  this record existed nothing gave a revert a target - "which commit was change X" was unanswerable. It is a **ledger**
-  record, not a convergence event: the ledger holds what happened, the convergence record holds goal state, and an
-  application is not goal state.
-  - **The runtime records the claim and a script checks it.** The runtime cannot reach git, and a process spawn on the
-    request path to check one claim would be a control where a reading belongs. `scripts/harness-rounds.mts` checks,
-    where git and this project evidence readings already live.
-  - **Three refusals, each naming what is wrong**: an unknown change id (a prediction must be pre-registered, so a
-    commit naming no change is an edit nobody predicted); a second application for the same change, naming the commit
-    already recorded (one commit per logical edit is what gives the revert its granularity); an empty commit.
-  - **The check is `surfaceFit`, against the declared paths of the surface the manifest named**, using the fence own
-    rule through `declaredPrefixHit` rather than a second implementation of it. It answers **`inside`**,
-    **`outside`** with the offending files named, or **`unresolved`** when the commit cannot be resolved - a third
-    answer and not a nicer word for `outside`, because "the edit went somewhere it declared it would not" and "nobody
-    could tell" are different facts and only one of them is about the edit.
-  - **A file outside the declared component reads `outside`, and that is information rather than a violation.** A
-    manifest names one component; an edit that also changes the specification, the declaration, or another component is
-    a fact worth seeing, not something to hide by widening the claim - and a component implementation surface includes
-    its own tests, or every real edit would read `outside`.
 
 - **`scripts/harness-corpus.mts` summarises the recorded corpus, and says why it is empty when it is.** Mining needs a
   corpus rather than one ledger, and this is the reading that answers "what do we have" once instead of per round.
@@ -224,10 +204,6 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A refusal with no request id | Counted as unrefused by the failure reading; never attributed by position |
 | A terminal whose mechanism is unfamiliar | Emitted with the mechanism carried through; never dropped |
 | A request whose converged state will not take an event | The ledger names the state; the convergence record is untouched |
-| An application naming a change the record does not carry | Refused, naming the id; the manifest comes first |
-| A second application for one change | Refused, naming the commit already recorded |
-| A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
-| A touched file outside the declared paths | `outside`, with the files named |
 | A change that edits the verifier | Not a loop turn: judged by its suites and a person. The reading answers `definite`, `possible` (naming the symbols) or `none` - and an edit to the adapter alone is no longer `possible` |
 | A commit the reading cannot resolve | `verifier: none` - nothing was read, so nothing is claimed |
 | A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
@@ -244,7 +220,6 @@ The steps a turn is made of, because instruments only become a loop when someone
 
 ### 6. Tests Required
 
-- An application is recorded once per change, and a second one, an unknown change and an empty commit are each refused.
 - The surface check answers inside, outside with the offenders named, and unresolved for a commit nobody could read.
 - The corpus summary counts each terminal class with the axis rule, splits a composite refusal label, and says why a
   corpus with no failure has none - and does not say it when the corpus holds one.
