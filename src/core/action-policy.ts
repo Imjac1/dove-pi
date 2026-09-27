@@ -7,6 +7,7 @@ import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
 import { evaluatePermission, FENCE_TARGETS, matchesPermission, normalizeFencePath, type WorkMode } from "./work-mode.ts";
+import type { GateLabel } from "./task-convergence.ts";
 
 /**
  * The host tools that can reach outside the machine (a network call) or mutate the workspace filesystem, by name.
@@ -75,6 +76,8 @@ export interface ActionPolicyOptions {
 export interface ActionPolicy {
 	readonly modeId: string;
 	/** The checks in the order they are consulted, so a reader sees the policy instead of inferring it. */
+	/** The labels this policy can produce. Checked against `GATE_LABELS` by a test, because the entries come from gate
+	 * objects whose ids are wider - the coupling that matters is on `labelled`, which is where a refusal is labelled. */
 	readonly gates: readonly string[];
 	/** The name-only check. Safe to run before the arguments are final. */
 	denyDecision(action: string): GateDecision;
@@ -99,7 +102,7 @@ export interface ActionPolicy {
 	evaluate(invocation: GateInvocation, source: { readonly viaCapability: boolean }): GateDecision;
 }
 
-function labelled(decision: GateDecision, gate: string): GateDecision {
+function labelled(decision: GateDecision, gate: GateLabel): GateDecision {
 	if (decision.outcome === "allow") return decision;
 	return { outcome: decision.outcome, reason: `[` + gate + `] ` + decision.reason, remediation: decision.remediation };
 }
@@ -485,7 +488,9 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			}
 			if (limitGate !== undefined) {
 				const decision = limitGate.evaluate(invocation);
-				if (decision.outcome === "block") return labelled(decision, limitGate.id);
+				if (decision.outcome === "block") // The literal, not `limitGate.id`: the call site knows which gate it is evaluating, and the label it writes is the
+				// one the vocabulary checks. The behaviour is identical - the factory names that gate `limit`.
+				return labelled(decision, "limit");
 			}
 			// **The contract is checked against actions, not against tools, and a raw tool call has no action to check.**
 			// A document names actions (`net.scan`) and targets (`t-web`); a `bash` command is neither, so asking the
@@ -503,7 +508,7 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 					};
 				}
 				const decision = conformanceGate.evaluate(invocation);
-				if (decision.outcome === "block") return labelled(decision, conformanceGate.id);
+				if (decision.outcome === "block") return labelled(decision, "conformance");
 			}
 			// **Counted here and only here**: every gate above has passed and the action is about to be permitted, so
 			// this is the first point at which "ran in this phase" is true. An `ask` returns below without counting,

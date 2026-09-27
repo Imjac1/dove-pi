@@ -866,10 +866,29 @@ export const VERIFICATION_STATES: ReadonlySet<VerificationState> = new Set([
  * no `[label]` prefix, so `deny+scope+registered+ask` is a legal ledger value. The read therefore splits on `+`
  * and counts atoms; the composite itself is not nameable here, because predicting a composite would be predicting
  * the absence of a label.
+ *
+ * **One source, three readers, and the producers typed against it.** The tuple below is the declaration; the union is derived
+ * from it and the set is built from it, so the two cannot disagree. The producers - the policy gate list, the label the
+ * policy refusals pass, and the effect boundary - are typed as \`GateLabel\`, which turns a label a producer invents into a
+ * **compile error** rather than a refusal class nobody can predict.
+ *
+ * **What that does not cover**: a label nobody writes. The type rejects new labels, not unused ones, and this set carried
+ * two names that no writer produced until they were found by hand and the first draft was corrected. The subset direction is
+ * covered by a test against the policy gate list; the "every label is produced" direction is covered by **neither**, and
+ * saying so is the point.
  */
-export const GATE_LABELS: ReadonlySet<string> = new Set([
+export const GATE_LABEL_NAMES = [
 	"deny", "scope", "registered", "limit", "conformance", "sandbox", "technique", "fence", "ask", "effect-claim",
-]);
+	// **Found by the compiler, not by hand.** The intensity ceiling refuses an action and labels the refusal `intensity`,
+	// and the set did not carry it - so that refusal class was one no prediction could name. Three earlier rounds counted
+	// these labels by hand and counted ten; typing the producers found the eleventh in one typecheck.
+	"intensity",
+] as const;
+
+/** The refusal labels a manifest prediction may name, and the only ones a producer may write. */
+export type GateLabel = (typeof GATE_LABEL_NAMES)[number];
+
+export const GATE_LABELS: ReadonlySet<string> = new Set(GATE_LABEL_NAMES);
 
 /** The observables a prediction may name. Three, not four: `stop-reasons` is not a closed set yet (see design.md). */
 export const CHANGE_OBSERVABLES = ["criterion-status", "verification-state", "gate-refusals"] as const;
