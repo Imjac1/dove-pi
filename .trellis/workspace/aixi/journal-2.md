@@ -161,3 +161,42 @@ The survey finished: no live drift is left after the eleventh label, and two cou
 ### Next Steps
 
 - The survey of vocabularies is answered: the remaining ones are typed or are free text, and the mode file fields have their loader refusals as their check. The first real turn still needs a Pi host.
+
+
+## Session 56: Citations name a thing, not a position
+<!-- trellis-session: v=2 fp=98a42df99945376a -->
+
+**Date**: 2026-09-28
+**Task**: Citations name a thing, not a position
+**Branch**: `master`
+
+### Summary
+
+Eighteen line-number citations were found in comments - the specifications cite none - and two were already stale, one of them because the verifier extraction moved every line of the adapter. The live code now names what a citation points at, and a prohibition keeps the pattern from coming back.
+
+### Main Changes
+
+- the measurement decided the fix: a citation into our own code is wrong the moment somebody edits above it, and nothing notices, so the durable form is the name of the thing rather than its position
+- two categories stayed, named inside the check that enforces the rule: types.d.ts, the Pi host own type file pinned by version, and the withdrawn behaviour map, whose citations are its evidence
+- seven of the eighteen named no symbol on the citing line, so no check could judge them - the sweep removed their positions, which is the point: what a reader cannot check, they should not have to
+- the prohibition was seen to fail on a seed and pass again once removed, because a prohibition nobody has watched fire has unproven wiring
+- and the check states its own limit: it forbids a pattern, so it cannot tell whether the file a citation names is the right one - a floor, not a proof
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d96beab` | docs(citations): name the thing, not the position |
+| `e81c339` | chore(task): record the citation sweep, the seed that proved the check, and the allowances |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 723 tests, 721 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the sweep changed comments only.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the seven unjudgeable citations, which no check can judge, are the residue of this class.
