@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 45
+- **Total Sessions**: 46
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1731 | Active |
+| `journal-1.md` | ~1775 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 46 | 2026-09-28 | The verifier read paths move out of the adapter, and the gate I committed past | `cb6830f`, `67ed055`, `bfb6536`, `bbb5716` | `master` |
 | 45 | 2026-09-28 | The verifier, declared where it can be and named where it cannot | `63a028a`, `edc92fe`, `15df96d` | `master` |
 | 44 | 2026-09-28 | The verifier is outside the loop, and the split that made room to say it | `3681e8f`, `57b6a81` | `master` |
 | 43 | 2026-09-28 | The behaviours a fix must not regress, and the suites nobody had stated | `42fbe3f`, `ddddc97`, `f9301dc` | `master` |

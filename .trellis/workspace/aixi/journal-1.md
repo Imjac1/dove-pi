@@ -1731,3 +1731,45 @@ The boundary limit from the previous round became a reading: the declaration now
 ### Next Steps
 
 - Extracting the embedded verifier code would turn possible into definite for those files, and it is its own change with a real blast radius: unresolvedAcceptanceEvidence is exported and used by tests.
+
+
+## Session 46: The verifier read paths move out of the adapter, and the gate I committed past
+<!-- trellis-session: v=2 fp=0e0483c86390df9b -->
+
+**Date**: 2026-09-28
+**Task**: The verifier read paths move out of the adapter, and the gate I committed past
+**Branch**: `master`
+
+### Summary
+
+The five functions that produce the evidence the loop is judged by moved verbatim out of the adapter into src/core/harness-verifier.ts, which is now a verifier path - so an edit there reads definite and an edit to the adapter alone no longer reads possible.
+
+### Main Changes
+
+- the move was rolled back once and refused twice before it landed: the first attempt ended the block at a parameter line because the end-detection counted braces from a signature that has none, and the second refused because a type annotation holds braces - the third found the body opener and counted from there
+- both files came out at brace depth zero, the four module-private functions are now exported, and the module states that as the one change inside the move
+- the move settled two things it exposed: the previous round embedded list had missed changeBaseline, which reads the values a verdict is compared against, and an orphaned doc comment sat above the refusal counts describing a function that documents itself 25 lines later
+- and a measurement was wrong in a smaller way: the blast radius was recorded as two test files, and only one imports the moved code - the other matched a fixture string
+- the live reading answers definite for a commit that touched harness-round.ts and none for one that touched only task artifacts
+- and the mistake worth recording: the budget test reported the loop specification over its cap before the commit, and the commit was made anyway - the next commit moved the applied contract to the records specification, where a ledger record belongs, taking the loop specification from 25,532 to 22,964 and moving the wall to the records specification at 24,245, which needs its own split before the next addition
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cb6830f` | feat(loop): the verifier read paths move out of the adapter, so the answer is definite |
+| `67ed055` | docs(spec): record the extraction, what it makes definite, and the half that stays embedded |
+| `bfb6536` | chore(task): record the extraction, the two refusals and the smaller blast radius |
+| `bbb5716` | docs(spec): move the applied contract to the records specification, because it is a record |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. Both readings and the three scripts still run.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The records specification has 331 bytes left, so the next contract there needs a split - and the second half of the extraction, the record module verification functions, is still embedded and still its own change.
