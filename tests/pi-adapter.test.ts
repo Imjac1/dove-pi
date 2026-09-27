@@ -561,7 +561,40 @@ describe("Pi adapter", () => {
 				"status must reject mutation-shaped arguments instead of silently returning an unchanged snapshot",
 			);
 			await convergenceTool!.execute("freeze-convergence", { operation: "freeze", criteria: [{ id: "AC-001", text: "The formal request completes without a product regression." }] }, undefined, undefined, context);
+			// **The change manifest, at the boundary a session reaches.** A prediction is pre-registered: the shape
+			// rules first, then the record - and the baseline is read by the runtime, which is why the caller cannot
+			// send one.
+			const manifest = { operation: "change", acceptanceId: "AC-001", changeId: "chg-1", surface: "tool-implementation", failureEvidenceRef: "ledger:tool:freeze-convergence", rootCause: "the read path re-resolved what it had already resolved", fix: "resolve once and carry the result", predictedRegressions: [] };
+			await assert.rejects(
+				() => convergenceTool!.execute("change-no-prediction", { ...manifest, predictedFixes: [] }, undefined, undefined, context),
+				/at least 1 predictedFixes/,
+				"a change with nothing predicted is a rationale, and is refused as one",
+			);
+			await assert.rejects(
+				() => convergenceTool!.execute("change-unknown-observable", { ...manifest, predictedFixes: ["vibes:AC-001=better"] }, undefined, undefined, context),
+				/criterion-status, verification-state, gate-refusals/,
+				"and a prediction outside the closed set is refused by naming the set",
+			);
+			await assert.rejects(
+				() => convergenceTool!.execute("change-caller-baseline", { ...manifest, predictedFixes: ["criterion-status:AC-001=passed"], baseline: { "criterion-status:AC-001": "passed" } }, undefined, undefined, context),
+				/refuses a caller-supplied 'baseline'/,
+				"the baseline is the runtime's read, so one party cannot write both sides of the contract it is judged by",
+			);
+			await assert.rejects(
+				() => convergenceTool!.execute("status-with-manifest-field", { operation: "status", predictedFixes: ["criterion-status:AC-001=passed"] }, undefined, undefined, context),
+				/status is read-only.*predictedFixes/,
+				"and the read stays a read",
+			);
+			const recorded = await convergenceTool!.execute("record-change", { ...manifest, predictedFixes: ["criterion-status:AC-001=passed", "gate-refusals:fence=down"] }, undefined, undefined, context);
+			assert.equal(recorded.details.changes.length, 1, "the manifest is recorded on the native formal task");
+			assert.equal(recorded.details.changes[0].recordedAtRevision, recorded.details.revision, "at the revision its own event produced");
+			assert.deepEqual(recorded.details.changes[0].baseline, { "criterion-status:AC-001": "pending" }, "with the baseline the runtime read, which the caller never supplied");
+			const atManifest = await convergenceTool!.execute("status-at-manifest", { operation: "status" }, undefined, undefined, context);
+			assert.equal(atManifest.details.changes[0].verdict, "pending", "and nothing has happened yet, so nothing is decided");
 			await convergenceTool!.execute("start-convergence", { operation: "progress", acceptanceId: "AC-001", status: "started" }, undefined, undefined, context);
+			const afterOneEvent = await convergenceTool!.execute("status-after-one-event", { operation: "status" }, undefined, undefined, context);
+			assert.equal(afterOneEvent.details.changes[0].verdict, "contradicted", "the predicted pass did not happen, and the record says so rather than staying silent");
+			assert.match(afterOneEvent.details.changes[0].observed.join(" | "), /criterion-status:AC-001: pending -> in_progress \(prediction not met\)/, "and it carries the movement it compared");
 			await convergenceTool!.execute("record-follow-up", { operation: "finding", acceptanceId: "AC-001", findingId: "follow-up-1", findingKind: "follow_up", summary: "Related cleanup is outside this task." }, undefined, undefined, context);
 			const amendedFinding = await convergenceTool!.execute("amend-follow-up", { operation: "update_finding", acceptanceId: "AC-001", findingId: "follow-up-1", evidenceRefs: ["evidence:follow-up"], nextAction: "Create a separate follow-up task." }, undefined, undefined, context);
 			assert.deepEqual(amendedFinding.details.findings.find((finding: { id: string }) => finding.id === "follow-up-1")?.evidenceRefs, ["evidence:follow-up"]);

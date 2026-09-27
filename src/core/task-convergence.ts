@@ -62,6 +62,13 @@ export interface TaskConvergenceSnapshot {
 	readonly meaningfulProgressSinceReview: boolean;
 	readonly checkpoint?: TaskCheckpoint;
 	readonly correctiveAction?: TaskCorrectiveAction;
+	/**
+	 * The changes recorded against this task, each with the prediction it has to earn.
+	 *
+	 * **Optional on purpose.** The snapshot is `schemaVersion: 1` and records written before this field existed are
+	 * on disk, so an absent value means "none recorded" - which is true of every one of them.
+	 */
+	readonly changes?: readonly TaskChange[];
 	readonly observedResources: TaskResourceObservation;
 }
 
@@ -97,6 +104,12 @@ export type TaskConvergenceEvent =
 	| (VersionedEvent & { readonly kind: "task.checkpointed"; readonly acceptanceId: string; readonly nextAction: string })
 	| (VersionedEvent & { readonly kind: "task.blocked"; readonly acceptanceId: string; readonly nextAction: string; readonly unblockCondition: string })
 	| (VersionedEvent & { readonly kind: "task.resumed"; readonly acceptanceId: string; readonly acceptanceRevision: string })
+	| (VersionedEvent & {
+		readonly kind: "change.recorded";
+		readonly acceptanceId: string;
+		/** Everything but the revision, which the reducer sets from the revision the event produces. */
+		readonly change: Omit<TaskChange, "recordedAtRevision">;
+	})
 	| (VersionedEvent & { readonly kind: "request.observed"; readonly acceptanceId: string; readonly resources: TaskResourceObservation });
 
 export class TaskConvergenceValidationError extends Error {
@@ -191,6 +204,9 @@ export function decodeTaskConvergenceEvent(value: unknown): TaskConvergenceEvent
 	if (kind === "task.progress_reviewed" || kind === "task.checkpointed") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), nextAction: requireString(event.nextAction, "event.nextAction", MAX_TEXT) };
 	if (kind === "task.blocked") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), nextAction: requireString(event.nextAction, "event.nextAction", MAX_TEXT), unblockCondition: requireString(event.unblockCondition, "event.unblockCondition", MAX_TEXT) };
 	if (kind === "task.resumed") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), acceptanceRevision: requirePattern(event.acceptanceRevision, "event.acceptanceRevision", SHA256_PATTERN, 64) };
+	if (kind === "change.recorded") {
+		return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), change: decodeChange(event.change, "event.change", storedMovements) };
+	}
 	if (kind === "request.observed") return { ...base, kind, acceptanceId: requireAcceptanceId(event.acceptanceId), resources: decodeResources(event.resources, "event.resources") };
 	throw invalid(`Unsupported convergence event kind: ${kind}`);
 }
@@ -223,6 +239,7 @@ export function decodeTaskConvergenceSnapshot(value: unknown): TaskConvergenceSn
 		meaningfulProgressSinceReview: requireBoolean(snapshot.meaningfulProgressSinceReview, "snapshot.meaningfulProgressSinceReview"),
 		...(checkpoint ? { checkpoint } : {}),
 		...(correctiveAction ? { correctiveAction } : {}),
+		...(snapshot.changes === undefined ? {} : { changes: decodeChanges(snapshot.changes) }),
 		observedResources: decodeResources(snapshot.observedResources, "snapshot.observedResources"),
 	});
 }
@@ -280,6 +297,8 @@ export function reduceTaskConvergence(current: TaskConvergenceSnapshot | undefin
 			return updateFinding(snapshot, event);
 		case "finding.resolved":
 			return resolveFinding(snapshot, event);
+		case "change.recorded":
+			return recordChange(snapshot, event);
 		case "task.verification_started":
 			return nextSnapshot(snapshot, { state: "verifying" });
 		case "task.progress_reviewed":
@@ -337,6 +356,21 @@ function recordFinding(snapshot: TaskConvergenceSnapshot, event: Extract<TaskCon
 		});
 	}
 	return nextSnapshot(snapshot, { findings });
+}
+
+/**
+ * Record a change and the prediction it has to earn.
+ *
+ * `recordedAtRevision` is set here rather than accepted from the caller: it is the revision this event produces
+ * (`nextSnapshot` bumps by one), and a caller-chosen value would let a manifest claim it was written in a round that
+ * already ended - which is the difference between a pre-registered prediction and a post-hoc one.
+ */
+function recordChange(snapshot: TaskConvergenceSnapshot, event: Extract<TaskConvergenceEvent, { kind: "change.recorded" }>): TaskConvergenceSnapshot {
+	const changes = snapshot.changes ?? [];
+	if (changes.some((change) => change.id === event.change.id)) throw invalid(`Change ${event.change.id} is already recorded on this task`);
+	const recorded: TaskChange = { ...event.change, recordedAtRevision: snapshot.revision + 1 };
+	// Oldest first out, so the newest manifests survive a bounded record rather than the record refusing to grow.
+	return nextSnapshot(snapshot, { changes: [...changes, recorded].slice(-MAX_CHANGES) });
 }
 
 function updateFinding(snapshot: TaskConvergenceSnapshot, event: Extract<TaskConvergenceEvent, { kind: "finding.updated" }>): TaskConvergenceSnapshot {
@@ -495,6 +529,16 @@ function freezeSnapshot(snapshot: TaskConvergenceSnapshot): TaskConvergenceSnaps
 		...(checkpoint ? { checkpoint } : { checkpoint: undefined }),
 		...(snapshot.correctiveAction ? { correctiveAction: Object.freeze({ ...snapshot.correctiveAction }) } : { correctiveAction: undefined }),
 		observedResources: Object.freeze({ ...snapshot.observedResources }),
+		// Frozen like every other collection here: a shallow spread would carry the manifests while leaving the array
+		// that holds them mutable, which is the one thing a record a verdict reads should not be.
+		...(snapshot.changes === undefined ? { changes: undefined } : {
+			changes: Object.freeze(snapshot.changes.map((change) => Object.freeze({
+				...change,
+				predictedFixes: Object.freeze([...change.predictedFixes]),
+				predictedRegressions: Object.freeze([...change.predictedRegressions]),
+				baseline: Object.freeze({ ...change.baseline }),
+			}))),
+		}),
 	});
 }
 
@@ -526,6 +570,96 @@ function decodeCriterionStates(value: unknown): readonly AcceptanceCriterionStat
 	return value.map((entry, index) => {
 		const criterion = requireRecord(entry, `snapshot.criteria[${index}]`);
 		return { ...definitions[index]!, status: requireEnum(criterion.status, `snapshot.criteria[${index}].status`, ACCEPTANCE_STATUSES), evidenceRefs: decodeEvidenceRefs(criterion.evidenceRefs, `snapshot.criteria[${index}].evidenceRefs`) };
+	});
+}
+
+const MAX_BASELINE_KEYS = 32;
+
+function requireMovementList(value: unknown, path: string, minimum: number): readonly unknown[] {
+	if (!Array.isArray(value)) throw invalid(`${path} must be a list of predicted movements`);
+	if (value.length < minimum) {
+		throw invalid(`${path} needs at least ${minimum} predicted movement(s): a change with nothing predicted is a rationale rather than a contract. Write '<observable>:<subject>=<target>', where <observable> is one of: ${CHANGE_OBSERVABLES.join(", ")}.`);
+	}
+	if (value.length > MAX_PREDICTIONS) throw invalid(`${path} holds ${value.length} predictions; the maximum is ${MAX_PREDICTIONS}`);
+	return value;
+}
+
+/**
+ * The one door: everything that reaches a record has already been parsed, so this validates structure rather than text.
+ *
+ * The snapshot decoder and the event decoder both come through here, which is why a manifest round-trips: the same
+ * validator reads back what the reducer wrote.
+ */
+function storedMovements(value: unknown, path: string, minimum: number): readonly PredictedMovement[] {
+	return requireMovementList(value, path, minimum).map((entry, index) => {
+		const movement = requireRecord(entry, `${path}[${index}]`);
+		const observable = requireString(movement.observable, `${path}[${index}].observable`, 64);
+		const subject = requireString(movement.subject, `${path}[${index}].subject`, 128);
+		// `to` and `direction` are two shapes in the union and one place in the record, so read whichever the
+		// observable takes and let the shared validator refuse a mismatch by naming what that observable accepts.
+		const target = movement.to ?? movement.direction;
+		if (typeof target !== "string") throw invalid(`${path}[${index}] needs 'to' or 'direction'.`);
+		return movementFromParts(observable, subject, target);
+	});
+}
+
+/**
+ * The values a verdict compares against, as read by the harness when the manifest was recorded.
+ *
+ * Validated for shape only: this is the *harness's* read travelling with the record, and the refusal that matters -
+ * a caller supplying one - happens at the tool boundary, where the caller is a model rather than the runtime.
+ */
+function decodeBaseline(value: unknown, path: string): Readonly<Record<string, string | number>> {
+	const record = requireRecord(value, path);
+	const keys = Object.keys(record);
+	if (keys.length > MAX_BASELINE_KEYS) throw invalid(`${path} holds ${keys.length} entries; the maximum is ${MAX_BASELINE_KEYS}`);
+	const baseline: Record<string, string | number> = {};
+	for (const key of keys) {
+		if (!/^[a-z-]+:.+$/u.test(key)) throw invalid(`${path}.${key} must be shaped '<observable>:<subject>'`);
+		const entry = record[key];
+		if (typeof entry === "string") {
+			baseline[key] = requireString(entry, `${path}.${key}`, MAX_TEXT);
+			continue;
+		}
+		if (typeof entry === "number" && Number.isFinite(entry)) {
+			baseline[key] = entry;
+			continue;
+		}
+		throw invalid(`${path}.${key} must be a string or a finite number`);
+	}
+	return baseline;
+}
+
+type MovementDecoder = (value: unknown, path: string, minimum: number) => readonly PredictedMovement[];
+
+function decodeChange(value: unknown, path: string, movements: MovementDecoder): Omit<TaskChange, "recordedAtRevision"> {
+	const change = requireRecord(value, path);
+	const surface = requireString(change.surface, `${path}.surface`, 64);
+	if (!CHANGE_SURFACES.has(surface as ChangeSurface)) {
+		throw invalid(`${path}.surface must be one of: ${[...CHANGE_SURFACES].join(", ")} (got '${surface}'). A free string cannot be asked which mishap a change risks.`);
+	}
+	return {
+		id: requirePattern(change.id, `${path}.id`, GENERIC_ID_PATTERN, 128),
+		surface: surface as ChangeSurface,
+		failureEvidenceRef: requireEvidenceRef(change.failureEvidenceRef, `${path}.failureEvidenceRef`),
+		rootCause: requireString(change.rootCause, `${path}.rootCause`, MAX_TEXT),
+		fix: requireString(change.fix, `${path}.fix`, MAX_TEXT),
+		predictedFixes: movements(change.predictedFixes, `${path}.predictedFixes`, 1),
+		predictedRegressions: movements(change.predictedRegressions, `${path}.predictedRegressions`, 0),
+		baseline: decodeBaseline(change.baseline, `${path}.baseline`),
+	};
+}
+
+function decodeChanges(value: unknown): readonly TaskChange[] {
+	if (!Array.isArray(value)) throw invalid("snapshot.changes must be a list");
+	if (value.length > MAX_CHANGES) throw invalid(`snapshot.changes holds ${value.length} changes; the maximum is ${MAX_CHANGES}`);
+	return value.map((entry, index) => {
+		const path = `snapshot.changes[${index}]`;
+		const record = requireRecord(entry, path);
+		return {
+			...decodeChange(record, path, storedMovements),
+			recordedAtRevision: requireExactInteger(record.recordedAtRevision, `${path}.recordedAtRevision`, 1, Number.MAX_SAFE_INTEGER),
+		};
 	});
 }
 
@@ -693,3 +827,238 @@ function invalid(message: string): TaskConvergenceValidationError {
 function assertNever(value: never): never {
 	throw invalid(`Unhandled convergence event: ${JSON.stringify(value)}`);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Change manifests: a two-sided prediction, and the verdict the next round earns it
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The harness components a change may touch, from AHE's own enumeration (`2604.25850` §3.3) - which is also the
+ * pathway list `2509.26354` measures misevolution along, and the reason this is a closed set: "which surface did
+ * this touch" is the question a misevolution guard has to ask, and a free string cannot be asked it.
+ */
+export type ChangeSurface =
+	| "system-prompt"
+	| "tool-description"
+	| "tool-implementation"
+	| "middleware"
+	| "skill"
+	| "subagent-config"
+	| "long-term-memory";
+export const CHANGE_SURFACES: ReadonlySet<ChangeSurface> = new Set([
+	"system-prompt", "tool-description", "tool-implementation", "middleware", "skill", "subagent-config", "long-term-memory",
+]);
+
+/** What the D3 audit reports per criterion (`extension.ts:1553-1558`), as a nameable target. */
+export type VerificationState = "verified" | "unresolved_evidence" | "failed" | "waived" | "not_claimed";
+export const VERIFICATION_STATES: ReadonlySet<VerificationState> = new Set([
+	"verified", "unresolved_evidence", "failed", "waived", "not_claimed",
+]);
+
+/**
+ * The gate labels the ledger actually records, verified against every writer rather than assumed.
+ *
+ * `deny` (`pi-adapter/extension.ts:2292`), the policy's own labels (`action-policy.ts:334-518`), `ask`
+ * (`extension.ts:2412`) and `effect-claim` (`:2450`). Two of these were missing from the first draft of this
+ * set - `ask` and `effect-claim` - which is exactly the class of error the closed set exists to make visible.
+ *
+ * **A recorded label may be composite.** `extension.ts:2377` falls back to `gates.join("+")` when a reason carries
+ * no `[label]` prefix, so `deny+scope+registered+ask` is a legal ledger value. The read therefore splits on `+`
+ * and counts atoms; the composite itself is not nameable here, because predicting a composite would be predicting
+ * the absence of a label.
+ */
+export const GATE_LABELS: ReadonlySet<string> = new Set([
+	"deny", "scope", "registered", "limit", "conformance", "sandbox", "technique", "fence", "ask", "effect-claim",
+]);
+
+/** The observables a prediction may name. Three, not four: `stop-reasons` is not a closed set yet (see design.md). */
+export const CHANGE_OBSERVABLES = ["criterion-status", "verification-state", "gate-refusals"] as const;
+export type ChangeObservable = (typeof CHANGE_OBSERVABLES)[number];
+
+/**
+ * One predicted movement: a subject that moves **into** a state, or a count that moves **down** or **up**.
+ *
+ * A movement rather than a sentence, because a sentence is checked by reading it and a movement is checked by
+ * comparing two reads - which is the whole difference between a contract and a rationale.
+ */
+export type PredictedMovement =
+	| { readonly observable: "criterion-status"; readonly subject: string; readonly to: AcceptanceStatus }
+	| { readonly observable: "verification-state"; readonly subject: string; readonly to: VerificationState }
+	| { readonly observable: "gate-refusals"; readonly subject: string; readonly direction: "down" | "up" };
+
+/** A manifest entry: Self-Harness's failure record, plus a prediction. */
+export interface TaskChange {
+	readonly id: string;
+	readonly surface: ChangeSurface;
+	/** The failure this answers, resolvable like any other ref. */
+	readonly failureEvidenceRef: string;
+	/** The inferred cause, **distinct from the verifier-level one**: two runs can share an outcome and differ here. */
+	readonly rootCause: string;
+	readonly fix: string;
+	/** At least one, enforced: a change with nothing predicted is a rationale. */
+	readonly predictedFixes: readonly PredictedMovement[];
+	/** May be empty, and an empty list is stored as an explicit claim of none rather than as a blank field. */
+	readonly predictedRegressions: readonly PredictedMovement[];
+	/** Read by the harness when the manifest was recorded. Never supplied by a caller - see `verdictFor`. */
+	readonly baseline: Readonly<Record<string, string | number>>;
+	readonly recordedAtRevision: number;
+}
+
+/**
+ * **One shape, not two, and this is where that was decided.** The event union declares the *decoded* form, as every
+ * other event kind does, so an event carries parsed movements and the reducer validates structure. Text arrives in
+ * exactly one place - the tool input, through {@link parsePredictedMovement} - because that is the only door a model
+ * or a person writes through. A wire form that also accepted text was tried and deleted: it had no producer, and an
+ * inert path is the defect class this project keeps finding in itself.
+ */
+
+export const MAX_CHANGES = 50;
+export const MAX_PREDICTIONS = 8;
+
+/** The key a movement and its recorded baseline share. */
+export function movementKey(movement: { readonly observable: ChangeObservable; readonly subject: string }): string {
+	return movement.observable + ":" + movement.subject;
+}
+
+/**
+ * Parse `<observable>:<subject>=<target>`, and refuse anything else **by naming the whole set**.
+ *
+ * The compact form exists because the schema bytes are measured: `agent_task_convergence` alone is 1,753 bytes,
+ * 32% of every tool schema this extension registers into a prompt (Round 10). Four union variants on two array
+ * fields would grow the largest schema again, for a shape this validates in one line - and a refusal teaches the
+ * set only when someone gets it wrong, which is cheaper than teaching it to everyone on every request.
+ */
+export function parsePredictedMovement(text: string): PredictedMovement {
+	const trimmed = String(text ?? "").trim();
+	const match = /^([a-z-]+):([^=]+)=(.+)$/.exec(trimmed);
+	if (match === null) {
+		throw invalid(`'${trimmed}' is not a predicted movement. Write '<observable>:<subject>=<target>', where <observable> is one of: ${CHANGE_OBSERVABLES.join(", ")}.`);
+	}
+	return movementFromParts((match[1] ?? "").trim(), (match[2] ?? "").trim(), (match[3] ?? "").trim());
+}
+
+/**
+ * The one validator both front doors share, because a movement has two shapes for a reason: the **event** carries
+ * text (a model wrote it) and the **record** carries structure (the reducer wrote it). Two decoders would be two
+ * vocabularies; one validator with two ways in is one vocabulary.
+ */
+function movementFromParts(observable: string, subject: string, target: string): PredictedMovement {
+	if (subject === "") throw invalid(`${observable} needs a non-empty subject.`);
+	switch (observable) {
+		case "criterion-status": {
+			if (!ACCEPTANCE_ID_PATTERN.test(subject)) throw invalid(`a criterion-status subject must be an AC-* id (got '${subject}').`);
+			if (!ACCEPTANCE_STATUSES.has(target as AcceptanceStatus)) {
+				throw invalid(`criterion-status targets must be one of: ${[...ACCEPTANCE_STATUSES].join(", ")} (got '${target}').`);
+			}
+			return { observable, subject, to: target as AcceptanceStatus };
+		}
+		case "verification-state": {
+			if (!ACCEPTANCE_ID_PATTERN.test(subject)) throw invalid(`a verification-state subject must be an AC-* id (got '${subject}').`);
+			if (!VERIFICATION_STATES.has(target as VerificationState)) {
+				throw invalid(`verification-state targets must be one of: ${[...VERIFICATION_STATES].join(", ")} (got '${target}').`);
+			}
+			return { observable, subject, to: target as VerificationState };
+		}
+		case "gate-refusals": {
+			if (!GATE_LABELS.has(subject)) {
+				throw invalid(`a gate-refusals subject must be one of: ${[...GATE_LABELS].join(", ")} (got '${subject}'). A composite label is not a subject: the read counts its atoms separately.`);
+			}
+			if (target !== "down" && target !== "up") throw invalid(`gate-refusals targets must be one of: down, up (got '${target}').`);
+			return { observable, subject, direction: target };
+		}
+		default:
+			throw invalid(`unknown observable '${observable}'. Known observables: ${CHANGE_OBSERVABLES.join(", ")}.`);
+	}
+}
+
+/**
+ * The rule both readers apply, in one place: a passed criterion whose evidence refs all resolve is `verified`, and
+ * anything else is what its own status says. The D3 audit (`extension.ts`) and the change baseline must not be able
+ * to disagree about what a criterion's state is, so the derivation lives here rather than twice at the call sites.
+ */
+export function verificationStateOf(status: AcceptanceStatus, unresolvedEvidence: number): VerificationState {
+	if (status === "passed") return unresolvedEvidence > 0 ? "unresolved_evidence" : "verified";
+	if (status === "failed") return "failed";
+	if (status === "waived") return "waived";
+	return "not_claimed";
+}
+
+export type ChangeVerdict = "pending" | "confirmed" | "contradicted" | "unobserved";
+
+/** The harness's own read, at the moment a verdict is asked for. A key that is absent could not be read. */
+export interface ChangeObservables {
+	/**
+	 * The revision of the read itself. A verdict is available once **any** event has landed after the manifest's
+	 * revision, which is the moment the comparison stops being a baseline compared with itself.
+	 *
+	 * A narrower boundary was designed first - the revision of the last `request.observed` event - and it was
+	 * unreachable: that event kind has **no producer in this repository**, so the field would always be absent and
+	 * every verdict would read `pending` forever. See the task's design.md; the missing producer is its own defect.
+	 */
+	readonly currentRevision: number;
+	readonly criterionStatus: Readonly<Record<string, string>>;
+	readonly verificationState: Readonly<Record<string, string>>;
+	/** Counts **per atom**: a composite ledger label is split on `+` before it reaches here. */
+	readonly gateRefusals: Readonly<Record<string, number>>;
+}
+
+export interface ChangeVerdictResult {
+	readonly verdict: ChangeVerdict;
+	readonly observed: readonly string[];
+}
+
+function readObservable(current: ChangeObservables, movement: PredictedMovement): string | number | undefined {
+	if (movement.observable === "criterion-status") return current.criterionStatus[movement.subject];
+	if (movement.observable === "verification-state") return current.verificationState[movement.subject];
+	return current.gateRefusals[movement.subject];
+}
+
+/**
+ * Whether the movement happened **between the baseline and this read**.
+ *
+ * A state movement requires the subject to be in the predicted state now **and not before**: a prediction of a
+ * movement that had already happened is not evidence for the change, so it is refused rather than counted. That is
+ * the cheap half of the gaming defence - the expensive half would be a read the predicting party cannot see, which
+ * is D6's subject.
+ */
+function movementHeld(movement: PredictedMovement, before: string | number, after: string | number): boolean {
+	if (movement.observable === "gate-refusals") {
+		if (typeof before !== "number" || typeof after !== "number") return false;
+		return movement.direction === "down" ? after < before : after > before;
+	}
+	return after === movement.to && before !== movement.to;
+}
+
+/**
+ * The verdict a manifest has earned. Total by construction: anything unreadable is `unobserved`, never
+ * `confirmed`, because a check that can throw is a check a run learns to avoid.
+ *
+ * `pending` until a `request.observed` event has landed after the manifest's revision. Without that boundary the
+ * first read after recording would compare a baseline with itself and report `contradicted`, which is worse than
+ * useless: it would teach the loop that every change fails.
+ */
+export function verdictFor(change: TaskChange, current: ChangeObservables): ChangeVerdictResult {
+	if (current.currentRevision <= change.recordedAtRevision) {
+		return { verdict: "pending", observed: [] };
+	}
+	const observed: string[] = [];
+	let contradicted = false;
+	let unobserved = false;
+	for (const movement of change.predictedFixes) {
+		const key = movementKey(movement);
+		const before = change.baseline[key];
+		const after = readObservable(current, movement);
+		if (before === undefined || after === undefined) {
+			unobserved = true;
+			observed.push(key + ": unreadable (baseline " + String(before) + ", now " + String(after) + ")");
+			continue;
+		}
+		const held = movementHeld(movement, before, after);
+		observed.push(key + ": " + String(before) + " -> " + String(after) + (held ? " (predicted)" : " (prediction not met)"));
+		if (!held) contradicted = true;
+	}
+	if (contradicted) return { verdict: "contradicted", observed };
+	if (unobserved) return { verdict: "unobserved", observed };
+	return { verdict: "confirmed", observed };
+}
+

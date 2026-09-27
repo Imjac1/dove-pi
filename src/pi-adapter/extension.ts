@@ -10,7 +10,7 @@ import { CAPABILITY_PROTOCOL_VERSION } from "../core/capability-protocol.ts";
 import { executeRecipe, type RecipeRegistry } from "../core/recipe-registry.ts";
 import { ExecutionLedger, projectExecutionDiagnostics } from "../core/execution-ledger.ts";
 import { ModeController, type ModeChange } from "../core/mode-controller.ts";
-import { normalizeAgentMode, normalizeInteractionMode, type AgentMode, type InteractionMode } from "../core/contracts.ts";
+import { normalizeAgentMode, normalizeInteractionMode, type AgentMode, type ExecutionRecord, type InteractionMode } from "../core/contracts.ts";
 import { inspectWindowsEnvironment } from "../windows-runtime/doctor.ts";
 import { applyWorkspacePatch, createWorkspaceSnapshot, restoreWorkspaceSnapshot, verifyWorkspaceSnapshot, type WorkspacePatchOperation } from "../windows-runtime/workspace.ts";
 import { createProjectProvider, initializeNativeProject, summarizeProjectContinuation, updateProjectManifest, type ProjectContextSnapshot, type ProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskOperation } from "../project-provider/index.ts";
@@ -39,7 +39,17 @@ import { createDoveRuntime } from "../runtime.ts";
 import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.ts";
 import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
 import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
-import type { FindingKind } from "../core/task-convergence.ts";
+import {
+	movementKey,
+	parsePredictedMovement,
+	verificationStateOf,
+	verdictFor,
+	type ChangeObservables,
+	type ChangeSurface,
+	type PredictedMovement,
+	type TaskChange,
+	type TaskConvergenceSnapshot,
+} from "../core/task-convergence.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
 import { createActionPolicy, evidenceDigestsFor, type ActionPolicy } from "../core/action-policy.ts";
@@ -349,9 +359,64 @@ export function normalizeLsToolInput(toolName: string, input: Record<string, unk
 	return true;
 }
 
-export function convergenceOperationFromPiInput(input: {
-	readonly operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume";
+/** What a change manifest looks like in the tool input, before the runtime supplies the baseline. */
+export interface ConvergenceChangeInput {
 	readonly acceptanceId?: string;
+	readonly changeId?: string;
+	readonly surface?: string;
+	readonly failureEvidenceRef?: string;
+	readonly rootCause?: string;
+	readonly fix?: string;
+	readonly predictedFixes?: readonly string[];
+	readonly predictedRegressions?: readonly string[];
+}
+
+/**
+ * Parse a change manifest from the tool input.
+ *
+ * **The one place the compact prediction grammar is applied to a tool call.** The runtime calls it before reading the
+ * baseline, because the baseline is read for exactly the keys this returns - and then the same parser runs again
+ * inside the operation mapper, so there is one set of rules and not two.
+ *
+ * `surface` travels as written and is validated by the event decoder, which refuses it by naming the whole closed
+ * set. A second copy of that set here would be a second vocabulary.
+ */
+export function changeManifestFromPiInput(input: ConvergenceChangeInput): Omit<TaskChange, "recordedAtRevision" | "baseline"> {
+	const required = (value: string | undefined, field: string): string => {
+		if (!value?.trim()) throw new Error(`agent_task_convergence requires ${field}.`);
+		return value.trim();
+	};
+	// The predictions travel as the text the caller wrote and are **validated here** so a malformed one is refused at
+	// the boundary rather than three layers down. Parsing them into movements is the reducer's job: the wire carries
+	// text and the record carries structure, and this is where the two meet exactly once.
+	const movements = (value: readonly string[] | undefined, field: string, minimum: number): readonly PredictedMovement[] => {
+		const list = value ?? [];
+		if (list.length < minimum) {
+			throw new Error(`agent_task_convergence change requires at least ${minimum} ${field} written as '<observable>:<subject>=<target>'. A change with nothing predicted is a rationale rather than a contract.`);
+		}
+		return list.map((entry) => parsePredictedMovement(entry));
+	};
+	return {
+		id: required(input.changeId, "changeId"),
+		surface: required(input.surface, "surface") as ChangeSurface,
+		failureEvidenceRef: required(input.failureEvidenceRef, "failureEvidenceRef"),
+		rootCause: required(input.rootCause, "rootCause"),
+		fix: required(input.fix, "fix"),
+		predictedFixes: movements(input.predictedFixes, "predictedFixes", 1),
+		predictedRegressions: movements(input.predictedRegressions, "predictedRegressions", 0),
+	};
+}
+
+export function convergenceOperationFromPiInput(input: {
+	readonly operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume" | "change";
+	readonly acceptanceId?: string;
+	readonly changeId?: string;
+	readonly surface?: string;
+	readonly failureEvidenceRef?: string;
+	readonly rootCause?: string;
+	readonly fix?: string;
+	readonly predictedFixes?: readonly string[];
+	readonly predictedRegressions?: readonly string[];
 	readonly acceptanceRevision?: string;
 	readonly criteria?: readonly { id: string; text: string }[];
 	readonly status?: "started" | "evidence" | "passed" | "failed" | "waived" | "step_completed" | "verification_started";
@@ -363,12 +428,20 @@ export function convergenceOperationFromPiInput(input: {
 	readonly summary?: string;
 	readonly nextAction?: string;
 	readonly unblockCondition?: string;
-}): ProjectTaskConvergenceOperation {
+}, runtimeBaseline?: Readonly<Record<string, string | number>>): ProjectTaskConvergenceOperation {
 	if (input.operation === "status") throw new Error("status is read-only.");
 	const required = (value: string | undefined, field: string): string => {
 		if (!value?.trim()) throw new Error(`agent_task_convergence requires ${field}.`);
 		return value.trim();
 	};
+	if (input.operation === "change") {
+		// **The baseline is the runtime's, never the caller's.** A caller who could supply it would write both sides of
+		// the contract its own verdict is computed from - the failure this whole record exists to prevent.
+		if (runtimeBaseline === undefined) {
+			throw new Error("a change manifest is assembled with the runtime's own baseline read. Parse it with changeManifestFromPiInput, read the observables it names, then pass them here.");
+		}
+		return { action: "change", acceptanceId: required(input.acceptanceId, "acceptanceId"), change: { ...changeManifestFromPiInput(input), baseline: runtimeBaseline } };
+	}
 	if (input.operation === "freeze") return { action: "freeze", criteria: input.criteria ?? [], ...(input.acceptanceId ? { acceptanceId: input.acceptanceId } : {}) };
 	const acceptanceId = required(input.acceptanceId, "acceptanceId");
 	if (input.operation === "progress") {
@@ -561,6 +634,77 @@ export async function unresolvedAcceptanceEvidence(
 		else if (kind !== "ledger" && kind !== "effect") unresolved.push(ref);
 	}
 	return unresolved;
+}
+
+/**
+ * The harness's own read of the closed observable set a change's prediction is measured against.
+ *
+ * **Why the model does not supply this.** A verdict compares what a change predicted with what the next round
+ * observed, and both sides have to come from the party that does not benefit from the answer. This reads the
+ * snapshot and the ledger; the caller of the tool supplies none of it.
+ */
+/**
+ * The counts, per **atom**, of the refusals the ledger holds.
+ *
+ * **A recorded label may be composite.** The refusal path falls back to `gates.join("+")` when a reason carries no
+ * `[label]` prefix, so a prediction naming one atom would never see such an entry. Splitting here is what makes this
+ * a count of refusals rather than a count of the ways a refusal was labelled.
+ */
+function countGateRefusals(records: readonly ExecutionRecord[]): Readonly<Record<string, number>> {
+	const counts: Record<string, number> = {};
+	for (const record of records) {
+		if (record.kind !== "gate.refused") continue;
+		const gate = record.details?.gate;
+		if (typeof gate !== "string") continue;
+		for (const atom of gate.split("+")) {
+			const label = atom.trim();
+			if (label !== "") counts[label] = (counts[label] ?? 0) + 1;
+		}
+	}
+	return counts;
+}
+
+/**
+ * The observable read, from a snapshot whose evidence refs the caller has **already resolved**.
+ *
+ * Taking the resolution as an argument rather than doing it here is deliberate: the status read resolves every
+ * criterion's refs for its own audit, and resolving them a second time for the same answer would be one rule applied
+ * twice with two chances to differ.
+ */
+function changeObservables(
+	snapshot: TaskConvergenceSnapshot,
+	unresolvedByCriterion: readonly (readonly string[])[],
+	gateRefusals: Readonly<Record<string, number>>,
+): ChangeObservables {
+	const criterionStatus: Record<string, string> = {};
+	const verificationState: Record<string, string> = {};
+	snapshot.criteria.forEach((criterion, index) => {
+		criterionStatus[criterion.id] = criterion.status;
+		verificationState[criterion.id] = verificationStateOf(criterion.status, (unresolvedByCriterion[index] ?? []).length);
+	});
+	return { currentRevision: snapshot.revision, criterionStatus, verificationState, gateRefusals };
+}
+
+/**
+ * The values a verdict will compare against: read now, for the keys this manifest predicts over, and stored with it.
+ *
+ * A key left out is a baseline the harness did not have, which `verdictFor` reports as `unobserved` rather than as
+ * a zero - the difference between "it did not move" and "nobody looked".
+ */
+function changeBaseline(
+	manifest: { readonly predictedFixes: readonly PredictedMovement[]; readonly predictedRegressions: readonly PredictedMovement[] },
+	observed: ChangeObservables,
+): Readonly<Record<string, string | number>> {
+	const baseline: Record<string, string | number> = {};
+	for (const movement of [...manifest.predictedFixes, ...manifest.predictedRegressions]) {
+		const value = movement.observable === "criterion-status"
+			? observed.criterionStatus[movement.subject]
+			: movement.observable === "verification-state"
+				? observed.verificationState[movement.subject]
+				: observed.gateRefusals[movement.subject];
+		if (value !== undefined) baseline[movementKey(movement)] = value;
+	}
+	return baseline;
 }
 
 export async function admitNonConversationalMessages<T>(payload: T, maxCharacters: number): Promise<{ payload: T; leftAlone: number }> {
@@ -1504,11 +1648,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "agent_task_convergence",
 		label: "Dove Task Convergence",
-		description: "Record formal-task acceptance progress, findings, finding evidence updates, checkpoints, and resume decisions for the current native task. operation=status is read-only; use operation=update_finding with an existing findingId to append evidenceRefs or nextAction.",
+		description: "Record formal-task acceptance progress, findings, finding evidence updates, checkpoints, resume decisions, and change manifests for the current native task. operation=status is read-only and returns the audited verification vector and every change verdict; use operation=update_finding with an existing findingId to append evidenceRefs or nextAction. operation=change records a manifest whose predicted movements are checked against the next round observed ones.",
 		promptSnippet: "Use only for a formal task when recording evidence or a convergence decision tied to an existing AC-* criterion",
 		promptGuidelines: ["Select an existing acceptanceId before product work. To mark work started, call operation=progress with acceptanceId and status=started; operation=status only reads the snapshot and must not carry mutation fields. Follow-up findings are recorded without fixing them in the current task. If a finding already exists, use update_finding with the same findingId instead of repeating finding. Resource observations never decide convergence."],
 		parameters: Type.Object({
-			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume")]),
+			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume"), Type.Literal("change")]),
 			acceptanceId: Type.Optional(Type.String()),
 			acceptanceRevision: Type.Optional(Type.String()),
 			criteria: Type.Optional(Type.Array(Type.Object({ id: Type.String(), text: Type.String() }))),
@@ -1522,21 +1666,33 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			nextAction: Type.Optional(Type.String()),
 			unblockCondition: Type.Optional(Type.String()),
 			task: Type.Optional(Type.String()),
+			// A change manifest. Predictions are one compact string each: `<observable>:<subject>=<target>`, with the
+			// observable in {criterion-status, verification-state, gate-refusals}. A typebox union of those three shapes
+			// would grow the largest schema this extension registers, and the parser's refusal names the set anyway.
+			changeId: Type.Optional(Type.String()),
+			surface: Type.Optional(Type.String({ description: "Which harness component the change touches: system-prompt, tool-description, tool-implementation, middleware, skill, subagent-config, or long-term-memory." })),
+			failureEvidenceRef: Type.Optional(Type.String()),
+			rootCause: Type.Optional(Type.String()),
+			fix: Type.Optional(Type.String()),
+			predictedFixes: Type.Optional(Type.Array(Type.String(), { description: "At least one: '<observable>:<subject>=<target>', e.g. 'criterion-status:AC-003=passed'." })),
+			predictedRegressions: Type.Optional(Type.Array(Type.String(), { description: "May be empty; an empty list is recorded as an explicit claim of none." })),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const typed = params as {
-				operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume";
+				operation: "status" | "freeze" | "progress" | "finding" | "update_finding" | "resolve_finding" | "decide" | "checkpoint" | "resume" | "change";
 				acceptanceId?: string; acceptanceRevision?: string; criteria?: readonly { id: string; text: string }[];
 				status?: "started" | "evidence" | "passed" | "failed" | "waived" | "step_completed" | "verification_started";
 				evidenceRef?: string; evidenceRefs?: readonly string[]; stepId?: string; findingId?: string;
 				findingKind?: "blocking" | "regression" | "follow_up" | "scope_change" | "serious_unexpected_risk"; summary?: string;
 				nextAction?: string; unblockCondition?: string; task?: string;
+				changeId?: string; surface?: string; failureEvidenceRef?: string; rootCause?: string; fix?: string;
+				predictedFixes?: readonly string[]; predictedRegressions?: readonly string[];
 			};
 			if (!projectProvider.readTaskConvergence || !projectProvider.mutateTaskConvergence) throw new Error("Dove task convergence is unavailable for this provider.");
 			const target = typed.task?.trim() ? projectProvider.resolveTask(typed.task.trim()) : projectProvider.getCurrentTask();
 			if (!target?.formal || target.provider !== "native") throw new Error("Task convergence requires the current native formal task.");
 			if (typed.operation === "status") {
-				const mutationFields = ["acceptanceId", "acceptanceRevision", "criteria", "status", "evidenceRef", "evidenceRefs", "stepId", "findingId", "findingKind", "summary", "nextAction", "unblockCondition"] as const;
+				const mutationFields = ["acceptanceId", "acceptanceRevision", "criteria", "status", "evidenceRef", "evidenceRefs", "stepId", "findingId", "findingKind", "summary", "nextAction", "unblockCondition", "changeId", "surface", "failureEvidenceRef", "rootCause", "fix", "predictedFixes", "predictedRegressions"] as const;
 				const suppliedMutationField = mutationFields.find((field) => typed[field] !== undefined);
 				if (suppliedMutationField) throw new Error(`agent_task_convergence status is read-only; remove ${suppliedMutationField} and use operation=progress with acceptanceId plus status=started|verification_started|evidence|passed|failed|waived|step_completed.`);
 				const read = projectProvider.readTaskConvergence(target.stableId);
@@ -1552,17 +1708,51 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				})));
 				const verification = Object.fromEntries(snapshot.criteria.map((criterion, index) => {
 					const unresolved = unresolvedByCriterion[index] ?? [];
-					const state = criterion.status === "passed"
-						? (unresolved.length > 0 ? "unresolved_evidence" : "verified")
-						: criterion.status === "failed" ? "failed" : criterion.status === "waived" ? "waived" : "not_claimed";
+					// The derivation is `verificationStateOf`'s, shared with the baseline a change records, so an audit
+					// and a prediction cannot disagree about what a criterion's state is.
+					const state = verificationStateOf(criterion.status, unresolved.length);
 					return [criterion.id, { status: state, evidenceRefs: criterion.evidenceRefs.length, ...(unresolved.length > 0 ? { unresolved } : {}) }];
 				}));
-				// `details` keeps its `snapshot` key for the caller that compares across statuses; `verification`
-				// rides beside it so a consumer sees the audited vector without re-deriving it.
-				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification }, null, 2) }], details: { snapshot, verification } };
+				// **Decision observability's read, and the only place a verdict exists.** Each manifest's predicted
+				// movements are intersected with what the next round observed; nothing is written back, so `status`
+				// stays read-only and a verdict can never become a claim the record makes about itself.
+				const changeRead = changeObservables(snapshot, unresolvedByCriterion, countGateRefusals(await ledger.read()));
+				const changes = (snapshot.changes ?? []).map((change) => ({
+					id: change.id,
+					surface: change.surface,
+					recordedAtRevision: change.recordedAtRevision,
+					...verdictFor(change, changeRead),
+					predictedFixes: change.predictedFixes,
+					predictedRegressions: change.predictedRegressions,
+				}));
+				// `details` keeps its `snapshot` key for the caller that compares across statuses; `verification` and
+				// `changes` ride beside it so a consumer sees the audited vector and every verdict without re-deriving
+				// either.
+				return { content: [{ type: "text", text: JSON.stringify({ ...snapshot, verification, changes }, null, 2) }], details: { snapshot, verification, changes } };
 			}
 			if (runtimeReadOnly()) return { content: [{ type: "text", text: "形式任务收敛元数据变更已阻止：Dove 当前处于只读模式。" }], details: { operation: typed.operation, blocked: true, reason: "runtime_read_only" } };
-			const operation = convergenceOperationFromPiInput(typed);
+			// **A caller-supplied baseline is refused before anything else happens.** The baseline is what a verdict
+			// compares against, and a caller who could write it would write both sides of the contract it is judged by.
+			// The tool schema has no such field; this catches a caller that sends one anyway.
+			if ((params as Record<string, unknown>).baseline !== undefined) {
+				throw new Error("agent_task_convergence refuses a caller-supplied 'baseline': the values a verdict compares against are read by the harness when the manifest is recorded, so that one party does not write both sides of the contract.");
+			}
+			// **The manifest is parsed first, because the baseline is read for exactly the keys it names.** Then the
+			// runtime reads those observables itself and hands them to the operation mapper, which parses the same
+			// input again through the same function - one set of rules, applied once to the model's text and once to
+			// the runtime's read.
+			let runtimeBaseline: Readonly<Record<string, string | number>> | undefined;
+			if (typed.operation === "change") {
+				const manifest = changeManifestFromPiInput(typed);
+				const read = projectProvider.readTaskConvergence(target.stableId);
+				if (read.kind !== "valid") throw new Error(read.kind === "missing" ? "No convergence snapshot exists for this task; freeze acceptance criteria first." : `Convergence snapshot is unreadable: ${read.issue}`);
+				const unresolved = await Promise.all(read.snapshot.criteria.map((criterion) => unresolvedAcceptanceEvidence(criterion.evidenceRefs, {
+					readLedger: () => ledger.read(),
+					effectsDirectory: join(resolveWorkspaceRoot(cwd), ".dove", "effects"),
+				})));
+				runtimeBaseline = changeBaseline(manifest, changeObservables(read.snapshot, unresolved, countGateRefusals(await ledger.read())));
+			}
+			const operation = convergenceOperationFromPiInput(typed, runtimeBaseline);
 		// The companion to the shape rule one layer down: a well-shaped ref to a record the harness never wrote is the
 		// same assertion in the right costume, and only the layer that can read the ledger can tell the difference.
 		if (operation.action === "progress" && operation.progress.kind === "passed") {

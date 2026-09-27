@@ -311,6 +311,8 @@ function toConvergenceEvent(goal: NativeGoal, operation: ProjectTaskConvergenceO
 			return { ...base, kind: "finding.updated", acceptanceId: operation.acceptanceId, findingId: operation.findingId, ...(operation.evidenceRefs ? { evidenceRefs: operation.evidenceRefs } : {}), ...(operation.summary ? { summary: operation.summary } : {}), ...(operation.nextAction ? { nextAction: operation.nextAction } : {}) };
 		case "resolve_finding":
 			return { ...base, kind: "finding.resolved", acceptanceId: operation.acceptanceId, findingId: operation.findingId, ...(operation.evidenceRefs ? { evidenceRefs: operation.evidenceRefs } : {}) };
+		case "change":
+			return { ...base, kind: "change.recorded", acceptanceId: operation.acceptanceId, change: operation.change };
 		case "decide":
 			return { ...base, kind: "task.progress_reviewed", acceptanceId: operation.acceptanceId, nextAction: operation.nextAction };
 		case "checkpoint":

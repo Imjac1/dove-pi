@@ -7,6 +7,8 @@ import {
 	decodeTaskConvergenceSnapshot,
 	reduceTaskConvergence,
 	replayTaskConvergence,
+	TaskConvergenceValidationError,
+	verdictFor,
 	type TaskConvergenceSnapshot,
 } from "../src/core/task-convergence.ts";
 
@@ -248,3 +250,105 @@ function projectSemanticState(snapshot: TaskConvergenceSnapshot): unknown {
 		correctiveAction: snapshot.correctiveAction,
 	};
 }
+
+/** The message of a refusal, or a failure if nothing was refused. */
+function expectError(run: () => unknown): string {
+	try {
+		run();
+	} catch (error) {
+		assert.ok(error instanceof TaskConvergenceValidationError, "expected a convergence refusal, got " + String(error));
+		return error.message;
+	}
+	throw new Error("expected a refusal, but nothing was thrown");
+}
+
+/** A change manifest event over AC-001, with one predicted fix and no claimed regressions. */
+function changeEvent(overrides: Record<string, unknown> = {}): unknown {
+	return {
+		schemaVersion: 1,
+		kind: "change.recorded",
+		acceptanceId: "AC-001",
+		change: {
+			id: "chg-1",
+			surface: "tool-implementation",
+			failureEvidenceRef: "ledger:tool:suite-run",
+			rootCause: "the boundary read the tool name where the target lives in the arguments",
+			fix: "read the target argument before deciding",
+			// The event carries **parsed** movements: text arrives only at the tool input, through the parser.
+			predictedFixes: [{ observable: "criterion-status", subject: "AC-001", to: "passed" }],
+			predictedRegressions: [],
+			baseline: { "criterion-status:AC-001": "pending" },
+			...overrides,
+		},
+	};
+}
+
+describe("the change record", () => {
+	it("records a change at the revision its own event produced, not at one the caller chose", () => {
+		// `recordedAtRevision` is what makes a prediction pre-registered: a caller-chosen value could place a manifest
+		// in a round that already ended, which is a post-hoc claim wearing a prediction's clothes.
+		const snapshot = reduceTaskConvergence(freezeSingleCriterion("record-one"), changeEvent());
+		const change = snapshot.changes?.[0];
+		assert.ok(change, "the change is recorded");
+		assert.equal(change.recordedAtRevision, snapshot.revision, "recorded at the revision this event produced");
+		assert.deepEqual(change.predictedFixes, [{ observable: "criterion-status", subject: "AC-001", to: "passed" }]);
+		assert.deepEqual(change.predictedRegressions, [], "an empty regression set is recorded as an explicit claim of none");
+	});
+
+	it("leaves the manifest behind the revision, so a later read has something to compare against", () => {
+		// The boundary is the read's own revision: recording a manifest produces the revision it carries, and any
+		// event after that is what makes a verdict more than a baseline compared with itself.
+		let snapshot = reduceTaskConvergence(freezeSingleCriterion("record-round"), changeEvent());
+		const recordedAt = snapshot.changes?.[0]?.recordedAtRevision ?? 0;
+		assert.equal(recordedAt, snapshot.revision, "the manifest carries the revision its own event produced");
+		snapshot = reduceTaskConvergence(snapshot, { schemaVersion: 1, kind: "acceptance.started", acceptanceId: "AC-001" });
+		assert.ok(snapshot.revision > recordedAt, "and a later event is what the read needs");
+		const change = snapshot.changes?.[0];
+		assert.ok(change, "the manifest survives later events");
+		assert.equal(verdictFor(change, { currentRevision: snapshot.revision, criterionStatus: { "AC-001": "in_progress" }, verificationState: {}, gateRefusals: {} }).verdict, "contradicted", "a predicted pass that did not happen is contradicted, and that is the answer a run needs");
+		assert.equal(verdictFor(change, { currentRevision: recordedAt, criterionStatus: { "AC-001": "pending" }, verificationState: {}, gateRefusals: {} }).verdict, "pending", "while the same read at the manifest's own revision decides nothing");
+	});
+
+	it("round-trips through the snapshot decoder", () => {
+		const snapshot = reduceTaskConvergence(freezeSingleCriterion("record-round-trip"), changeEvent());
+		const decoded = decodeTaskConvergenceSnapshot(structuredClone(snapshot));
+		assert.deepEqual(decoded.changes, snapshot.changes);
+	});
+
+	it("decodes a snapshot written before this field existed, which is why it is optional", () => {
+		const snapshot = freezeSingleCriterion("record-legacy");
+		const legacy = structuredClone(snapshot) as unknown as Record<string, unknown>;
+		delete legacy.changes;
+		const decoded = decodeTaskConvergenceSnapshot(legacy);
+		assert.equal(decoded.changes, undefined, "an absent value means none recorded, which is true of every old record");
+	});
+
+	it("refuses a manifest with nothing predicted, because that is a rationale and not a contract", () => {
+		const error = expectError(() => reduceTaskConvergence(freezeSingleCriterion("record-empty"), changeEvent({ predictedFixes: [] })));
+		assert.match(error, /at least 1 predicted movement/);
+		assert.match(error, /rationale/);
+	});
+
+	it("refuses an unknown surface by naming every surface there is", () => {
+		const error = expectError(() => reduceTaskConvergence(freezeSingleCriterion("record-surface"), changeEvent({ surface: "vibes" })));
+		assert.match(error, /system-prompt, tool-description, tool-implementation, middleware, skill, subagent-config, long-term-memory/);
+	});
+
+	it("refuses a prediction outside the closed set, and a baseline key that is not shaped like one", () => {
+		assert.match(expectError(() => reduceTaskConvergence(freezeSingleCriterion("record-move"), changeEvent({ predictedFixes: [{ observable: "vibes", subject: "AC-001", to: "better" }] }))), /unknown observable|Known observables/);
+		assert.match(expectError(() => reduceTaskConvergence(freezeSingleCriterion("record-baseline"), changeEvent({ baseline: { "AC-001": "pending" } }))), /shaped/);
+	});
+
+	it("refuses a second manifest under the same id, and more predictions than the bound allows", () => {
+		let snapshot = reduceTaskConvergence(freezeSingleCriterion("record-dupe"), changeEvent());
+		assert.match(expectError(() => reduceTaskConvergence(snapshot, changeEvent())), /already recorded/);
+		const many = Array.from({ length: 9 }, (_, index) => ({ observable: "criterion-status", subject: "AC-001", to: index % 2 === 0 ? "passed" : "failed" }));
+		assert.match(expectError(() => reduceTaskConvergence(snapshot, changeEvent({ id: "chg-2", predictedFixes: many }))), /maximum is 8/);
+	});
+
+	it("refuses a manifest against an acceptance id this task does not have", () => {
+		const error = expectError(() => reduceTaskConvergence(freezeSingleCriterion("record-unknown"), { schemaVersion: 1, kind: "change.recorded", acceptanceId: "AC-999", change: (changeEvent() as { change: unknown }).change }));
+		assert.match(error, /AC-999/);
+	});
+});
+
