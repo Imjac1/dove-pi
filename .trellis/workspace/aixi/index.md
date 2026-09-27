@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 52
+- **Total Sessions**: 53
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~45 | Active |
+| `journal-2.md` | ~83 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 53 | 2026-09-28 | Executing the names: a drift check for the declaration and the guide | `cd701eb`, `214e886` | `master` |
 | 52 | 2026-09-28 | The readings, exercised as scripts: the layer only a hand had run | `a798c9f`, `2c0b014` | `master` |
 | 51 | 2026-09-28 | The turn, executable: a checklist for the one thing this environment cannot run | `dbc87f6`, `ebff3aa` | `master` |
 | 50 | 2026-09-28 | The roadmap closed out, and the frontier archived with its entry | `c3ee142`, `da0f7f7` | `master` |
