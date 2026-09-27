@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/harness-loop-turn.md", "reason": "The guide whose fields and scripts are checked."}
+{"file": ".trellis/harness-surface.yaml", "reason": "The declaration whose embedded symbols are checked."}
