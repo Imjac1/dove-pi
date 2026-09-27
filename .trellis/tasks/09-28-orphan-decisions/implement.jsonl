@@ -1,0 +1,2 @@
+{"file": "scripts/harness-rounds.mts", "reason": "The reading that prints decisions only against changes it carries."}
+{"file": "src/core/execution-ledger.ts", "reason": "Where the bounded record and the append-only ledger are described."}

@@ -79,6 +79,11 @@ under `.dove/tasks/<goal-id>/convergence.json`.
   `ask`, `effect-claim`, `intensity`. **The last of those was found by the typecheck and not by a hand count**: the label a
 refusal carries is typed as a member of the vocabulary, and the intensity ceiling refused with `intensity` while the set
 carried ten - so that refusal class was one no prediction could name, and three earlier rounds had verified the ten by hand.
+**The ledger may hold decisions the record no longer carries, and the reading says which.** The record is bounded and drops a
+change whose verdict is still pending; the ledger is append-only and keeps what happened. So the two disagree by design, and the turn
+reading names the orphans by id rather than printing nothing - because an operator reading "the next round has not been observed"
+beside a record that dropped the decision would be reading a true sentence about the wrong thing.
+
 **The field name belongs to the arm of a movement.** A status observable names its target `to`; a refusal count names it
 `direction` - because `to` reads right for a status and wrong for a count. The decoder enforces the pairing and **names the field
 in its refusal**, since the earlier message offered both names with an `or` and a fixture satisfied it while carrying the wrong
