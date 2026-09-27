@@ -79,6 +79,18 @@ that reports says so in a field a reader can check.
     - **The change operation calls the same resolver the pass path calls**, and refuses an unresolved reference by naming
       it. One rule, two callers - a second implementation of "does this reference resolve" is the drift this record keeps
       paying for.
+  - **A failure record carries the passing behaviours a fix must not regress**, which is the second of the two fields
+    Self-Harness requires of it (the first, a causal mechanism distinct from the verifier-level cause, is `reason` beside
+    `mechanism`). Until this existed the loop had **no notion of a suite at all**, so "do not regress" was a wish rather
+    than a list.
+    - **The suites come from the declaration**: `verifiedBy` in `.trellis/harness-surface.yaml` states which suites verify
+      each component, with the same discipline as the component paths - a key must be a declared component and a path must
+      resolve, because a list of suites that do not exist verifies nothing. A component with no entry means **nobody has
+      stated what verifies it**, which is a fact about our knowledge rather than a gap to fill with something plausible.
+    - **Empty when the evidence points nowhere.** An `unattributed` failure names no component, so a list derived from it
+      would be an invention dressed as a requirement; `componentEvidence` already says why beside it.
+    - **It is a list, not a test run**, and it is not derived from the fix: the record is written before the fix exists, so
+      the only honest source is what the failure points at.
   - **Three accounts of one failure, never merged.** Dove terminal says what the runtime observed
     (`host-shutdown-preflight`); the provider records say what the provider did, when the request reached it; and a
     **client** may say what it called the failure. Each is attributed to the boundary that produced it.
@@ -212,7 +224,10 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A client account supplied for a request | Carried with its source, and never merged into the mechanism |
 | A summary whose ledger terminal matches several requests | No account attached, and the reason reported |
 | A manifest citing failure evidence the ledger does not hold | Refused, naming the reference; nothing is recorded |
-| A mined failure | Carries `ledger:<stepId>` for the record it came from |ed |
+| A mined failure | Carries `ledger:<stepId>` for the record it came from |
+| A failure pointing at a component with declared suites | The suites ride with the record as `preserve` |
+| A failure whose evidence points at no component | Empty `preserve`, with the reason already beside it |
+| A `verifiedBy` key naming an undeclared component, or an empty list | Refused when the map is loaded |ed |
 | A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 | A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
 | A change already carrying a decision | Never decided again, however many rounds follow |
@@ -230,6 +245,8 @@ The steps a turn is made of, because instruments only become a loop when someone
   alone.
 - A failure record reference is the record step id with the prefix the resolver looks for, and a manifest citing a
   reference the ledger does not hold is refused with the reference named.
+- A failure pointing at a component carries the suites the declaration states for it, an unattributed one carries none,
+  and the map refuses a `verifiedBy` entry for a component that does not exist or a suite that does not resolve.
 - The surface declaration resolves every entry against the real tree, agrees with `CHANGE_SURFACES` in both
   directions, and lets one path belong to two components; the status read reports it.
 - The failure reading keeps the mechanism beside the class, counts only the terminals the axis calls failures,
