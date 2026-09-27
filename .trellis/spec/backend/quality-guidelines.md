@@ -72,12 +72,17 @@ CLI integration fixtures that spawn child processes must pass temporary environm
 
 ## Formal Convergence Quality Gate
 
-Formal task checks are bounded by the reducer-owned acceptance state. Findings
-must be classified and tied to an existing `AC-*`; only blocking/regression
-findings are fixed in the current scope. Follow-ups are recorded without
-expanding the task, while scope changes and serious risks checkpoint. After
-two semantic no-progress reviews, persist one criterion-bound checkpoint.
-When the reducer reports `ready_to_finish`, stop product mutation and perform
-only final verification and wrap-up. Tool calls, provider rounds, elapsed time,
-and token usage are observation-only until a separately approved threshold task
-defines calibrated limits.
+**This repository own rule, and the one part of the gate that is stated only here**: only **blocking** and **regression** findings are
+fixed in the current scope. Follow-ups are recorded without expanding the task, and a scope change or a serious unexpected risk is a
+checkpoint rather than a quiet widening.
+
+**The rest of the gate is the convergence contract, named where it lives** - so a reviewer can find it and argue with the rule rather
+than with a summary of it:
+
+- findings are classified and tied to an existing `AC-*`, and the acceptance state bounds what a formal task may do
+  (`personal-agent-convergence-record.md`),
+- two semantic no-progress reviews persist a criterion-bound checkpoint, and `ready_to_finish` is terminal for product mutation
+  (the same specification),
+- tool calls, provider rounds, elapsed time and token usage are **observation-only** until a separately approved threshold task defines
+  calibrated limits - which is enforced by the closed observable set carrying no resource observable
+  (`personal-agent-harness-loop.md`).
