@@ -7,6 +7,7 @@ import { parseLedgerLines } from "../src/core/execution-ledger.ts";
 import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import { surfaceFit, verifierFit } from "../src/core/harness-round.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
+import { decodeTaskConvergenceSnapshot } from "../src/core/task-convergence.ts";
 import type { TaskChange } from "../src/core/task-convergence.ts";
 
 /**
@@ -31,20 +32,28 @@ import type { TaskChange } from "../src/core/task-convergence.ts";
 const workspace = resolve(process.argv[2] ?? process.cwd());
 const harnessRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function readChanges(): { readonly taskId: string; readonly change: TaskChange }[] {
+function readChanges(): { readonly changes: readonly { readonly taskId: string; readonly change: TaskChange }[]; readonly unreadable: readonly string[] } {
 	const tasksDir = join(workspace, ".dove", "tasks");
-	if (!existsSync(tasksDir)) return [];
-	const out: { taskId: string; change: TaskChange }[] = [];
+	if (!existsSync(tasksDir)) return { changes: [], unreadable: [] };
+	const changes: { taskId: string; change: TaskChange }[] = [];
+	const unreadable: string[] = [];
 	for (const entry of readdirSync(tasksDir, { withFileTypes: true })) {
 		if (!entry.isDirectory()) continue;
 		const file = join(tasksDir, entry.name, "convergence.json");
 		if (!existsSync(file)) continue;
 		try {
-			const parsed = JSON.parse(readFileSync(file, "utf8")) as { changes?: readonly TaskChange[] };
-			for (const change of parsed.changes ?? []) out.push({ taskId: entry.name, change });
-		} catch { /* a record this script cannot read is not a turn it can print */ }
+			// **The decoder that owns this format, not a cast.** A cast is satisfied by values that only look like the shape: a
+			// record carrying `changes: "none"` passed one, and because a string is iterable the reading counted four characters
+			// as four changes and then died on the first of them. The decoder is total and typed, and a record it refuses is
+			// **reported** rather than silently dropped - a reading that hides a task is a reading whose output cannot be trusted
+			// to be complete.
+			const snapshot = decodeTaskConvergenceSnapshot(JSON.parse(readFileSync(file, "utf8")));
+			for (const change of snapshot.changes ?? []) changes.push({ taskId: entry.name, change });
+		} catch {
+			unreadable.push(entry.name);
+		}
 	}
-	return out;
+	return { changes, unreadable };
 }
 
 function readLedger(): readonly ExecutionRecord[] {
@@ -74,7 +83,7 @@ if (existsSync(surfacePath)) {
 	}
 } else surfaceIssue = "no declaration at .trellis/harness-surface.yaml";
 
-const changes = readChanges();
+const { changes, unreadable } = readChanges();
 const records = readLedger();
 const appliedByChange = new Map(records.filter((record) => record.kind === "change.applied").map((record) => [String(record.details?.changeId ?? ""), String(record.details?.commit ?? "")]));
 const decisions = records.filter((record) => record.kind === "change.decided");
@@ -83,6 +92,13 @@ console.log("Harness rounds - " + workspace);
 console.log("");
 if (surfaceIssue !== undefined) console.log("  surface declaration: " + surfaceIssue);
 if (changes.length === 0) {
+	if (unreadable.length > 0) {
+		// **Saying "no turn has been recorded" here would be false**, and this is the difference the report exists for: a record
+		// exists and this build cannot read it, so the reading cannot say whether a turn was recorded. Those are different
+		// facts, and only one of them is about the workspace.
+		console.log("  A task record exists that this build cannot read, so this reading cannot say whether a turn was recorded: " + unreadable.join(", "));
+		process.exit(0);
+	}
 	console.log("  No change manifest in this workspace: no turn of the loop has been recorded here.");
 	console.log("");
 	console.log("  A turn begins with operation=change on agent_task_convergence, which pre-registers the prediction an");
@@ -90,6 +106,11 @@ if (changes.length === 0) {
 	process.exit(0);
 }
 console.log("  changes recorded: " + changes.length);
+if (unreadable.length > 0) {
+	// **Reported rather than dropped.** A task record this build cannot decode is not a turn it can print, and saying so is what
+	// keeps the count above honest: silent skipping is how a reading becomes incomplete without looking incomplete.
+	console.log("  task records that could not be read: " + unreadable.join(", "));
+}
 console.log("");
 for (const { change } of changes) {
 	const commit = appliedByChange.get(change.id);

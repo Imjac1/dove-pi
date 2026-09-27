@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { computeAcceptanceRevision } from "../src/core/task-convergence.ts";
 
 /**
  * **The layer only a hand had run.** Each reading has unit tests over constructed records; until this file, no test spawned
@@ -55,9 +56,13 @@ describe("the readings, exercised as scripts", () => {
 				record("change.applied", "applied:chg-1", { changeId: "chg-1", commit: "abc1234" }),
 				record("change.decided", "change:chg-1", { changeId: "chg-1", verdict: "contradicted", observed: ["gate-refusals:fence: 3 -> 4 (prediction not met)"], decidedAtRevision: 7, verdictOnly: true }),
 			].join("\n"));
+			const CRITERIA = [{ id: "AC-001", text: "the boundary reads the target" }];
 			writeFileSync(join(project, ".dove", "tasks", "t1", "convergence.json"), JSON.stringify({
-				schemaVersion: 1, taskId: "t1", revision: 7, acceptanceRevision: "a", state: "working",
-				criteria: [], findings: [], completedStepIds: [], consecutiveNoProgress: 0, meaningfulProgressSinceReview: true,
+				// **The revision must be the one the criteria produce**, because that is what a real record carries and what the
+				// decoder checks. This fixture used a literal, and the reading accepted it for two rounds because it cast the record
+				// into a shape instead of decoding it - a fixture that could not exist is not a fixture.
+				schemaVersion: 1, taskId: "t1", revision: 7, acceptanceRevision: computeAcceptanceRevision(CRITERIA), state: "working",
+				criteria: [{ ...CRITERIA[0], status: "pending", evidenceRefs: [] }], findings: [], completedStepIds: [], consecutiveNoProgress: 0, meaningfulProgressSinceReview: true,
 				changes: [{ id: "chg-1", surface: "tool-implementation", failureEvidenceRef: "ledger:request:req-1", rootCause: "x", fix: "y", predictedFixes: [{ observable: "gate-refusals", subject: "fence", to: "down" }], predictedRegressions: [], baseline: { "gate-refusals:fence": 3 }, recordedAtRevision: 6 }],
 				observedResources: { toolCalls: 0, providerRounds: 0, elapsedMs: 0 },
 			}));
@@ -125,6 +130,28 @@ describe("the readings, exercised as scripts", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+	it("says it cannot read a task record, instead of inventing a count from it", () => {
+		// **Measured before the fix.** A record carrying `changes: "none"` satisfied the cast the reading used, and because a
+		// string is iterable it printed "changes recorded: 4" and then died on the first character. The reading decodes through
+		// the decoder that owns the format now, and a record it refuses is reported: silently dropping it would make the count
+		// above it incomplete without looking incomplete.
+		const root = mkdtempSync(join(tmpdir(), "dove-readings-badrecord-"));
+		try {
+			const project = join(root, "project");
+			mkdirSync(join(project, ".dove", "tasks", "t1"), { recursive: true });
+			writeFileSync(
+				join(project, ".dove", "tasks", "t1", "convergence.json"),
+				JSON.stringify({ schemaVersion: 1, taskId: "t1", revision: 9, state: "working", changes: "none" }),
+			);
+			const result = run("harness-rounds.mts", [project], { DOVE_PI_STATE_DIR: join(root, "state") });
+			assert.equal(result.status, 0, "must not die on a record it cannot decode: " + result.stdout);
+			assert.doesNotMatch(result.stdout, /changes recorded: 4/, "and must not count four characters as four changes");
+			assert.match(result.stdout, /cannot read/, "it says what it cannot do instead");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("says what it did not find, instead of dying on a path that is not there", () => {
 		// The behaviour the scripts were written for, and the reason they can be run at all: a reading that dies on a missing
 		// ledger is a reading nobody runs twice.
