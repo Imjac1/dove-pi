@@ -1,0 +1,2 @@
+{"file": ".trellis/harness-surface.yaml", "reason": "The declaration that maps paths to components."}
+{"file": "tests/harness-round.test.ts", "reason": "The unit test that covers the logic the rehearsal integrates."}
