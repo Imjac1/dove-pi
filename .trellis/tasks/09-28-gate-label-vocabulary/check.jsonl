@@ -1,0 +1,2 @@
+{"file": "tests/gate-labels.test.ts", "reason": "The direction the type cannot cover."}
+{"file": ".trellis/spec/backend/personal-agent-convergence-record.md", "reason": "The contract that lists the labels."}
