@@ -1249,3 +1249,43 @@ Repaired a defect the previous task introduced on a false premise: the ledger re
 ### Next Steps
 
 - The loop over the loop, the four-piece scaffold last item, now planned against a record that has one writer and a spec that says what it does.
+
+
+## Session 34: The declared editable surface, and the two corrections the tests forced
+<!-- trellis-session: v=2 fp=5c2a19bd932e42f3 -->
+
+**Date**: 2026-09-28
+**Task**: The declared editable surface, and the two corrections the tests forced
+**Branch**: `master`
+
+### Summary
+
+Delivered AHE component observability in the form this repository can check: the seven components CHANGE_SURFACES already names, bound to paths in a declaration whose every entry must resolve, reported by the status read as the bounded context a proposal is made from.
+
+### Main Changes
+
+- the ordering was set by evidence rather than by taste: a survey of 164 recorded ledgers found 164 completed terminals and no tool.observed record anywhere, so the mining half of the loop has nothing real to read while the map is verifiable by construction today
+- the map is not a partition - one path may belong to two components, because the adapter is both a tool description and middleware - and it carries one vocabulary, asserted equal to CHANGE_SURFACES in both directions
+- the host test corrected the design: the map belongs to the harness, not to the workspace a run happens to be in. Resolving it from the workspace made eleven of fourteen entries look missing in a project that simply did not have it
+- the status read reports it bounded to component names and path counts, which is what keeps the declaration from being an inert file read only by its own test
+- two process notes worth keeping: an edit reported success while leaving the file unchanged, so every edit in this task was re-read from disk before it was trusted - and a large-file whole-write is never safe from a stitched read, which the previous task learned destructively
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b45f99` | feat(surface): declare the editable harness components, and make every entry resolve |
+| `35aaac3` | docs(spec): record the declared surface where the bounded context is documented |
+| `ba9655a` | chore(task): record the declared-surface task and the two corrections it took |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 669 tests, 667 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, after the contract moved to the spec that had room rather than compressing another.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The failure reading - experience observability - which needs this map to attribute a pattern to a component, and a corpus that contains a failure, which nothing on this machine does yet.

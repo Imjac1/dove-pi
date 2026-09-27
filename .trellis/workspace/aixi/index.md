@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 33
+- **Total Sessions**: 34
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1251 | Active |
+| `journal-1.md` | ~1291 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 34 | 2026-09-28 | The declared editable surface, and the two corrections the tests forced | `4b45f99`, `35aaac3`, `ba9655a` | `master` |
 | 33 | 2026-09-28 | One writer for the observation, and the false premise behind the duplicate | `5c26d4a`, `d569dbd`, `f822a0b` | `master` |
 | 32 | 2026-09-28 | The Safety and Stability axis, and the axes we cannot read | `f6986db`, `4400855`, `378bf55` | `master` |
 | 31 | 2026-09-27 | The resource observation, and the attribution guard it needed | `c57f4aa`, `f614bcb`, `70d1015` | `master` |
