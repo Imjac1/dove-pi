@@ -551,3 +551,41 @@ Wide measurement first: every markdown file in the repository and its relative l
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and the generator boilerplate in the two index files, which a tool update may rewrite.
+
+
+## Session 66: The bootstrap instruction this project never needed, and the tool rule the check implements
+<!-- trellis-session: v=2 fp=97ec7221f9216133 -->
+
+**Date**: 2026-09-28
+**Task**: The bootstrap instruction this project never needed, and the tool rule the check implements
+**Branch**: `master`
+
+### Summary
+
+Measured: the boilerplate phrase lives in exactly two files and nowhere else, no script or template regenerates them, and the content guidelines are all project-specific - so the reason a previous round gave for leaving the text alone was wrong. And the rule the index check enforces turns out to be the bootstrap skill own checklist line.
+
+### Main Changes
+
+- the corrected reason matters: the managed block footer says the block may be overwritten by a tool update, and the specification files are project content, so nothing was protecting the leftover text except a guess
+- the section addressed a project that has not filled its guidelines in, and this one has - single-package TypeScript with explicit runtime boundaries, no database or ORM, errors crossing process and host boundaries
+- removing it is safe because of the previous round check: the tables are what a newcomer reads and a hand-edited table drifts, so the table is kept true by a test and the prose around it can go
+- and the check now names where its rule comes from: trellis-spec-bootstrap says in one checklist line that an index must match its final spec file set. This test is that sentence made mechanical, and it was not being kept when it was written - the backend index was missing three specifications, the harness loop among them
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `513c8d1` | docs(spec): drop the bootstrap instruction this project never needed, and name the rule the check enforces |
+| `778fa2a` | chore(task): record the wrong reason, the measurement that corrected it, and the tool rule the check implements |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 728 tests, 726 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the index check still passes after the removal.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the trellis-update-spec and trellis-check skills, which may state rules this repository already enforces mechanically.

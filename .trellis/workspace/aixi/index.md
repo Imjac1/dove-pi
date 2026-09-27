@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 65
+- **Total Sessions**: 66
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~553 | Active |
+| `journal-2.md` | ~591 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 66 | 2026-09-28 | The bootstrap instruction this project never needed, and the tool rule the check implements | `513c8d1`, `778fa2a` | `master` |
 | 65 | 2026-09-28 | The index rule covers every directory, and the wide measurement that widened it | `6c1b477`, `46632cd` | `master` |
 | 64 | 2026-09-28 | The entrance lists every specification, and a check keeps it listing them | `eeaf611`, `ea0cfd4` | `master` |
 | 63 | 2026-09-28 | Fixtures from the writer types, and the correction of a probe that measured itself | `2821f3c`, `95e5e8c` | `master` |
