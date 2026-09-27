@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate and the testing requirements the check step must run."}
+{"file": ".trellis/spec/backend/personal-agent-mode-format.md", "reason": "The boundary-control contract the observable set reads gate labels from."}
