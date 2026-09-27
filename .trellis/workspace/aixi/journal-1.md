@@ -1850,3 +1850,43 @@ A plan to finish the verifier extraction was refuted by measurement twice and th
 ### Next Steps
 
 - The third module: the movement vocabulary - movementFromParts, movementKey and the validation names the parser needs - shared by the record and the verifier, which is what would let the tail move afterwards.
+
+
+## Session 49: The third module, measured and declined with the numbers
+<!-- trellis-session: v=2 fp=0791e79440e51743 -->
+
+**Date**: 2026-09-28
+**Task**: The third module, measured and declined with the numbers
+**Branch**: `master`
+
+### Summary
+
+The refactor the previous round named as the way forward was measured and declined: the refusal constructor has 74 use sites in the record module, nine more names have three to ten each, and the movement helpers cannot be lifted without a value-level cycle against their own types - while the payoff would be a tidier declaration whose limit it already states.
+
+### Main Changes
+
+- the payoff and the cost were both measured: an empty embedded list against moving a vocabulary the record depends on 74 times, with the reading already answering possible and naming the symbols
+- what reopens it is recorded rather than parked: splitting the record module for a reason of its own, at which point the vocabulary comes apart as part of that work
+- the numbers carry their method - non-comment lines matching each name, per module - because a count without one is a count nobody can check
+- and the decision is written in two places: the contract, where the question is answered at length, and the declaration comment, where the question arises
+- the gate was green before the commit this time: recording the decision first took the loop specification four bytes over its cap, the overage was measured, and my own new paragraph was tightened rather than another contract compressed - which is the rule broken two rounds ago and kept now
+- no source file changed, checked rather than promised: the diff is two specifications, and the suite and the readings are unchanged
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d98f0d` | docs(spec): the third module, measured and declined with the numbers |
+| `ea72af9` | chore(task): record the measured decision, the green gate before the commit, and the headroom it left |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, with the loop specification at 24,314 of 24,576 - which the next round has to deal with.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The loop specification has 262 bytes left, so the next contract there needs a split; and the first real turn of the loop remains a Pi-hosted act.
