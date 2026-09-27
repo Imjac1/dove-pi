@@ -81,3 +81,43 @@ Two documents name things - the declaration embedded list names symbols, and the
 ### Next Steps
 
 - Running the turn, which needs a Pi host; the loop specification still has its 262 bytes for whenever a contract needs them.
+
+
+## Session 54: One vocabulary for the refusal labels, and the eleventh the compiler found
+<!-- trellis-session: v=2 fp=20bc0eadda140b3c -->
+
+**Date**: 2026-09-28
+**Task**: One vocabulary for the refusal labels, and the eleventh the compiler found
+**Branch**: `master`
+
+### Summary
+
+GATE_LABELS is the closed set a manifest prediction is validated against, and the producers shared no type with it - so a label a producer wrote and the set did not carry meant a refusal class nobody could predict. Declared once, with the label a refusal carries typed as a member, the compiler found intensity: a live eleventh label that three earlier hand counts had missed.
+
+### Main Changes
+
+- the vocabulary is one declaration - a tuple, with the union and the set derived from it - so the two cannot disagree, and the parser that validates predictions keeps taking the set
+- typing the label a refusal carries turned a producer that invents a label into a compile error, which is how intensity was found: the intensity ceiling refuses with it and the set carried ten
+- and the same typecheck refused the wrong coupling: ActionGate.id is not a refusal label, because the loop gate is a general abstraction driven by test doubles while the policy gates are the ones that reach the ledger. That was reverted, with a sentence left where it was tried
+- the policy gate list is checked by a test instead, because its entries come from gate objects with wider ids, and a label nobody writes is covered by neither - stated in the contract rather than implied
+- a process slip, recorded rather than backdated: this task went to code before its design and implementation artifacts existed and before task.py start ran. The artifacts were written afterwards, the checklist reconstructed, and the slip written into the task file because a task that hides its own sequence teaches the next reader the wrong one
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5aee501` | fix(convergence): one vocabulary for the refusal labels, and the eleventh the compiler found |
+| `2a16343` | docs(spec): the label list gains its eleventh name, and the coupling that found it |
+| `01df626` | chore(task): record the vocabulary task, the compiler finding and the step that was skipped |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 722 tests, 720 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the affected suites - action policy, loop gate, change verdict, 50 tests - pass with the two literal substitutions.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The rest of the survey: which other vocabularies in this repository have producers that share no type with them.

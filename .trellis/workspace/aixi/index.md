@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 53
+- **Total Sessions**: 54
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~83 | Active |
+| `journal-2.md` | ~123 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 54 | 2026-09-28 | One vocabulary for the refusal labels, and the eleventh the compiler found | `5aee501`, `2a16343`, `01df626` | `master` |
 | 53 | 2026-09-28 | Executing the names: a drift check for the declaration and the guide | `cd701eb`, `214e886` | `master` |
 | 52 | 2026-09-28 | The readings, exercised as scripts: the layer only a hand had run | `a798c9f`, `2c0b014` | `master` |
 | 51 | 2026-09-28 | The turn, executable: a checklist for the one thing this environment cannot run | `dbc87f6`, `ebff3aa` | `master` |
