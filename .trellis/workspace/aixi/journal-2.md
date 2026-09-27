@@ -857,3 +857,41 @@ Recomputing every tracked hash classified the numbers: 73 match, 34 differ, 74 a
 ### Next Steps
 
 - The first real turn, which needs a Pi host.
+
+
+## Session 74: The two front doors stay in step, in shape if not in meaning
+<!-- trellis-session: v=2 fp=c48bd1a226721863 -->
+
+**Date**: 2026-09-28
+**Task**: The two front doors stay in step, in shape if not in meaning
+**Branch**: `master`
+
+### Summary
+
+A census of the repository tree found no orphan - every top-level entry is named in the specifications or is tool content - and one thing with no guard: the two READMEs, 26 KB each and structurally identical by hand. The check holds their shape, and says it cannot hold their meaning.
+
+### Main Changes
+
+- measured before the check: 31 headings, 33 code fences and 14 table rows in each, the headings differing only as translations and a five percent byte difference which is the language itself, so they are in step and the only reason is that whoever writes one remembers the other
+- the census is a result about the repository rather than about the search: engagements is the authority input the mode files name, dove_pi.py and install.ps1 are referenced from the READMEs and the installer tests, and .codex and .github are tool content
+- the check is seeded both ways, and states what it cannot do - a section translated badly, or a command changed in one language and not the other, passes a shape check
+- the commit list in this entry excludes the archive commit Trellis makes for itself: this round made the check and the task record, and the archive is the tool own, which every round has and whose message names the task
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a2b758b` | test(docs): the two front doors stay in step, in shape if not in meaning |
+| `6725c63` | chore(task): record the tree census and the README shape measurement |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 732 tests, 730 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 10 of 10.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and with the audit converged - four measured-clean results in a row - the next round should ask what else the loop itself still lacks rather than look for another document class.
