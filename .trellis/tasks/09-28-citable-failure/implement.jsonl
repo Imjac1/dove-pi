@@ -1,0 +1,2 @@
+{"file": "src/core/failure-reading.ts", "reason": "The record that gains the reference."}
+{"file": "src/pi-adapter/extension.ts", "reason": "The resolver and the change branch that will call it."}
