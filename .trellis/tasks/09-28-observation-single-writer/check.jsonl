@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate the repair must pass."}
+{"file": "tests/pi-adapter.test.ts", "reason": "The host assertions written against the duplicate shape, which this task retargets."}
