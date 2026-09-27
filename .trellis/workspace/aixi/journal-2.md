@@ -109,6 +109,7 @@ GATE_LABELS is the closed set a manifest prediction is validated against, and th
 | `5aee501` | fix(convergence): one vocabulary for the refusal labels, and the eleventh the compiler found |
 | `2a16343` | docs(spec): the label list gains its eleventh name, and the coupling that found it |
 | `01df626` | chore(task): record the vocabulary task, the compiler finding and the step that was skipped |
+| `6eb91cf` | docs(loop): record why a gate id is not a refusal label, where the coupling was tried and reverted |
 
 ### Testing
 
