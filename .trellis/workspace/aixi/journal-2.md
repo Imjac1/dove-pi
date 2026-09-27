@@ -512,3 +512,42 @@ The specs index existed and listed eight personal-agent specifications while the
 ### Next Steps
 
 - The first real turn, which needs a Pi host; and a review of what other generated-looking index or template file has drifted the same way.
+
+
+## Session 65: The index rule covers every directory, and the wide measurement that widened it
+<!-- trellis-session: v=2 fp=edd58bcb3fc0020d -->
+
+**Date**: 2026-09-28
+**Task**: The index rule covers every directory, and the wide measurement that widened it
+**Branch**: `master`
+
+### Summary
+
+Wide measurement first: every markdown file in the repository and its relative links - 139 files, 61 links, none broken - and of the three specification indexes only the backend one was stale. The check written a round ago named that directory, so the rule covers every directory now, reports a directory with no index, and is proved to fail on a seeded omission.
+
+### Main Changes
+
+- the wide measurement is what makes the rule right: the drift happens where a specification is added and the table is not updated, which is what happened three times in backend and nowhere else, and a check naming one directory leaves that open everywhere else
+- the comparison is extracted and seeded, so it is proved rather than asserted: an omitted file is reported, a name that is not there is reported, and a directory with no index is reported instead of skipped
+- the content specifications are not template text - frontend/state-management.md describes this project own split of state by authority - so the generator boilerplate is confined to the two index files and is recorded rather than edited, because a tool update may rewrite it
+- the guide now carries four lessons from four narrow measurements: widen the net before concluding, use the instrument the file type allows, take a fixture kind from the writer, and read the output unfiltered
+- and this round own two tooling mistakes are recorded with the others: a probe written as .mjs that cannot call require, and an edit that replaced a test first line and left its body behind, which the typecheck caught before anything ran
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6c1b477` | test(docs): the index rule covers every specification directory, proved by seeding an omission |
+| `46632cd` | chore(task): archive 09-28-wide-index-check |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 728 tests, 726 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the drift suite is 6 of 6 with the generalised case.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host; and the generator boilerplate in the two index files, which a tool update may rewrite.
