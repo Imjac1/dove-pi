@@ -103,6 +103,10 @@ node --import tsx scripts/harness-rounds.mts [workspace]
   decision: <verdict> at revision <n>
 ```
 
+**Bring back two artifacts.** The **ledger** and the **convergence record** of the task the turn ran in. They are what let the
+run be read afterwards - the mining step reads the first, and the decisions read the second - and a run whose files stayed on the host
+cannot be examined here at all.
+
 **Keep or revert as a person, with that output in front of you**:
 
 ```powershell

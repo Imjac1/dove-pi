@@ -204,6 +204,71 @@ describe("the readings, exercised as scripts", () => {
 		}
 	});
 
+	it("rehearses the last mile on a real commit of this repository", () => {
+		// **The chain the guide promises at step 7, and the only part never asserted against a real commit.** Every script step runs
+		// against fixtures; the applied line, the verifier line and the decision line have been read by hand in earlier rounds and
+		// never by a test. `harness-rounds.mts` resolves a commit with `git show` in the harness root, so a commit of the real
+		// repository can be handed to it.
+		//
+		// **The subject is the root commit, resolved at runtime.** A hard-coded sha would pass here and be wrong in a clone with a
+		// different history, and a recent commit would be absent from a shallow one - while `git rev-list --max-parents=0 HEAD`
+		// answers in any full clone. It touches 169 files across every top-level directory, so it is **outside** every surface, and
+		// the answer names the files - which is the property a previous round decided is information rather than a violation.
+		//
+		// **The third answer gets its own subject**: a commit that does not exist reads `unresolved`, which is not a nicer word for
+		// outside but the statement that nobody could tell. **The inside path is not asserted here**: it needs a commit that stays
+		// within one surface, and measured, this history has eleven - all recent, so a shallow clone would not have them. It is
+		// covered by `tests/harness-round.test.ts` at the unit level, and the reading own line is what this rehearsal adds.
+		const rev = execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
+		assert.match(rev, /^[0-9a-f]{40}$/, "the root commit of this repository resolves at runtime");
+
+		const root = mkdtempSync(join(tmpdir(), "dove-rehearsal-"));
+		try {
+			const state = join(root, "state");
+			const project = join(root, "project");
+			mkdirSync(join(project, ".dove", "tasks", "t1"), { recursive: true });
+			mkdirSync(state, { recursive: true });
+			const CRITERIA = [{ id: "AC-001", text: "the last mile of the turn is rehearsed" }];
+			const change = (id: string, surface: string, commitRef: string) => ({
+				id, surface, failureEvidenceRef: "ledger:request:req-1", rootCause: "x", fix: "y",
+				predictedFixes: [{ observable: "gate-refusals", subject: "fence", direction: "down" }],
+				predictedRegressions: [], baseline: { "gate-refusals:fence": 3 }, recordedAtRevision: 6, commitRef,
+			});
+			writeFileSync(join(state, "execution.jsonl"), [
+				record("request.received", "request:req-1", { logicalRequestId: "req-1" }),
+				record("change.applied", "applied:chg-real", { changeId: "chg-real", commit: rev }),
+				record("change.applied", "applied:chg-ghost", { changeId: "chg-ghost", commit: "0".repeat(40) }),
+				record("change.decided", "change:chg-real", { changeId: "chg-real", verdict: "confirmed", observed: [], decidedAtRevision: 9, verdictOnly: true }),
+			].join("\n"));
+			writeFileSync(join(project, ".dove", "tasks", "t1", "convergence.json"), JSON.stringify({
+				schemaVersion: 1, taskId: "t1", revision: 9, acceptanceRevision: computeAcceptanceRevision(CRITERIA), state: "working",
+				criteria: [{ ...CRITERIA[0], status: "pending", evidenceRefs: [] }], findings: [], completedStepIds: [],
+				consecutiveNoProgress: 0, meaningfulProgressSinceReview: true,
+				changes: [change("chg-real", "tool-implementation", rev), change("chg-ghost", "tool-implementation", "0".repeat(40))],
+				observedResources: { toolCalls: 0, providerRounds: 0, elapsedMs: 0 },
+			}));
+			const result = run("harness-rounds.mts", [project], { DOVE_PI_STATE_DIR: state });
+			assert.equal(result.status, 0, result.stdout);
+			// A real commit, outside its declared surface, with the files named.
+			assert.match(result.stdout, /applied:\s+[0-9a-f]{7,}\s+outside tool-implementation/, "the root commit is outside the source surface");
+			// The files outside are named on their own line, which is where the guide says to look for them.
+			const shown = (result.stdout.match(/outside:.*/) ?? ["(no outside line)"])[0];
+			assert.match(result.stdout, /outside:\s+\S/, "and the files outside it are named: " + shown.slice(0, 160));
+			// **The list is what is *not* in the declared surface**, so it names the skill and tool files the commit touched and
+			// correctly does not name src/ or tests/ - which belong to the surface being checked. Asserting the presence of a
+			// source path here would be asserting a bug.
+			assert.match(shown, /\.agents\/skills\//, "the files outside the surface are named: " + shown.slice(0, 160));
+			assert.doesNotMatch(shown, /(^|, )src\//, "and a file inside the surface is not called outside: " + shown.slice(0, 160));
+			// A commit nobody can resolve, which is its own answer.
+			assert.match(result.stdout, /applied:\s+0{7,}\s+unresolved/, "a commit git cannot resolve reads unresolved");
+			// The verifier answer and the decision, which are the rest of step 7.
+			assert.match(result.stdout, /verifier:\s+(definite|possible|none)/, "the verifier answer is printed");
+			assert.match(result.stdout, /decision:\s+confirmed at revision 9/, "and the decision the record carries");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("says what it did not find, instead of dying on a path that is not there", () => {
 		// The behaviour the scripts were written for, and the reason they can be run at all: a reading that dies on a missing
 		// ledger is a reading nobody runs twice.
