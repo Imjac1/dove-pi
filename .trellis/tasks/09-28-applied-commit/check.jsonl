@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate this must pass."}
+{"file": "tests/fence-drift.test.ts", "reason": "The fence suite that is the regression net for the exported rule."}

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-harness-loop.md", "reason": "The loop contracts, and where the procedure goes."}
+{"file": "src/core/action-policy.ts", "reason": "The declared-prefix rule the check reuses rather than reimplements."}
