@@ -271,6 +271,34 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - Trellis calls the shared TypeScript reducer through its narrow helper; Dove
   never imports or executes Trellis scripts.
 
+- **The Safety & Stability axis (`src/core/harness-axes.ts`) is a read-only projection of the append-only
+  execution ledger**, never a second source of truth: a `crash-free ratio` over `request.terminal` reasons and
+  `sandbox violations` over `gate.refused` labels, plus a **declared** list of the axes it cannot read.
+  - **A terminal reason is classified by a table we state**: `completed` is clean; `recovered` is reported
+    beside the ratio and never folded into it; `cancelled` and `superseded` are interrupted; the five
+    startup/authorization/`failed` reasons are failures. The table is keyed by the reason union, so **a new
+    reason fails the typecheck** rather than defaulting, and the test enumerates the closed set.
+  - **No data is not no failures**: a ledger with no terminals yields `undefined` ratios, never `1.0`. A
+    perfect score from no evidence is the failure this project keeps finding in its own files.
+  - **A recorded refusal label may be composite** (`gates.join("+")`) and is split into its atoms - the same
+    rule the observation reader applies, so the axis and the record agree about what a refusal is.
+  - **The reading is printed, never asserted**: `scripts/harness-axes.mts`, exit status 0 in every case,
+    including "no ledger found". A threshold is a decision with its own evidence.
+  - **It lives here because it is a reading of the records this specification documents**, and it moved when the loop contracts were split to make room for the boundary they now state.
+- **`change.decided` is the validation half of the loop, written at the round boundary.** A verdict existed only as
+  a function computed on read and discarded, which reports and does not accumulate: the manifest is bounded and lives
+  in one task, so a change whose verdict is still `pending` falls out and stops being recomputable. So the round that
+  makes a verdict readable records it, **once per change**, with `verdictOnly: true`.
+  - **The round boundary is the only writer**, and the status read stays read-only; deciding in a read would make
+    `status` a mutation.
+  - **The memory is the ledger**, not a process-local set: a set would re-decide every change after a restart and the
+    record would claim two revisions for one decision.
+  - **`pending` is never recorded.** It means the next round has not happened; writing "not yet" every round for every
+    change is noise. `unobserved` **is** recorded, because it is an answer - the prediction named something the record
+    does not carry - and it is not the same as no decision.
+  - **The record reports and never acts.** Nothing on that path reverts an edit, mutates a criterion or refuses a call,
+    and `verdictOnly` is what lets a reader tell a reporting record from an acting one.
+
 ### 4. Validation & Error Matrix
 
 | Condition | Required behavior |
@@ -287,6 +315,10 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 | A prediction outside the closed set | Refused, naming the observables and the gate labels |
 | A caller-supplied `baseline` | Refused at the tool boundary: the baseline is the harness's read |
 | A manifest field on `operation=status` | Refused, and the refusal names the operation that records one |
+
+| A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
+| A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
+| A change already carrying a decision | Never decided again, however many rounds follow |
 
 ### 5. Good/Base/Bad Cases
 
@@ -310,6 +342,10 @@ under `.dove/tasks/<goal-id>/convergence.json`.
 - Record a manifest and read the same revision (`pending`), then read after one event
   (`contradicted`, carrying the movement it compared); assert the stored baseline is the one the
   runtime read, and that a caller-supplied baseline is refused.
+
+- The axis classifies every terminal reason the type defines, reports `undefined` ratios for an empty ledger,
+  and splits a composite refusal label into its atoms.
+- A round records one decision per decidable change and never a `pending` one, and a second round adds none.
 
 ### 7. Wrong vs Correct
 

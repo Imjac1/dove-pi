@@ -17,35 +17,23 @@ that reports says so in a field a reader can check.
 
 ### 3. Contracts
 
-- **The Safety & Stability axis (`src/core/harness-axes.ts`) is a read-only projection of the append-only
-  execution ledger**, never a second source of truth: a `crash-free ratio` over `request.terminal` reasons and
-  `sandbox violations` over `gate.refused` labels, plus a **declared** list of the axes it cannot read.
-  - **A terminal reason is classified by a table we state**: `completed` is clean; `recovered` is reported
-    beside the ratio and never folded into it; `cancelled` and `superseded` are interrupted; the five
-    startup/authorization/`failed` reasons are failures. The table is keyed by the reason union, so **a new
-    reason fails the typecheck** rather than defaulting, and the test enumerates the closed set.
-  - **No data is not no failures**: a ledger with no terminals yields `undefined` ratios, never `1.0`. A
-    perfect score from no evidence is the failure this project keeps finding in its own files.
-  - **A recorded refusal label may be composite** (`gates.join("+")`) and is split into its atoms - the same
-    rule the observation reader applies, so the axis and the record agree about what a refusal is.
-  - **The reading is printed, never asserted**: `scripts/harness-axes.mts`, exit status 0 in every case,
-    including "no ledger found". A threshold is a decision with its own evidence.
-  - **This contract lives in this document because the loop has its own specification now.** It was filed in the
-    evidence plane only because the specification that documents `request.terminal`
-    (`personal-agent-request-runtime.md:332`) had reached its 24 KiB cap, and it moved when the loop contracts did.
-- **`change.decided` is the validation half of the loop, written at the round boundary.** A verdict existed only as
-  a function computed on read and discarded, which reports and does not accumulate: the manifest is bounded and lives
-  in one task, so a change whose verdict is still `pending` falls out and stops being recomputable. So the round that
-  makes a verdict readable records it, **once per change**, with `verdictOnly: true`.
-  - **The round boundary is the only writer**, and the status read stays read-only; deciding in a read would make
-    `status` a mutation.
-  - **The memory is the ledger**, not a process-local set: a set would re-decide every change after a restart and the
-    record would claim two revisions for one decision.
-  - **`pending` is never recorded.** It means the next round has not happened; writing "not yet" every round for every
-    change is noise. `unobserved` **is** recorded, because it is an answer - the prediction named something the record
-    does not carry - and it is not the same as no decision.
-  - **The record reports and never acts.** Nothing on that path reverts an edit, mutates a criterion or refuses a call,
-    and `verdictOnly` is what lets a reader tell a reporting record from an acting one.
+- **The verifier is outside the loop, so an instrument change is not a loop turn.** A manifest judges an edit by three
+  observables - a criterion status, a criterion verification state, a refusal count - and they are **behaviour-shaped**
+  because a verdict is read against the next round **task-level outcomes**. An **instrument change is a verifier change**,
+  and the distinction the field draws is exactly this: **self-improvement is the system changing while the verifier does
+  not**, and recursive self-improvement - the system *and* the verifier rising - is the axis this project explicitly
+  declines. So the closed set is not widened to reach instruments, and this is the principled form of "there is nothing to
+  add here".
+  - **Judging an instrument with the instrument own output would make the verifier its own judge.** The only observable such
+    a change moves is the instrument output, and a subject that produces its own verdict is not verified - which is the
+    whole reason the set is behaviour-shaped and the baseline is read by the runtime.
+  - **What judges one instead: its suites and a person.** The suites are no longer a matter of memory - the declaration
+    states which suites verify each component (`verifiedBy`), so a reader has the list in hand rather than a recollection,
+    and a failure record carries the ones its evidence points at.
+  - **What the map cannot yet do is named rather than glossed**: `tool-implementation` is bound to the whole of `src`,
+    which holds **both** the harness and the verifier, so "is this edit a verifier change?" is a **reader judgment** today.
+    A finer map - harness code and verifier code separated at file level - is the prerequisite that would settle it, and it
+    is not a footnote to this contract.
 - **The failure reading (`src/core/failure-reading.ts`) is the mining half of the loop: a pure function of the
   ledger that turns an unsuccessful request into a bounded record.** It reads; it clusters nothing, ranks nothing and
   proposes nothing.
@@ -217,6 +205,7 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A second application for one change | Refused, naming the commit already recorded |
 | A commit that cannot be resolved | `unresolved`, never reported as inside or outside |
 | A touched file outside the declared paths | `outside`, with the files named |
+| A change that edits the verifier | Not a loop turn: judged by its suites and a person - and which edits those are is a judgment the map cannot make yet |
 | A corpus with no failure record | Reported with the preservation gap that explains it, not as a bare zero |
 | A root that does not exist, or a ledger that will not parse | Walked past; the reading still prints and exits 0 |
 | A preflight failure with no provider record | `unseen` on the record, naming the boundary and not the cause |
@@ -228,15 +217,9 @@ The steps a turn is made of, because instruments only become a loop when someone
 | A failure pointing at a component with declared suites | The suites ride with the record as `preserve` |
 | A failure whose evidence points at no component | Empty `preserve`, with the reason already beside it |
 | A `verifiedBy` key naming an undeclared component, or an empty list | Refused when the map is loaded |ed |
-| A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
-| A change whose verdict is still pending at a round | No decision recorded; the round has not happened yet |
-| A change already carrying a decision | Never decided again, however many rounds follow |
 
 ### 6. Tests Required
 
-- The axis classifies every terminal reason the type defines, reports `undefined` ratios for an empty ledger,
-  and splits a composite refusal label into its atoms.
-- A round records one decision per decidable change and never a `pending` one, and a second round adds none.
 - An application is recorded once per change, and a second one, an unknown change and an empty commit are each refused.
 - The surface check answers inside, outside with the offenders named, and unresolved for a commit nobody could read.
 - The corpus summary counts each terminal class with the axis rule, splits a composite refusal label, and says why a
