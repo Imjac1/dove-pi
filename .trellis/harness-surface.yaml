@@ -43,6 +43,12 @@ verifiedBy:
 verifier:
   paths: [src/core/harness-axes.ts, src/core/failure-reading.ts, src/core/harness-round.ts, src/core/harness-corpus.ts, src/core/execution-ledger.ts, src/core/harness-verifier.ts]
   embedded:
-    # `extension.ts` left this list when its verifier read paths moved out; what remains there is harness code.
+    # extension.ts left this list when its verifier read paths moved out; what remains there is harness code.
+    #
+    # task-convergence.ts stays because the separation was measured and the entanglement is real, at two layers: the
+    # verification tail uses the record validation vocabulary (the id patterns, the closed sets, and the refusal
+    # constructor), and movementFromParts - which parses a movement from its parts - is called by the record own decoders
+    # as well. Extracting the tail therefore needs the movement vocabulary to become a third module that both sides
+    # import, which is a different change from a move of one block.
     - path: src/core/task-convergence.ts
       symbols: [parsePredictedMovement, verificationStateOf, verdictFor, decidableChanges]

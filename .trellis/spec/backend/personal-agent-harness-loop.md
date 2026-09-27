@@ -54,9 +54,13 @@ that reports says so in a field a reader can check.
       the four that were module-private are exported, because their new home is a module rather than the file that called
       them. An edit to the adapter alone is no longer a `possible` verifier change; an edit to that module is
       `definite`.
-    - **The record module half stays embedded**, with its four symbols still named: those functions are entangled with the
-      record reducer rather than sitting in a block, and pretending the two extractions are one change would make the
-      blast radius of the easy one and the hard one indistinguishable.
+    - **The record module half stays embedded, and the reason is measured rather than assumed.** Two attempts to move it
+      reached the same wall from different directions: the verification tail uses the record validation vocabulary (the id
+      patterns, the closed sets, the refusal constructor), and `movementFromParts` - which parses a movement from its parts -
+      is called by the record own decoders as well as by the parser. Extracting it therefore needs that vocabulary to become
+      a third module both sides import, which is a different change from moving one block. An earlier version of this
+      contract said the functions were "entangled with the record reducer": a guess that pointed at the right answer for the
+      wrong reason, and the wrong reason is what made the next attempt look cheap.
 - **The failure reading (`src/core/failure-reading.ts`) is the mining half of the loop: a pure function of the
   ledger that turns an unsuccessful request into a bounded record.** It reads; it clusters nothing, ranks nothing and
   proposes nothing.
