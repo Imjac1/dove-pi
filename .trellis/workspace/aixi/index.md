@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 42
+- **Total Sessions**: 43
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1614 | Active |
+| `journal-1.md` | ~1654 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 43 | 2026-09-28 | The behaviours a fix must not regress, and the suites nobody had stated | `42fbe3f`, `ddddc97`, `f9301dc` | `master` |
 | 42 | 2026-09-28 | A mined failure carries a citable reference, and a manifest resolves what it cites | `ffa3a55`, `fc2cd2f`, `bef34ab` | `master` |
 | 41 | 2026-09-28 | Three accounts of one failure, each attributed to the boundary that made it | `8302cb7`, `cc12da9`, `6accf75` | `master` |
 | 40 | 2026-09-28 | The first real failure, and the claim it refuted | `6fc6c1d`, `93d39a3`, `e69f978` | `master` |

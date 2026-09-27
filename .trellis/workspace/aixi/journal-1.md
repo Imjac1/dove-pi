@@ -1612,3 +1612,43 @@ The loop first step and third step were joined at neither end - the failure reco
 ### Next Steps
 
 - The observable boundary is now the only thing between the loop and its first real turn: the evidence is citable, the mining names the cause and attributes what it cannot see, and what is missing is a prediction the closed set can express.
+
+
+## Session 43: The behaviours a fix must not regress, and the suites nobody had stated
+<!-- trellis-session: v=2 fp=749eee5df8154bd5 -->
+
+**Date**: 2026-09-28
+**Task**: The behaviours a fix must not regress, and the suites nobody had stated
+**Branch**: `master`
+
+### Summary
+
+The second field Self-Harness requires of a failure record - the passing behaviours a proposal must not regress - is now carried, sourced from a declaration that states which suites verify each component; measured before building it, the loop specification had no notion of a suite at all.
+
+### Main Changes
+
+- the declaration gains verifiedBy with the same discipline as the component paths: a key must be a declared component and a path must resolve, because a list of suites that do not exist verifies nothing
+- skill and subagent-config are deliberately unstated: nobody has said what verifies them, and that is a fact about our knowledge rather than a gap to fill with something plausible
+- the record carries the suites of the component the evidence points at, and an empty list when the evidence points nowhere - a list derived from nothing would be an invention dressed as a requirement, and componentEvidence already says why beside it
+- it is a list, not a test run, and it is not derived from the fix: the record is written before the fix exists, so the only honest source is what the failure points at
+- the live reading showed the empty case, because the one real failure in the corpus is unattributed: its cause is upstream of the ledger, so there is no component whose suites could be named - which is the honest answer rather than a missing one
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42fbe3f` | feat(loop): a failure record carries the behaviours a fix must not regress |
+| `ddddc97` | docs(spec): record the field, its source, and the empty case |
+| `f9301dc` | chore(task): record the preserve-behaviours task and the empty case the live reading showed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 709 tests, 707 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The corpus reading runs and prints the reference, the client account and the limit for the real failure.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The loop now has every instrument AHE names - a mining half that names class, mechanism, attribution, what it cannot see, a citable reference and what must not regress; a manifest that resolves its evidence; a round boundary that decides; and a surface that makes an edit bounded and revertible. What remains is the turn itself, which is a Pi-hosted act.
