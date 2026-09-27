@@ -1773,3 +1773,41 @@ The five functions that produce the evidence the loop is judged by moved verbati
 ### Next Steps
 
 - The records specification has 331 bytes left, so the next contract there needs a split - and the second half of the extraction, the record module verification functions, is still embedded and still its own change.
+
+
+## Session 47: The convergence contract gets its own specification, one heading level up
+<!-- trellis-session: v=2 fp=aede6eaa7586785c -->
+
+**Date**: 2026-09-28
+**Task**: The convergence contract gets its own specification, one heading level up
+**Branch**: `master`
+
+### Summary
+
+The records specification was 331 bytes from its cap, and measuring it section by section showed why: a 13.7 KB scenario written at ### level after the numbered sections, so the document claimed the convergence scenario was a subsection of the tests section. It moved out whole, and both specifications are now comfortable.
+
+### Main Changes
+
+- the split fixed a structural mistake as well as a budget one: in its own file the block becomes ## Scenario: Formal Task Convergence State, the shape the specifications written since use, with its subsections unchanged beneath it
+- the records specification goes from 24,245 to 10,578 bytes with its eight numbered sections intact, and the new file is 14,118; the loop specification sits at 22,964 and the router at 4,039 of its 8 KiB
+- the router links the new specification in order with a selection rule and the budget test declares it, because a specification nobody routes to is a file rather than a contract
+- and one prediction was wrong in a small way: the design expected the moved text to name other specifications that would need checking, and measured it names none - the body has no cross-references at all, so nothing in it could have gone stale
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f1835f9` | docs(spec): the convergence contract gets its own specification, one heading level up |
+| `d85fcdc` | chore(task): record the convergence-specification split and the measurement that decided it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 713 tests, 711 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and all three readings still run.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The second half of the verifier extraction: the four verification functions in the record module are still embedded, and they are entangled with the record reducer rather than sitting in a block.
