@@ -264,6 +264,22 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
   effects are recorded: a blocked one never ran and a failed one is ambiguous.
 - A checkpoint carries a **graph signature** (mode + sorted tool names + gate) and **explicit
   lineage**. Resuming under a changed shape is refused.
+- **The Safety & Stability axis (`src/core/harness-axes.ts`) is a read-only projection of the append-only
+  execution ledger**, never a second source of truth: a `crash-free ratio` over `request.terminal` reasons and
+  `sandbox violations` over `gate.refused` labels, plus a **declared** list of the axes it cannot read.
+  - **A terminal reason is classified by a table we state**: `completed` is clean; `recovered` is reported
+    beside the ratio and never folded into it; `cancelled` and `superseded` are interrupted; the five
+    startup/authorization/`failed` reasons are failures. The table is keyed by the reason union, so **a new
+    reason fails the typecheck** rather than defaulting, and the test enumerates the closed set.
+  - **No data is not no failures**: a ledger with no terminals yields `undefined` ratios, never `1.0`. A
+    perfect score from no evidence is the failure this project keeps finding in its own files.
+  - **A recorded refusal label may be composite** (`gates.join("+")`) and is split into its atoms - the same
+    rule the observation reader applies, so the axis and the record agree about what a refusal is.
+  - **The reading is printed, never asserted**: `scripts/harness-axes.mts`, exit status 0 in every case,
+    including "no ledger found". A threshold is a decision with its own evidence.
+  - This entry sits in this scenario because the request-runtime specification that documents
+    `request.terminal` (`personal-agent-request-runtime.md:332`) is at its 24 KiB cap. If the specifications
+    are reorganised, that is the axis's more natural home.
 
 ### 4. Validation & Error Matrix
 
@@ -279,6 +295,8 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 | Finding in the baseline, matched by tier 1 | `baselineState: unchanged` |
 | Checkpoint resumed under a different mode version | Refused |
 | Tool set or gate changed since the checkpoint | Refused |
+| Empty or headerless ledger read for the axis | Ratios `undefined`; never a perfect score from no evidence |
+| A terminal reason outside the nine the type defines | Counted as unclassified; never folded into `clean` |
 
 ### 5. Tests Required
 
@@ -289,6 +307,8 @@ function restoreCheckpoint(c: ActionCheckpoint, shape: GraphShape): RestoreResul
 - Two runs over the same tree are byte-stable.
 - Only completed effects enter a checkpoint; the signature ignores tool registration order.
 - Restore refuses a mode-version, tool-set, or gate change.
+- The axis classifies every terminal reason the type defines, reports `undefined` ratios for an empty ledger,
+  and splits a composite refusal label into its atoms.
 
 ### 6. Wrong vs Correct
 
