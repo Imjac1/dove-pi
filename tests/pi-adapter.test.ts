@@ -545,6 +545,12 @@ describe("Pi adapter", () => {
 			await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: simplePrompt, systemPrompt: "" }, context);
 			assert.equal(existsSync(join(root, ".dove", "state.json")), false, "fast-lane lookup must not create formal state");
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
+			// **AC5: a request outside a formal task records its cost and no convergence record.** The ledger carries
+			// the reason, so a reader can tell a fast-lane request from a formal one that was skipped for a state.
+			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+			const fastLaneObservations = readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: Record<string, unknown> }).filter((record) => record.kind === "task.convergence.observed");
+			assert.equal(fastLaneObservations.length, 1, "the fast-lane request is observed exactly once");
+			assert.equal((fastLaneObservations[0]?.details ?? {}).convergenceSkipReason, "no-formal-native-task", "and names why it has no convergence record");
 
 			const formalPrompt = "请规划并设计一个缓存命中率优化方案，只回复完成，不要调用工具。";
 			await events.get("input")?.({ type: "input", text: formalPrompt, source: "interactive", streamingBehavior: "immediate" }, context);
@@ -623,6 +629,28 @@ describe("Pi adapter", () => {
 			await events.get("agent_start")?.({ type: "agent_start" }, context);
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
 			assert.match(readFileSync(join(root, ".dove", "tasks", formalTask!.providerTaskId, "evidence.jsonl"), "utf8"), /"outcome":"completed"/);
+
+			// **The resource observation, which had no producer before this change.** The terminal is the only place
+			// where a request's counters are all live, and \`agent_settled\` is what settles a request - so this is where
+			// the record's resource kind finally receives anything. Read from disk, because a claim about a record
+			// that the record itself does not show is the class of assertion this project refuses.
+			const observationPath = join(root, ".dove", "tasks", formalTask!.providerTaskId, "convergence.json");
+			const ledgerRecords = (): Array<{ kind?: string; details?: Record<string, unknown> }> =>
+				readFileSync(join(stateDir, "execution.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind?: string; details?: Record<string, unknown> });
+			const observationCountBefore = ledgerRecords().filter((record) => record.kind === "task.convergence.observed").length;
+			const beforeObservation = JSON.parse(readFileSync(observationPath, "utf8")) as { revision: number; observedResources: { toolCalls: number; providerRounds: number; elapsedMs: number } };
+			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+			const afterObservation = JSON.parse(readFileSync(observationPath, "utf8")) as { revision: number; observedResources: { toolCalls: number; providerRounds: number; elapsedMs: number }; criteria: readonly unknown[] };
+			assert.equal(afterObservation.revision, beforeObservation.revision + 1, "one request terminal records exactly one observation, and the revision is what shows it");
+			assert.deepEqual(afterObservation.criteria, JSON.parse(JSON.stringify(beforeObservation)).criteria, "and it decides nothing");
+			const observations = ledgerRecords().filter((record) => record.kind === "task.convergence.observed");
+			assert.equal(observations.length, observationCountBefore + 1, "the ledger record comes from the same terminal");
+			const ledgerObservation = observations.at(-1)?.details ?? {};
+			assert.equal(ledgerObservation.observationOnly, true, "marked as an observation, so a reader can tell it decides nothing");
+			assert.equal(ledgerObservation.convergenceSkipReason, undefined, "and this terminal was not skipped: the criterion was active and the state would take it");
+			assert.equal(ledgerObservation.toolCalls, afterObservation.observedResources.toolCalls - beforeObservation.observedResources.toolCalls, "the ledger record and the snapshot describe the same request, from one assembly");
+			assert.equal(ledgerObservation.providerRounds, afterObservation.observedResources.providerRounds - beforeObservation.observedResources.providerRounds);
+			assert.equal(ledgerObservation.elapsedMs, afterObservation.observedResources.elapsedMs - beforeObservation.observedResources.elapsedMs);
 			const progressedNativeTask = JSON.parse(readFileSync(join(root, ".dove", "state.json"), "utf8")) as { currentGoalId?: string; goals?: Array<{ id?: string; nextStep?: string }> };
 			assert.equal(progressedNativeTask.goals?.find((goal) => goal.id === progressedNativeTask.currentGoalId)?.nextStep, "Review evidence and decide the next action for AC-001.", "native continuation must preserve the reducer-owned AC-bound corrective action");
 			const convergencePath = join(root, ".dove", "tasks", formalTask!.providerTaskId, "convergence.json");
@@ -656,10 +684,31 @@ describe("Pi adapter", () => {
 			assert.equal((auditedForgery.details as { verification: Record<string, { status: string; unresolved: readonly string[] }> }).verification["AC-001"]?.status, "unresolved_evidence", "a pass citing a record the harness never wrote audits as unresolved, not verified");
 			assert.deepEqual((auditedForgery.details as { verification: Record<string, { unresolved: readonly string[] }> }).verification["AC-001"]?.unresolved, ["ledger:tool:never-happened"]);
 			writeFileSync(convergencePath, validSnapshot, "utf8");
+			// **A request has to be open for this assertion to be about the gate.** The convergence refusal sits after
+			// the lease check (`extension.ts:2301`), and a real session settles a request when the agent does - the
+			// observation above is what made that visible here, because it settles the request this one used to hold
+			// open. So the next request is driven the way the host drives it, rather than relying on a lease that a
+			// settled session would not have.
+			await events.get("input")?.({ type: "input", text: "继续当前项目任务", source: "interactive", streamingBehavior: "immediate" }, context);
+			await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "继续当前项目任务", systemPrompt: "" }, context);
+			await events.get("agent_start")?.({ type: "agent_start" }, context);
+			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "completed", content: [] }] }, context);
+			// The count is taken **before** the call below, because a `ready_to_finish` refusal aborts the request it
+			// refuses (`issueRequestHostAbort`), which settles it and records the observation right there.
+			const skipCountBefore = ledgerRecords().filter((record) => record.kind === "task.convergence.observed").length;
+			const revisionBeforeSkip = (JSON.parse(readFileSync(observationPath, "utf8")) as { revision: number }).revision;
 			const blockedAfterFinish = await events.get("tool_call")?.({ type: "tool_call", toolCallId: "formal-write-after-finish", toolName: "write", input: { path: "should-not-write.txt", content: "blocked" } }, context) as { block?: boolean; terminate?: boolean; reason?: string } | undefined;
 			assert.equal(blockedAfterFinish?.block, true);
 			assert.equal(blockedAfterFinish?.terminate, true);
 			assert.match(blockedAfterFinish?.reason ?? "", /ready_to_finish/);
+			// **AC4: a state that will not take an event does not silently drop the observation.** The reducer refuses
+			// events after `ready_to_finish`, so the producer does not offer one - and the ledger says which state
+			// refused it, because "no observation" and "observation discarded" must not look the same.
+			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+			const skipped = ledgerRecords().filter((record) => record.kind === "task.convergence.observed").slice(skipCountBefore);
+			assert.equal(skipped.length, 1, "the ledger still records what the request cost");
+			assert.equal((skipped[0]?.details ?? {}).convergenceSkipReason, "state-ready_to_finish", "and names the state that would not take it");
+			assert.equal((JSON.parse(readFileSync(observationPath, "utf8")) as { revision: number }).revision, revisionBeforeSkip, "while the convergence record is untouched");
 
 			await events.get("input")?.({ type: "input", text: "创建一个项目任务：缓存命中率优化", source: "interactive", streamingBehavior: "immediate" }, context);
 			const start = await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "创建一个项目任务：缓存命中率优化", systemPrompt: "" }, context) as { message?: { content?: string } };

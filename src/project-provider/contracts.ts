@@ -1,5 +1,5 @@
 import type { TrellisSnapshot, TrellisTaskRecord } from "../trellis-adapter/index.ts";
-import type { AcceptanceCriterionDefinition, FindingKind, TaskChange, TaskConvergenceSnapshot } from "../core/task-convergence.ts";
+import type { AcceptanceCriterionDefinition, FindingKind, TaskChange, TaskConvergenceSnapshot, TaskResourceObservation } from "../core/task-convergence.ts";
 import type { NativeGoalConvergenceProjection, NativeTaskPhase } from "./native-state.ts";
 
 /** Contract version consumed by the Dove agent core. */
@@ -82,6 +82,7 @@ export type ProjectTaskConvergenceOperation =
 	| { readonly action: "update_finding"; readonly acceptanceId: string; readonly findingId: string; readonly evidenceRefs?: readonly string[]; readonly summary?: string; readonly nextAction?: string }
 	| { readonly action: "resolve_finding"; readonly acceptanceId: string; readonly findingId: string; readonly evidenceRefs?: readonly string[] }
 	| { readonly action: "change"; readonly acceptanceId: string; readonly change: Omit<TaskChange, "recordedAtRevision"> }
+	| { readonly action: "observe"; readonly acceptanceId: string; readonly resources: TaskResourceObservation }
 	| { readonly action: "decide"; readonly acceptanceId: string; readonly nextAction: string }
 	| { readonly action: "checkpoint"; readonly acceptanceId: string; readonly nextAction: string; readonly unblockCondition?: string }
 	| { readonly action: "resume"; readonly acceptanceId: string; readonly acceptanceRevision: string };

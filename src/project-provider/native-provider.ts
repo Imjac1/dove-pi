@@ -313,6 +313,10 @@ function toConvergenceEvent(goal: NativeGoal, operation: ProjectTaskConvergenceO
 			return { ...base, kind: "finding.resolved", acceptanceId: operation.acceptanceId, findingId: operation.findingId, ...(operation.evidenceRefs ? { evidenceRefs: operation.evidenceRefs } : {}) };
 		case "change":
 			return { ...base, kind: "change.recorded", acceptanceId: operation.acceptanceId, change: operation.change };
+		case "observe":
+			// The observation kind, its decoder and its reducer branch already existed and were unreachable: this is
+			// the first producer the record has ever had for them.
+			return { ...base, kind: "request.observed", acceptanceId: operation.acceptanceId, resources: operation.resources };
 		case "decide":
 			return { ...base, kind: "task.progress_reviewed", acceptanceId: operation.acceptanceId, nextAction: operation.nextAction };
 		case "checkpoint":

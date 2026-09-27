@@ -207,6 +207,16 @@ describe("Dove native project provider", () => {
 			assert.deepEqual([...(concurrent.kind === "valid" ? concurrent.snapshot.criteria[0]?.evidenceRefs ?? [] : [])].sort(), ["evidence:parallel-a", "evidence:parallel-b"]);
 
 			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "started" } });
+			// **The observation, through the provider that writes every other record.** The kind, its decoder and its
+			// reducer branch existed with no producer at all until the request terminal began emitting one; this is
+			// the round trip through the layer that owns the record.
+			const observed = await provider.mutateTaskConvergence!(task.stableId, { action: "observe", acceptanceId: "AC-001", resources: { toolCalls: 7, providerRounds: 3, elapsedMs: 1234, outputTokens: 99 } });
+			assert.equal(observed.observedResources.toolCalls, 7);
+			assert.equal(observed.observedResources.providerRounds, 3);
+			assert.equal(observed.observedResources.elapsedMs, 1234);
+			assert.equal(observed.observedResources.outputTokens, 99);
+			assert.equal(observed.revision, snapshot.revision + 1, "an observation advances the revision");
+			assert.deepEqual(observed.criteria, snapshot.criteria, "and decides nothing: the criteria are untouched");
 			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "finding", acceptanceId: "AC-001", finding: { id: "follow-up-1", kind: "follow_up", summary: "Neighboring cleanup is outside this acceptance set.", evidenceRefs: ["evidence:follow-up"] } });
 			snapshot = await provider.mutateTaskConvergence!(task.stableId, { action: "decide", acceptanceId: "AC-001", nextAction: "Run the focused AC-001 check." });
 			assert.equal(snapshot.consecutiveNoProgress, 0);
