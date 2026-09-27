@@ -156,6 +156,40 @@ describe("the readings, exercised as scripts", () => {
 		}
 	});
 
+	it("reports a decision the record no longer carries, without calling it nothing", () => {
+		// **The state is designed, not corrupt.** The record is bounded and drops a change whose verdict is still pending; the
+		// ledger is append-only and keeps it. Probed before the fix: a `change.decided` for a change the snapshot does not carry
+		// produced no line anywhere, while the change beside it printed "the next round has not been observed" - a true sentence
+		// about the wrong thing, on a turn whose decision was sitting in the file the reader was told to read.
+		const root = mkdtempSync(join(tmpdir(), "dove-readings-orphan-"));
+		try {
+			const state = join(root, "state");
+			const project = join(root, "project");
+			mkdirSync(state, { recursive: true });
+			mkdirSync(join(project, ".dove", "tasks", "t1"), { recursive: true });
+			const CRITERIA = [{ id: "AC-001", text: "the boundary reads the target" }];
+			writeFileSync(join(state, "execution.jsonl"), [
+				record("request.received", "request:req-1", { logicalRequestId: "req-1" }),
+				record("change.decided", "change:chg-9", { changeId: "chg-9", verdict: "confirmed", observed: [], decidedAtRevision: 9, verdictOnly: true }),
+			].join("\n"));
+			writeFileSync(join(project, ".dove", "tasks", "t1", "convergence.json"), JSON.stringify({
+				schemaVersion: 1, taskId: "t1", revision: 9, acceptanceRevision: computeAcceptanceRevision(CRITERIA), state: "working",
+				criteria: [{ ...CRITERIA[0], status: "pending", evidenceRefs: [] }], findings: [], completedStepIds: [],
+				consecutiveNoProgress: 0, meaningfulProgressSinceReview: true,
+				changes: [{ id: "chg-1", surface: "tool-implementation", failureEvidenceRef: "ledger:request:req-1", rootCause: "x", fix: "y",
+					predictedFixes: [{ observable: "gate-refusals", subject: "fence", direction: "down" }], predictedRegressions: [],
+					baseline: { "gate-refusals:fence": 3 }, recordedAtRevision: 6 }],
+				observedResources: { toolCalls: 0, providerRounds: 0, elapsedMs: 0 },
+			}));
+			const result = run("harness-rounds.mts", [project], { DOVE_PI_STATE_DIR: state });
+			assert.equal(result.status, 0, result.stdout);
+			assert.match(result.stdout, /decisions the record does not carry: chg-9/, "the orphan is reported by id");
+			assert.match(result.stdout, /decision:\s+\(none yet\) - the next round has not been observed/, "and the change own line keeps its meaning");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("says what it did not find, instead of dying on a path that is not there", () => {
 		// The behaviour the scripts were written for, and the reason they can be run at all: a reading that dies on a missing
 		// ledger is a reading nobody runs twice.

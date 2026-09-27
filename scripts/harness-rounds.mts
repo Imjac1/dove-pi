@@ -117,6 +117,15 @@ if (unreadable.length > 0) {
 	// keeps the count above honest: silent skipping is how a reading becomes incomplete without looking incomplete.
 	console.log("  task records that could not be read: " + unreadable.join(", "));
 }
+// **A decision the record no longer carries still happened.** The record is bounded and drops a change whose verdict is still
+// pending, while the ledger is append-only and keeps it - so the two are supposed to disagree, and this state is designed rather
+// than corrupt. Saying nothing would let an operator read "the next round has not been observed" on a turn whose decision is
+// sitting in the file they were told to read.
+const carried = new Set(changes.map((entry) => entry.change.id));
+const orphanDecisions = [...new Set(decisions.map((record) => String(record.details?.changeId ?? "")))].filter((id) => id !== "" && !carried.has(id));
+if (orphanDecisions.length > 0) {
+	console.log("  decisions the record does not carry: " + orphanDecisions.join(", ") + "   (the ledger keeps what a bounded record drops)");
+}
 console.log("");
 for (const { change } of changes) {
 	const commit = appliedByChange.get(change.id);
