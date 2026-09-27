@@ -446,3 +446,52 @@ describe("every entry in a shipped mode's permission list names an action that c
 		});
 	}
 });
+
+describe("the fence", () => {
+	/** The same three files, with a `fence` block inserted ahead of `gate`. */
+	function fenced(yaml: string): WorkModeFiles {
+		return files({ governance: files().governance.replace("gate:", `fence:\n${yaml}\ngate:`) });
+	}
+
+	it("carries a declared fence, with every path normalised to a prefix", () => {
+		// `modes/**`, `tests/` and `./.dove/effects` are three ways of writing a prefix. `matchesPermission` owns
+		// the one wildcard rule this format has, so the fence reuses its shape rather than adding a glob engine -
+		// which is why a trailing `/**` is stripped rather than compiled.
+		const mode = loadWorkMode(fenced(['  paths: ["modes/**", "tests/", "./.dove/effects", "AGENTS.md"]', "  shell: denied"].join("\n")), { frameworkVersion: FRAMEWORK });
+		assert.deepEqual(mode.fence, { paths: ["modes", "tests", ".dove/effects", "AGENTS.md"], shell: "denied" });
+	});
+
+	it("carries targets for a tool this repository cannot read a schema for", () => {
+		const mode = loadWorkMode(fenced(['  paths: [modes]', "  shell: uncovered", "  targets:", '    notebook_edit: "path"'].join("\n")), { frameworkVersion: FRAMEWORK });
+		assert.equal(mode.fence?.shell, "uncovered");
+		assert.deepEqual(mode.fence?.targets, { notebook_edit: "path" });
+	});
+
+	it("refuses a fence with no usable path, because it would read as fenced and protect nothing", () => {
+		for (const yaml of ['  paths: []\n  shell: denied', '  paths: ["  "]\n  shell: denied', '  paths: ["**"]\n  shell: denied', "  shell: denied"]) {
+			const error = expectError(() => loadWorkMode(fenced(yaml), { frameworkVersion: FRAMEWORK }), "missing-field");
+			assert.match(error.detail, /protecting nothing/, "the refusal says why an empty fence is worse than none");
+		}
+	});
+
+	it("requires the shell stance, and names both ways out instead of defaulting one", () => {
+		// A default would either silently change a mode's tool availability or let the fence read as complete while
+		// a one-line `bash` rewrites the policy. `denied` and `uncovered` are both honest; choosing for the author
+		// is not - the rule `permissions.unlisted` already follows.
+		const error = expectError(() => loadWorkMode(fenced("  paths: [modes]"), { frameworkVersion: FRAMEWORK }), "missing-field");
+		assert.match(error.detail, /'denied'/);
+		assert.match(error.detail, /'uncovered'/);
+		assert.match(error.detail, /never paths/, "and it says why the fence cannot answer this itself");
+	});
+
+	it("refuses an unrecognised shell stance, an unknown key, and a target that names nothing", () => {
+		expectError(() => loadWorkMode(fenced("  paths: [modes]\n  shell: maybe"), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		expectError(() => loadWorkMode(fenced("  paths: [modes]\n  shell: denied\n  mode: strict"), { frameworkVersion: FRAMEWORK }), "unknown-field");
+		expectError(() => loadWorkMode(fenced('  paths: [modes]\n  shell: denied\n  targets:\n    notebook_edit: ""'), { frameworkVersion: FRAMEWORK }), "invalid-type");
+	});
+
+	it("leaves a mode without a fence exactly as it was, which is what makes this additive", () => {
+		assert.equal(loadWorkMode(files(), { frameworkVersion: FRAMEWORK }).fence, undefined);
+	});
+});
+

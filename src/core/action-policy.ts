@@ -6,7 +6,7 @@ import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
-import { evaluatePermission, matchesPermission, type WorkMode } from "./work-mode.ts";
+import { evaluatePermission, FENCE_TARGETS, matchesPermission, normalizeFencePath, type WorkMode } from "./work-mode.ts";
 
 /**
  * The host tools that can reach outside the machine (a network call) or mutate the workspace filesystem, by name.
@@ -16,7 +16,25 @@ import { evaluatePermission, matchesPermission, type WorkMode } from "./work-mod
  * the mode's permission list and its own declared effects, which is a separate control.
  */
 const NETWORK_TOOLS = new Set(["web_search", "fetch_content", "get_search_content", "source_check", "browser", "agent_browser", "mcp", "mcpScript"]);
-const FILESYSTEM_MUTATORS = new Set(["write", "edit", "bash", "powershell", "replace", "insert", "notebook_edit"]);
+export const FILESYSTEM_MUTATORS = new Set(["write", "edit", "bash", "powershell", "replace", "insert", "notebook_edit"]);
+
+/**
+ * Every tool name this repository knows can change the workspace - **except the shell**, which a fence cannot
+ * classify (the host's classifier reads command names, never paths) and the mode's `fence.shell` stance governs.
+ *
+ * **The union is maintained here rather than imported, and that is deliberate.** `pi-adapter`'s own mutation set
+ * cannot be reached from `core` - core takes no Pi imports - so the coupling is asserted by a test that may import
+ * both, and it fails when either list gains a name this one lacks. Without that test this constant is how a third
+ * list would quietly appear beside the two that already disagree.
+ *
+ * A fenced run refuses these tools unless the fence can read their target. That is the fail-closed direction: of
+ * the 57 tool names installed in this project's host, this repository can read three schemas, so "the rest write
+ * somewhere harmless" is a claim we cannot back.
+ */
+export const FENCE_MUTATION_TOOLS = new Set([
+	"write", "edit", "replace", "insert", "notebook_edit",
+	"delete", "mkdir", "agent_workspace_patch", "agent_workspace_restore",
+]);
 
 /**
  * The one action policy a mode's controls add up to.
@@ -87,6 +105,69 @@ function labelled(decision: GateDecision, gate: string): GateDecision {
 }
 
 /**
+ * A target as a fence compares it: workspace-relative, forward-slashed, lowercased.
+ *
+ * `undefined` means the path is **not inside the workspace**, which is not a fence question - a fence protects
+ * workspace paths, and a target outside the root matches none of them.
+ *
+ * Lowercasing is a Windows-first choice and it fails closed: on a case-insensitive filesystem a differently-cased
+ * spelling addresses the same file, so a case-sensitive comparison would let `MODES/x.yaml` through the fence.
+ */
+function workspaceRelativeTarget(workspaceRoot: string, target: string): string | undefined {
+	const resolved = isAbsolute(target) ? resolve(target) : resolve(workspaceRoot, target);
+	const inside = relative(workspaceRoot, resolved);
+	if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return undefined;
+	return inside.replace(/\\/gu, "/").toLowerCase();
+}
+
+/** The protected prefix a target falls under, or `undefined`. A prefix matches a file exactly and a subtree. */
+function fencePrefixHit(prefixes: readonly string[], target: string | undefined): string | undefined {
+	if (target === undefined) return undefined;
+	return prefixes.find((prefix) => {
+		const normalized = normalizeFencePath(prefix).toLowerCase();
+		return normalized !== "" && (target === normalized || target.startsWith(normalized + "/"));
+	});
+}
+
+/**
+ * Every target a tool names, or `undefined` when this repository cannot read **any** of them.
+ *
+ * `undefined` is the fail-closed answer and the caller must not read it as "no target": an unreadable target on a
+ * covered tool, or a covered tool called with no target at all, is the case a fence exists for. A list-valued tool
+ * (`agent_workspace_patch`) yields `undefined` if **any** of its entries is unreadable, because one unreadable
+ * operation in the batch is one write the fence would not have seen.
+ *
+ * A mode's `fence.targets` entry wins over the built-in map for the same tool: the map is what this repository
+ * verified, and the mode is the operator's declaration read before any untrusted content.
+ */
+type FenceTargets =
+	/** The fence has no way to read this tool's target at all. */
+	| { readonly kind: "uncovered" }
+	/** The tool is covered, and this call does not carry a target the fence can read. */
+	| { readonly kind: "unreadable" }
+	| { readonly kind: "targets"; readonly targets: readonly string[] };
+
+function fenceTargetsOf(mode: WorkMode, invocation: GateInvocation): FenceTargets {
+	const declared = mode.fence?.targets?.[invocation.tool];
+	const spec = declared === undefined ? FENCE_TARGETS[invocation.tool] : { at: declared };
+	if (spec === undefined) return { kind: "uncovered" };
+	const raw = readArgumentPath(invocation.arguments, spec.at);
+	if (spec.each === undefined) {
+		return typeof raw === "string" && raw.trim() !== "" ? { kind: "targets", targets: [raw] } : { kind: "unreadable" };
+	}
+	if (!Array.isArray(raw)) return { kind: "unreadable" };
+	const targets: string[] = [];
+	for (const entry of raw) {
+		const value = readArgumentPath(entry, spec.each);
+		// One unreadable operation in the batch is one write the fence would not have seen, so the whole call is
+		// unreadable rather than partially classified.
+		if (typeof value !== "string" || value.trim() === "") return { kind: "unreadable" };
+		targets.push(value);
+	}
+	return { kind: "targets", targets };
+}
+
+/**
  * The actual digest of every evidence reference a document names, read from the workspace.
  *
  * The document carries the digest it *expects*; supplying the one the file *has* is what makes the check a check. A
@@ -130,7 +211,7 @@ export function evidenceDigestsFor(document: AuthorityDocument, workspaceRoot: s
 }
 
 export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
-	const { mode } = options;
+	const { mode, workspaceRoot } = options;
 	// The ceiling comes from the mode, which is read before any untrusted content is: a scope assembled later has
 	// already been influenced by what was read (design 4.3). One agent today - the mode itself - and `narrow` is there
 	// for the day a delegate exists.
@@ -251,6 +332,71 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			// as a second control that must be remembered.
 			const denial = denyDecision(invocation.tool);
 			if (denial.outcome === "block") return labelled(denial, "deny");
+			// **The fence, and it is checked before every control whose configuration this run could have
+			// influenced.** Its subject is the harness itself - the policy, the verifier and the ledger are what it
+			// protects - so it cannot run after something that this run may have softened. It is also the only
+			// control here whose absence is safe by construction: a mode with no `fence` block makes no claim, and
+			// this whole branch disappears with it.
+			//
+			// Three ways to be refused, named by the tags `fenceTargetsOf` returns so the comment cannot drift from
+			// the code: a target that falls inside a protected prefix, a covered tool whose target cannot be read
+			// (`unreadable`), and a tool that mutates by a route the fence has no map for (`uncovered`). Refusing the third rather than allowing it
+			// is the whole design: this repository can read three tool schemas out of the 57 names its host has
+			// installed, so "the rest write somewhere harmless" is a claim it cannot back.
+			const fence = mode.fence;
+			if (fence !== undefined) {
+				const shellTool = invocation.tool === "bash" || invocation.tool === "powershell";
+				if (fence.shell === "denied" && shellTool) {
+					return labelled(
+						{
+							outcome: "block",
+							reason: `Mode '${mode.id}' declares 'fence.shell: denied' and '${invocation.tool}' can write anywhere in the workspace, including the paths the fence protects.`,
+							remediation: "Run the command's work through a tool that names its target, or change the mode's fence.shell to 'uncovered' deliberately rather than around it.",
+						},
+						"fence",
+					);
+				}
+				if (!shellTool) {
+					const resolved = fenceTargetsOf(mode, invocation);
+					if (resolved.kind === "uncovered") {
+						// A tool that mutates by a route this repository cannot read is refused rather than assumed
+						// harmless: it can read three of the 57 tool schemas its host has installed.
+						if (FENCE_MUTATION_TOOLS.has(invocation.tool)) {
+							return labelled(
+								{
+									outcome: "block",
+									reason: `Mode '${mode.id}' declares a 'fence' and '${invocation.tool}' changes the workspace by a route the fence cannot read, so it would write into the protected paths unseen.`,
+									remediation: `Declare 'fence.targets.${invocation.tool}' naming the argument that carries its target, or remove the 'fence' block if this mode protects nothing.`,
+								},
+								"fence",
+							);
+						}
+					} else if (resolved.kind === "unreadable") {
+						return labelled(
+							{
+								outcome: "block",
+								reason: `Mode '${mode.id}' declares a 'fence' and this '${invocation.tool}' call names no target the runtime can read, so the write cannot be classified against it.`,
+								remediation: "Call the tool with the argument that names its target, or remove the 'fence' block if this mode protects nothing.",
+							},
+							"fence",
+						);
+					} else {
+						for (const target of resolved.targets) {
+							const relativeTarget = workspaceRelativeTarget(workspaceRoot, target);
+							const hit = fencePrefixHit(fence.paths, relativeTarget);
+							if (hit === undefined) continue;
+							return labelled(
+								{
+									outcome: "block",
+									reason: `Mode '${mode.id}' declares a 'fence' over '${hit}' and this write lands inside it (${relativeTarget ?? target}), so it would change the harness's own control surface.`,
+									remediation: "Write the change somewhere the fence does not protect, or change the mode's fence.paths deliberately rather than around it.",
+								},
+								"fence",
+							);
+						}
+					}
+				}
+			}
 			// **A technique is checked before anything that could allow the call.** `never_allow` names actions; this
 			// names how an action runs, and the two are not interchangeable: a probe can be run in many techniques, and
 			// forbidding `dos` is a statement about conduct that a permission list over tools cannot make. Checked on

@@ -100,7 +100,7 @@ const REVIEWED_IDEMPOTENT_PI_TOOLS = new Set([
 	"lens_diagnostics", "lsp_diagnostics", "symbol_search", "project_report", "module_report", "read_symbol", "read_enclosing",
 	"web_search", "source_check", "fetch_content", "get_search_content",
 ]);
-const FORMAL_PRODUCT_MUTATION_TOOLS = new Set(["write", "edit", "replace", "insert", "delete", "mkdir", "agent_workspace_patch", "agent_workspace_restore"]);
+export const FORMAL_PRODUCT_MUTATION_TOOLS = new Set(["write", "edit", "replace", "insert", "delete", "mkdir", "agent_workspace_patch", "agent_workspace_restore"]);
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
 	fast: "thinkingLow",
 	standard: "thinkingMedium",
@@ -2030,8 +2030,21 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				activeAuthorityDocument === undefined
 					? "no authority document: this mode declares no conformance"
 					: `conformance against engagement '${activeAuthorityDocument.engagement}' with ${activeAuthorityDocument.grants.length} grant(s)`;
+			// **The fence is announced, and `uncovered` is announced in full.** A mode that declares a protected
+			// surface is stating which part of the workspace this run may not write, so the operator is told the
+			// paths and the shell stance rather than left to read the mode file. `uncovered` in particular is a
+			// declaration this runtime cannot enforce for the mode: the fence cannot see through the shell, so the
+			// gap has to be visible where an operator is already looking.
+			const fence = activeWorkMode.fence;
+			const fenceReport =
+				fence === undefined
+					? ""
+					: ` Its fence protects ${fence.paths.length} workspace path(s) (${fence.paths.join(", ")}) and ` +
+						(fence.shell === "denied"
+							? "refuses bash and powershell, so the fence cannot be walked around."
+							: "declares shell: 'uncovered' - a bash or powershell command can still write into those paths.");
 			ctx.ui.notify(
-				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are refused, and ${activeWorkMode.permissions.ask_before.length} action(s) run only after you confirm them. A host without a dialog refuses those too.`,
+				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are refused, and ${activeWorkMode.permissions.ask_before.length} action(s) run only after you confirm them. A host without a dialog refuses those too.` + fenceReport,
 				"info",
 			);
 		}

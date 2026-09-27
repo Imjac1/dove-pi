@@ -129,6 +129,28 @@ export interface WorkMode {
 		readonly filesystem?: "unrestricted" | "ephemeral" | "read-only-source";
 	};
 	/**
+	 * The workspace paths this mode protects from being written, from the `governance.fence` block.
+	 *
+	 * **What it is for.** A mode that declares a fence names the part of the workspace that constitutes the
+	 * harness's own control surface - its policy, its verifier, its ledger - and the tool boundary refuses writes
+	 * into it. That is the precondition for an agent editing its own harness at all: the thing that decides
+	 * whether an edit was good has to be out of reach of the edit.
+	 *
+	 * **`shell` is required and is not defaulted.** The host's shell classifier (`pi-adapter/extension.ts`) reads
+	 * command names and never paths, so a fence cannot see through `bash`. A mode must therefore state which route
+	 * it took: `denied` closes it, `uncovered` declares it open. Both are honest; a default would be a policy
+	 * nobody chose, which is the rule `permissions.unlisted` already follows.
+	 *
+	 * **A path is a prefix, not a glob.** It matches a file exactly and a directory's whole subtree; a trailing
+	 * `/*` or `/**` is accepted and stripped ({@link normalizeFencePath}). `targets` extends
+	 * {@link FENCE_TARGETS} with the tools this repository cannot read a schema for.
+	 */
+	readonly fence?: {
+		readonly paths: readonly string[];
+		readonly shell: "denied" | "uncovered";
+		readonly targets?: Readonly<Record<string, string>>;
+	};
+	/**
 	 * How many actions this mode permits per phase, from `gate.intensity`, e.g. `{ discovery: 2 }`.
 	 *
 	 * A **ceiling on a count**, not a threshold on an argument: a limit says an order may not exceed a notional,
@@ -146,7 +168,7 @@ export interface WorkMode {
 }
 
 const MODE_FIELDS = new Set(["name", "description", "license", "compatibility", "metadata"]);
-const GOVERNANCE_FIELDS = new Set(["version", "framework", "scope", "authority", "gate", "effects", "sandbox", "session", "evidence", "coordination", "stop"]);
+const GOVERNANCE_FIELDS = new Set(["version", "framework", "scope", "authority", "gate", "effects", "sandbox", "fence", "session", "evidence", "coordination", "stop"]);
 const PERMISSION_FIELDS = new Set(["unlisted", "always_allow", "ask_before", "never_allow"]);
 const UNLISTED_STANCES = new Set(["allow", "ask"]);
 const SCOPE_FIELDS = new Set(["targets", "environment", "exclusions", "ownership_evidence"]);
@@ -164,6 +186,36 @@ const SANDBOX_NETWORK = new Set(["none", "allowlist", "unrestricted"]);
 const SANDBOX_FILESYSTEM = new Set(["unrestricted", "ephemeral", "read-only-source"]);
 /** The isolation claims a host can actually enforce at its tool boundary, without an OS sandbox. */
 const ENFORCEABLE_SANDBOX = new Set(["network: none", "filesystem: read-only-source"]);
+const FENCE_FIELDS = new Set(["paths", "shell", "targets"]);
+const FENCE_SHELL_STANCES = new Set(["denied", "uncovered"]);
+/**
+ * The tools whose path argument this repository can **verify**, and where that argument is.
+ *
+ * Read from the installed host's own schemas (`pi-agent-core`, `dist/harness/tools/*.d.ts`): `write` and `edit`
+ * both take `path`, and `tools/index.d.ts` exports exactly `{read, write, edit, bash}`. `agent_workspace_patch`
+ * is ours (`pi-adapter/extension.ts`) and takes a **list**, which is why a target is a set rather than a value.
+ *
+ * **The map is deliberately tiny, and the smallness is the design.** The installed catalog holds 57 tool names
+ * across extensions this repository cannot read schemas for, so "which other tools mutate, and where is their
+ * path" is a claim we cannot back. Everything outside this map is either declared by the mode
+ * (`fence.targets`) or **refused at the boundary** - never assumed harmless.
+ */
+export const FENCE_TARGETS: Readonly<Record<string, { readonly at: string; readonly each?: string }>> = {
+	write: { at: "path" },
+	edit: { at: "path" },
+	agent_workspace_patch: { at: "operations", each: "path" },
+};
+
+/**
+ * A fence path as it is compared: forward slashes, no leading `./`, no trailing `/*` or `/`.
+ *
+ * A **prefix** rather than a glob, because `matchesPermission` already owns the one wildcard rule this format
+ * has, and a second, richer rule for one field is how two rules come to disagree. `modes`, `modes/`, `modes/*`
+ * and `modes/**` therefore mean the same thing, and say so in one place.
+ */
+export function normalizeFencePath(entry: string): string {
+	return entry.trim().replace(/\\/gu, "/").replace(/^\.\//u, "").replace(/\/?\*+$/u, "").replace(/\/+$/u, "");
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -539,6 +591,49 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		}
 	}
 
+	// **The fence is validated at load, and its two required fields are the point.** A fence with no usable path
+	// would read as a protection while protecting nothing - the defect class this block exists for. And `shell` is
+	// required because the fence cannot see through the shell (`pi-adapter/extension.ts` classifies a command by
+	// name and never by path): a mode must state whether it closed that route or left it open, in the shape
+	// `permissions.unlisted` already uses for a stance nobody should be able to leave implicit.
+	let fence: WorkMode["fence"];
+	if (governance.fence !== undefined) {
+		const block = requireRecord("governance.fence", governance.fence);
+		rejectUnknown("governance.fence", block, FENCE_FIELDS);
+		const paths = (block.paths === undefined ? [] : requireStringArray("governance.fence.paths", block.paths)).map(normalizeFencePath);
+		if (paths.length === 0 || paths.some((entry) => entry === "")) {
+			throw new WorkModeError(
+				"missing-field",
+				`Mode '${frontmatter.name}' declares a 'fence' with no usable 'paths', so it would read as fenced while protecting nothing. Declare the workspace paths the fence protects (a file matches exactly, a directory its whole subtree), or remove the 'fence' block.`,
+			);
+		}
+		if (block.shell === undefined) {
+			throw new WorkModeError(
+				"missing-field",
+				`Mode '${frontmatter.name}' declares a 'fence' and no 'shell' stance, and the fence cannot see through the shell: its classifier reads command names, never paths. Declare shell: 'denied' to refuse bash and powershell in this mode, or 'uncovered' to state that a shell command can still write into the fence.`,
+			);
+		}
+		if (typeof block.shell !== "string" || !FENCE_SHELL_STANCES.has(block.shell)) {
+			throw new WorkModeError("invalid-type", `governance.fence.shell must be one of: ${[...FENCE_SHELL_STANCES].join(", ")} (got ${JSON.stringify(block.shell)}). 'denied' refuses bash and powershell; 'uncovered' declares that a shell command can still write into the fence.`);
+		}
+		let targets: Record<string, string> | undefined;
+		if (block.targets !== undefined) {
+			const declared = requireRecord("governance.fence.targets", block.targets);
+			targets = {};
+			for (const [tool, at] of Object.entries(declared)) {
+				if (typeof at !== "string" || at.trim() === "") {
+					throw new WorkModeError("invalid-type", `governance.fence.targets.${tool} must name the argument path carrying that tool's target (got ${JSON.stringify(at)}).`);
+				}
+				targets[tool] = at;
+			}
+		}
+		fence = {
+			paths,
+			shell: block.shell as "denied" | "uncovered",
+			...(targets === undefined ? {} : { targets }),
+		};
+	}
+
 	return {
 		id: frontmatter.name,
 		description: frontmatter.description,
@@ -552,6 +647,7 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		...(grant === undefined ? {} : { authorityGrant: grant as string }),
 		...(excludedTechniques.length === 0 ? {} : { excludedTechniques }),
 		...(sandbox === undefined ? {} : { sandbox }),
+		...(fence === undefined ? {} : { fence }),
 		...(Object.keys(intensityCeilings).length === 0 ? {} : { intensityCeilings }),
 		permissions,
 		limits,

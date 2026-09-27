@@ -270,3 +270,108 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 });
 
 
+
+describe("the fence: the harness's own control surface, refused at the tool boundary", () => {
+	const rawTool = { viaCapability: false } as const;
+
+	/** A fenced mode with nothing else in the way, so a decision is the fence's and only the fence's. */
+	function fenced(overrides: Partial<WorkMode> = {}): WorkMode {
+		return mode({
+			gateSemantics: "none",
+			permissions: { unlisted: "allow", always_allow: [], ask_before: [], never_allow: [] },
+			fence: { paths: ["modes", "tests", ".dove/effects"], shell: "denied" },
+			...overrides,
+		});
+	}
+
+	const reasonOf = (decision: { outcome: string }): string => (decision as { reason?: string }).reason ?? "";
+
+	it("blocks a write inside a protected prefix, and names the prefix that decided", () => {
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		const decision = policy.evaluate(invocation("write", { path: "modes/code-audit/governance.yaml", content: "x" }), rawTool);
+		assert.equal(decision.outcome, "block");
+		assert.match(reasonOf(decision), /^\[fence\]/, "the reason says which control refused it");
+		assert.match(reasonOf(decision), /'modes'/);
+	});
+
+	it("blocks a differently-cased spelling and an absolute path, because both address the same file", () => {
+		// Windows-first, and it fails closed: a case-sensitive comparison would let the first of these through on the
+		// platform this project ships for, and the second is the same target written the other way.
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		assert.equal(policy.evaluate(invocation("write", { path: "MODES/code-audit/governance.yaml", content: "x" }), rawTool).outcome, "block");
+		assert.equal(policy.evaluate(invocation("edit", { path: join(files.root, "tests", "x.test.ts"), edits: [] }), rawTool).outcome, "block");
+	});
+
+	it("lets a write outside every prefix through, and has no opinion about a path outside the workspace", () => {
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		assert.equal(policy.evaluate(invocation("write", { path: "src/core/action-policy.ts", content: "x" }), rawTool).outcome, "allow");
+		assert.equal(
+			policy.evaluate(invocation("write", { path: join(tmpdir(), "elsewhere.txt"), content: "x" }), rawTool).outcome,
+			"allow",
+			"a fence protects workspace paths, so a target outside the root matches none of them",
+		);
+	});
+
+	it("blocks a covered tool that names no readable target, because that is the case a fence exists for", () => {
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		const decision = policy.evaluate(invocation("write", { content: "x" }), rawTool);
+		assert.equal(decision.outcome, "block");
+		assert.match(reasonOf(decision), /^\[fence\]/);
+		assert.match(reasonOf(decision), /names no target the runtime can read/);
+	});
+
+	it("blocks a mutation the fence cannot read at all, and names the way out", () => {
+		// `mkdir` is on this repository's mutation set and not in the verified target map, so the fence has no route
+		// to its target. Refusing is the design: this repository can read three tool schemas out of 57 installed names.
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		const decision = policy.evaluate(invocation("mkdir", { path: "new-dir" }), rawTool);
+		assert.equal(decision.outcome, "block");
+		assert.match(reasonOf(decision), /changes the workspace by a route the fence cannot read/);
+		assert.match((decision as { remediation?: string }).remediation ?? "", /fence\.targets\.mkdir/, "and the remediation names the declaration that would allow it");
+	});
+
+	it("accepts a declared target for that tool, and then applies the same prefixes to it", () => {
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced({ fence: { paths: ["modes"], shell: "denied", targets: { mkdir: "path" } } }), workspaceRoot: files.root });
+		assert.equal(policy.evaluate(invocation("mkdir", { path: "src/new" }), rawTool).outcome, "allow", "declaring the target is what makes the tool classifiable");
+		assert.equal(policy.evaluate(invocation("mkdir", { path: "modes/new" }), rawTool).outcome, "block", "and once classifiable it is fenced like any other write");
+	});
+
+	it("blocks a batched patch when any one of its operations lands inside the fence", () => {
+		// `agent_workspace_patch` names a *list* of targets. One unreadable or protected operation is enough: a fence
+		// that classified the batch by its first entry would be a fence in name only.
+		const files = workspace();
+		const policy = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		const inside = policy.evaluate(
+			invocation("agent_workspace_patch", { operations: [{ kind: "write", path: "src/a.ts" }, { kind: "delete", path: "tests/old.test.ts" }] }),
+			rawTool,
+		);
+		assert.equal(inside.outcome, "block");
+		assert.match(reasonOf(inside), /'tests'/);
+		const outside = policy.evaluate(invocation("agent_workspace_patch", { operations: [{ kind: "write", path: "src/a.ts" }] }), rawTool);
+		assert.equal(outside.outcome, "allow");
+		const unreadable = policy.evaluate(invocation("agent_workspace_patch", { operations: [{ kind: "write", path: "src/a.ts" }, { kind: "mkdir" }] }), rawTool);
+		assert.equal(unreadable.outcome, "block", "one unreadable operation makes the batch unreadable");
+	});
+
+	it("honours the shell stance, because the fence cannot see through the shell either way", () => {
+		const files = workspace();
+		const denied = createPolicy({ mode: fenced(), workspaceRoot: files.root });
+		assert.equal(denied.evaluate(invocation("bash", { command: "echo x > modes/x" }), rawTool).outcome, "block", "'denied' closes the one route a path check cannot reach");
+		assert.match(reasonOf(denied.evaluate(invocation("bash", { command: "ls" }), rawTool)), /^\[fence\]/);
+		const uncovered = createPolicy({ mode: fenced({ fence: { paths: ["modes"], shell: "uncovered" } }), workspaceRoot: files.root });
+		assert.equal(uncovered.evaluate(invocation("bash", { command: "echo x > modes/x" }), rawTool).outcome, "allow", "'uncovered' is a declaration, not a silent hole: the mode said so, and the load notification repeats it");
+	});
+
+	it("leaves a mode with no fence exactly as it was, which is what makes this additive", () => {
+		const files = workspace();
+		const policy = createPolicy({ mode: mode({ gateSemantics: "none", permissions: { unlisted: "allow", always_allow: [], ask_before: [], never_allow: [] } }), workspaceRoot: files.root });
+		assert.equal(policy.evaluate(invocation("write", { path: "modes/code-audit/governance.yaml", content: "x" }), rawTool).outcome, "allow", "no fence, no claim, no new refusal");
+	});
+});
+

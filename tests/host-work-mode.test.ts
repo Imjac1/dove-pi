@@ -140,6 +140,8 @@ interface FixtureSpec {
 	readonly expires?: string;
 	/** Targets the mode excludes. Declared so a case can show whether anything checks them. */
 	readonly exclusions?: readonly string[];
+	/** The workspace paths the mode protects. Declared so a case can show whether a write into them is refused. */
+	readonly fence?: { readonly paths: readonly string[]; readonly shell: "denied" | "uncovered" };
 }
 
 function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
@@ -160,6 +162,7 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			"  grant: " + (conformance === undefined ? "local-fixture" : conformance.document),
 			"  capabilities: [" + spec.capability + "]",
 			'  expires: "' + (spec.expires ?? "2027-01-01T00:00:00.000Z") + '"',
+			...(spec.fence === undefined ? [] : ["fence:", "  paths: [" + spec.fence.paths.join(", ") + "]", "  shell: " + spec.fence.shell]),
 			"gate:",
 			// `none` when the fixture declares neither control: a fixture that wrote `limit` with no limits would be refused
 			// by the rule this branch is about.
@@ -1043,6 +1046,128 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 });
+
+describe("the fence at the host boundary  [D8]", () => {
+	it("announces the protected surface and the shell stance, and refuses a write into it", async () => {
+		// The announcement is part of the control, not decoration: a fence the operator cannot see is a restriction
+		// nobody can review, and `shell: denied` is what makes the path check the whole story rather than half of it.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "fenced", { capability: "workspace.inspect", fence: { paths: ["modes", "tests"], shell: "denied" } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "fenced" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			// **A request lease is required for the argument-reading half of the policy to run at all**
+			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// about a control that reads arguments opens a request the way the host does, or it would be asserting
+			// against a call path the fence never sees.
+			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "review the harness", systemPrompt: "" }, host.context);
+			const banner = host.notifications.find((message) => /fenced loaded from modes\/fenced/.test(message));
+			assert.ok(banner !== undefined, host.notifications.join(" | "));
+			assert.match(banner ?? "", /fence protects 2 workspace path\(s\) \(modes, tests\)/, "the operator is told which paths");
+			assert.match(banner ?? "", /refuses bash and powershell/, "and that the one route the fence cannot see is closed");
+
+			const inside = await callTool(host, "write", { path: "modes/fenced/governance.yaml", content: "x" }, "c-fence-in");
+			assert.equal(inside?.block, true, "a write into the mode's own governance file is refused");
+			// The host prefixes the mode id, so the policy's own label is inside the reason rather than at its head - and
+			// it is that label the ledger records as the gate that refused the action.
+			assert.match(inside?.reason ?? "", /\[fence\]/, "and the reason names the control that refused it");
+			assert.match(inside?.reason ?? "", /'modes'/);
+
+			const outside = await callTool(host, "write", { path: "src/notes.md", content: "x" }, "c-fence-out");
+			assert.notEqual(outside?.block, true, "a write outside every prefix is not the fence's business: " + (outside?.reason ?? "(no reason)"));
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses a mutation it cannot classify, and names the declaration that would allow it", async () => {
+		// `mkdir` mutates and is not in the verified target map, so the fence has no route to its target. This is the
+		// host-level half of the fail-closed rule: the mode can allow it, by declaring where that tool's target lives.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "fenced", { capability: "workspace.inspect", fence: { paths: ["modes"], shell: "denied" } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "fenced" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			// **A request lease is required for the argument-reading half of the policy to run at all**
+			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// about a control that reads arguments opens a request the way the host does, or it would be asserting
+			// against a call path the fence never sees.
+			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "review the harness", systemPrompt: "" }, host.context);
+			const decision = await callTool(host, "mkdir", { path: "new-dir" }, "c-fence-unmapped");
+			assert.equal(decision?.block, true, "a mutation the fence cannot read does not run inside a fence");
+			assert.match(decision?.reason ?? "", /route the fence cannot read/);
+			assert.match(decision?.reason ?? "", /fence\.targets\.mkdir/, "and the reason names the declaration that would change the answer");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses a hidden write: one unreadable entry in a batched patch makes the whole call unreadable", async () => {
+		// `agent_workspace_patch` names a list. The first entry alone would pass, so a fence that classified the batch
+		// by its first entry would refuse nothing here while reporting that it had checked.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "fenced", { capability: "workspace.inspect", fence: { paths: ["tests"], shell: "denied" } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "fenced" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			// **A request lease is required for the argument-reading half of the policy to run at all**
+			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// about a control that reads arguments opens a request the way the host does, or it would be asserting
+			// against a call path the fence never sees.
+			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "review the harness", systemPrompt: "" }, host.context);
+			const hidden = await callTool(
+				host,
+				"agent_workspace_patch",
+				{ operations: [{ kind: "write", path: "src/a.ts", content: "x" }, { kind: "delete", path: "tests/old.test.ts" }] },
+				"c-fence-batch",
+			);
+			assert.equal(hidden?.block, true, "the second operation is the one the fence exists for");
+			assert.match(hidden?.reason ?? "", /'tests'/);
+			const clean = await callTool(host, "agent_workspace_patch", { operations: [{ kind: "write", path: "src/a.ts", content: "x" }] }, "c-fence-clean");
+			assert.notEqual(clean?.block, true, "while a batch entirely outside the fence is allowed: " + (clean?.reason ?? "(no reason)"));
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("declares the shell route open rather than leaving it unsaid, and the banner says so", async () => {
+		// `uncovered` is legal because a mode may genuinely need the shell. What is not legal is silence: the fence
+		// cannot see through the shell, so the gap is stated at load where the operator is already reading.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "open", { capability: "workspace.inspect", fence: { paths: ["modes"], shell: "uncovered" } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "open" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			// **A request lease is required for the argument-reading half of the policy to run at all**
+			// (`extension.ts:2301`: without an active lease the handler returns after the name-only denial). So a case
+			// about a control that reads arguments opens a request the way the host does, or it would be asserting
+			// against a call path the fence never sees.
+			await host.events.get("input")?.({ type: "input", text: "review the harness", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "review the harness", systemPrompt: "" }, host.context);
+			const banner = host.notifications.find((message) => /open loaded from modes\/open/.test(message));
+			assert.match(banner ?? "", /shell: 'uncovered'/, "the banner names the stance in force");
+			assert.match(banner ?? "", /can still write into those paths/, "and says what it means for the fence");
+			const shell = await callTool(host, "bash", { command: "echo x > modes/open/governance.yaml" }, "c-fence-shell");
+			assert.notEqual(shell?.block, true, "so the shell is not refused by the fence: " + (shell?.reason ?? "(no reason)"));
+			const write = await callTool(host, "write", { path: "modes/open/governance.yaml", content: "x" }, "c-fence-still");
+			assert.equal(write?.block, true, "while the path check still applies to the tools it can read");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+});
+
 
 
 
