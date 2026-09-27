@@ -6,7 +6,8 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "../src/pi-adapter/extension.ts";
-import { admitNonConversationalMessages, convergenceOperationFromPiInput, unresolvedAcceptanceEvidence } from "../src/pi-adapter/extension.ts";
+import { admitNonConversationalMessages, convergenceOperationFromPiInput } from "../src/pi-adapter/extension.ts";
+import { unresolvedAcceptanceEvidence } from "../src/core/harness-verifier.ts";
 import { resolveActionIdentity } from "../src/pi-adapter/action-identity.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
 

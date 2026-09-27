@@ -41,9 +41,8 @@ verifiedBy:
 # symbols were read out of the source rather than remembered, and they are data rather than a comment because the reading
 # uses them.
 verifier:
-  paths: [src/core/harness-axes.ts, src/core/failure-reading.ts, src/core/harness-round.ts, src/core/harness-corpus.ts, src/core/execution-ledger.ts]
+  paths: [src/core/harness-axes.ts, src/core/failure-reading.ts, src/core/harness-round.ts, src/core/harness-corpus.ts, src/core/execution-ledger.ts, src/core/harness-verifier.ts]
   embedded:
-    - path: src/pi-adapter/extension.ts
-      symbols: [unresolvedAcceptanceEvidence, countGateRefusals, changeObservables, convergenceObservables]
+    # `extension.ts` left this list when its verifier read paths moved out; what remains there is harness code.
     - path: src/core/task-convergence.ts
       symbols: [parsePredictedMovement, verificationStateOf, verdictFor, decidableChanges]

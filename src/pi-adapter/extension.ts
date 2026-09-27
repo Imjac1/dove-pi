@@ -54,6 +54,7 @@ import {
 	type TaskResourceObservation,
 } from "../core/task-convergence.ts";
 import { parseHarnessSurface, unresolvedSurfaceEntries } from "../core/harness-surface.ts";
+import { changeBaseline, changeObservables, convergenceObservables, countGateRefusals, unresolvedAcceptanceEvidence } from "../core/harness-verifier.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
 import { createActionPolicy, evidenceDigestsFor, type ActionPolicy } from "../core/action-policy.ts";
@@ -610,123 +611,6 @@ const MAX_BACKGROUND_MESSAGE_CHARS = 8_000;
  * so the caller can report it: silently skipping it would be the exemption this exists to remove, and silently
  * rewriting an unknown shape would be worse.
  */
-/**
- * Resolve acceptance evidence refs against what the harness actually wrote.
- *
- * The companion to the shape rule in the tool-argument layer: that one refuses a ref the agent could have authored,
- * and this one refuses a well-shaped ref whose record does not exist. Neither is sufficient alone - a well-shaped ref
- * to a record that was never written is the assertion in the right costume.
- *
- * What resolves:
- * - `ledger:<stepId>` - a step the execution ledger wrote. Every tool call now writes one (`tool:<toolCallId>`) and
- *   the result names it, so this is the kind a model can actually produce.
- * - `effect:<effectKey>` - a claim file in the effect store, whose existence is the claim.
- */
-export async function unresolvedAcceptanceEvidence(
-	evidenceRefs: readonly string[],
-	options: { readonly readLedger: () => Promise<readonly { readonly stepId: string }[]>; readonly effectsDirectory: string },
-): Promise<readonly string[]> {
-	const needsLedger = evidenceRefs.some((ref) => ref.startsWith("ledger:"));
-	const stepIds = needsLedger ? new Set((await options.readLedger()).map((record) => record.stepId)) : new Set<string>();
-	const unresolved: string[] = [];
-	for (const ref of evidenceRefs) {
-		const separator = ref.indexOf(":");
-		const kind = separator < 0 ? "" : ref.slice(0, separator);
-		const id = separator < 0 ? "" : ref.slice(separator + 1);
-		if (kind === "ledger" && !stepIds.has(id)) unresolved.push(ref);
-		else if (kind === "effect" && !existsSync(join(options.effectsDirectory, id + ".json"))) unresolved.push(ref);
-		else if (kind !== "ledger" && kind !== "effect") unresolved.push(ref);
-	}
-	return unresolved;
-}
-
-/**
- * The harness's own read of the closed observable set a change's prediction is measured against.
- *
- * **Why the model does not supply this.** A verdict compares what a change predicted with what the next round
- * observed, and both sides have to come from the party that does not benefit from the answer. This reads the
- * snapshot and the ledger; the caller of the tool supplies none of it.
- */
-/**
- * The counts, per **atom**, of the refusals the ledger holds.
- *
- * **A recorded label may be composite.** The refusal path falls back to `gates.join("+")` when a reason carries no
- * `[label]` prefix, so a prediction naming one atom would never see such an entry. Splitting here is what makes this
- * a count of refusals rather than a count of the ways a refusal was labelled.
- */
-function countGateRefusals(records: readonly ExecutionRecord[]): Readonly<Record<string, number>> {
-	const counts: Record<string, number> = {};
-	for (const record of records) {
-		if (record.kind !== "gate.refused") continue;
-		const gate = record.details?.gate;
-		if (typeof gate !== "string") continue;
-		for (const atom of gate.split("+")) {
-			const label = atom.trim();
-			if (label !== "") counts[label] = (counts[label] ?? 0) + 1;
-		}
-	}
-	return counts;
-}
-
-/**
- * The observable read, from a snapshot whose evidence refs the caller has **already resolved**.
- *
- * Taking the resolution as an argument rather than doing it here is deliberate: the status read resolves every
- * criterion's refs for its own audit, and resolving them a second time for the same answer would be one rule applied
- * twice with two chances to differ.
- */
-function changeObservables(
-	snapshot: TaskConvergenceSnapshot,
-	unresolvedByCriterion: readonly (readonly string[])[],
-	gateRefusals: Readonly<Record<string, number>>,
-): ChangeObservables {
-	const criterionStatus: Record<string, string> = {};
-	const verificationState: Record<string, string> = {};
-	snapshot.criteria.forEach((criterion, index) => {
-		criterionStatus[criterion.id] = criterion.status;
-		verificationState[criterion.id] = verificationStateOf(criterion.status, (unresolvedByCriterion[index] ?? []).length);
-	});
-	return { currentRevision: snapshot.revision, criterionStatus, verificationState, gateRefusals };
-}
-
-/**
- * The observables a verdict is read against, assembled **once** for both of its consumers.
- *
- * The status read reports verdicts and the round boundary records them, and both need the same three inputs: the
- * snapshot, the per-criterion unresolved refs, and the refusal counts. Assembling them twice is how a field comes to be
- * added to one and forgotten in the other - the drift this record has already paid for once, when a decoder served two
- * doors. The I/O is injected rather than closed over so the rule stays in one place and the caller owns the filesystem.
- */
-async function convergenceObservables(
-  snapshot: TaskConvergenceSnapshot,
-  readLedger: () => Promise<readonly ExecutionRecord[]>,
-  effectsDirectory: string,
-): Promise<{ readonly observables: ChangeObservables; readonly unresolvedByCriterion: readonly (readonly string[])[] }> {
-  const unresolvedByCriterion = await Promise.all(snapshot.criteria.map((criterion) => unresolvedAcceptanceEvidence(criterion.evidenceRefs, { readLedger, effectsDirectory })));
-  return { observables: changeObservables(snapshot, unresolvedByCriterion, countGateRefusals(await readLedger())), unresolvedByCriterion };
-}
-
-/**
- * The values a verdict will compare against: read now, for the keys this manifest predicts over, and stored with it.
- *
- * A key left out is a baseline the harness did not have, which `verdictFor` reports as `unobserved` rather than as
- * a zero - the difference between "it did not move" and "nobody looked".
- */
-function changeBaseline(
-	manifest: { readonly predictedFixes: readonly PredictedMovement[]; readonly predictedRegressions: readonly PredictedMovement[] },
-	observed: ChangeObservables,
-): Readonly<Record<string, string | number>> {
-	const baseline: Record<string, string | number> = {};
-	for (const movement of [...manifest.predictedFixes, ...manifest.predictedRegressions]) {
-		const value = movement.observable === "criterion-status"
-			? observed.criterionStatus[movement.subject]
-			: movement.observable === "verification-state"
-				? observed.verificationState[movement.subject]
-				: observed.gateRefusals[movement.subject];
-		if (value !== undefined) baseline[movementKey(movement)] = value;
-	}
-	return baseline;
-}
 
 /**
  * The declared editable surface, as a bounded projection: component names and how many paths each owns.
