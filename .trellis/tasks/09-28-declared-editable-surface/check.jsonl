@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate this must pass."}
+{"file": "tests/harness-reachability.test.ts", "reason": "The gate that decides whether a new core module is inert."}
