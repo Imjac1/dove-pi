@@ -1717,6 +1717,8 @@ The boundary limit from the previous round became a reading: the declaration now
 | Hash | Message |
 |------|---------|
 | `63a028a` | feat(loop): the verifier is declared where it can be and named where it cannot |
+| `edc92fe` | docs(spec): record the three answers, the two relations and the extraction prerequisite |
+| `15df96d` | chore(task): record the verifier-map task, the live answer and the dropped brace |
 
 ### Testing
 
