@@ -1,0 +1,2 @@
+{"file": "tests/document-drift.test.ts", "reason": "The checks the front-door rule joins."}
+{"file": ".trellis/.template-hashes.json", "reason": "Where the script actually is: the platform hook directories."}
