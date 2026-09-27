@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The quality gate this must pass."}
+{"file": "src/core/failure-reading.ts", "reason": "One of the two verified-stale citations."}
