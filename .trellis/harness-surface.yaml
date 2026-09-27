@@ -50,5 +50,9 @@ verifier:
     # constructor), and movementFromParts - which parses a movement from its parts - is called by the record own decoders
     # as well. Extracting the tail therefore needs the movement vocabulary to become a third module that both sides
     # import, which is a different change from a move of one block.
+    #
+    # Measured and declined as its own change: the refusal constructor alone has 74 use sites in the record module, and the
+    # movement helpers could not be lifted without a value-level cycle. See the boundary contract in
+    # personal-agent-harness-loop.md for the numbers and for what would reopen it.
     - path: src/core/task-convergence.ts
       symbols: [parsePredictedMovement, verificationStateOf, verdictFor, decidableChanges]

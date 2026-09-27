@@ -61,6 +61,14 @@ that reports says so in a field a reader can check.
       a third module both sides import, which is a different change from moving one block. An earlier version of this
       contract said the functions were "entangled with the record reducer": a guess that pointed at the right answer for the
       wrong reason, and the wrong reason is what made the next attempt look cheap.
+    - **The refactor was measured and declined.** Use sites in the record module, counted as non-comment matching lines:
+      `invalid` **74**, `GENERIC_ID_PATTERN` 10, `CHANGE_OBSERVABLES`/`ACCEPTANCE_STATUSES` 5,
+      `ACCEPTANCE_ID_PATTERN`/`SHA256_PATTERN`/`TaskConvergenceValidationError` 4,
+      `VERIFICATION_STATES`/`GATE_LABELS`/`MAX_CHANGES`/`movementFromParts` 3, `movementKey` 2. Lifting the movement helpers
+      alone would need a module that imports the record while the record imports it - a cycle tolerable for **types** and not
+      for **values** - and the payoff would be an empty `embedded` list while the reading already answers `possible` with the
+      symbols named. **What reopens it**: splitting the record module for a reason of its own, at which point the vocabulary
+      comes apart as part of that work.
 - **The failure reading (`src/core/failure-reading.ts`) is the mining half of the loop: a pure function of the
   ledger that turns an unsuccessful request into a bounded record.** It reads; it clusters nothing, ranks nothing and
   proposes nothing.
