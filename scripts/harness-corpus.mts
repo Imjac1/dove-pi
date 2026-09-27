@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
+import { parseLedgerLines } from "../src/core/execution-ledger.ts";
 import { summarizeCorpus, type CorpusLedger } from "../src/core/harness-corpus.ts";
 import type { ClientAccount } from "../src/core/failure-reading.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
@@ -41,9 +42,7 @@ function walk(root: string, out: string[], depth: number): void {
 /** A ledger this script cannot parse counts as empty rather than stopping the walk. */
 function readRecords(file: string): readonly ExecutionRecord[] {
 	try {
-		return readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => {
-			try { return [JSON.parse(line) as ExecutionRecord]; } catch { return []; }
-		});
+		return parseLedgerLines(readFileSync(file, "utf8"));
 	} catch { return []; }
 }
 

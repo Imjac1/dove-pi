@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
+import { parseLedgerLines } from "../src/core/execution-ledger.ts";
 import { readFailures, type ClientAccount } from "../src/core/failure-reading.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
 
@@ -33,7 +34,7 @@ if (!existsSync(ledgerPath)) {
 	process.exit(0);
 }
 
-const records = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as ExecutionRecord);
+const records = parseLedgerLines(readFileSync(ledgerPath, "utf8"));
 /**
  * The client account, when the caller names the run summary it belongs to.
  *

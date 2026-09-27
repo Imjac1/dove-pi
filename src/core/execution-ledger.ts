@@ -191,6 +191,28 @@ function nonNegativeNumber(value: unknown): number | undefined {
 	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
+/**
+ * **The one reader of the ledger line format, because five of them disagreed.**
+ *
+ * A ledger is written one JSON object per line, one line per append. Two of the readings parsed it themselves with a bare
+ * `JSON.parse` and threw on a line a crash had cut short - so on exactly the run this harness exists to explain, they printed
+ * nothing at all. The rule is that a line which does not parse is **not a record**: the append guarantee is one line per call,
+ * so a line the writer never finished was never written.
+ *
+ * **Left open, and recorded in the contract rather than decided here**: a partial line anywhere but the end would mean the
+ * append guarantee itself was broken, and nothing here says whether a reading should skip it, count it, or refuse the file.
+ */
+export function parseLedgerLines(content: string): readonly ExecutionRecord[] {
+	return content.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+		try {
+			const record = JSON.parse(line) as ExecutionRecord;
+			return record && typeof record === "object" ? [record] : [];
+		} catch {
+			return [];
+		}
+	});
+}
+
 export class ExecutionLedger {
 	public constructor(private readonly filePath: string) {}
 
@@ -401,18 +423,10 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "change.applied", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, taskId: input.taskId }, details: { changeId: input.changeId, commit: input.commit } });
 	}
 
-	/** Read the append-only ledger for startup recovery and diagnostics. */
+	/** Read the append-only ledger for startup recovery and diagnostics, through the one reader of its line format. */
 	public async read(): Promise<readonly ExecutionRecord[]> {
 		try {
-			const content = await readFile(this.filePath, "utf8");
-			return content.split(/\r?\n/).filter(Boolean).flatMap((line) => {
-				try {
-					const record = JSON.parse(line) as ExecutionRecord;
-					return record && typeof record === "object" ? [record] : [];
-				} catch {
-					return [];
-				}
-			});
+			return parseLedgerLines(await readFile(this.filePath, "utf8"));
 		} catch (error) {
 			if (isMissing(error)) return [];
 			throw error;

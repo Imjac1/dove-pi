@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
+import { parseLedgerLines } from "../src/core/execution-ledger.ts";
 import { parseHarnessSurface } from "../src/core/harness-surface.ts";
 import { surfaceFit, verifierFit } from "../src/core/harness-round.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
@@ -49,9 +50,7 @@ function readChanges(): { readonly taskId: string; readonly change: TaskChange }
 function readLedger(): readonly ExecutionRecord[] {
 	const file = join(resolveDoveStateDir(workspace), "execution.jsonl");
 	if (!existsSync(file)) return [];
-	return readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => {
-		try { return [JSON.parse(line) as ExecutionRecord]; } catch { return []; }
-	});
+	return parseLedgerLines(readFileSync(file, "utf8"));
 }
 
 /** The files a commit touched, or undefined when git cannot answer - a third answer, not an empty one. */

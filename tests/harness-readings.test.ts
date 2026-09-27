@@ -95,6 +95,36 @@ describe("the readings, exercised as scripts", () => {
 		}
 	});
 
+	it("reads a ledger a crash truncated, instead of dying on it", () => {
+		// **The failure this test exists for, measured before it was written.** A ledger whose last append was cut short made
+		// `harness-failures.mts` and `harness-axes.mts` exit 1 with **no output at all** - blind on exactly the run the harness
+		// exists to explain. Five readers parsed this format; two of them threw, because they were copies of the tolerant one
+		// with the try removed. There is one reader now, and this is the case that proves it.
+		const root = mkdtempSync(join(tmpdir(), "dove-readings-partial-"));
+		try {
+			const state = join(root, "state");
+			mkdirSync(state, { recursive: true });
+			const complete = [
+				record("request.received", "request:req-1", { logicalRequestId: "req-1" }),
+				record("request.terminal", "request:req-1", { logicalRequestId: "req-1", reason: "failed", terminal: { origin: "provider", code: "provider-attempt-limit", retryable: true } }),
+			].join("\n");
+			// A half-written final line, with no newline after it: the append guarantee is one line per call, so this line was
+			// never finished, which is why it is not a record.
+			writeFileSync(join(state, "execution.jsonl"), complete + "\n" + '{"taskId":"t1","stepId":"request:req-2","kind":"request.rece');
+			const env = { DOVE_PI_STATE_DIR: state };
+			for (const script of ["harness-failures.mts", "harness-axes.mts", "harness-rounds.mts"]) {
+				const result = run(script, [join(state, "execution.jsonl")], env);
+				assert.equal(result.status, 0, script + " must survive a truncated final line: " + result.stdout);
+			}
+			const corpus = run("harness-corpus.mts", [state], env);
+			assert.equal(corpus.status, 0, "the corpus reading must survive it too: " + corpus.stdout);
+			const failures = run("harness-failures.mts", [join(state, "execution.jsonl")], env);
+			assert.match(failures.stdout, /provider-attempt-limit/, "the record that was written is still read");
+			assert.doesNotMatch(failures.stdout, /req-2/, "and the line the writer never finished is not a record");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 	it("says what it did not find, instead of dying on a path that is not there", () => {
 		// The behaviour the scripts were written for, and the reason they can be run at all: a reading that dies on a missing
 		// ledger is a reading nobody runs twice.

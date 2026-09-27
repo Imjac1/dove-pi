@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
+import { parseLedgerLines } from "../src/core/execution-ledger.ts";
 import { safetyAndStability, UNCOMPUTABLE_AXES } from "../src/core/harness-axes.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
 
@@ -26,7 +27,7 @@ if (!existsSync(ledgerPath)) {
 	process.exit(0);
 }
 
-const records = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as ExecutionRecord);
+const records = parseLedgerLines(readFileSync(ledgerPath, "utf8"));
 const reading = safetyAndStability(records);
 const percent = (value: number | undefined): string => (value === undefined ? "no data" : (value * 100).toFixed(1) + "%");
 const count = (label: string, value: number | string): void => console.log("  " + label.padEnd(48, ".") + " " + value);
