@@ -51,6 +51,19 @@ export interface FailureRecord {
 	readonly resources?: TaskResourceObservation;
 	/** The provider outcome for this request, when the ledger holds one that reports trouble. */
 	readonly provider?: ProviderOutcome;
+	/**
+	 * **What this record cannot see**, when the cause is upstream of every recording hook.
+	 *
+	 * Declared rather than left to be inferred. A request Pi rejected in preflight leaves a terminal that says
+	 * `host-shutdown-preflight` - which is what Dove observed and is not a cause - and **no provider record at all**,
+	 * because the refusal happened before any hook ran. A reader who is not told that will read the terminal name as an
+	 * explanation.
+	 *
+	 * It never names the upstream cause. The ledger does not hold `provider-authorization-denied` - the RPC did - and
+	 * importing that name would be claiming an observation this process never made. The limit names the boundary, which
+	 * is the part the record can support.
+	 */
+	readonly unseen?: string;
 	readonly component: ChangeSurface | "unattributed";
 	/** The rule that decided the component, or the reason none could be. Never empty. */
 	readonly componentEvidence: string;
@@ -226,6 +239,11 @@ export function readFailures(records: readonly ExecutionRecord[]): FailureReadin
 			...(decided === undefined ? {} : { convergence: decided }),
 			...(observed === undefined ? {} : { resources: observed }),
 			...(providers.has(terminal.requestId) ? { provider: providers.get(terminal.requestId) as ProviderOutcome } : {}),
+			// Both halves matter: a preflight closure **with** a provider outcome has its cause on the record, and any
+			// other terminal means the request reached the loop, so the closure is not what happened.
+			...(terminal.reason === "startup-failed" && !providers.has(terminal.requestId)
+				? { unseen: "the request ended before the agent loop started: whatever rejected it did so upstream of every recording hook, so this ledger cannot name the cause" }
+				: {}),
 			component: attribution.component,
 			componentEvidence: attribution.evidence,
 		});

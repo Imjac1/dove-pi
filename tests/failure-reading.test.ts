@@ -179,4 +179,40 @@ describe("the failure reading", () => {
 		// reported trouble is the one worth attaching, and a later success does not erase what went wrong earlier.
 		assert.deepEqual(reading.failures.find((failure) => failure.requestId === "req-2")?.provider, { stopReason: "error", httpStatus: 500 });
 	});
+
+	it("declares what it cannot see when the cause is upstream of every recording hook", () => {
+		// The first real failure the corpus ever held looked like this: two records, no provider record at all, and a
+		// terminal naming what Dove observed rather than what rejected the request. A reader has to be told that.
+		const reading = readFailures([
+			received("req-1"),
+			terminal("req-1", "startup-failed", { origin: "session", code: "host-shutdown-preflight", retryable: false }),
+		]);
+		const failure = reading.failures[0]!;
+		assert.match(String(failure.unseen ?? ""), /upstream of every recording hook/);
+		assert.match(String(failure.unseen ?? ""), /cannot name the cause/);
+		assert.doesNotMatch(String(failure.unseen ?? ""), /authorization|provider-authorization-denied/, "the ledger does not hold that name, so the record must not claim it");
+		assert.equal(failure.mechanism.code, "host-shutdown-preflight", "and the mechanism stays what Dove observed");
+	});
+
+	it("declares no limit when the cause is on the record", () => {
+		// Both halves of the rule matter. A preflight closure whose request also has a provider outcome has its cause on
+		// the record, so a limit there would be a false absence - which is worse than no note at all.
+		const withProvider = readFailures([
+			received("req-1"),
+			record("provider.request.completed", "req-1", { providerCallId: "call-1", stopReason: "error", usage: { httpStatus: 401 } }),
+			terminal("req-1", "startup-failed", { origin: "session", code: "host-shutdown-preflight", retryable: false }),
+		]);
+		assert.equal(withProvider.failures[0]?.unseen, undefined);
+		assert.deepEqual(withProvider.failures[0]?.provider, { stopReason: "error", httpStatus: 401 });
+	});
+
+	it("declares no limit for a failure that reached the loop", () => {
+		const reached = readFailures([
+			received("req-1"),
+			terminal("req-1", "failed", { origin: "provider", code: "provider-attempt-limit", retryable: true }),
+			terminal("req-2", "failed", { origin: "convergence", code: "convergence-ready_to_finish", retryable: false }),
+		]);
+		assert.equal(reached.failures[0]?.unseen, undefined, "a provider failure is on the record under its own name");
+		assert.equal(reached.failures[1]?.unseen, undefined, "and a convergence refusal is a different boundary altogether");
+	});
 });

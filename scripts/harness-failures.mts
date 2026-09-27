@@ -43,6 +43,8 @@ if (reading.failures.length === 0) {
 for (const failure of reading.failures) {
 	console.log("  " + failure.requestId + "  " + failure.reason + " / " + failure.mechanism.code + " (" + failure.mechanism.origin + (failure.mechanism.retryable ? ", retryable" : "") + ")");
 	if (failure.mechanism.summary !== undefined) console.log("    summary:    " + failure.mechanism.summary);
+	// The declared limit, printed where the mechanism is: a reader of the record needs to know the name is not the cause.
+	if (failure.unseen !== undefined) console.log("    unseen:     " + failure.unseen);
 	// The second place the mechanism lives: the provider own account of the same failure, printed beside Dove own.
 	if (failure.provider !== undefined) console.log("    provider:   " + failure.provider.stopReason + (failure.provider.httpStatus === undefined ? "" : " (http " + failure.provider.httpStatus + ")") + (failure.provider.diagnostic === undefined ? "" : " - " + failure.provider.diagnostic));
 	console.log("    refusals:   " + (failure.refusals.length === 0 ? "(none)" : failure.refusals.map((entry) => entry.gate + ": " + entry.reason).join(" | ")));
