@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 39
+- **Total Sessions**: 40
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1494 | Active |
+| `journal-1.md` | ~1534 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 40 | 2026-09-28 | The first real failure, and the claim it refuted | `6fc6c1d`, `93d39a3`, `e69f978` | `master` |
 | 39 | 2026-09-28 | The mining half reads the provider outcome, and the boundary that cannot judge it | `428ab37`, `86e8d24`, `7aa03e5` | `master` |
 | 38 | 2026-09-28 | The corpus as a reading, and the preservation gap behind the empty fuel | `e5ca39d`, `7b8b5cc`, `05a42dd` | `master` |
 | 37 | 2026-09-28 | The applied commit, and the check that found the map defect on its first run | `43b44d1`, `f0e9684`, `f6ce958`, `460512c` | `master` |

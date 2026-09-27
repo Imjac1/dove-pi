@@ -1492,3 +1492,43 @@ A measured blind spot in the mining half is closed: the suite asserts that a pre
 ### Next Steps
 
 - The open question the boundary raises: widen the observable set so an instrument improvement is judgeable, or accept that a person judges them - and the first real turn, which still needs a corpus that contains a failure.
+
+
+## Session 40: The first real failure, and the claim it refuted
+<!-- trellis-session: v=2 fp=b85edce6938033d0 -->
+
+**Date**: 2026-09-28
+**Task**: The first real failure, and the claim it refuted
+**Branch**: `master`
+
+### Summary
+
+The corpus now holds a real failure - produced by running the black-box harness the way the suite runs it, with a preserved state directory - and reading it refuted part of what the previous round claimed, so the claim is corrected and the failure record now declares the boundary it cannot see.
+
+### Main Changes
+
+- the run: provider-authorization-denied at the RPC, host-shutdown-preflight in the ledger, and a ledger of two records with no provider record at all - so for a preflight rejection the mechanism is NOT in the ledger, because Pi refuses the request before any Dove hook runs
+- the previous round verified its change against a fixture built to the shape it expected, which is the failure mode this project keeps finding; the corrected sentence is written in place in the specification because the over-broad version is what a future reader would re-derive
+- the record now carries unseen when the terminal is startup-failed and no provider outcome was recorded: it names the boundary and never imports the upstream name, because the ledger does not hold provider-authorization-denied - the RPC did
+- both halves of the rule are asserted: a closure with a provider outcome has its cause on the record, and a provider failure or a convergence refusal reached the loop, so a limit there would be a false absence
+- the corpus reading aggregated a failure for the first time in its life, and the run is reproducible from the command recorded in the task
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6fc6c1d` | feat(loop): a failure whose cause is upstream declares what it cannot see |
+| `93d39a3` | docs(spec): correct the over-broad claim the first real failure refuted |
+| `e69f978` | chore(task): record the first real failure, the run that produced it, and the claim it refuted |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 702 tests, 700 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5. The corpus reading reports 179 ledgers with one failure, and the failure script prints its mechanism and its limit.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The question the run leaves open: whether Pi exposes a preflight rejection to an extension at all, which is the only way the ledger could ever name that cause - and the first real turn, which now has evidence in the corpus to cite.
