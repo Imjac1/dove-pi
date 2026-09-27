@@ -199,6 +199,22 @@ revision 1 with all ten pending and was archived in that state. The cheapest ste
 **populating `evidenceRefs` with the check that decided each criterion, and adding a test that fails when a criterion
 has none** - which is the same shape as the reachability test, applied to acceptance.
 
+**Built (2026-09-27, commit 4e684a0) - the sensor half of (a).** `agent_task_convergence status` now returns a
+`verification` vector beside the snapshot: for every criterion, the same resolver the pass path refuses on
+(`unresolvedAcceptanceEvidence`) resolves each evidence ref against the ledger and the effect store, and the result
+is one of `verified` (passed, every ref resolves) / `unresolved_evidence` (passed, a ref names nothing the harness
+wrote) / `failed` / `waived` / `not_claimed`. Two tests pin it: a passed criterion citing `ledger:tool:suite-run`
+audits `verified`, and a snapshot forged on disk to cite `ledger:tool:never-happened` audits
+`unresolved_evidence` with the ref named - the forgery the pass path cannot see because it bypasses the pass path,
+which is precisely the case the audit exists for.
+
+**What this does not claim.** (ii) is still open: nothing drives the criteria, and the audit reads a snapshot rather
+than running the checks. The mechanical link is now a *reading* instead of a human vocabulary match - which the
+executed probe above showed was unreliable - but "the criterion was decided by this check, and that check is green"
+still requires whoever passes a criterion to cite the right observable. The audit catches a forged or stale citation;
+it cannot catch a citation to a real record that does not actually decide the criterion. That is the boundary between
+this sensor and a real judge, and it is why (a) is scoped to the execution-signal oracle rather than an LLM one.
+
 ---
 
 ## D4. Do we make the cumulative constraints real?
