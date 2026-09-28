@@ -1,0 +1,3 @@
+{"file": "src/core/harness-axes.ts", "reason": "Where ITQ is declared uncomputable and where it will be computed."}
+{"file": "src/core/execution-ledger.ts", "reason": "The decision record the vector joins."}
+{"file": "src/pi-adapter/extension.ts", "reason": "The call site that has the snapshot in hand."}
