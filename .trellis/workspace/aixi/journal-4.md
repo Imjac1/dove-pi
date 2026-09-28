@@ -869,3 +869,39 @@ Re-tested an earlier conclusion and found it wrong. pwsh is not installed here, 
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and the goal stays active by the policy it carries.
+
+
+## Session 182: The two conclusions that lean on the layer fact
+<!-- trellis-session: v=2 fp=b2af073d8f9efe0a -->
+
+**Date**: 2026-09-29
+**Task**: The two conclusions that lean on the layer fact
+**Branch**: `master`
+
+### Summary
+
+Tested the fact two qualifications lean on instead of quoting it. The layer check re-runs at 2 of 2, nothing anywhere imports from modes, and modes holds ten files: one json, six yaml, three markdown and no TypeScript at all. So a mode is data.
+
+### Main Changes
+
+- the principle is not that a search finds no trace of a vertical in the core but that a vertical has no code to contribute. The two qualifications were right and weaker than they needed to be
+- a holder now walks modes and asserts it holds no executable file, with a control that the directory was read, and it says in its header what it does not hold - the absence of the string, which is the trap the string-search version fell into
+- and a cosmetic wart is recorded rather than fixed: the case sits outside the file describe block, a move was attempted and turned out to be a no-op, and it stopped there because a placement is not worth more calls than the finding that prompted it
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9c76e82` | test(layer): hold the fact that modes are data, which two qualifications lean on |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and the goal stays active by the policy it carries.

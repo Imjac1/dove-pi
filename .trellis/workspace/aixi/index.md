@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 181
+- **Total Sessions**: 182
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~871 | Active |
+| `journal-4.md` | ~907 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 182 | 2026-09-29 | The two conclusions that lean on the layer fact | `9c76e82` | `master` |
 | 181 | 2026-09-29 | The fallback, and whether it can be observed | `d98efea` | `master` |
 | 180 | 2026-09-29 | The goal-tool policy, read for the first time | `409a0ca` | `master` |
 | 179 | 2026-09-29 | What this span actually changed, counted | `45004ce` | `master` |
