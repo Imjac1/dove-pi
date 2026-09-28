@@ -970,3 +970,41 @@ Round 42 rehearsed the last mile with outside and unresolved and left inside to 
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task - the only step this environment cannot take.
+
+
+## Session 77: A round is a record, and the third axis is computable
+<!-- trellis-session: v=2 fp=8a4552576540c96c -->
+
+**Date**: 2026-09-28
+**Task**: A round is a record, and the third axis is computable
+**Branch**: `master`
+
+### Summary
+
+ITQ was declared uncomputable with its reason and its evidence: no per-round score was persisted, the criterion vector existed only in a checkpoint, and a convergence decision reads the same whether it started, passed or failed a criterion. Its wouldNeed named the observation and said that was a decision of its own - so the round made the decision and then made the axis computable.
+
+### Main Changes
+
+- the decision, and the measurement that corrected my first answer: the vector belongs on the observation, which is written for every settled request, and not on the decision record, which is only written on a tool call or a block. I had argued for the decision record on three grounds before measuring which record is actually per round
+- the axis computes the per-round score, the slope as a last-minus-first difference rather than a fit, and the escape rate - an escape being the round a stagnation ended, not every round that follows it, which the first implementation got wrong and its own test caught
+- ITQ leaves the uncomputable list, which now holds the one axis that needs something the harness does not measure at all: a second objective and a decision about its frontier
+- and no observable is added: the closed set a manifest predicts stays behaviour-shaped, and a criterion vector is a record of what the criteria were rather than a fourth thing to predict
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7ee87ab` | feat(loop): a round is a record, and the third axis is computable |
+| `0852c31` | chore(task): record the per-round score decision and the axis it made computable |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 733 tests, 731 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the axes suite is 9 of 9 with the new axis asserted on a constructed sequence.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The Pareto axis, which needs a second measured objective and a decision about its frontier - and that is a design decision rather than a build step. The first real turn still needs a Pi host.
