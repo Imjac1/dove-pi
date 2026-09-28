@@ -76,6 +76,65 @@ describe("Pi adapter", () => {
 		assert.equal(isReadOnlyShellCommand("bash", { command: "unknown-tool --inspect" }), false);
 	});
 
+	it("advises on a long conversation through the handler, and only that guard fires", async () => {
+		// **The turn cap is wired and this holds the wiring.** A case of its own, for the same reason as the one
+		// below: every notice is one-shot per `extension(api)` call. And it stages a small prefix on purpose, so
+		// the fraction and token guards stay silent and the assertion is about the cap rather than about whichever
+		// adviser happened to speak first.
+		const previousCap = process.env.DOVE_PI_MAX_MESSAGES;
+		process.env.DOVE_PI_MAX_MESSAGES = "3";
+		try {
+			const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+			const notifications: string[] = [];
+			let sessionEntries: unknown[] = [];
+			const api = {
+				registerCommand() {},
+				registerShortcut() {},
+				registerTool() {},
+				registerFlag() {},
+				appendEntry() {},
+				getAllTools() { return representativeTools.map((name) => ({ name })); },
+				setActiveTools() {},
+				getActiveTools() { return [...representativeTools]; },
+				getThinkingLevel() { return "max"; },
+				on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const context: FakeContext = {
+				hasUI: true,
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify: (message) => notifications.push(message) },
+				sessionManager: { getEntries: () => sessionEntries, getSessionId: () => "cap-session" },
+				// Deliberately small, so neither the fraction guard nor the absolute token guard can fire.
+				getContextUsage: () => ({ tokens: 1_000, contextWindow: 1_000_000 }),
+			};
+			const turn = () => events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "turn", systemPrompt: "" }, context);
+			const cap = () => notifications.filter((message) => /条对话/.test(message));
+			const other = () => notifications.filter((message) => /通过率|已累积约/.test(message));
+			// At the cap exactly: quiet. The comparison is `>`, so a session of three turns under a cap of three is fine.
+			sessionEntries = [{ type: "message" }, { type: "message" }, { type: "message" }];
+			notifications.length = 0;
+			await turn();
+			assert.equal(cap().length, 0, `the cap does not fire at three: ${JSON.stringify(notifications)}`);
+			assert.equal(other().length, 0, "and nothing else did either, which is what makes the next step about the cap");
+			// Past it: one notice, naming both ways out and claiming neither.
+			sessionEntries = [...sessionEntries, { type: "message" }, { type: "message" }];
+			notifications.length = 0;
+			await turn();
+			assert.equal(cap().length, 1, `the cap is reported once: ${JSON.stringify(notifications)}`);
+			assert.match(cap()[0] ?? "", /\/compact/, "it names the first way out");
+			assert.match(cap()[0] ?? "", /新的会话/, "and the second");
+			assert.match(cap()[0] ?? "", /5 条对话/, "and the count it saw");
+			assert.equal(other().length, 0, "still nothing else, so this notice is the cap and not a neighbour");
+			// The control: the flag is one-shot, so an identical turn reports nothing at all.
+			notifications.length = 0;
+			await turn();
+			assert.equal(notifications.length, 0, "the notice does not repeat");
+		} finally {
+			if (previousCap === undefined) delete process.env.DOVE_PI_MAX_MESSAGES;
+			else process.env.DOVE_PI_MAX_MESSAGES = previousCap;
+		}
+	});
+
 	it("reports a cold start and a growing prefix through the fuse, once each", async () => {
 		// **A case of its own because the flags are closure state.** Every notice the adapter raises is one-shot per
 		// `extension(api)` call, so a case asserting a notice has to own the handler that raises it - which is what
