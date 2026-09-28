@@ -1181,3 +1181,39 @@ Both answers: duplicate project authorities are built as conflicts in context/in
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 136: The promises and the tests that hold them, written down
+<!-- trellis-session: v=2 fp=a35c5eb1ef6bcb23 -->
+
+**Date**: 2026-09-28
+**Task**: The promises and the tests that hold them, written down
+**Branch**: `master`
+
+### Summary
+
+Wrote the promise-to-holder mapping into the specification as a second table under the refusal table, and added a check that reads that document and asserts every test path it names exists. The check declares what it does not claim: a pointer resolving is not a promise being held.
+
+### Main Changes
+
+- the negative control failed two checks rather than one - the new pointer check and an existing check reading the same document - which says the document is held in more than one way
+- one row is named by file only, on purpose: the action-not-granted row says its case is not named because it was not read to a case. Writing an unread case name would have been the plausible-neighbour mistake
+- so a count with no reader became a pointer with a holder, which is the durable form of what the last two rounds established by reading
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aabbb3a` | docs(spec): write the holders into the table, and hold the pointers |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 745 tests, 743 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
