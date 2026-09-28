@@ -1375,3 +1375,39 @@ Built the isolated archived-scenario replay. The ledger is at stateDir/execution
 ### Next Steps
 
 - The child seventh plan item: validate repeated maintenance explanations and incomplete-session reporting.
+
+
+## Session 196: The summary that explains repeated maintenance
+<!-- trellis-session: v=2 fp=02913737cde4983f -->
+
+**Date**: 2026-09-29
+**Task**: The summary that explains repeated maintenance
+**Branch**: `master`
+
+### Summary
+
+Did the child seventh plan item, answering the archived defect that maintenance logs could not explain two installs and one repair within a few minutes. summarize_maintenance_logs lists the runs in order with each decision and duration, counts them by decision, and reports how many runs could not say what they decided or how long they took.
+
+### Main Changes
+
+- a summary reporting only run counts and a duration total would look complete while explaining nothing, which is the archived defect restated. The duration total is unknown rather than zero when nothing could be measured, because a sum of nothing reads as no time at all, which is a claim, where unknown is the truth
+- and the grouping was deliberately not invented: the defect is a cluster of runs and the obvious implementation groups by proximity, but a timestamp is not a correlation identifier, so the runs are listed in order and the reader sees the cluster rather than the summary asserting one exists
+- six cases, including a control that no_op is a decision rather than the absence of one, and that an empty input summarises to nothing rather than to a claim
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9343af9` | feat(installer): explain repeated maintenance decisions instead of listing four fields |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. npm run test:installer: 140 tests, OK - six more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child eighth plan item, the last: run the full Node, installer, doctor, Pi smoke and diff checks.
