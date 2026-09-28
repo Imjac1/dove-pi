@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 88
+- **Total Sessions**: 89
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1430 | Active |
+| `journal-2.md` | ~1467 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 89 | 2026-09-28 | The promises on the reachability list | `b0004eb`, `66aac8d` | `master` |
 | 88 | 2026-09-28 | Modules on the Python side, and the duplicate the refinement found | `9aabb38`, `0dbf020` | `master` |
 | 87 | 2026-09-28 | The one shipped file no typechecker has ever read | `a534a05`, `d59f094` | `master` |
 | 86 | 2026-09-28 | Modules in src that nothing imports | `22847a9`, `5953d20` | `master` |

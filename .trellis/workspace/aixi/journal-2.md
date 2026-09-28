@@ -1428,3 +1428,40 @@ The Python module graph is clean: nine candidates across installer, dove_pi.py a
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 89: The promises on the reachability list
+<!-- trellis-session: v=2 fp=17b85f050910a405 -->
+
+**Date**: 2026-09-28
+**Task**: The promises on the reachability list
+**Branch**: `master`
+
+### Summary
+
+The allow-list names, for each unreachable module, the milestone that would make it reachable, so a non-null value is a promise attached to a task. Read across all ten entries: every one is wiredBy null. The task that made the claims this list was born with has finished, and each claim left the list as it was wired, which the six shrinks in its own comments record.
+
+### Main Changes
+
+- the premise was that the list carries promises from finished tasks, and the measurement refuted it. What is left is modules unreachable on purpose - the four readings, each with the reason a reading must not be a control - and modules that predate the framework work and are claimed by nothing
+- that is worth recording because the exactness assertion cannot see it: the test catches dead code arriving and a list rotting, and it cannot catch a promise whose task ended, because the list stays exact and the suite stays green either way
+- so the one thing the check is blind to is now written where the next entry will be written, and the round is a measurement and a note rather than an edit to the list, which it was explicitly out of scope to touch
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b0004eb` | docs(reachability): every entry is wiredBy null, measured rather than assumed |
+| `66aac8d` | chore(task): record the refuted premise and the one thing the reachability check cannot see |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. The reachability test is 6 of 6. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
