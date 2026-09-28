@@ -1363,3 +1363,40 @@ Read all six Tests Required lists in framework-core.md. Scenario 1 six items and
 ### Next Steps
 
 - Scenarios 2, 4 and 5 of the required-test lists, and four items of scenario 3, which this round named as unchecked rather than implying.
+
+
+## Session 141: The authority matrix, row by row
+<!-- trellis-session: v=2 fp=6aadc472c3fe6999 -->
+
+**Date**: 2026-09-28
+**Task**: The authority matrix, row by row
+**Branch**: `master`
+
+### Summary
+
+Eight of the nine rows of the authority matrix are held in the matrix own words, most by gates.test.ts: blocks a target that is not in the document, blocks when ownership evidence cannot be verified, blocks when the required grant is missing, blocks a grant issued by the operator itself, blocks when an external approval is pending or stale.
+
+### Main Changes
+
+- and one was implemented and unheld: authority.ts blocks an ambiguous target with it matches N entries, and no test reached it. A holder was added to the pentest suite, twinning an entry onto the shipped document so a request naming that address matches both - the second genuinely unheld promise this audit has found, after the CLI approval row
+- the control ran before the test was right: the first version renamed the twin id so only one entry matched, and the test failed, which is what a control is
+- and the repository own check caught me: the new case carried a comment citing authority.ts:314, and the suite refused it with a comment cites a line of this repository, which drifts: name the thing instead - the very rule this session has quoted in its own reports. The comment names evaluateAuthority now, and the fix is a commit rather than an amend, because a check that catches its own auditor is the check working
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbfdeff` | test(authority): hold the matrix row that nothing held |
+| `08d0ca4` | fix(test): the house rule caught me citing a line number in a comment |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Scenarios 4 and 5 of the required-test lists, which remain unchecked and named as such.
