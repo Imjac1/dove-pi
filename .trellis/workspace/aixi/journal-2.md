@@ -1728,3 +1728,40 @@ Measured by running the registry rather than grepping for it: dove-pi capability
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 97: The fields the specification names in the doctor projection
+<!-- trellis-session: v=2 fp=b7b94c6a40b9549a -->
+
+**Date**: 2026-09-28
+**Task**: The fields the specification names in the doctor projection
+**Branch**: `master`
+
+### Summary
+
+Measured by running doctor rather than reading the builder: requestDiagnostics carried schemaVersion alone while the contract named three fields as if all three were always there, and the subagent projection matched its own contract exactly.
+
+### Main Changes
+
+- reading the builder narrowed the finding: the interface marks both fields optional and the builder spreads them conditionally, so the code never overstated anything - the prose was the one place that did, and a consumer would get undefined silently on a fresh workspace
+- the presence case is asserted in the CLI, adapter and RPC suites; the absence case, which is what a fresh workspace gets, was held by nothing. It is now
+- and the assertion is the behaviour itself rather than a pattern over it - the key is omitted, not present with an undefined value, which is what a consumer iterating keys sees
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `989ae8c` | fix(spec): the diagnostics fields are conditional, and a test holds the absence |
+| `7fb26ec` | chore(task): record the conditional fields and the absence nothing held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

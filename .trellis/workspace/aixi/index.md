@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 96
+- **Total Sessions**: 97
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1730 | Active |
+| `journal-2.md` | ~1767 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 97 | 2026-09-28 | The fields the specification names in the doctor projection | `989ae8c`, `7fb26ec` | `master` |
 | 96 | 2026-09-28 | The capability names the documents tell a user to run | `7fe470f`, `bd6bf93` | `master` |
 | 95 | 2026-09-28 | The subcommands the usage strings name | `3177292`, `49f21bc` | `master` |
 | 94 | 2026-09-28 | The Python test files the installer pattern skips | `e06d5d2`, `4738b0f` | `master` |
