@@ -1691,3 +1691,39 @@ Split the second extension-runtime list into its claims and held seven of eight,
 ### Next Steps
 
 - The fourth item of the first extension-runtime list in pi-adapter.test.ts, and the additive decoding and legacy unknown claims the list locates in release, readiness and status tests.
+
+
+## Session 150: The two items the last round named
+<!-- trellis-session: v=2 fp=9cc17792f78bf8ba -->
+
+**Date**: 2026-09-28
+**Task**: The two items the last round named
+**Branch**: `master`
+
+### Summary
+
+Held the continuation item - three of its four claims held in the assertions themselves: activeToolSets equals consecutiveChatCount under a message saying natural-language continuation must not churn the active set, the continuation kinds are matched, and a doesNotMatch keeps the agent from being told to read the status tool.
+
+### Main Changes
+
+- the identity cluster is not located after six suites and two phrases: the identity suite has four cases and not this, the readiness suite has nine and all are bundle integrity, the manifest suite has three and none is decoding, and additive and legacy across all tests turn up policy, ledger, profile and cache material
+- not located is not the same as unheld, and six of my searches this session have been wrong for pattern reasons, so the entry is the list of searches rather than a claim that nothing holds it
+- and a bonus: managed-install-status.test.ts reports managed extension degradation from local state without mutating it - found because this round asked the file list for status rather than release
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c1c9fcb` | chore(task): hold the continuation item, and name the identity cluster as unlocated |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The doctor projection claim of the continuation item, and the additive identity decoding cluster, both still named.
