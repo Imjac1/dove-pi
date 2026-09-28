@@ -1619,3 +1619,39 @@ Asked the file list first and it named the owner in one command: code-audit-seed
 ### Next Steps
 
 - The remaining lists in extension-runtime, request-runtime, harness-loop, mode-format and project-context, and the two convergence items that point at the Pi tool boundary.
+
+
+## Session 148: The seven lists left
+<!-- trellis-session: v=2 fp=ed014dab1dfcd5d2 -->
+
+**Date**: 2026-09-28
+**Task**: The seven lists left
+**Branch**: `master`
+
+### Summary
+
+Read the seven remaining required-test lists and held the four most specific items, three of them safety-shaped: the mode-format refusal names both ways out, the project-context one is verbatim - reports malformed native state but does not overwrite it - and the harness-loop one names the missing reference in the failure message.
+
+### Main Changes
+
+- the provider-limit items are claims about numbers and request-plan-model-gateway.test.ts holds them as numbers: outputBudget 4096, a large-window request that must not inherit the static 4096, and a case that fails closed when a limit needs clamping but has no writable field
+- and the rest are named rather than implied: extension-runtime two lists of four, request-runtime two lists of four and eight, harness-loop three of four items, project-context five of six
+- two of the remaining items point at the Pi tool boundary, which is the boundary every functional check in this session has met
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5ad9a3e` | chore(task): read the seven lists left, and hold the four most specific items |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The extension-runtime lists, whose items pack two to four claims each, and the two items that point at the Pi tool boundary.
