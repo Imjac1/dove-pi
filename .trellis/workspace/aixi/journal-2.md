@@ -1238,3 +1238,41 @@ The one release link never exercised here was the readiness gate, because it nee
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task. The release chain is now exercised end to end except a real install, which writes outside the repository.
+
+
+## Session 84: The installer parameters, as declared and as accepted
+<!-- trellis-session: v=2 fp=605c89d28a103454 -->
+
+**Date**: 2026-09-28
+**Task**: The installer parameters, as declared and as accepted
+**Branch**: `master`
+
+### Summary
+
+Read both sides of the installer parameter surface: install.ps1 declares Profile, Verify, NoPath, NoFont, NoExtensions and Proxy and passes the first two through to the installer, while the managed-install contract named only the four NoPath/NoFont/NoExtensions/Proxy - so a user installing through the piped bootstrap had no document naming the switches that choose a profile and a verification level.
+
+### Main Changes
+
+- the contract names all six now, with the values in prose, and a test compares the documented list with the param block in both directions - a document promising a switch the script does not declare, and a script declaring one no document names
+- two of my own readings were wrong first, and both the same way: a regex over both READMEs matched PowerShell own -NoProfile flag in a command-line example and reported it as a documented installer switch, and then the contract line was written with the values inside the backticks so the test regex did not see the names it had just added
+- that is the lesson twice in one round: a pattern is not a claim, and a check whose pattern is stricter than the prose it reads reports the prose as missing something it says
+- the round followed the rule it set itself two rounds ago and the task existed before the first edit
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d2585d` | fix(installer): the contract names the two switches it was silent about, and a test holds the list |
+| `6d2d96f` | chore(task): record the parameter surface, the missing names and the two patterns that were wrong first |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 115 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The READMEs still do not name -Profile or -Verify for the piped install path, which is a product-document decision rather than a contract one. The first real turn still needs a Pi host.

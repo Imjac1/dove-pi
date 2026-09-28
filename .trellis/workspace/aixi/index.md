@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 83
+- **Total Sessions**: 84
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1240 | Active |
+| `journal-2.md` | ~1278 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 84 | 2026-09-28 | The installer parameters, as declared and as accepted | `7d2585d`, `6d2d96f` | `master` |
 | 83 | 2026-09-28 | The release gate, run on artifacts built from this tree | `74c7073`, `294f7c7` | `master` |
 | 82 | 2026-09-28 | The mode suites read the directory the runtime reads | `875f7db`, `12d0bb7` | `master` |
 | 81 | 2026-09-28 | A help flag answered only in first position, and one command that answers nothing | `27f2a71`, `915dd9e` | `master` |
