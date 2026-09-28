@@ -365,3 +365,39 @@ Accounted for every mode-format item and answered whether each can be checked. S
 ### Next Steps
 
 - The remaining lists in the other specifications, and the request-runtime items still unheld.
+
+
+## Session 168: The novice project and the exact resolution
+<!-- trellis-session: v=2 fp=27223f47ab300ce3 -->
+
+**Date**: 2026-09-29
+**Task**: The novice project and the exact resolution
+**Branch**: `master`
+
+### Summary
+
+Held one half of the resolution item and found the other unheld. The required-argument half is held by the protocol suite enforcing each advertised parameter schema before execution; the exact-resolution half is not: CapabilityRegistry.require throws Unknown capability and no test asserts it.
+
+### Main Changes
+
+- the seventeen uses of require in the suite are calls to it, not assertions about it - the registry is twenty-six lines and all four of its behaviours are visible, and only the last is about resolution
+- and the behaviour was observed by hand four rounds into the audit: round 88 drove capability run no.such_capability through the rpc interface and recorded Unknown capability, so this is the fourth candidate unheld promise and the first with a recorded observation beside it rather than only a reading
+- the native-absence item and the question of whether the clean-project case is it were not reached, and are named rather than left to look done
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a020f69` | chore(task): hold one half of the resolution item, and find the other unheld with a hand observation beside it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 752 tests, 750 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- A holder for the require refusal, which has a recorded observation and no test, and the native-absence item.

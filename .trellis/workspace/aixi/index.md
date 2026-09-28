@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 167
+- **Total Sessions**: 168
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~367 | Active |
+| `journal-4.md` | ~403 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 168 | 2026-09-29 | The novice project and the exact resolution | `a020f69` | `master` |
 | 167 | 2026-09-29 | The mode format list, with the checkability question | `bb159eb` | `master` |
 | 166 | 2026-09-29 | The mode id that must not appear in core | `98324c9` | `master` |
 | 165 | 2026-09-29 | The core that must not import Pi | `9b65587` | `master` |
