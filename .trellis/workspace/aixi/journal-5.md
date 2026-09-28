@@ -407,3 +407,39 @@ Read harness-surface.yaml for the first time and mapped this span against it: 11
 ### Next Steps
 
 - Nothing in this repository is reachable work. One task waits on a person and the first real turn waits on a host.
+
+
+## Session 224: The boundary, with its evidence
+<!-- trellis-session: v=2 fp=2ebda7690ed20ec4 -->
+
+**Date**: 2026-09-29
+**Task**: The boundary, with its evidence
+**Branch**: `master`
+
+### Summary
+
+Ran the whole gate rather than parts: typecheck, the Node suite at 795 passing, the installer suite at 140 cases, doctor healthy and pi smoke all exit zero, while release:check exits two and that is the known one - its entry passes none of the five arguments the Python tool requires. Then stated the boundary with its evidence and changed nothing.
+
+### Main Changes
+
+- what is done and what holds it: the review list closed with every item done, wired or measured as already existing and each with a holder; the reachability register honest with ten entries saying what they are; the surface mapped at 1143 of 1156 changed paths inside a declared component; and the suite at 797 tests, which grew by 50 cases across this span while staying green
+- what waits and on what: one task waits on a person, because its criteria were written from the code and deliberately left unchecked, since checking them would be marking my reading as the intent. And the first real turn waits on a host, because Pi is installable from here and installing it changes this machine, which is the one action this loop may not take
+- nothing was changed to make the round look fuller. Three rounds have looked, and the third found something to check rather than something to do, which is the difference between a survey and a check
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2dfda47` | chore(task): state the boundary with its evidence, and change nothing |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 797 tests, 795 pass, 0 fail, 2 skipped. npm run test:installer: 140 cases. npm run doctor: healthy. npm run pi:smoke: exit 0.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The same boundary, unchanged: one task waiting on a person and the first real turn waiting on a host.
