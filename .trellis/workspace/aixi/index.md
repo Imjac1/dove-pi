@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 127
+- **Total Sessions**: 128
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~894 | Active |
+| `journal-3.md` | ~930 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 128 | 2026-09-28 | A refusal that says which gate refused | `a4ef48c` | `master` |
 | 127 | 2026-09-28 | Naming the gate that refuses a write | `138b97e`, `2f0d1d1` | `master` |
 | 126 | 2026-09-28 | The half of the boundary that lets something through | `1a8c94e`, `873165f` | `master` |
 | 125 | 2026-09-28 | The approval boundary, over the interface that serves it | `7fd720f`, `d0e774e` | `master` |

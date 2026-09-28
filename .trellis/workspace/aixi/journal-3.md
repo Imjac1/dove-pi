@@ -892,3 +892,39 @@ Named the second gate. capability-invocation.ts holds three conditions in one au
 ### Next Steps
 
 - A refusal message that names which gate refused, which would separate the two without touching the status vocabulary. The first real turn still needs a Pi host.
+
+
+## Session 128: A refusal that says which gate refused
+<!-- trellis-session: v=2 fp=190f8e077e9d47a7 -->
+
+**Date**: 2026-09-28
+**Task**: A refusal that says which gate refused
+**Branch**: `master`
+
+### Summary
+
+Made the approval refusal name which of the two gates refused. The work was not the message but the trip: the callback returned a boolean, so the reason had nowhere to travel from. It may return a reason string now, and fast-path checks approved !== true.
+
+### Main Changes
+
+- observed in a run: approval_denied with Capability approval was not granted when unavailable was sent, and approval_denied with No approver is configured for this host when granted was. The status is unchanged, so nothing that keyed on it is affected
+- capability-invocation gives each of its three conditions its own answer: not required returns true, approval not granted returns the sentence it always did, and no approver returns a sentence that names the gate
+- and a test holds both, because a distinction nothing asserts is a distinction that drifts
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4ef48c` | fix(rpc): the approval refusal says which of the two gates refused |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 743 tests, 741 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
