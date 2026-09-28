@@ -79,3 +79,40 @@ Checked the usage review plan item by item. Six of ten are done or measured as a
 ### Next Steps
 
 - Two items are work rather than verdicts: DOVE_PI_MAX_MESSAGES, which is small and advisory, and the keepalive, which needs the network and the plan own offline-first constraint.
+
+
+## Session 215: The configurable message cap
+<!-- trellis-session: v=2 fp=5200912de078a98c -->
+
+**Date**: 2026-09-29
+**Task**: The configurable message cap
+**Branch**: `master`
+
+### Summary
+
+Did the review P0.2 as a third branch of the context guard rather than a new mechanism, because that module already carried the env reader, the disable switch, the advisory contract and the hint the adapter notifies. The reader is DOVE_PI_MAX_MESSAGES with a default of 150, and the hint names both ways out.
+
+### Main Changes
+
+- and the hint says neither way drops anything, because the host owns the conversation and a cap that deleted or rewrote history would be control this adapter does not have
+- an unsupplied count reports absent rather than invented, with a control holding that against a cap of one where a supplied count of two does fire
+- the existing deepEqual on the whole guard object asserted its exact shape, so the two new fields had to be added there. The suite would have caught it and did not have to, because the file was read first
+- and one thing is recorded rather than built: the adapter does not yet pass the message count. It reads it from the same call the fuse uses on the same lines, so passing it is a one-line change that belongs to the round touching that handler next
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0350b9d` | feat(context): add the configurable turn cap the review asks for, as a third branch of the guard |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 787 tests, 785 pass, 0 fail, 2 skipped - two more than before. The guard suite is 10 cases, up from 8.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Pass the message count from the handler, which reads it on the same line the fuse already calls; then the keepalive half of P0.3, which needs the network.
