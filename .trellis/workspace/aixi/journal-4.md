@@ -437,3 +437,39 @@ The round expected one unheld refusal and found four behaviours with no holder: 
 ### Next Steps
 
 - The native-absence item and the clean-project placement question, both still named, and the request-runtime items left.
+
+
+## Session 170: The novice project, and what runtime initialization means
+<!-- trellis-session: v=2 fp=a48b9d8bba3bf990 -->
+
+**Date**: 2026-09-29
+**Task**: The novice project, and what runtime initialization means
+**Branch**: `master`
+
+### Summary
+
+Placed the native-absence item: it is held by architecture and named nowhere. src/runtime.ts is a composition root that exposes registries, createDoveRuntime takes no arguments so there is no way to hand it state, and the repository has no .dove at all - so every test that calls it already runs in a novice project.
+
+### Main Changes
+
+- the clean-project case is a neighbour rather than the item: it holds the health half and says nothing about execution, and execution is exercised by the real-dove-blackbox suite in fourteen cases that keep concurrent scenarios on disjoint runtime roots
+- and two attempts at a named holder failed on the fixture shape: the first used an invoke the runtime does not have, the second read protocolVersion off a capability definition when it is a field of the request
+- both were guesses about an API one file away, in capability-protocol.test.ts, whose request helper at line 12 builds the whole invocation - the same defect as the three typecheck runs two rounds ago, and the file that asserted nothing was removed so the tree is clean
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ab3fe16` | chore(task): place the native-absence item, and record two failed attempts at a holder |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 755 tests, 753 pass, 0 fail, 2 skipped, unchanged.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- A named holder for the novice-runtime item, using the request helper in capability-protocol.test.ts rather than a guessed shape.
