@@ -1,0 +1,2 @@
+{"file": "scripts/build-release-manifest.mts", "reason": "Where the manifest states a minimum."}
+{"file": "install.ps1", "reason": "Where a prerequisite is checked."}
