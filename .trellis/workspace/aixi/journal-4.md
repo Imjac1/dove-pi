@@ -652,3 +652,39 @@ Ran both scripts nobody here has run. benchmark:interop exits 0 and is safe, mak
 ### Next Steps
 
 - The first real turn, which needs a Pi host, and any further reading the specifications do not answer.
+
+
+## Session 176: What is genuinely undone, measured
+<!-- trellis-session: v=2 fp=1b1c541a79bd4767 -->
+
+**Date**: 2026-09-29
+**Task**: What is genuinely undone, measured
+**Branch**: `master`
+
+### Summary
+
+Re-measured the standing correction and found it accurate: 421 archived pointers, 419 resolving, 2 broken, and 58 of them point inside their own task directory with none broken because round 75 repointed them. The note numbers moved but the note is not wrong - its rule is exact and its numbers are framed as a measurement at a time.
+
+### Main Changes
+
+- and this session archived some fifty tasks without breaking one entry of its own, for the reason the note gives: the entries were curated against paths outside the task. That is a confirmation rather than a correction, and no third date was added
+- every top-level directory has been touched: bin, engagements, installer, modes, scripts, src and tests, with __pycache__ as the known noise floor
+- so what remains is not undone work but recorded findings: two claims that cannot be checked as written, two script entries that do not work as written, and the first real turn which needs a Pi host
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e0867f8` | chore(task): re-measure what is genuinely undone, and change nothing |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and nothing else that this environment can reach.
