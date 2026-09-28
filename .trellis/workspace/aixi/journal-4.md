@@ -1813,3 +1813,39 @@ Measured the review P2 three items before changing anything, and all three exist
 ### Next Steps
 
 - One real visibility change remains from the review - showing the diagnostics by default rather than behind a full flag. Its P1 question needs a host running a real turn.
+
+
+## Session 208: The diagnostics by default
+<!-- trellis-session: v=2 fp=f4b0ee5a7e12ae4a -->
+
+**Date**: 2026-09-29
+**Task**: The diagnostics by default
+**Branch**: `master`
+
+### Summary
+
+Showed the cache line in /status by default and kept the goal line behind the flag. The line splits by cost: the cache text is formatted from diagnostics already inspected one line above, while the goal line needs await ledger.read.
+
+### Main Changes
+
+- and the tension I expected does not exist: the command handler writes to ctx.ui.notify, which is the user screen and not the request, so the change costs zero tokens. The guessed cost was tokens per request and the measurement retired it
+- the hint the old line printed - use /status full for cache diagnostics - is gone, because it is no longer true
+- and the holder this does not have is named rather than claimed: the /status command has no direct test. The two /status matches in the suite are about agent_task_convergence status-shaped arguments and the document-drift one is about a workflow sentence, so all three are false positives. Holding it needs the fake extension host the adapter tests build, which is larger than the edit
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f462602` | feat(status): show the cache line by default, and keep the goal line behind the flag |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped, unchanged. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The review has nothing left that is real work in this repository. Its P1 question - why the model does not invoke a capability advertised in two places - needs a host running a real turn.
