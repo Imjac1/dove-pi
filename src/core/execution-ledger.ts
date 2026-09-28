@@ -381,8 +381,15 @@ export function summarizeExecutionRecords(content: string): ExecutionAuditSummar
 export function parseLedgerLines(content: string): readonly ExecutionRecord[] {
 	return content.split(/\r?\n/).filter(Boolean).flatMap((line) => {
 		try {
-			const record = JSON.parse(line) as ExecutionRecord;
-			return record && typeof record === "object" ? [record] : [];
+			const parsed: unknown = JSON.parse(line);
+			// **A parsed line is not yet a record.** `typeof [] === "object"`, so a JSON array used to survive
+			// this test and reach the projection with no `kind` at all - which then threw on `startsWith` and
+			// took the whole summary with it, on exactly the malformed input this reader exists to survive.
+			// The contract requires `kind` on every record, so requiring it here is what the contract says
+			// rather than a new rule: a line without one is not a record, the same as a line that does not parse.
+			if (!isRecord(parsed)) return [];
+			if (typeof parsed.kind !== "string") return [];
+			return [parsed as unknown as ExecutionRecord];
 		} catch {
 			return [];
 		}

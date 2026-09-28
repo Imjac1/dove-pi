@@ -1,0 +1,5 @@
+{"taskId":"task-1","stepId":"step-1","kind":"tool.observed","timestamp":"2026-08-30T00:00:00.000Z","mode":"standard","details":{"tool":"read"},"correlation":{"requestId":"req-1","toolCallId":"call-1"}}
+{"taskId":"task-1","stepId":"step-1","kind":"tool.observed","timestamp":"2026-08-30T00:00:01.000Z","mode":"standard","details":{"tool":"read"},"correlation":{"requestId":"req-1","toolCallId":"call-1"}}
+{"taskId":"task-1","stepId":"step-1","kind":"tool.observed","timestamp":"2026-08-30T00:00:02.000Z","mode":"standard","details":{"tool":"read"},"correlation":{"requestId":"req-1"}
+{"taskId":"task-1","stepId":"step-1","kind":"tool.observed","timestamp":"2026-08-30T00:00:03.000Z","mode":"standard","details":{"tool":"read"}}
+{"taskId":"task-1","stepId":"step-1","kind":"request.terminal","timestamp":"2026-08-30T00:00:04.000Z","mode":"standard","details":{"policyAbort":true}}

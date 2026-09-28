@@ -1,0 +1,3 @@
+{"taskId":"task-1","stepId":"step-1","kind":"mode.changed","timestamp":"2026-08-30T00:00:00.000Z","mode":"standard","details":{"from":"standard","to":"ultra"}}
+{"taskId":"task-1","stepId":"step-1","kind":"request.received","timestamp":"2026-08-30T00:00:01.000Z","mode":"standard","details":{}}
+{"taskId":"task-1","stepId":"step-1","kind":"request.terminal","timestamp":"2026-08-30T00:00:02.000Z","mode":"standard","details":{}}

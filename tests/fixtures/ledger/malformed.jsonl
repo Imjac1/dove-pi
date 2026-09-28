@@ -1,0 +1,12 @@
+{"taskId":"task-1","stepId":"step-1","kind":"request.received","timestamp":"2026-08-30T00:00:00.000Z","mode":"standard","details":{}}
+{"taskId":"task-1","stepId":"step-1","kind":
+not json at all
+"a bare string is valid JSON"
+42
+null
+true
+[]
+["an array is valid JSON and typeof says object"]
+{"taskId":"task-1","stepId":"step-1","kind":"request.terminal","timestamp":"2026-08-30T00:00:03.000Z","mode":"standard","details":{"reason":"shutdown"}}
+
+
