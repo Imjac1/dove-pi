@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 108
+- **Total Sessions**: 109
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~196 | Active |
+| `journal-3.md` | ~233 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 109 | 2026-09-28 | Whether the tool that breaks the pointers is mine to fix | `392cede`, `62b084a` | `master` |
 | 108 | 2026-09-28 | The status a task records and the place it sits | `e63d183` | `master` |
 | 107 | 2026-09-28 | The paths the task contexts curate | `da3dbdb`, `340493d` | `master` |
 | 106 | 2026-09-28 | The acceptance criteria of archived tasks | `4481809` | `master` |

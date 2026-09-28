@@ -194,3 +194,40 @@ Measured 121 task.json files across the active tree and the archive. The status 
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 109: Whether the tool that breaks the pointers is mine to fix
+<!-- trellis-session: v=2 fp=62331c01f17f9902 -->
+
+**Date**: 2026-09-28
+**Task**: Whether the tool that breaks the pointers is mine to fix
+**Branch**: `master`
+
+### Summary
+
+Measured the assumption this session had been making: .trellis/scripts/task.py is in .trellis/.template-hashes.json at line 88, along with 68 tracked scripts entries, so it is tool-managed and an edit would be lost. The assumption was correct, but it was an assumption until this round, and it is the kind that decides whether a fix is worth making.
+
+### Main Changes
+
+- the consequence is recorded in the repo-owned section of AGENTS.md, beside the existing correction and in the same style: the pointers break again on every archive, the fix is not this repository to make, and what is ours is to repoint the entries after an archive
+- no check was added, because the three pointers that remain are the ones whose files are gone, and a check over the rest would go red on every archive, which is the thing this round established cannot be fixed here
+- and the round had its own small refusals: the workflow declined to start the task until a check context was curated, and my generator broke once on a backtick inside a template literal, both of which the tool or the rule caught rather than me
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `392cede` | docs(agents): the archive breaks its own pointers, and the tool that does it is not ours |
+| `62b084a` | chore(task): archive 09-28-archive-repoint |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
