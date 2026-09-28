@@ -1838,3 +1838,39 @@ Measured: the code reads twenty-seven DOVE_PI_ variables and the documents named
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 100: The schema versions Dove writes and the ones it accepts
+<!-- trellis-session: v=2 fp=bca5a5fc17e72581 -->
+
+**Date**: 2026-09-28
+**Task**: The schema versions Dove writes and the ones it accepts
+**Branch**: `master`
+
+### Summary
+
+Measured every schemaVersion Dove writes against every one it accepts. The workspace policy, native project state, native sessions, release manifest and managed install state all agree, and each pair inside one language shares a constant.
+
+### Main Changes
+
+- two did not, and they are different problems: the context snapshot stamped a literal 2 and refused anything but a literal 2, both in the same package, so they share a constant now; the managed install state is written in Python and read in TypeScript, where no constant can cross, so the pair is declared in a test
+- the first fix is structural and the second cannot be - that is the whole difference, and it is why one is a constant and the other is a check
+- the declared pair was given a negative control: drifting the TypeScript literal makes the check fail, and restoring it makes it pass
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ebf092a` | fix(state): one snapshot schema version, and a check across the language boundary |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. Installer tests: 122 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

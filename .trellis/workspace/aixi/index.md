@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 99
+- **Total Sessions**: 100
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1840 | Active |
+| `journal-2.md` | ~1876 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 100 | 2026-09-28 | The schema versions Dove writes and the ones it accepts | `ebf092a` | `master` |
 | 99 | 2026-09-28 | The environment variables, as documented and as read | `7e5b07d` | `master` |
 | 98 | 2026-09-28 | The runtime versions, as declared and as enforced | `a01ab65`, `525d50f` | `master` |
 | 97 | 2026-09-28 | The fields the specification names in the doctor projection | `989ae8c`, `7fb26ec` | `master` |
