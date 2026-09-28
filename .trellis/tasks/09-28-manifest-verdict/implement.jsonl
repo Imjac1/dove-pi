@@ -1,0 +1,2 @@
+{"file": "src/pi-adapter/extension.ts", "reason": "Where a change manifest is assembled from the tool input."}
+{"file": "src/core/task-convergence.ts", "reason": "The TaskChange contract a manifest satisfies."}
