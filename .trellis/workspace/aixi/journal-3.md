@@ -81,3 +81,40 @@ Checked every commit the journal names against the object store: 267 distinct sh
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 106: The acceptance criteria of archived tasks
+<!-- trellis-session: v=2 fp=e701307330a4543d -->
+
+**Date**: 2026-09-28
+**Task**: The acceptance criteria of archived tasks
+**Branch**: `master`
+
+### Summary
+
+Counted across 113 archived tasks: 209 criteria ticked and 497 unticked, with 88 tasks carrying at least one unticked. Split by origin, this session own 73 tasks have 380 unticked and none ticked, while the 40 older tasks are ticked in most places - so the practice exists in this project and I did not follow it.
+
+### Main Changes
+
+- the rounds updated the checklist in implement.md and left the PRD boxes alone, which is why the record of 73 tasks says nothing about whether their work was done
+- three classes, read rather than counted: a placeholder criterion that reads TBD, a PRD whose boxes were never used, and a box simply missed. A number alone could not tell those apart
+- this task own PRD is ticked because its criteria are met and verified here. The other seventy-two are not, and that is a decision: bulk-ticking would assert that every criterion of every round was met, and I cannot re-verify seventy-three rounds now
+- the practice is the fix, and it is written here because this is what the next session reads: the PRD boxes are the record, and they are ticked when the work is done. No check was added - one that an archived PRD has no unticked box would be red on 88 tasks
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4481809` | chore(task): record the archived criteria, and that the worst share of them is mine |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
