@@ -201,13 +201,15 @@ export function improvementTrajectory(records: readonly ExecutionRecord[]): Impr
 export const UNCOMPUTABLE_AXES: readonly UncomputableAxis[] = [
 	// **ITQ left this list in the round that made a round a record.** The observation carries the criterion vector and the
 	// no-progress count now, so `improvementTrajectory` reads the slope and the escape rate from the ledger. What is left here is the
-	// axis that needs something the harness does not measure at all.
+	// **What is left is declared for a decision rather than for a missing measurement.** The two objectives are in this very module:
+	// crashFreeRatio and isolationRefusalsPerRequest, computed from the same records and correlated per request. So the entry that
+	// said no second objective is recorded was contradicted by the file it lived in - and by a test that passes.
 
 	{
 		axis: "Safety & Stability (SSM)",
 		metric: "Pareto preservation",
-		reason: "it is a multi-objective property and no second objective is recorded, so there is nothing to preserve against.",
+		reason: "it asks whether a run that is stable but hits isolation refusals is better or worse than one that is safe but crashes, and no reading answers that. The two objectives are reported by this module - crashFreeRatio and isolationRefusalsPerRequest, from the same records and correlated per request - and what is missing is a frontier: a decision about which trade-off is acceptable.",
 		evidence: "no ledger record carries a second measured objective; the fields a request terminal does carry are its reason and its terminal envelope (src/core/execution-ledger.ts:244-245).",
-		wouldNeed: "a second objective the harness measures per round, and a decision about what its frontier is.",
+		wouldNeed: "a decision about the frontier - which trade-off between stability and safety is acceptable - with its own evidence. It is not a measurement this harness is missing.",
 	},
 ];

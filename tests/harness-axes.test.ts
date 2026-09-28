@@ -93,8 +93,13 @@ describe("the Safety and Stability axis", () => {
 		// same whether it started, passed or failed a criterion. The observation carries the vector now, which makes a round a record.
 		assert.deepEqual(UNCOMPUTABLE_AXES.map((entry) => entry.metric), ["Pareto preservation"], "the list holds what still cannot be read");
 		const pareto = UNCOMPUTABLE_AXES[0] as UncomputableAxis;
-		assert.match(pareto.reason, /second objective|multi-objective/);
-		assert.match(pareto.wouldNeed, /second objective/, "and what would change that");
+		assert.match(pareto.reason, /frontier|trade-off/, "the reason says what the axis lacks: a frontier, not a measurement");
+		assert.match(pareto.wouldNeed, /frontier/, "and what would change that is a decision about the frontier");
+		// The entry and the two objectives belong in one place: this module reports both, so an entry claiming none is recorded would
+		// be contradicted by the file it lives in - which is what it said before a round measured it.
+		assert.match(pareto.reason, /crashFreeRatio|isolationRefusalsPerRequest/, "the entry names the objectives this module reports");
+		const both = safetyAndStability([]);
+		assert.ok("crashFreeRatio" in both && "isolationRefusalsPerRequest" in both, "which are the two objectives the reading carries");
 
 		// **And the axis that left the list is computed**, from the record that made a round a round.
 		const stall = [0, 1, 0, 0];
