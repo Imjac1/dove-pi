@@ -34,7 +34,7 @@ import * as record from "../src/core/task-convergence.ts";
  * - **The guide prose is not checked.** Which surface to choose, what to predict, whether to keep or revert - the judgments the guide
  *   exists to leave visible.
  *
- * **Why nine cases in one file rather than four files**: they are one shape and the helpers are the rules. Splitting by subject would
+ * **Why eleven cases in one file rather than four files**: they are one shape and the helpers are the rules. Splitting by subject would
  * produce files of two cases each, which is more surface for no gain. The measurement is in the task that wrote this header.
  */
 
@@ -415,5 +415,26 @@ describe("the documents that name things", () => {
 			});
 		}
 		assert.deepEqual(offenders, [], "a comment cites a line of this repository, which drifts: name the thing instead");
+	});
+
+	it("names only .dove paths that code builds, which is a different property from existing", () => {
+		// **A runtime path need not exist, and the case above holds existence.** `.dove/state.json` and `.dove/tasks/<id>` are paths the
+		// code builds when it runs, and a fresh checkout has neither. So this asserts the other property: a path a front door names must
+		// be one some code constructs - which is what a previous round found the help violating, with a file that is not in the layout.
+		//
+		// **It errs toward silence**: any mention of the name in `src` counts, so it cannot call a built path unbuilt.
+		const named = new Set<string>();
+		for (const file of ["README.md", "README.en.md"]) {
+			for (const match of readFileSync(join(process.cwd(), file), "utf8").matchAll(/\.dove\/([A-Za-z0-9_.-]+)/g)) {
+				named.add(match[1] as string);
+			}
+		}
+		assert.ok(named.size > 0, "the front doors no longer name a .dove path, which is its own kind of wrong");
+
+		const built = walk(["src"])
+			.map((file) => readFileSync(file, "utf8"))
+			.join("\n");
+		const unbuilt = [...named].filter((name) => !built.includes('"' + name + '"'));
+		assert.deepEqual(unbuilt, [], "a front door names a .dove path that no code builds: " + unbuilt.join(", "));
 	});
 });
