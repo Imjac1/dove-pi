@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AgentMode, DispatchActual, DispatchDecision, ExecutionRecord } from "./contracts.ts";
+import type { AgentMode, DispatchActual, DispatchDecision, ExecutionRecord, ExecutionRecordKind } from "./contracts.ts";
 import type { ChangeVerdict } from "./task-convergence.ts";
 import type { RequestPlan } from "./request-plan.ts";
 import type { RequestAttemptOutcome, RequestAttemptTrigger, RequestDelivery, RequestInputSource, RequestTerminalEnvelope, RequestTerminalReason } from "./request-lifecycle.ts";
@@ -55,6 +55,78 @@ export interface ExecutionDiagnosticsProjection {
  * The ledger remains the source of truth; this projection deliberately drops
  * arbitrary details so a diagnostic query cannot echo secrets or large logs.
  */
+/**
+ * Which of the three coupled defect families a record carries evidence for.
+ *
+ * The kinds are grouped by the child tasks that eliminated the defects, so an audit summary can say which
+ * family a run exercised without the reader knowing the kind vocabulary.
+ */
+export type ExecutionEvidenceFamily = "extension_identity" | "request_lifecycle" | "tool_loop" | "other";
+
+export interface CorrelatedExecutionGroup {
+	/** The strongest identifier the group shares. Records with none of them are grouped under the unlinked key. */
+	readonly key: string;
+	readonly keyKind: "requestId" | "sessionId" | "attemptId" | "unlinked";
+	readonly records: readonly ExecutionRecord[];
+	readonly families: Readonly<Record<ExecutionEvidenceFamily, number>>;
+/**
+	 * True when every record in the group carried correlation identifiers. A group with any legacy record is
+	 * labelled, not guessed at: the contract says correlation is optional for legacy records.
+	 */
+	readonly complete: boolean;
+}
+
+const FAMILY_BY_PREFIX: readonly (readonly [string, ExecutionEvidenceFamily])[] = [
+	["dispatch.", "extension_identity"],
+	["request.", "request_lifecycle"],
+	["model.budget.", "tool_loop"],
+	["provider.request.", "tool_loop"],
+	["tool.", "tool_loop"],
+];
+
+/** Name the defect family a record kind belongs to, or `other` when no child claimed it. */
+export function executionEvidenceFamily(kind: ExecutionRecordKind): ExecutionEvidenceFamily {
+	for (const [prefix, family] of FAMILY_BY_PREFIX) {
+		if (kind.startsWith(prefix)) return family;
+	}
+	return "other";
+}
+
+/**
+ * Correlate records into groups that share a request, a session or an attempt.
+ *
+ * **The key is chosen by strength, not by position**: `requestId` identifies one logical user request and is
+ * what the idempotency child exists to keep stable, `sessionId` is wider, and `attemptId` is narrower than
+ * either. A record carrying none of them is grouped under `unlinked` and its group is marked incomplete,
+ * which is where legacy records land - the contract says they may carry no correlation, and an audit
+ * projection labels that rather than inventing a key from the timestamp.
+ */
+export function correlateExecutionRecords(records: readonly ExecutionRecord[]): readonly CorrelatedExecutionGroup[] {
+	const groups = new Map<string, { keyKind: CorrelatedExecutionGroup["keyKind"]; records: ExecutionRecord[] }>();
+	for (const record of records) {
+		const correlation = record.correlation;
+		const requestId = correlation?.requestId;
+		const sessionId = correlation?.sessionId;
+		const attemptId = correlation?.attemptId;
+		const keyKind: CorrelatedExecutionGroup["keyKind"] = requestId !== undefined
+			? "requestId"
+			: sessionId !== undefined ? "sessionId" : attemptId !== undefined ? "attemptId" : "unlinked";
+		const key = keyKind === "unlinked" ? UNLINKED_GROUP_KEY : (requestId ?? sessionId ?? attemptId)!;
+		const group = groups.get(key) ?? { keyKind, records: [] };
+		group.records.push(record);
+		groups.set(key, group);
+	}
+	return [...groups.entries()].map(([key, group]) => {
+		const families: Record<ExecutionEvidenceFamily, number> = { extension_identity: 0, request_lifecycle: 0, tool_loop: 0, other: 0 };
+		for (const record of group.records) families[executionEvidenceFamily(record.kind)] += 1;
+		const complete = group.keyKind !== "unlinked"
+			&& group.records.every((record) => record.correlation !== undefined);
+		return Object.freeze({ key, keyKind: group.keyKind, records: Object.freeze([...group.records]), families: Object.freeze(families), complete });
+	});
+}
+
+/** The key a group gets when none of its records carried a correlation identifier. */
+export const UNLINKED_GROUP_KEY = "unlinked";
 export function projectExecutionDiagnostics(
 	records: readonly ExecutionRecord[],
 	filter: ExecutionDiagnosticsFilter = {},
