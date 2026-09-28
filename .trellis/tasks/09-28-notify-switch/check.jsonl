@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "The specification that owns extension behavior."}
+{"file": "scripts/build-release-manifest.mts", "reason": "The list that says this ships."}
