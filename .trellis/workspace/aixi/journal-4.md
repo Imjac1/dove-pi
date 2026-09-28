@@ -544,3 +544,39 @@ Read mode-controller.ts first and found the mode-change item already held: core.
 ### Next Steps
 
 - The Pi registration item, which is the last named request-runtime item.
+
+
+## Session 173: The registration that must not change the contracts
+<!-- trellis-session: v=2 fp=43dff97689a5fa93 -->
+
+**Date**: 2026-09-29
+**Task**: The registration that must not change the contracts
+**Branch**: `master`
+
+### Summary
+
+Answered the checkability question for the last request-runtime item. The adapter registers eleven commands and shortcuts into the host pi object, and the item is two claims: the registration is a behaviour and is exercised, while without changing core contracts is structural and held by the layer check that src/core imports nothing from the Pi side.
+
+### Main Changes
+
+- a case restating that would prove nothing of its own, which is the failure mode this round was watching for
+- and a constraint was discovered the hard way: the qualification was written into the specification and the document suite refused it with personal-agent-request-runtime.md exceeds 24 KiB. Every specification file has a 24 KiB budget and the round 142 gate was green, so the addition is what pushed it over
+- the edit was reverted, because the substance was worth having and the file had no room for it - a note that does not fit the budget is a note the suite will refuse, which is a real constraint on the whole correction method
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `07de9ab` | chore(task): answer the checkability question for the last request-runtime item, and find a 24 KiB spec budget |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The lists left elsewhere in the specifications, with the 24 KiB budget in mind for any correction.
