@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 123
+- **Total Sessions**: 124
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~745 | Active |
+| `journal-3.md` | ~782 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 124 | 2026-09-28 | The other headless interface | `998b650`, `72e60b0` | `master` |
 | 123 | 2026-09-28 | The headless interface, driven by a pipe | `f654988`, `b27faea` | `master` |
 | 122 | 2026-09-28 | The last two project subcommands | `87522be` | `master` |
 | 121 | 2026-09-28 | The three subcommands left unrun | `ffd08d0` | `master` |

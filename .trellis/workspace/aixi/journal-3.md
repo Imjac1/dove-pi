@@ -743,3 +743,40 @@ Drove the JSON-RPC interface with the request the README documents: it returns a
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 124: The other headless interface
+<!-- trellis-session: v=2 fp=2c83cf7d53871a8a -->
+
+**Date**: 2026-09-28
+**Task**: The other headless interface
+**Branch**: `master`
+
+### Summary
+
+Drove dove-pi mcp the way the rpc interface was driven. It answers the handshake with protocolVersion 2024-11-05 and serverInfo dove-pi 1.0.0, answers tools/list with the tools it exposes, and exits on its own. And an unserved method gives -32601 Method not found - the specification code that rpc collapsed into -32700 until last round.
+
+### Main Changes
+
+- the reason is visible in the code: mcp connects the official StdioServerTransport, so the protocol error handling is the SDK own, while the rpc server is hand-written
+- and they differ on malformed input too: rpc answers with a -32700 envelope, mcp says nothing, because the SDK transport drops a line it cannot parse. Two behaviours for the same input, neither wrong for what it is - one is an answer to a request, the other is a transport refusing to pass rubbish upward
+- nothing was fixed: the contrast is the result, and it says the defect the last round repaired was a defect of writing the protocol by hand rather than of the protocol
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `998b650` | chore(task): drive the other headless interface and compare it with the first |
+| `72e60b0` | chore(task): archive 09-28-mcp-pipe |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 742 tests, 740 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
