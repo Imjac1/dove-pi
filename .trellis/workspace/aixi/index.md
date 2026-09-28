@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 98
+- **Total Sessions**: 99
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1804 | Active |
+| `journal-2.md` | ~1840 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 99 | 2026-09-28 | The environment variables, as documented and as read | `7e5b07d` | `master` |
 | 98 | 2026-09-28 | The runtime versions, as declared and as enforced | `a01ab65`, `525d50f` | `master` |
 | 97 | 2026-09-28 | The fields the specification names in the doctor projection | `989ae8c`, `7fb26ec` | `master` |
 | 96 | 2026-09-28 | The capability names the documents tell a user to run | `7fe470f`, `bd6bf93` | `master` |

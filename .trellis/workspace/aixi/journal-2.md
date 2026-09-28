@@ -1802,3 +1802,39 @@ Measured across seven places - package.json engines, the release manifest, insta
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 99: The environment variables, as documented and as read
+<!-- trellis-session: v=2 fp=015c30d2a003fa82 -->
+
+**Date**: 2026-09-28
+**Task**: The environment variables, as documented and as read
+**Branch**: `master`
+
+### Summary
+
+Measured: the code reads twenty-seven DOVE_PI_ variables and the documents named four. Seven are set by the launcher for the extension it starts, and sixteen were named nowhere - including the prefix fuse off switch, the context budget pair and the state directory.
+
+### Main Changes
+
+- no dead knobs: all four documented variables are read. The finding is the other direction - a knob a user cannot find is a knob that does nothing, and its failure is quiet, because the shell accepts the setting and the tool behaves as if it were absent
+- the help now names them in two classes, the ones a user may set and the ones the launcher overwrites, and a check asserts that every variable the help names is one the code reads
+- and that check failed its own control twice, the same way both times: the help text lives inside dove_pi.py, so searching that file found a planted name in the very block that names it. The Python side is parsed with ast now, which sees reads rather than text
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7e5b07d` | fix(cli): the variables the code reads are named, and the check that holds them parses rather than searches |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. Installer tests: 121 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
