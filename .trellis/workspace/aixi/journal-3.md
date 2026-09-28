@@ -634,3 +634,39 @@ Ran the lifecycle in a temporary project with the state read after each step: cr
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 121: The three subcommands left unrun
+<!-- trellis-session: v=2 fp=7db9a746b41a0a5e -->
+
+**Date**: 2026-09-28
+**Task**: The three subcommands left unrun
+**Branch**: `master`
+
+### Summary
+
+Ran task current, task continue and task verify in a temporary project. With a current task all three exit zero and none changes the state - the revision, status and phase are identical after each - so what each changes comes from the state rather than the output.
+
+### Main Changes
+
+- after finish, verify refuses with No current task, the same message archive gave last round, while continue on the same finished task exits zero and returns a continuation. Two commands that read the same task differ on exactly this
+- and verify reads where its name suggests it might write, which is worth having measured rather than assumed. current changes its response shape: currentTask while one exists, continuation once the task is finished
+- this closes the tail of the previous round scope: all ten task subcommands have now been executed here rather than read
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ffd08d0` | chore(task): run the three task subcommands left unrun |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
