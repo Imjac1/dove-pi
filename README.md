@@ -544,3 +544,22 @@ dove-pi repair
 
 无需处理，普通请求会直接执行并在需要时静默创建状态。需要提前创建空状态时才运行
 `dove-pi project init`。
+
+## 适配器与插件复用
+
+同一条经复核的能力，先经 Pi 适配器暴露，再经 MCP 与 CLI/RPC 适配器暴露，**执行逻辑只有一份**。宿主只负责调用，
+策略、审批、证据与回滚归 Dove Core 所有。
+
+| 适配器 | 调用方式 | 关联标识 |
+| --- | --- | --- |
+| Pi | `agent_run_capability` | 宿主会话 ID 与 Dove 执行 ID 分开记录 |
+| MCP | 能力发现与执行 | `requestId`、`attemptId` |
+| CLI / RPC | 本地脚本与网关调用 | `providerCallId`、`toolCallId` |
+
+经复核的 Pi 插件包会被投影成**可观测的宿主能力**，而不会注册第二个 Core 执行器：插件的工具名出现在匹配项里，
+执行仍走同一条能力路径。
+
+```powershell
+npm run doctor          # 适配器、provider、运行时、权限与版本兼容性
+npm run pi:smoke        # 启动器与扩展是否就绪
+```

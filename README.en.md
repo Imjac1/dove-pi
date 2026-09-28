@@ -598,3 +598,22 @@ dove-pi repair
 
 Nothing is required. Ordinary work executes directly and creates compact state silently when
 needed. Run `dove-pi project init` only to create an empty state in advance.
+
+## Adapters and plugin reuse
+
+One reviewed capability is exposed through the Pi adapter first, then through the MCP and CLI/RPC adapters, **with a
+single copy of the execution logic**. A host calls it; policy, approval, evidence and rollback stay Dove Core own.
+
+| Adapter | How it is called | Correlation |
+| --- | --- | --- |
+| Pi | `agent_run_capability` | host session id and Dove execution id recorded apart |
+| MCP | capability discovery and execution | `requestId`, `attemptId` |
+| CLI / RPC | local scripts and gateway callers | `providerCallId`, `toolCallId` |
+
+A reviewed Pi plugin package is projected into **observable host capabilities** without registering a second Core
+executor: the plugin tool names appear in the match, and execution still takes the same capability path.
+
+```powershell
+npm run doctor          # adapter, provider, runtime, permission and version compatibility
+npm run pi:smoke        # whether the launcher and its extensions are ready
+```
