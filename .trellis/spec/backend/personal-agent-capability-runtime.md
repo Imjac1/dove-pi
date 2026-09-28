@@ -126,6 +126,26 @@ and evidence contracts still apply to Dove-owned executors.
 | An invocation names an action the mode does not grant | Refuse as a scope denial: that is a policy decision, and it is reported ahead of the deployment fact |
 | Diagnostics filter is not an object or contains non-string IDs | Return a JSON-RPC error without reading or mutating state |
 
+**Held by**, row by row: the test that goes red if the behaviour changes. Each of these was read, not guessed, and one of them is named by
+file only because its case was not read to a case.
+
+| Condition | Held by |
+|---|---|
+| Unsupported protocol or invalid capability semver | `tests/capability-protocol.test.ts`, the invalid-semver case |
+| Arguments fail the declared parameter schema | `tests/capability-protocol.test.ts`, the case whose own name says before execution |
+| Request claims approval without a trusted host callback | `tests/local-rpc.test.ts`, three `approval_denied` assertions |
+| RPC input line exceeds 128 KiB | `tests/local-rpc.test.ts`, an oversized line followed by a valid one |
+| Duplicate project authorities | `tests/interoperable-context.test.ts`, the `conflicts` assertion |
+| Evidence reference names credential/key material | `tests/context.test.ts`, the sensitive-path case |
+| Capability platform is unsupported | `tests/capability-protocol.test.ts`, the status name |
+| Action granted by the mode and not implemented | `tests/host-work-mode.test.ts`, which also holds that nothing is put to the operator |
+| Action not granted by the mode | `tests/action-policy.test.ts` - **the case is not named because it was not read to a case** |
+| Diagnostics filter is not an object | `tests/local-rpc.test.ts`, the case added with the corrected code |
+
+**What these pointers are, and what they are not.** A path here says where to look, and a check holds every one of them to a file that
+exists. **It does not claim that the test holds the promise** - that judgement needs a reader, and a check which implied it would be the kind
+of control this project refuses to fake. The pointers are a reading aid with a resolution check; the reading is still the work.
+
 ### 5. Good / Base / Bad Cases
 
 - Good: Pi, CLI/RPC, and MCP invoke the same reviewed registry entry and

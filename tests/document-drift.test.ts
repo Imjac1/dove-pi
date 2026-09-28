@@ -438,3 +438,19 @@ describe("the documents that name things", () => {
 		assert.deepEqual(unbuilt, [], "a front door names a .dove path that no code builds: " + unbuilt.join(", "));
 	});
 });
+/**
+ * **Which class of defect this holds, and which it does not.** It holds a *pointer*: every test path named in the capability runtime
+ * specification resolves to a file that exists. It does **not** hold that the named test actually exercises the promised behaviour -
+ * that judgement needs a reader, and a check which implied it would be a control pretending to be a proof. The pointers exist so that
+ * a reader knows where to look; this keeps them from rotting.
+ */
+describe("the capability runtime specification pointers", () => {
+	it("names only test files that exist", () => {
+		const spec = readFileSync(join(process.cwd(), ".trellis/spec/backend/personal-agent-capability-runtime.md"), "utf8");
+		const named = [...spec.matchAll(/`(tests\/[^`]+\.test\.ts)`/g)].map((match) => match[1]);
+		assert.ok(named.length >= 5, "the specification names several holders, so a zero or tiny extraction is a broken pattern");
+		for (const path of new Set(named)) {
+			assert.ok(existsSync(join(process.cwd(), path)), `${path} is named as a holder and does not exist`);
+		}
+	});
+});
