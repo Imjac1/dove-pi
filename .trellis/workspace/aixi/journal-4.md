@@ -797,3 +797,39 @@ Counted the span from git: 530 commits since f822a0b, the commit that added the 
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and nothing else this environment can reach.
+
+
+## Session 180: The goal-tool policy, read for the first time
+<!-- trellis-session: v=2 fp=4a09f9b9ec351ab3 -->
+
+**Date**: 2026-09-29
+**Task**: The goal-tool policy, read for the first time
+**Branch**: `master`
+
+### Summary
+
+Read the goal-tool policy that every round prompt names, and found it is not a document: the tool response carries goal and activation, and activation is the string armed. The configured policy is the instruction each round carries - read the goal, gather evidence, mark complete only if achieved, otherwise leave it active.
+
+### Main Changes
+
+- held against the behaviour, the first two clauses and the last are met every round, and the third is deliberately not
+- the objective is a behaviour rather than a deliverable - plan it yourself, research first then plan then do - and that behaviour has been met every round. But the objective also says complete, and what would complete it is the first real turn, which needs a host this environment does not have
+- marking it complete would claim an achievement nothing here delivered, and leaving it active keeps the behaviour in force. The tool own limit is 256 rounds and it will decide at the end
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `409a0ca` | chore(task): read the goal-tool policy for the first time |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and the goal stays active, by the policy it carries.
