@@ -487,3 +487,40 @@ Measured the two barrels in src: project-provider/index.ts with nine export-star
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 117: The task command chain in a temporary project
+<!-- trellis-session: v=2 fp=27893a655d7df31b -->
+
+**Date**: 2026-09-28
+**Task**: The task command chain in a temporary project
+**Branch**: `master`
+
+### Summary
+
+Ran the CLI chain that writes state, in a temporary directory: project init, two task creates, task status and task list all exit zero, and the created tasks appear in the list. It works end to end, and the paths the earlier rounds could only read about are now observed - .dove/state.json, .dove/project.json and .dove/tasks/<id>/ written by a real run.
+
+### Main Changes
+
+- and the state matches what the code declares: schemaVersion 1, revision 2 after two creates, currentGoalId set, two goals with formal true and phase intake, and project.json with provider native and adapterContract 1.0. The revision increments per mutation, which is a declared behaviour seen for the first time rather than read
+- the one failure was mine: the first task create exited 1 with Unexpected task argument: probe, and the CLI was right - PowerShell had eaten the quotes so a probe arrived as two arguments. A refusal that names the argument it did not expect is what a good CLI error looks like
+- the fixture was removed afterwards and this repository is untouched, which is what makes this the closest thing to an end-to-end this environment can run
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad37646` | chore(task): run the task command chain in a temporary project, and read what it wrote |
+| `a939579` | chore(task): archive 09-28-cli-chain |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
