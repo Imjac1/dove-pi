@@ -2,6 +2,7 @@ import json
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
@@ -362,6 +363,44 @@ class BootstrapPrerequisiteTests(unittest.TestCase):
             "[pscustomobject]@{reused=[bool]$launcher}|ConvertTo-Json -Compress; Remove-Item -LiteralPath $root -Recurse -Force"
         )
         self.assertEqual(result, {"reused": False})
+
+
+class BootstrapParameterSurfaceTests(unittest.TestCase):
+    """The switches the documents promise, against the ones the script declares.
+
+    Found by reading both: `install.ps1` declares `-Profile` and `-Verify` and passes them through to the installer, while the
+    managed-install contract described the downloaded bootstrap as accepting only `-NoPath`, `-NoFont`, `-NoExtensions` and `-Proxy`.
+    A switch nobody documents is one nobody finds; a documented switch the script does not accept is worse. Both directions are
+    asserted here, because either can drift alone.
+    """
+
+    def _declared_switches(self) -> set:
+        source = BOOTSTRAP.read_text(encoding="utf-8")
+        start = source.index("param(")
+        depth = 0
+        end = start
+        for index in range(start, len(source)):
+            if source[index] == "(":
+                depth += 1
+            elif source[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    end = index
+                    break
+        return set(re.findall(r"\$([A-Za-z][A-Za-z0-9]*)", source[start:end]))
+
+    def test_documented_switches_match_the_declared_ones(self):
+        contract = (ROOT / ".trellis" / "spec" / "backend" / "personal-agent-managed-install.md").read_text(encoding="utf-8")
+        line = next(text for text in contract.splitlines() if "additionally accepts" in text)
+        documented = set(re.findall(r"`-([A-Za-z][A-Za-z0-9]*)`", line))
+        declared = self._declared_switches()
+
+        self.assertEqual(documented - declared, set(), "a document promises a switch the script does not declare")
+        self.assertEqual(
+            {"NoPath", "NoFont", "NoExtensions", "Proxy", "Profile", "Verify"} - documented,
+            set(),
+            "the script declares a switch that no document names",
+        )
 
 
 if __name__ == "__main__":
