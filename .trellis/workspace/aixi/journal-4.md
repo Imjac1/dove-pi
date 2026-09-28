@@ -905,3 +905,39 @@ Tested the fact two qualifications lean on instead of quoting it. The layer chec
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and the goal stays active by the policy it carries.
+
+
+## Session 183: The check that needed a network nobody measured
+<!-- trellis-session: v=2 fp=4a014449592ef29b -->
+
+**Date**: 2026-09-29
+**Task**: The check that needed a network nobody measured
+**Branch**: `master`
+
+### Summary
+
+Measured the network and ran the read-only check that was declined for it. Test-NetConnection to api.github.com on 443 is True and a request returns HTTP 200; update --check exits 0, reports the latest stable release and that Pi is not installed with an update available, and git status is identical before and after.
+
+### Main Changes
+
+- so the command documented as reporting without changing anything does exactly that, and the reason it was declined - it needs the network - was never measured
+- that is the same defect as the fallback two rounds ago: a conclusion about a machine, drawn without asking the machine. The second instance in three rounds makes it a pattern - the session is better at noticing that a search missed something than at noticing that a test was never run
+- and what its answer says about the first real turn: Pi is not installed and an update is available, so the thing that turn needs is reachable from here. Installing it is what changes this machine, and that is where the environment stops - the line is not can the network be reached, it is may this machine be changed
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71bfaf2` | chore(task): measure the network, and run the read-only check that was declined for it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs this machine to be changed - which is outside what this environment may do.
