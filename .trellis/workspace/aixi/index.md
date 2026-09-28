@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 143
+- **Total Sessions**: 144
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1475 | Active |
+| `journal-3.md` | ~1512 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 144 | 2026-09-28 | The four lists, and a claim about test sensitivity | `078400a` | `master` |
 | 143 | 2026-09-28 | Whether the required-test sections exist elsewhere | `184c61c` | `master` |
 | 142 | 2026-09-28 | The last two required-test lists | `12cedc3` | `master` |
 | 141 | 2026-09-28 | The authority matrix, row by row | `bbfdeff`, `08d0ca4` | `master` |

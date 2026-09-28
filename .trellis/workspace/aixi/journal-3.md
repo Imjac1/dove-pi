@@ -1473,3 +1473,40 @@ Counted the required-test sections and found my hypothesis wrong: nine specifica
 ### Next Steps
 
 - The four required-test lists in capability-runtime.md, beginning with the load-bearing claim and the four-transport smoke matrix.
+
+
+## Session 144: The four lists, and a claim about test sensitivity
+<!-- trellis-session: v=2 fp=7b23820537581c38 -->
+
+**Date**: 2026-09-28
+**Task**: The four lists, and a claim about test sensitivity
+**Branch**: `master`
+
+### Summary
+
+Read the four Tests Required lists in capability-runtime.md and tested the claim no search could answer. The claim is true: disabling the registration lookup fails three cases, disabling the scope decision fails two. Both mutations were restored and the tree verified clean of them.
+
+### Main Changes
+
+- this file states its items as assertions, most beginning with Assert, where framework-core.md stated behaviours in prose - same section name, different voice
+- the four-transport smoke matrix item is held: interop-smoke-matrix.test.ts:21 returns the same Capability Protocol result shape through Core, RPC, MCP and Pi, naming all four the item requires in one case
+- the mutations matter as a method: a claim about whether tests would notice can only be tested by making them not notice, and a mutation left in place would be a change to the framework rather than a test of it
+- the safety items of the third and fourth lists - path traversal and reserved snapshot paths, rollback of a failed multi-operation patch - were read but not held, named as unchecked rather than implied
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `078400a` | chore(task): test the load-bearing claim by mutation, and find it true |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped, on a tree verified clean of the mutations. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The safety items of the third and fourth lists in capability-runtime.md, and the twelve other specifications that carry required-test sections.
