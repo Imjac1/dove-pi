@@ -40,6 +40,10 @@ A second correction, measured rather than assumed: **archiving a task breaks the
 measurement, and the entries read fine, which is why nobody noticed. **The script is in `.trellis/.template-hashes.json`, so the fix is not
 this repository to make**: a `trellis update` may replace it, and an edit here would be lost. What is ours is to repoint the entries after an
 archive, and to know that a fresh archive has just done it again.
+**Re-measured later, so the numbers above are not read as current**: at that point there were **394 of 396** archived curated entries
+pointing into `.trellis` that still resolved, the two broken ones being the two files that are genuinely gone. The 58 of 66 was the state
+before they were repointed, and every archive since has exercised the same breakage on its own task - which is why the entries are worth
+re-pointing after an archive and why the warning is not historical.
 
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a
