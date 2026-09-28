@@ -29,7 +29,7 @@ The coding specifications live under `.trellis/spec/`, indexed in [`.trellis/spe
 and that index lists **every** specification in that directory, which a test checks, because it was missing three of them.
 
 One correction to a tracked document: `.trellis/workflow.md` names the script at .trellis/scripts/inject-workflow-state.py, which
-in this install is `.claude/hooks/inject-workflow-state.py` (and `.codex/hooks/inject-workflow-state.py`). The path that is wrong is
+in this install is `.codex/hooks/inject-workflow-state.py`. This note also named a .claude path as a second location, which was true when it was written and is not any more: that platform is not installed here, and its 52 files are still in the tool own hash list. The removed path is written without code marks for the same reason the one below it is. The path that is wrong is
 written here without code marks on purpose: the documentation checks read code spans, and a note describing a wrong path would
 otherwise read as one. The workflow-state mechanism itself works - that document carries thirty of its
 blocks - and the file may be replaced by a tool update, so the correction lives here, where a test holds its position.
