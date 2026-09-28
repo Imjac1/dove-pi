@@ -221,3 +221,39 @@ Guarded child.kill with a try/catch and a comment saying why: a pre-aborted Abor
 ### Next Steps
 
 - The timeout firing itself, which shares the abort path and is not separately tested.
+
+
+## Session 164: The timeout that fires
+<!-- trellis-session: v=2 fp=7ca912da922749fd -->
+
+**Date**: 2026-09-29
+**Task**: The timeout that fires
+**Branch**: `master`
+
+### Summary
+
+Held the timeout path with a case that proves itself: a three-second sleep with a one-millisecond timeout asserts both that the run was interrupted and that it lasted under a second and a half. The duration is the part that matters, because a completed sleep would report three seconds and the boolean alone would not tell them apart.
+
+### Main Changes
+
+- the mirror control is a hundred-millisecond sleep with a five-second timeout, which completes and asserts the field stays false - a race won and a race allowed are the two halves
+- and the case says what it does not hold: not cancellation, which has its own case, and not a timeout that fires mid-output, since the script produces nothing before the timeout
+- the changed file was named in the git add, which the previous rounds learned to do the hard way
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ef4a61` | test(shell): hold the timeout that fires, and prove it with the duration |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 750 tests, 748 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The request-runtime items still unheld, and the lists left elsewhere.
