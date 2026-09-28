@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-3.md`
-- **Total Sessions**: 157
+- **Active File**: `journal-4.md`
+- **Total Sessions**: 158
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1982 | Active |
+| `journal-4.md` | ~43 | Active |
+| `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 158 | 2026-09-29 | The three answers and the client account | `b15b233` | `master` |
 | 157 | 2026-09-29 | The corpus summary and the sentence it must not say | `a767115` | `master` |
 | 156 | 2026-09-29 | The project context list, five items left | `3cc3eae` | `master` |
 | 155 | 2026-09-29 | A holder for the branch that prevents a false drift report | `1d140a4` | `master` |
