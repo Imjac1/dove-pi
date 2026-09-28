@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 215
+- **Total Sessions**: 216
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~118 | Active |
+| `journal-5.md` | ~153 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 216 | 2026-09-29 | Passing the message count, once | `d7cebd7` | `master` |
 | 215 | 2026-09-29 | The configurable message cap | `0350b9d` | `master` |
 | 214 | 2026-09-29 | The twenty-three boxes, each given a reason | `5452136` | `master` |
 | 213 | 2026-09-29 | The survey the skill prescribes, run for the first time | `4e70eb9`, `acc2a8b` | `master` |

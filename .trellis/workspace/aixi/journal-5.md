@@ -116,3 +116,38 @@ Did the review P0.2 as a third branch of the context guard rather than a new mec
 ### Next Steps
 
 - Pass the message count from the handler, which reads it on the same line the fuse already calls; then the keepalive half of P0.3, which needs the network.
+
+
+## Session 216: Passing the message count, once
+<!-- trellis-session: v=2 fp=279f58637b7ea627 -->
+
+**Date**: 2026-09-29
+**Task**: Passing the message count, once
+**Branch**: `master`
+
+### Summary
+
+Wired the turn cap. The handler read ctx.sessionManager.getEntries() twice on adjacent lines, once for the diagnostics the fuse reads and nowhere for the guard, so the change is one read reused rather than a second call. One read, two users, and a name that was free: sessionEntries had zero occurrences in the whole file.
+
+### Main Changes
+
+- the holder this does not have, for the third time in this line of work: the wiring line is held by compilation. The two cases added last round test guardContext directly and the adapter suite session arrays are far below a hundred and fifty entries, so the cap cannot fire in them
+- with one difference from the seam question worth noting: this line can be held, because the count is an argument a case controls. The next step is written down - a case in tests/pi-adapter.test.ts, which already builds the handler and a fake context, supplying a long session and a small cap
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d7cebd7` | feat(adapter): pass the conversation count the turn cap needs, from the read that already happens |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 787 tests, 785 pass, 0 fail, 2 skipped, unchanged. tests/pi-adapter.test.ts and tests/context-guard.test.ts together: 44 pass.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- A case that holds the cap wiring: a long session and a small cap through the adapter handler, which is possible because the count is an argument. Then the keepalive half of the review P0.3, which needs the network.
