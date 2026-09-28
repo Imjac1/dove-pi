@@ -414,3 +414,39 @@ Measured 742 exported symbols in src. The crude count said 272 were not referenc
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 115: The barrel that re-exports what nothing names
+<!-- trellis-session: v=2 fp=6392303968620762 -->
+
+**Date**: 2026-09-28
+**Task**: The barrel that re-exports what nothing names
+**Branch**: `master`
+
+### Summary
+
+Measured through the barrel the previous round could not see through: project-provider/index.ts has fourteen importers - the CLI, the adapters, the commands, the extension and five test files - and they take named things, so the five symbols left alone last round are reachable and are offered API rather than dead code.
+
+### Main Changes
+
+- and the barrel publishes nine modules with export-star, so every export of contracts.ts, discovery.ts and manifest.ts is part of its surface whether or not anything names it: unused export is not a category that applies to a barrel. The search could see the names and could not see the wall
+- nothing was changed: the five stay, the barrel stays, and the note the last round wrote about its own limit is now a measured fact rather than a caution
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4ee95f` | chore(task): measure through the barrel the last round could not see through |
+| `3e96bed` | chore(task): archive 09-28-barrel-reach |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
