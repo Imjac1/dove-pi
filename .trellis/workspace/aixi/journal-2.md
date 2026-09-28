@@ -1655,3 +1655,39 @@ Measured the other runner: seven python test files under tests, and active_task_
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 95: The subcommands the usage strings name
+<!-- trellis-session: v=2 fp=9b19bc59809387ce -->
+
+**Date**: 2026-09-28
+**Task**: The subcommands the usage strings name
+**Branch**: `master`
+
+### Summary
+
+One level below the command and switch audits: every subcommand the usage strings name is one the dispatch handles. The thickest is task, whose usage names ten and src/commands/task.ts handles exactly those ten, six as branches and four through the mutation path. project names four and dispatches four, shell three and three, and web, workspace, capability and session likewise.
+
+### Main Changes
+
+- the READMEs and the help name subsets of those - nine of the ten task subcommands, three of them in the help - which is what a way in is allowed to be, the same reading a previous round gave the switch list
+- no check was added: the usage strings are prose in the same files as the dispatch, so a textual comparison would be a pattern pretending to be a claim, the class this session has met five times. The measurement is recorded where the surface is already documented layer by layer
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3177292` | docs(cli): the subcommand layer is measured, and it is clean |
+| `49f21bc` | chore: archive the subcommands task |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 739 tests, 737 pass, 0 fail, 2 skipped. Installer tests: 119 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
