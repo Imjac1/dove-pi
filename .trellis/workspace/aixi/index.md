@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 217
+- **Total Sessions**: 218
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~189 | Active |
+| `journal-5.md` | ~227 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 218 | 2026-09-29 | The keepalive whose own evidence contradicted it | `9287c93`, `e3b009b` | `master` |
 | 217 | 2026-09-29 | A case that holds the cap wiring | `10b33b9` | `master` |
 | 216 | 2026-09-29 | Passing the message count, once | `d7cebd7` | `master` |
 | 215 | 2026-09-29 | The configurable message cap | `0350b9d` | `master` |

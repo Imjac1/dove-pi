@@ -187,3 +187,41 @@ Held the turn cap through the adapter handler, which the previous round wired an
 ### Next Steps
 
 - The review list is now down to one item: P0.3 keepalive, which needs the network and the plan own offline-first constraint.
+
+
+## Session 218: The keepalive whose own evidence contradicted it
+<!-- trellis-session: v=2 fp=b4f0f8b96b7b3ad4 -->
+
+**Date**: 2026-09-29
+**Task**: The keepalive whose own evidence contradicted it
+**Branch**: `master`
+
+### Summary
+
+Measured the review P0.3 keepalive before building it, and found the review interval contradicted by the repository own observation: context-guard.ts records that cache misses are time-driven, a gap over sixty seconds giving a 34 to 40 percent miss regardless of prefix size, while the review proposes a heartbeat every four to five minutes. So the interval is derived as three quarters of the observed gap, and a case asserts the ordering.
+
+### Main Changes
+
+- the policy is off by default because a heartbeat is a provider request, so enabling it is enabling the network, and the review own note asks for optional and offline-first. The disabled branch is checked first and nothing in the module reaches the network
+- and it is its own module rather than part of the guard: the guard reads what already happened to the prefix, while this decides whether to make a request - the only act in this line of work with a network cost
+- then the repository corrected me: the reachability check failed with has no module that is unreachable and unlisted, because the new module was neither imported nor listed. The commit before it went out with the gate red, the second time this session has done that
+- the check own vocabulary is exactly right for the case, and its entry now names what will reach the module rather than claiming nothing will: the keepalive policy is complete and its timer is not built, so wiredBy says the adapter round that schedules a heartbeat is wiring rather than this decision
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9287c93` | feat(adapter): derive the keepalive interval from the repository own observation, and default it off |
+| `e3b009b` | fix(harness): list the keepalive module, which the reachability check was right to flag |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 793 tests, 791 pass, 0 fail, 2 skipped - five more than before. The reachability suite is 6 cases. The keepalive suite is 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- This one is now down to its timer. The review list has nothing else that is real work in this repository.
