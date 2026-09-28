@@ -149,3 +149,39 @@ Wrote the case for the cancellation half and it found a defect instead of passin
 ### Next Steps
 
 - The guard for child.kill in the abort path, which is a one-line robustness fix in a path a timeout also walks.
+
+
+## Session 162: A commit path that missed the file it changed
+<!-- trellis-session: v=2 fp=3ca874780fa49d69 -->
+
+**Date**: 2026-09-29
+**Task**: A commit path that missed the file it changed
+**Branch**: `master`
+
+### Summary
+
+A follow-up to the cancellation round, because its journal entry said the tree was unchanged at five cases - true of the working tree, and false of HEAD. The removal of the failing case was committed with a path that named only the task directory, so the repository carried a failing test until this commit.
+
+### Main Changes
+
+- the same class the session keeps meeting: a selector that does not cover what it claims. Here it was git add with a task-directory path instead of the changed test file
+- it was caught by reading git status after the journal rather than by assuming the tree was clean, which is the check that has caught the index and ref locks all session
+- and the correction is a new entry rather than an edit, because the journal is not rewritten; the earlier entry is incomplete rather than untrue
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aab09bc` | fix(test): commit the removal the previous commit left staged |
+
+### Testing
+
+- [OK] git status is clean and tests/windows-runtime.test.ts is five of five, so HEAD and the working tree agree again.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The guard for child.kill in the abort path, which is still the round after this one.
