@@ -113,3 +113,39 @@ Measured the shell boundary and found five behaviours implemented with one asser
 ### Next Steps
 
 - The signal and interrupted cancellation half, the mode-change item, and the native-absence item.
+
+
+## Session 161: The cancellation half of the shell boundary
+<!-- trellis-session: v=2 fp=6aee6899df7ff04d -->
+
+**Date**: 2026-09-29
+**Task**: The cancellation half of the shell boundary
+**Branch**: `master`
+
+### Summary
+
+Wrote the case for the cancellation half and it found a defect instead of passing. A pre-aborted AbortSignal fails with kill EINVAL and generated asynchronous activity after the test completed, so the run settles and an unhandled error escapes after the test is over.
+
+### Main Changes
+
+- the abort path read before the case was written: abort sets interrupted and calls child.kill unguarded, a pre-aborted signal calls it immediately after spawn, and the timeout shares the same path - so it kills a process that has not started, which on Windows raises EINVAL
+- the case was removed rather than left failing, because it asserts a behaviour the code does not have, and the tree is unchanged at five cases
+- the round produced a defect report with a reproduction and did not produce a fix: a one-line guard deserves its own round with its own evidence, and this finding is stronger than the test would have been
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe8cbaf` | chore(task): the cancellation case found a defect, and the round recorded it instead of leaving a failing test |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 748 tests, 746 pass, 0 fail, 2 skipped, unchanged.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The guard for child.kill in the abort path, which is a one-line robustness fix in a path a timeout also walks.
