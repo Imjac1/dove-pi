@@ -1162,3 +1162,41 @@ The round asked whether the release chain actually runs, and it does: the launch
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task. Everything measured this round either runs or is consistent, except rpc --help printing nothing, which is the passthrough semantics and its own decision.
+
+
+## Session 82: The mode suites read the directory the runtime reads
+<!-- trellis-session: v=2 fp=2990d3c0c7b2275b -->
+
+**Date**: 2026-09-28
+**Task**: The mode suites read the directory the runtime reads
+**Branch**: `master`
+
+### Summary
+
+The shipped modes are validated, and each of the three suites spelled modes/<name> by hand while the host resolves a mode through workModeDirectory. They agree today and nothing kept them in step - the same class the release digest had two rounds ago, where a test that spells a path is testing its own spelling.
+
+### Main Changes
+
+- the three suites use the resolver now, each with the reason, so a change to how the host finds a mode cannot leave them passing against a directory the runtime no longer reads
+- the round also verified the previous round fix from the other door: bin/dove-pi.cjs routes to the same program, so capability --help answers the router help and install --help still prints its own argparse help through the stable launcher too
+- and two more measurements came back negative: workModeDirectory is join(resolve(root), modes, name), the same path the suites wrote, and the adapter suite registers the extension against fake pi objects
+- a process note, and it is a habit now rather than an accident: this task was written after the fix, for the second round in a row. The rule for the next round is written down where the next reader will find it - the task exists before the first edit
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `875f7db` | test(modes): the mode suites read the directory the runtime reads |
+| `12d0bb7` | chore(task): record the mode resolver finding and the habit it exposes |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. The three mode suites are 36 tests. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

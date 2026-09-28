@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 81
+- **Total Sessions**: 82
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1164 | Active |
+| `journal-2.md` | ~1202 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 82 | 2026-09-28 | The mode suites read the directory the runtime reads | `875f7db`, `12d0bb7` | `master` |
 | 81 | 2026-09-28 | A help flag answered only in first position, and one command that answers nothing | `27f2a71`, `915dd9e` | `master` |
 | 80 | 2026-09-28 | The release digest did not cover the mode definitions the runtime loads | `476bfc9`, `77e5ad6` | `master` |
 | 79 | 2026-09-28 | A toast on every instruction, documented nowhere and impossible to turn off | `f9624a0`, `9c5884d` | `master` |
