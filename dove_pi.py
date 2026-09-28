@@ -26,7 +26,7 @@ import subprocess
 import sys
 import json
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 if TYPE_CHECKING:
     from installer import InstallState, MaintenanceResult, ManagedExtensionState, ManagedLayout, ReleaseManifest
@@ -637,6 +637,57 @@ def maintenance_run_id(seed: str = "") -> str:
     material = seed or f"{datetime.now(timezone.utc).isoformat()}-{os.getpid()}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
+
+def summarize_maintenance_logs(entries: Iterable[object]) -> dict:
+    """Explain a run of maintenance decisions from their logs.
+
+    **The archived defect this answers**: *maintenance logs could not explain two installs and one repair within
+    a few minutes.* So the summary lists the runs in the order they happened, states each decision and its
+    duration, and counts what it could not read.
+
+    **It does not group runs into a time window.** Grouping by proximity would be inventing a correlation the
+    records do not carry - the design says correlation fields are identifiers, and a timestamp is not one. The
+    runs are listed in order with their times, and a reader can see a cluster without being told there is one.
+
+    **A legacy four-field record has no decision and no duration**, and both stay `unknown` rather than being
+    inferred from the command name: an install that changed nothing and an install that changed everything look
+    identical without the field that says which.
+    """
+    runs: list[dict] = []
+    by_decision: dict = {}
+    undecided = 0
+    timed = 0
+    total_duration = 0
+    for entry in entries:
+        projected = project_maintenance_record(entry)
+        if projected.get("malformed"):
+            undecided += 1
+            runs.append({"at": MAINTENANCE_UNAVAILABLE, "command": MAINTENANCE_UNAVAILABLE, "decision": MAINTENANCE_UNAVAILABLE,
+                         "durationMs": MAINTENANCE_UNAVAILABLE, "malformed": True})
+            continue
+        decision = projected.get("decision", MAINTENANCE_UNAVAILABLE)
+        if decision == MAINTENANCE_UNAVAILABLE:
+            undecided += 1
+        else:
+            by_decision[decision] = by_decision.get(decision, 0) + 1
+        duration = projected.get("durationMs", MAINTENANCE_UNAVAILABLE)
+        if isinstance(duration, int) and not isinstance(duration, bool):
+            timed += 1
+            total_duration += duration
+        runs.append({"at": projected.get("at", MAINTENANCE_UNAVAILABLE), "command": projected.get("command", MAINTENANCE_UNAVAILABLE),
+                     "decision": decision, "durationMs": duration, "malformed": False})
+    return {
+        "schemaVersion": MAINTENANCE_SCHEMA_VERSION,
+        "runs": runs,
+        "runCount": len(runs),
+        "byDecision": by_decision,
+        # **The two counters that keep the summary honest**: how many runs could not say what they decided, and
+        # how many could not say how long they took. A summary that reports neither would look complete while
+        # explaining nothing, which is the defect it exists to answer.
+        "runsWithoutDecision": undecided,
+        "runsWithDuration": timed,
+        "totalDurationMs": total_duration if timed else MAINTENANCE_UNAVAILABLE,
+    }
 
 def write_maintenance_log(
     layout: ManagedLayout,
