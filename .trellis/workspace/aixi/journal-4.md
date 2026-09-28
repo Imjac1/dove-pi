@@ -401,3 +401,39 @@ Held one half of the resolution item and found the other unheld. The required-ar
 ### Next Steps
 
 - A holder for the require refusal, which has a recorded observation and no test, and the native-absence item.
+
+
+## Session 169: Holders for the registry four behaviours
+<!-- trellis-session: v=2 fp=d5caa3a088bc9bb1 -->
+
+**Date**: 2026-09-29
+**Task**: Holders for the registry four behaviours
+**Branch**: `master`
+
+### Summary
+
+The round expected one unheld refusal and found four behaviours with no holder: require refusing an unknown name, register refusing a duplicate, get answering undefined, and list enumerating. The registry is twenty-six lines and the suite constructs registries in five places while asserting none of their behaviour.
+
+### Main Changes
+
+- the first case asserts the refusal and then that a held name resolves, so the assertion is about the refusal rather than a method that always throws; the duplicate case asserts the message and that the first registration survives; and a planted control flipping the expected name fails the case
+- and three type errors were needed to get the fixture shape right: the type is declared locally and not exported, the field shape had to come from the suite that owns the protocol fixtures, and the third error was the cause - a helper widens literal fields, so status became string rather than its union, which is why the existing suite inlines
+- that is the session method teaching itself again: the shape was in the owning file, and three guesses cost three typecheck runs where one reading cost none
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97bcf9e` | test(core): hold the registry four behaviours, three of which nothing held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 755 tests, 753 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The native-absence item and the clean-project placement question, both still named, and the request-runtime items left.
