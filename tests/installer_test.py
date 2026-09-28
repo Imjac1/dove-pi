@@ -336,6 +336,12 @@ class CliHelpCoverageTests(unittest.TestCase):
 
     **One direction on purpose**: a README may show a way in without listing everything, so naming fewer commands than the router has is
     not a defect. Naming a command a reader cannot then find in the help is.
+
+    **What this does not cover, measured in the round after it**: the flags. The help names eighteen and the READMEs twenty-three, and every
+    one of them is accepted - by the program the document is about, which is not always this one. `--cwd`, `--prompt`, `--scenario` and
+    `--launcher` belong to `scripts/real-dove-blackbox.mjs` and the READMEs name them under that script, so a check over this program
+    would report four false positives. **The first attempt at one did**, twice over: a regex that lost its escaping in the shell that
+    generated it, and a parser set that left out the very script the flags belong to. A check is only as good as the scope it declares.
     """
 
     def test_commands_the_readmes_name_are_named_in_the_help(self):
