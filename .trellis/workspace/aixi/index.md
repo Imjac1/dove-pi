@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 201
+- **Total Sessions**: 202
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1597 | Active |
+| `journal-4.md` | ~1634 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 202 | 2026-09-29 | Reading the real-user web access P2 | `12b6270` | `master` |
 | 201 | 2026-09-29 | The bilingual README sections | `607f4ee` | `master` |
 | 200 | 2026-09-29 | Reading the interop layer P1 | `1a342e8` | `master` |
 | 199 | 2026-09-29 | Reading the adaptive formal workflow | `b292856` | `master` |

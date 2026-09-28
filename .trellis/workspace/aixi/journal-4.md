@@ -1595,3 +1595,40 @@ Closed item 14 of the interop P1: both front doors now carry the adapter and plu
 ### Next Steps
 
 - The interop P1 now has nothing measured missing; the two P2 tasks remain, real-user web access and the usage review.
+
+
+## Session 202: Reading the real-user web access P2
+<!-- trellis-session: v=2 fp=854f6452e9bac009 -->
+
+**Date**: 2026-09-29
+**Task**: Reading the real-user web access P2
+**Branch**: `master`
+
+### Summary
+
+Read the next P2 and found it carried a template PRD - Goal TBD, Requirements TBD, one unchecked TBD criterion - while its feature is implemented and tested: src/capabilities/web-access.ts registers web.access_status and web.real_user_setup, and tests/web-access.test.ts holds them.
+
+### Main Changes
+
+- so the PRD was written from what the code does: a read-only readiness capability reporting web-search.json state and the Edge and Chrome cookie sources pi-web-access will read, and a setup capability writing allowBrowserCookies with a host-scoped authFetch profile, refusing an empty host list so the file stays parseable
+- its acceptance criteria are deliberately left unchecked. Stating them is a reading of the code; checking them would be marking my own reading as the intent, which is the failure mode this repository specification exists to prevent. The person who wrote the intent should say whether these are it
+- and the task stays open rather than archived for the same reason, with the retrospective stated in the document itself so a reader knows which parts are description and which are aspiration
+- the other P2 was measured too: 08-28-dove-pi-usage-review has a real 7661-byte plan with no TBD and a research file, so it is substantive and belongs to a later round
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `12b6270` | docs(task): write the real-user web access PRD from the code, with its criteria left unchecked |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 08-28-dove-pi-usage-review, which has a real plan to read rather than a template to fill.
