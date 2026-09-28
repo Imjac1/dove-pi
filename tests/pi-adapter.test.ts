@@ -151,6 +151,23 @@ describe("Pi adapter", () => {
 			sessionManager: { getEntries: () => fallbackSessionEntries, getBranch: () => sessionEntries, getSessionId: () => "session-test" },
 			abort: () => { providerAborted = true; },
 		};
+		// **The status line, which four rounds of review pointed at and no test ever invoked.** The two halves of it
+		// cost differently, so they are asserted separately: the cache text is formatted from diagnostics already
+		// inspected in the handler, while the goal line needs a ledger read and stays behind `/status full`.
+		notifications.length = 0;
+		await commands.get("status")?.handler("", context);
+		const plainStatus = notifications.at(-1) ?? "";
+		assert.match(plainStatus, /Cache: /, "the cache line shows without asking for full");
+		assert.doesNotMatch(plainStatus, /Goals: /, "the goal line costs a ledger read and waits for full");
+		assert.doesNotMatch(plainStatus, /Use \/status full for cache diagnostics/, "the hint is gone because it is no longer true");
+		notifications.length = 0;
+		await commands.get("status")?.handler("full", context);
+		const fullStatus = notifications.at(-1) ?? "";
+		assert.match(fullStatus, /Cache: /, "full keeps the cache line rather than replacing it");
+		assert.match(fullStatus, /Goals: /, "full adds the goal line");
+		// The control: the two calls are not the same string, so the assertions above are about the flag.
+		assert.notEqual(plainStatus, fullStatus, "full changes the line");
+		notifications.length = 0;
 		const capabilityTool = tools.get("agent_run_capability") as { execute: (...args: unknown[]) => Promise<{ details?: { status?: string } }> };
 		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
 		process.env.PI_CODING_AGENT_DIR = join(adapterStateDir, "pi-capability-no-confirm");
