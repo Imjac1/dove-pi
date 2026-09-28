@@ -1159,3 +1159,38 @@ Did the remaining child task first plan item, and did it as code rather than pro
 ### Next Steps
 
 - The child second plan item: extend maintenance logs with run identity, timing, decision, release, path, extension and sync summaries.
+
+
+## Session 190: The maintenance log grows additively
+<!-- trellis-session: v=2 fp=8bac28c2e238115b -->
+
+**Date**: 2026-09-29
+**Task**: The maintenance log grows additively
+**Branch**: `master`
+
+### Summary
+
+Did the child second plan item. MaintenanceResult carries eleven fields and its to_json already emits release, profile, degraded extensions and a path outcome, while the writer took four of them away - so the gap was not missing data but a writer dropping what it was handed. write_maintenance_log now takes an optional record: with none it is the legacy four-field write, with one it writes schema 2.
+
+### Main Changes
+
+- and syncState is unknown because the vocabulary does not exist: zero hits for in_sync, managed_newer, project_newer or diverged anywhere in the installer package. Those words are on the TypeScript side, so the field is real and it is this half of the tree that cannot fill it - the design says label an unavailable field rather than guess
+- the four new tests went in only on the third attempt. The first wrote the class alongside a string replacement that did not match, so the block vanished silently and the suite reported Ran 130 as before - the count is what gave it away. The second died on a SyntaxError. The third worked by stopping being clever: the class in its own file, a staged copy with a placeholder, a ten-line splice
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `72fa70e` | feat(installer): write maintenance logs additively, with the fields the result already carried |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. npm run test:installer: 134 tests, OK, four more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child third plan item: correlate lifecycle records from the first three children.
