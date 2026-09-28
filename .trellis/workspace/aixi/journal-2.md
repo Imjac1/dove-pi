@@ -1541,3 +1541,41 @@ cache, token and extensions are in LOCAL_CLI_COMMANDS, so a user can run them, a
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 92: The switches the documents name
+<!-- trellis-session: v=2 fp=40caccf95a6be1e3 -->
+
+**Date**: 2026-09-28
+**Task**: The switches the documents name
+**Branch**: `master`
+
+### Summary
+
+Every flag the documents name is accepted by the program the document is about: Dove own flags by Dove, and --cwd, --prompt, --scenario and --launcher by scripts/real-dove-blackbox.mjs, which is where the READMEs name them. A clean result.
+
+### Main Changes
+
+- the first extraction reported eleven flags accepted nowhere and sixteen accepted but undocumented, and both directions were artifacts of the extraction rather than facts about the code
+- two causes, both mine: a regex that lost its escaping inside the program that generated it, and a parser set of src plus dove_pi.py that left out the very script four of the flags belong to
+- a probe was tried and rejected first: asking cmd --bogus --help whether argparse refuses unknown arguments answers zero, because --help short-circuits before the refusal. The honest probe was reading the parser and then grepping each documented flag with the grep tool rather than a generated regex
+- so the round is a measurement with a clean result and a statement of scope on the existing help check, because a check is only as good as the scope it declares - and the next person to extend it now knows why four flags would be false positives
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `29258af` | docs(cli): the switch surface is measured, and the check says what it does not cover |
+| `ad5a762` | chore(task): record the switch surface, the clean result and the two artifacts |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 118 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
