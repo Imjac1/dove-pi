@@ -1668,3 +1668,39 @@ Read the last open task, whose 7524-character plan is built from real session te
 ### Next Steps
 
 - The usage review P0: a session-size fuse that compacts or suggests /compact when the prompt prefix nears the context window. That is a runtime behaviour change rather than a reading.
+
+
+## Session 204: The session-size fuse
+<!-- trellis-session: v=2 fp=a5bf24efd65f42d1 -->
+
+**Date**: 2026-09-29
+**Task**: The session-size fuse
+**Branch**: `master`
+
+### Summary
+
+Did the usage review P0. The fuse reads the CacheDiagnostics the adapter already collects and answers three things: cold_start when the last miss was not a warmup, near_limit at the 0.8 ratio the review names, and ok otherwise. Six cases hold it.
+
+### Main Changes
+
+- what was read first supplied everything: CacheDiagnostics carries promptTokens, the hit rates, fullMisses and lastMissReason with its four values; the diagnostics are already consumed by a command, so the plan note about not being surfaced is about the status line rather than nowhere; and context-admission.ts compacts content above a threshold while conversation compaction does not exist
+- a window of zero or less, NaN or infinity yields ok with a ratio of zero, because dividing by an unknown window produces a number that looks like a measurement and is not one. The cold start still reports in that case, because a miss reason is a fact about the call rather than about the window
+- and it recommends rather than acts: compacting here would change a conversation the caller owns. A control holds that the expected warmup miss is not reported as a defect, and boundaries are tested at 79999, 80000 and 101000 against a 100000 window
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57a1543` | feat(cache): add a session-size fuse that reports a growing prefix and a billed cold start |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped - six more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The usage review P1: give the model an incentive to invoke a capability, since the recording exists and the invocation does not happen. Then P3, surfacing the diagnostics the fuse now reads.
