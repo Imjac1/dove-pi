@@ -1411,3 +1411,41 @@ Did the child seventh plan item, answering the archived defect that maintenance 
 ### Next Steps
 
 - The child eighth plan item, the last: run the full Node, installer, doctor, Pi smoke and diff checks.
+
+
+## Session 197: The full validation, and the criteria held against it
+<!-- trellis-session: v=2 fp=76f92158790e7d39 -->
+
+**Date**: 2026-09-29
+**Task**: The full validation, and the criteria held against it
+**Branch**: `master`
+
+### Summary
+
+Ran the child five validation commands together and all five pass: typecheck, the Node suite at 776 pass, the installer suite, doctor reporting healthy, and pi smoke. One of them contradicted a standing session conclusion, which is the round real finding.
+
+### Main Changes
+
+- doctor reports managedInstall installed false at AppData alongside pi version 0.84.3, while update --check in round 154 reported Pi not installed with 0.84.3 available. Both are true and they say different things: the check was reporting the managed release, and Pi itself is present at the version that same output called not installed
+- so a standing conclusion was wrong. The session has been saying the first real turn needs a host this environment does not have, and the premise came from a line about the managed release rather than about Pi. The host is here; what is missing is the managed install, and installing it is still a change to this machine
+- the boundary is not lifted, only restated: not this environment has no host, but this environment has an unmanaged host and cannot create the managed release
+- and the criteria are held against what exists with two named as not met rather than quietly dropped: the summary does not report stagnation or cache-prefix changes, because the vocabulary has no kind for either
+- that is the fifth time a cannot-be-done judgement rested on a premise nobody measured, after the timeout declared unreachable, the fallback, the network behind update --check, and the toolset
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9039a3a` | chore(task): run the child full validation, and measure the contradiction it contains |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. npm run test:installer: 140 tests, OK. npm run doctor: healthy. npm run pi:smoke: exit 0.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The parent umbrella last step: run the parent integration review and archive the tree. The eight child items are done.
