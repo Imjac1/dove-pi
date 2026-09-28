@@ -39,6 +39,76 @@ export interface CacheDiagnostics {
 	readonly lastMissReason?: "warmup" | "model-change" | "idle" | "provider-miss-or-expiry";
 }
 
+/**
+ * What the session-size fuse decided, and why.
+ *
+ * **The defect this answers is measured**: the 20260830 usage review found a fixed prefix growing to 180-210k
+ * tokens and one 169-turn session ending in a full cold start at 179,915 input tokens with `cacheRead` at zero,
+ * while content compaction existed and conversation compaction did not. So the reading is taken from the cache
+ * diagnostics the adapter already collects rather than from a round count.
+ */
+export type SessionFuseState = "ok" | "near_limit" | "cold_start";
+
+export interface SessionFuseReading {
+	readonly state: SessionFuseState;
+	readonly promptTokens: number;
+	readonly contextWindowTokens: number;
+	/** Prompt tokens as a fraction of the window. `0` when the window is unknown, never a guess. */
+	readonly usageRatio: number;
+	readonly lastMissReason?: CacheDiagnostics["lastMissReason"];
+	/** Present only when there is something to suggest. Absent is a fact, not a missing message. */
+	readonly recommendation?: string;
+}
+
+/** The fraction of the context window at which the fuse recommends compacting. The review names 80-85%. */
+export const SESSION_FUSE_PREFIX_RATIO = 0.8;
+
+/**
+ * Read the cache diagnostics as a session-size fuse.
+ *
+ * **Three answers, and each one is about something measurable**:
+ *
+ * - `cold_start` when the last miss was not a warmup. The review names `idle`, `model-change` and provider expiry
+ *   as the events that re-bill a whole prefix, and only the expected first call is not one of them.
+ * - `near_limit` when the prompt has reached {@link SESSION_FUSE_PREFIX_RATIO} of the window. **A window of zero or
+ *   less yields `ok` rather than a ratio**: dividing by an unknown window would produce a number that looks like a
+ *   measurement and is not one, and this reading exists to prevent exactly that kind of claim.
+ * - `ok` otherwise, including a session that has not called the provider yet.
+ *
+ * **It recommends and does not act.** The review asks for compaction or a suggestion, and a suggestion is what a
+ * reading can honestly produce: a compaction decided here would change a conversation the caller owns.
+ */
+export function evaluateSessionFuse(
+	diagnostics: CacheDiagnostics,
+	contextWindowTokens: number,
+): SessionFuseReading {
+	const promptTokens = diagnostics.promptTokens;
+	const known = Number.isFinite(contextWindowTokens) && contextWindowTokens > 0;
+	const usageRatio = known ? promptTokens / contextWindowTokens : 0;
+	const base = {
+		promptTokens,
+		contextWindowTokens: known ? contextWindowTokens : 0,
+		usageRatio,
+		...(diagnostics.lastMissReason === undefined ? {} : { lastMissReason: diagnostics.lastMissReason }),
+	};
+	const missReason = diagnostics.lastMissReason;
+	if (missReason !== undefined && missReason !== "warmup") {
+		return {
+			...base,
+			state: "cold_start",
+			recommendation: `the last provider call was a full miss (${missReason}): ${promptTokens} prompt tokens were billed at full price. Start a new session or compact before continuing.`,
+		};
+	}
+	if (known && usageRatio >= SESSION_FUSE_PREFIX_RATIO) {
+		return {
+			...base,
+			state: "near_limit",
+			recommendation: `the prompt prefix is ${Math.round(usageRatio * 100)}% of the ${contextWindowTokens}-token window: compact the conversation or run /compact before the next turn.`,
+		};
+	}
+	return { ...base, state: "ok" };
+}
+
 export interface GoalEfficiencyDiagnostics {
 	readonly goalCount: number;
 	readonly completedGoalCount: number;
