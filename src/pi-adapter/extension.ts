@@ -25,7 +25,7 @@ import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts"
 import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
 import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 import { formatProgressSnapshot, ProgressGuard, type ProgressRunOptions } from "./progress-guard.ts";
-import { formatCacheDiagnostics, formatGoalEfficiency, inspectCacheDiagnostics, inspectGoalEfficiency } from "./cache-diagnostics.ts";
+import { evaluateSessionFuse, formatCacheDiagnostics, formatGoalEfficiency, inspectCacheDiagnostics, inspectGoalEfficiency } from "./cache-diagnostics.ts";
 import { attributeProviderCache, inspectProviderCachePrefix, type CachePrefixSnapshot } from "../core/cache-prefix.ts";
 import { guardContext } from "./context-guard.ts";
 import { createRequestPlan, isTaskInventoryRequest, type RequestPlan } from "../core/request-plan.ts";
@@ -816,6 +816,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let stableAutoToolNames: string[] = [];
 	let lastSystemPrompt: string | undefined;
 	let guardNotified = false;
+	let fuseNotified = false;
 	const reasoningVoiceFlagPath = join(stateDir, "reasoning-voice");
 	function readReasoningVoiceFlag(): boolean {
 		try {
@@ -3118,6 +3119,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (contextGuard.compactAdvised && contextGuard.hint && ctx.hasUI && !guardNotified) {
 			guardNotified = true;
 			ctx.ui.notify(contextGuard.hint, "warning");
+		}
+		// **The fuse answers a question the guard cannot**, which is why it is not folded into it: the guard reads
+		// the usage Pi reports, so a cold start re-bills the whole prefix at full price while `fractionUsed` is
+		// unchanged. Its own one-shot flag, so the two notices are independent facts rather than one repeated.
+		const fuse = evaluateSessionFuse(inspectCacheDiagnostics(ctx.sessionManager.getEntries()), contextWindow ?? 0);
+		if (fuse.state === "cold_start" && fuse.recommendation && ctx.hasUI && !fuseNotified) {
+			fuseNotified = true;
+			ctx.ui.notify(fuse.recommendation, "warning");
 		}
 
 		const continuationGuidance = continuationState
