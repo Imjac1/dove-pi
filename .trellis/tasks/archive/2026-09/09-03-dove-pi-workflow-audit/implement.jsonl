@@ -5,4 +5,4 @@
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"跨层质量门禁、测试命令、失败可恢复性和禁止模式。"}
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"审计启动器到 CLI/Pi/协议/文档的数据流和跨层一致性。"}
 {"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"避免为路由、解析和错误格式新增重复实现。"}
-{"file":".trellis/tasks/09-03-dove-pi-workflow-audit/research/workflow-audit.md","reason":"本任务的代码证据、真实命令矩阵和外部资料。"}
+{"file":".trellis/tasks/archive/2026-09/09-03-dove-pi-workflow-audit/research/workflow-audit.md","reason":"本任务的代码证据、真实命令矩阵和外部资料。"}

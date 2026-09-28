@@ -4,4 +4,4 @@
 {"file":".trellis/spec/backend/personal-agent-extension-runtime.md","reason":"核对 Pi 扩展和托管身份一致性。"}
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"执行最终跨层质量检查和完整测试矩阵。"}
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"检查代码、协议、安装器和 README 是否同步。"}
-{"file":".trellis/tasks/09-03-dove-pi-workflow-audit/research/workflow-audit.md","reason":"复核每个缺陷是否有可复现证据、回归覆盖或明确延期。"}
+{"file":".trellis/tasks/archive/2026-09/09-03-dove-pi-workflow-audit/research/workflow-audit.md","reason":"复核每个缺陷是否有可复现证据、回归覆盖或明确延期。"}

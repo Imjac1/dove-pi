@@ -7,14 +7,14 @@
 {"file":".trellis/spec/backend/error-handling.md","reason":"Error boundary and fail-closed conventions"}
 {"file":".trellis/spec/backend/directory-structure.md","reason":"Where new modules and tests belong"}
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Data flow across layers before adding a contract"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-pi-agent-core.md","reason":"Verified hook signatures and the blocking contract of the first adapter"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-pi-agent-core-version-delta.md","reason":"0.84.3 stub vs 0.87.1 implementation; why the adapter must be replaceable"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-claude-code-subagent-and-skill-formats.md","reason":"The field-level precedent the mode schema is derived from"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-work-mode-field-usage.md","reason":"Empirical field convergence, and why the capability set must be required"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-github-survey.md","reason":"The six gate patterns, and the fail-open default to design against"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-pentest-engagement-contract-schema.md","reason":"The authority-contract fields required by NIST and PTES"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/official-vertical-requirements-quant-and-audit.md","reason":"SEC 15c3-5 pre-trade requirements and the SARIF output contract"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/ground-truth-community-security-evidence.md","reason":"Why no single layer is a boundary"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/verification-log.md","reason":"How claims in this task were verified, and which are still unverified"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/official-vertical-requirements-pentest.md","reason":"Acceptance evidence for the pentest mode's scope contract"}
-{"file":".trellis/tasks/09-25-dove-base-agent-framework/research/synthesis-01-official-wave.md","reason":"The gate/loop conclusions the acceptance criteria are checked against"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-pi-agent-core.md","reason":"Verified hook signatures and the blocking contract of the first adapter"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-pi-agent-core-version-delta.md","reason":"0.84.3 stub vs 0.87.1 implementation; why the adapter must be replaceable"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-claude-code-subagent-and-skill-formats.md","reason":"The field-level precedent the mode schema is derived from"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-work-mode-field-usage.md","reason":"Empirical field convergence, and why the capability set must be required"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-github-survey.md","reason":"The six gate patterns, and the fail-open default to design against"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-pentest-engagement-contract-schema.md","reason":"The authority-contract fields required by NIST and PTES"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/official-vertical-requirements-quant-and-audit.md","reason":"SEC 15c3-5 pre-trade requirements and the SARIF output contract"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/ground-truth-community-security-evidence.md","reason":"Why no single layer is a boundary"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/verification-log.md","reason":"How claims in this task were verified, and which are still unverified"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/official-vertical-requirements-pentest.md","reason":"Acceptance evidence for the pentest mode's scope contract"}
+{"file":".trellis/tasks/archive/2026-09/09-25-dove-base-agent-framework/research/synthesis-01-official-wave.md","reason":"The gate/loop conclusions the acceptance criteria are checked against"}
