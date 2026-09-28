@@ -407,5 +407,38 @@ class CliHelpCoverageTests(unittest.TestCase):
         )
 
 
+class RuntimeMinimumTests(unittest.TestCase):
+    """The minimum the launcher enforces is the minimum the release declares.
+
+    Measured across seven places: package.json engines, the release manifest, installer/release.py, the readiness check, both bootstrap
+    prerequisite calls, dove_pi.py own checks, and both READMEs. **They agree**, and two of the places compare exactly - a manifest that
+    drifts from `EXPECTED_RUNTIME` fails the readiness check, which fails a release.
+
+    **What none of that holds is the value that decides what a user machine does.** `MIN_NODE` is the comparison the launcher makes
+    before it will run at all, and the manifest is a declaration about it; if they disagree, a user is told one thing by the release and
+    refused by the tool. This is the one direction worth asserting, and it is the enforcer that has to match.
+    """
+
+    def test_the_enforced_minimum_matches_the_declared_one(self):
+        manifest = (ROOT / "scripts" / "build-release-manifest.mts").read_text(encoding="utf-8")
+        declared = re.search(r'runtime:\s*\{\s*python:\s*">=([0-9.]+)",\s*node:\s*">=([0-9.]+)"', manifest)
+        self.assertIsNotNone(declared, "the manifest no longer states a runtime minimum in the shape this test reads")
+
+        declared_node = tuple(int(part) for part in declared.group(2).split("."))
+        self.assertEqual(
+            dove_pi.MIN_NODE,
+            declared_node,
+            "the launcher enforces " + ".".join(str(part) for part in dove_pi.MIN_NODE) + " and the release declares " + declared.group(2),
+        )
+
+        python_minimum = tuple(int(part) for part in declared.group(1).split("."))
+        source = (ROOT / "dove_pi.py").read_text(encoding="utf-8")
+        self.assertIn(
+            "sys.version_info < (" + ", ".join(str(part) for part in python_minimum) + ")",
+            source,
+            "the launcher Python check and the declared minimum have drifted apart",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
