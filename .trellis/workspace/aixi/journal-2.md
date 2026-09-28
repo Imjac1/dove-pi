@@ -1123,3 +1123,42 @@ Reading the release source roots showed the digest walked bin, src, installer, .
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 81: A help flag answered only in first position, and one command that answers nothing
+<!-- trellis-session: v=2 fp=00c9c58c8e575b2d -->
+
+**Date**: 2026-09-28
+**Task**: A help flag answered only in first position, and one command that answers nothing
+**Branch**: `master`
+
+### Summary
+
+The round asked whether the release chain actually runs, and it does: the launcher answers --version and --help, the five read-only subcommands all exit 0 with real output, the release artifact names are consistent across the workflow and the readiness check, and the one-launch workspace override leaves the file alone. Then all fourteen advertised commands were asked for their own help, and six answered a usage error.
+
+### Main Changes
+
+- the mechanism: dove_pi.py recognises help only as the first argument, so capability --help falls through to the local CLI and answers a usage error for a group that needs a subcommand
+- and one of the eight that exit 0 answers nothing at all - rpc --help prints empty output, which is worse than the usage error because it says nothing
+- the guard covers exactly the commands the local CLI owns, so install --help keeps its own argparse help: a specific answer beats a general one, and nothing that already worked was replaced
+- verified by running all fourteen rather than reading the diff: every command answers --help now, install still prints its usage, the top level still prints the version, and the installer suite is 111 tests OK
+- and a process slip, recorded rather than backdated: this task was written after the fix. The artifacts say so, because a task that hides its own sequence teaches the next reader the wrong one
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `27f2a71` | fix(cli): a help flag is answered wherever it appears, not only first |
+| `915dd9e` | chore(task): record the help flag finding, and that this task was written after the fix |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 111 tests OK. Doctor: exit 0. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task. Everything measured this round either runs or is consistent, except rpc --help printing nothing, which is the passthrough semantics and its own decision.
