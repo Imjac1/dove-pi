@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { classifyTerminal, ISOLATION_CONTROLS, safetyAndStability, TERMINAL_CLASSES, UNCOMPUTABLE_AXES } from "../src/core/harness-axes.ts";
+import { classifyTerminal, improvementTrajectory, ISOLATION_CONTROLS, safetyAndStability, TERMINAL_CLASSES, UNCOMPUTABLE_AXES, type UncomputableAxis } from "../src/core/harness-axes.ts";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
 
 /**
@@ -87,15 +87,31 @@ describe("the Safety and Stability axis", () => {
 		assert.equal(reading.refusals.total, 0);
 	});
 
-	it("declares the axes it cannot read, with the evidence and what would change that", () => {
-		const itq = UNCOMPUTABLE_AXES.find((entry) => entry.axis.includes("Improvement Trajectory"));
-		assert.ok(itq, "the axis that cannot be measured is declared rather than omitted");
-		assert.match(itq!.metric, /slope|stagnation/);
-		assert.match(itq!.reason, /per-round score|round score/);
-		assert.match(itq!.evidence, /acceptanceVector|appendTaskConvergenceDecision/, "and it cites where the absence is");
-		assert.match(itq!.wouldNeed, /observation|recordRequestObservation/);
-		const pareto = UNCOMPUTABLE_AXES.find((entry) => entry.metric.includes("Pareto"));
-		assert.ok(pareto, "so is the metric of this axis nobody records a second objective for");
+	it("declares the axes it cannot read, and stops declaring one that became readable", () => {
+		// **ITQ was declared uncomputable for a named reason, and the round that fixed the reason removed the declaration.** What the
+		// entry asked for was a per-round score: the criterion vector existed only in a checkpoint, and a convergence decision reads the
+		// same whether it started, passed or failed a criterion. The observation carries the vector now, which makes a round a record.
+		assert.deepEqual(UNCOMPUTABLE_AXES.map((entry) => entry.metric), ["Pareto preservation"], "the list holds what still cannot be read");
+		const pareto = UNCOMPUTABLE_AXES[0] as UncomputableAxis;
+		assert.match(pareto.reason, /second objective|multi-objective/);
+		assert.match(pareto.wouldNeed, /second objective/, "and what would change that");
+
+		// **And the axis that left the list is computed**, from the record that made a round a round.
+		const stall = [0, 1, 0, 0];
+		const records = [1, 1, 2, 3].map((passed, index) => ({
+			taskId: "t1", stepId: "request:r" + String(index), kind: "task.convergence.observed",
+			timestamp: "2026-09-28T16:00:0" + String(index) + ".000Z", mode: "standard",
+			details: {
+				acceptanceVector: [1, 2, 3].map((threshold, position) => ({ id: "AC-00" + String(position + 1), status: passed >= threshold ? "passed" : "pending" })),
+				consecutiveNoProgress: stall[index],
+			},
+		})) as unknown as Parameters<typeof improvementTrajectory>[0];
+		const itq = improvementTrajectory(records);
+		assert.deepEqual(itq.rounds.map((round) => round.passed), [1, 1, 2, 3], "the per-round score is the passed criteria at that round");
+		assert.equal(itq.slope, 2, "and the slope is last minus first, a difference rather than a fit");
+		assert.equal(itq.stagnationEscapes, 1, "one round followed a rise in the no-progress count by a fall");
+		assert.equal(itq.roundsStagnant, 1, "and one round was spent stagnant");
+		assert.equal(improvementTrajectory([]).slope, undefined, "no rounds means no slope, not a zero");
 	});
 
 	it("names the two controls whose refusal is an isolation violation", () => {

@@ -85,6 +85,15 @@ the request that failed, and the ledger reads the last one for repair. **One wri
 nothing read it, and that was wrong in a way worth naming: the probe had written `task.resource.observed`, a kind no writer defines,
 so the measurement was of the fixture. A record kind is a union member; a fixture that hand-writes one is checked now.
 
+**The observation carries the criterion vector, and that is what makes a round a record.** ITQ - slope, acceleration, stagnation
+escape rate - was declared uncomputable for a named reason: no round score was persisted, because a criterion vector existed only in a
+checkpoint and a convergence decision reads the same whether it started, passed or failed a criterion. **The decision this record was
+missing**: the vector belongs on the **observation**, which is written for every settled request, and not on the decision record, which is
+written on a tool call or a block rather than per round. It is read from the snapshot the observation path already holds, and the
+no-progress counter rides with it, because stagnation already has a definition here and a second one would be a second rule. **What this
+does not do is add an observable**: the closed set a manifest predicts stays behaviour-shaped, and a criterion vector is a record of what
+the criteria were rather than a fourth thing to predict.
+
 **The ledger may hold decisions the record no longer carries, and the reading says which.** The record is bounded and drops a
 change whose verdict is still pending; the ledger is append-only and keeps what happened. So the two disagree by design, and the turn
 reading names the orphans by id rather than printing nothing - because an operator reading "the next round has not been observed"

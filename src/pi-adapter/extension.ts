@@ -2367,6 +2367,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 						toolDurationMs: currentRequestToolDurationMs,
 						...(currentRequestStopReasons.length === 0 ? {} : { stopReasons: currentRequestStopReasons }),
 						...(skipReason === undefined ? {} : { convergenceSkipReason: skipReason }),
+						// **The per-round score, carried where a round is already a record.** ITQ is declared uncomputable because no
+						// round score is persisted: a criterion vector exists only in a checkpoint, and a convergence decision is written
+						// on a tool call or a block rather than per round. The observation is the record written for every settled
+						// request, so the vector and the no-progress counter ride here - read from the snapshot this path already holds.
+						...(convergence?.kind === "valid" ? { acceptanceVector: convergence.snapshot.criteria.map((criterion) => ({ id: criterion.id, status: criterion.status })), consecutiveNoProgress: convergence.snapshot.consecutiveNoProgress } : {}),
 					});
 					// **The event that turns the ledger record into a round.** AHE's decision observability needs a moment
 					// the next read can compare against; this is it, and it is the only thing the previous task's claim

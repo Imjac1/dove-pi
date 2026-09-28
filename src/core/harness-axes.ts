@@ -146,14 +146,63 @@ export interface UncomputableAxis {
 	readonly wouldNeed: string;
 }
 
+/**
+ * **The improvement trajectory, as three numbers.** ITQ was declared uncomputable because no round score was persisted: a criterion
+ * vector existed only in a checkpoint. The observation record carries one per settled request now, which makes each round a record -
+ * and this reads them.
+ *
+ * **Slope is a difference, not a fit**, because three points do not justify a regression and the axis is asked for a direction rather
+ * than a prediction. **An escape is a fall after a rise** in the no-progress count the record already keeps, which is why this reading
+ * does not need a second definition of stagnation.
+ */
+export interface ImprovementTrajectory {
+	readonly axis: "ITQ";
+	/** One entry per observation that carried a vector: the passed criteria at that round. */
+	readonly rounds: readonly { readonly round: number; readonly passed: number; readonly total: number }[];
+	/** Last minus first, or `undefined` when fewer than two rounds carried a vector. */
+	readonly slope: number | undefined;
+	/** Rounds where the no-progress count fell after it had risen: a stagnation that ended. */
+	readonly stagnationEscapes: number;
+	readonly roundsStagnant: number;
+}
+
+export function improvementTrajectory(records: readonly ExecutionRecord[]): ImprovementTrajectory {
+	const rounds: { round: number; passed: number; total: number }[] = [];
+	let round = 0;
+	let stagnationEscapes = 0;
+	let roundsStagnant = 0;
+	let peak = 0;
+	for (const record of records) {
+		if (record.kind !== "task.convergence.observed") continue;
+		const vector = record.details?.acceptanceVector;
+		if (!Array.isArray(vector)) continue;
+		round += 1;
+		const passed = vector.filter((criterion: unknown) => {
+			const status = (criterion as { readonly status?: unknown }).status;
+			return status === "passed";
+		}).length;
+		rounds.push({ round, passed, total: vector.length });
+		const progress = record.details?.consecutiveNoProgress;
+		if (typeof progress !== "number" || !Number.isFinite(progress)) continue;
+		if (progress >= 1) roundsStagnant += 1;
+		// **An escape is the round a stagnation ended, not every round that follows it.** The counter returning to zero after it had
+		// risen counts once; the flat rounds after that are the new level, not further escapes - which is why the peak resets here
+		// rather than being kept as a high-water mark.
+		if (progress === 0 && peak > 0) {
+			stagnationEscapes += 1;
+			peak = 0;
+		} else {
+			peak = Math.max(peak, progress);
+		}
+	}
+	const slope = rounds.length < 2 ? undefined : (rounds[rounds.length - 1] as { passed: number }).passed - (rounds[0] as { passed: number }).passed;
+	return { axis: "ITQ", rounds, slope, stagnationEscapes, roundsStagnant };
+}
 export const UNCOMPUTABLE_AXES: readonly UncomputableAxis[] = [
-	{
-		axis: "Improvement Trajectory Quality (ITQ)",
-		metric: "slope, acceleration, stagnation escape rate",
-		reason: "it needs a per-round score, and no round score is persisted: the criterion vector exists only in a checkpoint, and a convergence decision records the operation and the state but not the criterion statuses.",
-		evidence: "TaskCheckpoint.acceptanceVector (src/core/task-convergence.ts:40) is written only when a checkpoint is written; execution-ledger.appendTaskConvergenceDecision (src/core/execution-ledger.ts:370) records eventKind, state, snapshotRevision, acceptanceRevision and acceptanceId - so a progress decision reads the same whether it started, passed or failed a criterion.",
-		wouldNeed: "the criterion vector carried on the observation the request terminal already writes (extension.ts recordRequestObservation), which would make each round a record. That is a decision of its own.",
-	},
+	// **ITQ left this list in the round that made a round a record.** The observation carries the criterion vector and the
+	// no-progress count now, so `improvementTrajectory` reads the slope and the escape rate from the ledger. What is left here is the
+	// axis that needs something the harness does not measure at all.
+
 	{
 		axis: "Safety & Stability (SSM)",
 		metric: "Pareto preservation",

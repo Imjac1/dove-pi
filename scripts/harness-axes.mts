@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExecutionRecord } from "../src/core/contracts.ts";
 import { parseLedgerLines } from "../src/core/execution-ledger.ts";
-import { safetyAndStability, UNCOMPUTABLE_AXES } from "../src/core/harness-axes.ts";
+import { improvementTrajectory, safetyAndStability, UNCOMPUTABLE_AXES } from "../src/core/harness-axes.ts";
 import { resolveDoveStateDir } from "../src/core/state-dir.ts";
 
 /**
@@ -49,6 +49,16 @@ const labels = Object.keys(reading.refusals.byLabel).sort();
 if (labels.length === 0) console.log("    (none recorded)");
 for (const label of labels) console.log("    " + label.padEnd(16, ".") + " " + reading.refusals.byLabel[label]);
 count("isolation refusals (sandbox + fence)", reading.isolationRefusals + " (" + percent(reading.isolationRefusalsPerRequest) + " per request)");
+console.log("");
+// **The second axis, and the first one that left the uncomputable list.** It reads the criterion vector the observation carries:
+// the per-round score, the slope as a difference, and how often a stagnation ended.
+const trajectory = improvementTrajectory(records);
+console.log("");
+console.log("Improvement Trajectory Quality (ITQ)");
+count("  rounds that carried a score", trajectory.rounds.length);
+count("  passed per round", trajectory.rounds.map((entry) => entry.passed).join(", ") || "(none)");
+count("  slope (last minus first)", trajectory.slope === undefined ? "no data" : String(trajectory.slope));
+count("  stagnation escapes", trajectory.stagnationEscapes + " of " + trajectory.roundsStagnant + " stagnant round(s)");
 console.log("");
 console.log("Axes this harness cannot read:");
 for (const entry of UNCOMPUTABLE_AXES) {
