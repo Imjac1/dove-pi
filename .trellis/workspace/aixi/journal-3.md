@@ -1799,3 +1799,39 @@ Asked for the function rather than the word: the owner is source_release_manifes
 ### Next Steps
 
 - The doctor schema-drift claim, and the source-install drift consequence, both named and neither concluded.
+
+
+## Session 153: Reports drift without reverting it
+<!-- trellis-session: v=2 fp=be9dfde0f5358845 -->
+
+**Date**: 2026-09-28
+**Task**: Reports drift without reverting it
+**Branch**: `master`
+
+### Summary
+
+Held the drift claim and found it is two claims with two holders. compareDoveExtensionIdentity in core/extension-identity.ts classifies a sync state including diverged, and inspectManagedInstall attaches that verdict while inspecting - it reads and reports and writes nothing.
+
+### Main Changes
+
+- both halves are held: extension-identity.test.ts classifies in-sync, a version apart and same-version-different-digest diverged, and managed-install-status.test.ts asserts the report does not mutate
+- the method is now four for four: I looked for a drift function in the doctor and found none, so the owner came from reading what the test imports, which named core/extension-identity.ts. Eight word searches have failed and four function-name searches have worked
+- and the naming is the hint the repository keeps giving: the function that reports without acting is called inspectManagedInstall, the case proving it is called without mutating it, and the state meaning drift is called diverged - the names say what the code promises, which is why asking for a name works and asking for a word does not
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `77ba557` | chore(task): hold the drift claim, and find it is two claims with two holders |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The source-install drift consequence named in the previous round, and the lists left unheld across the other specifications.
