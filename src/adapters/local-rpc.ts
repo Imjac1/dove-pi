@@ -100,22 +100,35 @@ async function writeRpcResponse(adapter: LocalCapabilityAdapter, line: string, o
 	try {
 		response = await adapter.handleRpc(JSON.parse(line));
 	} catch (error) {
-		response = { jsonrpc: "2.0", id: null, error: { code: -32_700, message: error instanceof Error ? error.message : String(error) } };
+		response = { jsonrpc: "2.0", id: null, error: { code: error instanceof JsonRpcError ? error.code : -32_700, message: error instanceof Error ? error.message : String(error) } };
 	}
 	output.write(`${JSON.stringify(response)}\n`);
 }
 
 function writeOversizedRpcError(output: Writable): void {
-	const response: JsonRpcResponse = { jsonrpc: "2.0", id: null, error: { code: -32_700, message: `RPC request exceeds ${MAX_RPC_LINE_BYTES} bytes.` } };
+	const response: JsonRpcResponse = { jsonrpc: "2.0", id: null, error: { code: -32_600, message: `RPC request exceeds ${MAX_RPC_LINE_BYTES} bytes.` } };
 	output.write(`${JSON.stringify(response)}\n`);
 }
 
+/**
+ * **An error that carries the JSON-RPC code, so the response says which kind of failure it was.** The validation below raises four
+ * different problems - a shape that is not a request, a version that is not 2.0, a method that is not served, an id of the wrong type -
+ * and until this existed they all arrived at the caller as plain errors and left as `-32700`, the code for a JSON *parse* failure. A
+ * client keying on the code could not tell "your JSON is broken" from "that method does not exist", which the specification gives
+ * different codes for.
+ */
+class JsonRpcError extends Error {
+	constructor(readonly code: number, message: string) {
+		super(message);
+	}
+}
+
 function parseRpcRequest(value: unknown): JsonRpcRequest {
-	if (typeof value !== "object" || value === null) throw new Error("Invalid JSON-RPC request.");
+	if (typeof value !== "object" || value === null) throw new JsonRpcError(-32_600, "Invalid JSON-RPC request.");
 	const candidate = value as Record<string, unknown>;
-	if (candidate.jsonrpc !== "2.0") throw new Error("JSON-RPC version must be 2.0.");
-	if (candidate.method !== "capabilities/list" && candidate.method !== "capabilities/invoke" && candidate.method !== "diagnostics/status") throw new Error("Unsupported JSON-RPC method.");
-	if (candidate.id !== null && typeof candidate.id !== "string" && typeof candidate.id !== "number") throw new Error("JSON-RPC id must be a string, number, or null.");
+	if (candidate.jsonrpc !== "2.0") throw new JsonRpcError(-32_600, "JSON-RPC version must be 2.0.");
+	if (candidate.method !== "capabilities/list" && candidate.method !== "capabilities/invoke" && candidate.method !== "diagnostics/status") throw new JsonRpcError(-32_601, "Unsupported JSON-RPC method.");
+	if (candidate.id !== null && typeof candidate.id !== "string" && typeof candidate.id !== "number") throw new JsonRpcError(-32_600, "JSON-RPC id must be a string, number, or null.");
 	return candidate as unknown as JsonRpcRequest;
 }
 

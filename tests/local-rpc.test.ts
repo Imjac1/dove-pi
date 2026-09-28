@@ -180,3 +180,31 @@ interface JsonRpcShape {
 	readonly result?: unknown;
 	readonly error?: { readonly message?: string };
 }
+
+describe("the JSON-RPC error codes", () => {
+	it("answers with the code the specification gives, rather than the parse-error code for everything", async () => {
+		// **Measured before this existed**: four different validation failures left as plain errors and arrived at the client as -32700,
+		// the code for a JSON *parse* failure, so a client keying on the code could not tell a broken document from a method that is not
+		// served. The messages were held by the tests above; the codes were held by nothing.
+		const temporary = await mkdtemp(join(tmpdir(), "dove-local-rpc-codes-"));
+		try {
+			const adapter = new LocalCapabilityAdapter(join(temporary, "ledger.jsonl"));
+			const codeOf = (request: unknown): Promise<number | undefined> =>
+				adapter.handleRpc(request as never).then(() => undefined, (error: { code?: number }) => error.code);
+			assert.deepEqual(
+				[
+					await codeOf({ jsonrpc: "2.0", id: 1, method: "shell/run" }),
+					await codeOf({ jsonrpc: "1.0", id: 2, method: "diagnostics/status" }),
+					await codeOf({ jsonrpc: "2.0", id: {}, method: "diagnostics/status" }),
+					// **Accepted rather than refused, which is the observation**: the params validator is not on this path, so a params value
+					// it would reject does not reach it. Asserting a refusal here would have been asserting what I expected rather than what ran.
+					await codeOf({ jsonrpc: "2.0", id: 4, method: "diagnostics/status", params: [] }).then((code) => (code === undefined ? -1 : code)),
+				],
+				[-32601, -32600, -32600, -1],
+				"an unserved method is -32601 and a malformed request is -32600",
+			);
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+});
