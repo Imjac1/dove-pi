@@ -1,0 +1,2 @@
+{"file": "src/core/work-mode.ts", "reason": "The resolver the host uses and the suites now use."}
+{"file": "tests/pentest-mode.test.ts", "reason": "One of the three suites."}
