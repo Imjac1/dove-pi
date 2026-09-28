@@ -1885,3 +1885,39 @@ Closed the gap two rounds named. A search for commands.get(status) across the wh
 ### Next Steps
 
 - A holder for the fuse wiring line, which needs a context reporting a grown prefix - a different harness from the one this round used.
+
+
+## Session 210: A holder for the fuse wiring, and the round that did not land
+<!-- trellis-session: v=2 fp=995ea34752dcac53 -->
+
+**Date**: 2026-09-29
+**Task**: A holder for the fuse wiring, and the round that did not land
+**Branch**: `master`
+
+### Summary
+
+The round tried to hold the fuse wiring through the adapter harness and ends with the tree restored to HEAD and nothing added. Four accidents, all self-inflicted and none of them the code: two splices truncated the test file at a comment line, one operation refused because git checkout had changed the file under the edit tool, and one assertion failed correctly.
+
+### Main Changes
+
+- the cause is worth more than the attempt: tools.read truncates long lines, and writing that content back with tools.write writes the truncation. That is the cause of both truncations and it is the same trap as the round that read a spec line ending in an ellipsis and treated the ellipsis as content
+- the rule it earns: never round-trip a file through read and write. Use the edit tool with an anchor, which matches against the real file rather than a view of it, and read the file first so the tool has a current revision
+- and the attempt did establish two real things. The notices are one-shot per extension(api) call because the flags are closure state in the handler, so a case asserting a notice has to own the handler that raises it - which is what round 184 meant by a different harness. And a cold start is stageable through the real path: two assistant messages, the second with cacheRead zero and more than five minutes after the first, yields lastMissReason idle
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c7c3284` | chore(task): record the fuse holder attempt, its four accidents and what it established |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped, unchanged. tests/pi-adapter.test.ts is identical to HEAD at 1342 lines.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The fuse case, written down to the entry shape and the tool: a case of its own with its own extension(api), staged warm then cold then identical, using tools.edit with an anchor after reading the file.
