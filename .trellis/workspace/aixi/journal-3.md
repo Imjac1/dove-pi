@@ -1727,3 +1727,39 @@ Held the continuation item - three of its four claims held in the assertions the
 ### Next Steps
 
 - The doctor projection claim of the continuation item, and the additive identity decoding cluster, both still named.
+
+
+## Session 151: Read the item in full, and ask which module decodes
+<!-- trellis-session: v=2 fp=f90ba8a2be2be58e -->
+
+**Date**: 2026-09-28
+**Task**: Read the item in full, and ask which module decodes
+**Branch**: `master`
+
+### Summary
+
+The continuation item is 264 characters and has five claims, not four, and for three rounds it was carried with its last two unread because a 190-character read cut it at doc. The fourth is safety-shaped - doctor reports schema drift without reverting it - and the fifth is the shared requestDiagnostics projection an earlier round already audited.
+
+### Main Changes
+
+- that is the failure this session keeps naming, a partial view read as the whole, and it happened to the thing being used to check other things
+- and the decoder question asked the right way round found the identity on the Python side: installer/release.py validates a release.json identity, and installer/manager.py computes a digest and leaves it unknown rather than inventing a divergent one
+- the cluster splits three ways: strict validation is held by two release installer cases, additive decoding is not established, and the legacy unknown fallback has code and no test naming it - a lead rather than a conclusion, since no test names it is the reading that has been wrong six times
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1f78178` | chore(task): read the item in full, and ask which module decodes |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The legacy unknown fallback at installer/manager.py, whose holder was not found, and the doctor schema-drift claim.

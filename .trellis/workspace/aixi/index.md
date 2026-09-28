@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 150
+- **Total Sessions**: 151
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1729 | Active |
+| `journal-3.md` | ~1765 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 151 | 2026-09-28 | Read the item in full, and ask which module decodes | `1f78178` | `master` |
 | 150 | 2026-09-28 | The two items the last round named | `c1c9fcb` | `master` |
 | 149 | 2026-09-28 | The list that packs safety claims | `1541a7b` | `master` |
 | 148 | 2026-09-28 | The seven lists left | `5ad9a3e` | `master` |
