@@ -62,6 +62,20 @@ new CapabilityInvocationService(registry, ledger, {
 | JSON-RPC stdio | None in protocol `1.0.0` | Request payloads cannot self-authorize; side effects fail closed |
 | MCP stdio | None in protocol `1.0.0` | `dove_invoke` exposes no approval argument; side effects fail closed |
 
+**Held by**, entry point by entry point. Four were read; the fifth was implemented and unheld, and a holder was added for it.
+
+| Entry point | Held by |
+|---|---|
+| Direct Core | `tests/capability-protocol.test.ts`, where a payload `granted` with no callback is denied |
+| Pi | `tests/pi-adapter.test.ts`, which sets `DOVE_PI_READ_ONLY` and restores it |
+| Local CLI | `tests/cli-approval.test.ts` - **added because this row was implemented and held by nothing** |
+| JSON-RPC stdio | `tests/local-rpc.test.ts`, the approval refusals |
+| MCP stdio | `tests/mcp-adapter.test.ts`, which asserts `dove_invoke` exposes no `approve` argument |
+
+**The CLI row is worth the note it carries.** Its behaviour was implemented at `cli.ts:360` and `:371`, and searching the tests for the flag,
+for `createLocalAdapter`, and for `capability run` found nothing - the only `"approve"` literal in the suite is the MCP assertion that it is
+*absent* there. **A safety row with no holder is the defect this column exists to make visible.**
+
 JSON-RPC is newline-delimited JSON over local stdio, limits each input line to
 128 KiB, and accepts only `capabilities/list`, `capabilities/invoke`, and the
 read-only `diagnostics/status` projection. MCP is
