@@ -1944,3 +1944,39 @@ Held all five remaining items of the project context list, most verbatim: immedi
 ### Next Steps
 
 - The lists still unheld in request-runtime and harness-loop, and the request-runtime items that point at the Pi tool boundary.
+
+
+## Session 157: The corpus summary and the sentence it must not say
+<!-- trellis-session: v=2 fp=7c259df5be3f204c -->
+
+**Date**: 2026-09-29
+**Task**: The corpus summary and the sentence it must not say
+**Branch**: `master`
+
+### Summary
+
+Held the sharpest harness-loop item, which is a claim about a sentence that must not be produced: the corpus summary says why a corpus with no failure has none, and a second case asserts it does not say it when the corpus holds a failure. The sentence is a named constant above a function documented as what this corpus does not contain and why.
+
+### Main Changes
+
+- the other two items are split: the surface item is about the check own three answers and those live in the reading suite where only a comment was found, while harness-surface.test.ts holds thirteen cases about the map; and the client-account item is not located, with one hit that is a comment
+- and the round paid a small toll to the same class of error: the check context named src/core/harness-readings.ts, and there is no such module - the workflow refused an empty check.jsonl, the guard catching an assumed name for the second time
+- so the file list named the owner immediately: harness-corpus.ts and its suite, which is the eleventh time asking for a name has worked
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a767115` | chore(task): hold the corpus summary, including the negative claim with its own case |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 748 tests, 746 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The check own three answers in the reading suite, and the client-account item, both named and neither concluded.

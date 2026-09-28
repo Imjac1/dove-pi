@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 156
+- **Total Sessions**: 157
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1946 | Active |
+| `journal-3.md` | ~1982 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 157 | 2026-09-29 | The corpus summary and the sentence it must not say | `a767115` | `master` |
 | 156 | 2026-09-29 | The project context list, five items left | `3cc3eae` | `master` |
 | 155 | 2026-09-29 | A holder for the branch that prevents a false drift report | `1d140a4` | `master` |
 | 154 | 2026-09-29 | Who consumes the source manifest | `a21ba10` | `master` |
