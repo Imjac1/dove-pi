@@ -1,0 +1,2 @@
+{"file": "scripts/check_release_readiness.py", "reason": "The gate being run."}
+{"file": ".github/workflows/release.yml", "reason": "The steps that build the artifacts it checks."}
