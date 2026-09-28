@@ -181,6 +181,39 @@ interface JsonRpcShape {
 	readonly error?: { readonly message?: string };
 }
 
+describe("the approval refusal", () => {
+	it("says which gate refused, rather than one sentence for two different gates", async () => {
+		// **Two gates, one sentence until this existed**: a caller that did not approve, and a host where no approver is registered. The
+		// second is what an rpc invocation always meets, because the adapter accepts an authorize callback and nothing supplies one.
+		const temporary = await mkdtemp(join(tmpdir(), "dove-local-rpc-approval-"));
+		try {
+			const adapter = new LocalCapabilityAdapter(join(temporary, "ledger.jsonl"));
+			const invoke = (approval: string) =>
+				adapter.handleRpc({
+					jsonrpc: "2.0", id: 1, method: "capabilities/invoke",
+					params: {
+						protocolVersion: CAPABILITY_PROTOCOL_VERSION,
+						capability: { name: "dev.project_test" }, arguments: {},
+						context: { cwd: temporary, mode: "standard", taskId: "rpc:test", stepId: "approval" },
+						correlation: { requestId: "rpc-approval" }, approval,
+					},
+				} as never).then(
+					(response: unknown) => (response as { result: { status: string; error?: string } }).result,
+				);
+
+			const notGranted = await invoke("unavailable");
+			assert.equal(notGranted.status, "approval_denied", "the status is unchanged");
+			assert.equal(notGranted.error, "Capability approval was not granted.", "an unapproved caller is told that");
+
+			const noApprover = await invoke("granted");
+			assert.equal(noApprover.status, "approval_denied", "and so is the other gate");
+			assert.equal(noApprover.error, "No approver is configured for this host.", "but this caller is told which gate refused");
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("the JSON-RPC error codes", () => {
 	it("answers with the code the specification gives, rather than the parse-error code for everything", async () => {
 		// **Measured before this existed**: four different validation failures left as plain errors and arrived at the client as -32700,

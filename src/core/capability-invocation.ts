@@ -13,7 +13,7 @@ export interface CapabilityInvocationServiceOptions {
 	readonly ownerPid?: number;
 	/** Pi-internal low-level attempt correlation; not part of the public protocol. */
 	readonly attemptId?: string;
-	readonly authorize?: (request: CapabilityInvocationRequest) => boolean | Promise<boolean>;
+	readonly authorize?: (request: CapabilityInvocationRequest) => boolean | string | Promise<boolean | string>;
 	readonly captureEvidence?: CapabilityExecutionOptions["captureEvidence"];
 }
 
@@ -61,8 +61,9 @@ export class CapabilityInvocationService {
 			recordPending: requiresApproval,
 			authorize: async () => {
 				if (!requiresApproval) return true;
-				if (approval !== "granted") return false;
-				return this.options.authorize ? await this.options.authorize(request) : false;
+				if (approval !== "granted") return "Capability approval was not granted.";
+				if (!this.options.authorize) return "No approver is configured for this host.";
+				return await this.options.authorize(request);
 			},
 		}, {
 			timeoutMs: request.execution?.timeoutMs,

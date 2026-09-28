@@ -9,7 +9,7 @@ export interface CapabilityAuthorization {
 	readonly required?: boolean;
 	/** Persist an explicit approval-pending transition (host integrations opt in). */
 	readonly recordPending?: boolean;
-	readonly authorize?: (input: { name: string; version: string; sideEffects: readonly string[]; args: Record<string, unknown> }) => Promise<boolean> | boolean;
+	readonly authorize?: (input: { name: string; version: string; sideEffects: readonly string[]; args: Record<string, unknown> }) => Promise<boolean | string> | boolean | string;
 }
 
 export interface CapabilityExecutionOptions {
@@ -49,7 +49,7 @@ export async function executeFastPath(
 			await ledger.appendCapabilityApprovalPending({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
 		}
 		const approved = authorization.authorize ? await authorization.authorize({ name, version: capability.version, sideEffects: capability.sideEffects, args }) : false;
-		if (!approved) {
+		if (approved !== true) {
 			executionState = transitionCapabilityExecution(executionState, "blocked", "approval_required");
 			await ledger.append({
 				taskId: context.taskId,
@@ -60,7 +60,7 @@ export async function executeFastPath(
 				correlation: { requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, executionId, toolCallId: context.toolCallId, taskId: context.taskId },
 				details: { capability: name, version: capability.version, executionId, reason: "approval_required" },
 			});
-			return { status: "blocked", capability: name, version: capability.version, error: "Capability approval was not granted.", durationMs: 0, evidenceRefs: [], executionId, outcome: "approval_denied" };
+			return { status: "blocked", capability: name, version: capability.version, error: typeof approved === "string" ? approved : "Capability approval was not granted.", durationMs: 0, evidenceRefs: [], executionId, outcome: "approval_denied" };
 		}
 		if (authorization.recordPending && authorization.authorize) await ledger.appendCapabilityApproved({ taskId: context.taskId, stepId: context.stepId, mode: context.mode, requestId: context.requestId, sessionId: context.sessionId, attemptId: context.attemptId, toolCallId: context.toolCallId, executionId, capability: name, version: capability.version });
 		executionState = transitionCapabilityExecution(executionState, "approved");
