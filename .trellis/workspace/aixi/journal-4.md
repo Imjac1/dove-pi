@@ -1015,3 +1015,40 @@ Named the remaining action from the launcher help rather than from memory: dove-
 ### Next Steps
 
 - The user answer that would authorise dove-pi update, which would install Pi 0.84.3 and open the first real turn. Everything reachable without it is done.
+
+
+## Session 186: What the tools object actually carries
+<!-- trellis-session: v=2 fp=e58f284165d4518f -->
+
+**Date**: 2026-09-29
+**Task**: What the tools object actually carries
+**Branch**: `master`
+
+### Summary
+
+Listed the tools object for the first time and found fifty-six members where this session had used six: read, write, edit, grep, pwsh and get_goal. Among the rest is ask_user_question, a way to put a question to the user, and create_goal and update_goal beside the get_goal used a hundred and fifty-seven times.
+
+### Main Changes
+
+- and round 156 was wrong about why the boundary is where it is: it concluded the confirmation cannot be obtained inside this loop, implying no mechanism exists. The mechanism exists - ask_user_question validated its arguments first, requiring an id per question, and then waited, and the call reached the round deadline without an answer
+- so the conclusion was true and its reason was not: the confirmation is unobtainable not because nothing can ask, but because a round is shorter than an answer
+- that is the fifth time in six rounds that a conclusion about the environment was drawn without inspecting it, and this time the environment was the toolset
+- the question is now put, with its two options, in this round history, and no answer arrived. Nothing was installed, the tree is unchanged, and the request is not repeated: a question that was asked and not answered is not a question to keep asking
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f212b12` | chore(task): list the tools object, and find the mechanism that made the boundary reason wrong |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The user answer to the authorisation question, which is now on the record and not repeated. Everything reachable without it is done.
