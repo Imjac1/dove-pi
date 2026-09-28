@@ -1523,3 +1523,39 @@ Read the next P0, 09-01-dove-adaptive-formal-workflow, and found its twenty-thre
 ### Next Steps
 
 - The three remaining open tasks: interop layer, real-user web access, and the usage review.
+
+
+## Session 200: Reading the interop layer P1
+<!-- trellis-session: v=2 fp=35854c37db196a93 -->
+
+**Date**: 2026-09-29
+**Task**: Reading the interop layer P1
+**Branch**: `master`
+
+### Summary
+
+Measured the P1 interop task with the names the code uses. The benchmark harness, the host-neutral invocation service, the MCP adapter, the CLI/RPC adapter and the interop smoke matrix are all present, CLAUDE.md reaches src/context/interoperable.ts, and Agent Skills reach the Pi adapter - and its PRD checked criteria match that measurement.
+
+### Main Changes
+
+- its implement.md is a fourteen-item plan with no checkboxes at all, so the file cannot say what is done; the PRD criteria can, and they are ticked
+- and the one gap is named precisely: item 14 asks for the Chinese and English README sections to carry the adapter and plugin-reuse model plus integration examples, while both files mention MCP six times and the word adapter zero times
+- it was not closed here, deliberately: tests/document-drift.test.ts holds the two READMEs against each other, so a bilingual edit that keeps them parallel is not a thing to attempt in the last minutes of a round. The task stays open and the gap is named rather than left to be rediscovered
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a342e8` | chore(task): measure the interop P1, and name the one gap it still has |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Item 14 of 08-27-dove-interop-layer: the bilingual README sections, with the drift check in mind. Then the two P2 tasks.
