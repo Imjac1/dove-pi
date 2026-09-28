@@ -1874,3 +1874,41 @@ Measured every schemaVersion Dove writes against every one it accepts. The works
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 101: The defaults, as documented and as coded
+<!-- trellis-session: v=2 fp=1c17b67782592c52 -->
+
+**Date**: 2026-09-28
+**Task**: The defaults, as documented and as coded
+**Branch**: `master`
+
+### Summary
+
+Measured the four defaults the help states against the code that applies them: verify quick, the workspace mode development, and the profile resolved as stored else max all agree. The bootstrap is the exception - it defaults -Profile to max and -Verify to quick and passes both unconditionally.
+
+### Main Changes
+
+- so a user running the downloaded script without -Profile gets max even when a stored profile exists, while dove-pi install without the flag resolves the stored one. Both defaults are deliberate, because the bootstrap is the fresh-install path and the flag is the maintenance path
+- what was missing is the statement: a reader of either help would conclude the stored profile is used. The contract names both bootstrap defaults now, where the switches are documented
+- and a check holds the declarations against it in the shape used for the runtime minimum, with a negative control: drifting the bootstrap default makes it fail with the declaration it could not find, and restoring it makes it pass
+- one more extraction of mine was too narrow and the round caught it: PowerShell parameter defaults have no default keyword, so a grep for one reported zero where the file had two
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `24a28ec` | docs(installer): the bootstrap has its own defaults, and the contract says which |
+| `c49e731` | chore(task): record the bootstrap defaults and the statement that was missing |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. Installer tests: 123 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
