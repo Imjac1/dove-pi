@@ -780,3 +780,41 @@ Drove dove-pi mcp the way the rpc interface was driven. It answers the handshake
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 125: The approval boundary, over the interface that serves it
+<!-- trellis-session: v=2 fp=66d716d263475f38 -->
+
+**Date**: 2026-09-28
+**Task**: The approval boundary, over the interface that serves it
+**Branch**: `master`
+
+### Summary
+
+Ran the two rpc methods left unrun. capabilities/list returns the registry; invoke on a read-only capability with approval unavailable returns status success; and invoke on a writing capability returns status approval_denied, once with unavailable and once with denied.
+
+### Main Changes
+
+- the refusal is a typed status inside the result envelope rather than a JSON-RPC error, which is the right shape: the request was valid and the capability was not permitted. And it names the capability it refused, so a caller knows which of its calls was turned down
+- both approval values behave the same way, which says the field is checked and neither is a way past the check
+- this is the boundary the round intended to measure without crossing it: driving a writing capability to the point of the decision changes nothing
+- and a plumbing note: the first attempt built the requests in PowerShell and every one came back -32700 Bad escaped character - my own escaping mangling a Windows path rather than the server refusing a request. Rebuilding them in Node produced the four answers
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7fd720f` | chore(task): observe the approval boundary over the interface that serves it |
+| `d0e774e` | chore(task): archive 09-28-rpc-invoke |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 742 tests, 740 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

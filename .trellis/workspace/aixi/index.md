@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 124
+- **Total Sessions**: 125
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~782 | Active |
+| `journal-3.md` | ~820 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 125 | 2026-09-28 | The approval boundary, over the interface that serves it | `7fd720f`, `d0e774e` | `master` |
 | 124 | 2026-09-28 | The other headless interface | `998b650`, `72e60b0` | `master` |
 | 123 | 2026-09-28 | The headless interface, driven by a pipe | `f654988`, `b27faea` | `master` |
 | 122 | 2026-09-28 | The last two project subcommands | `87522be` | `master` |
