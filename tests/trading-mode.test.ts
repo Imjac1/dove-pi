@@ -2,18 +2,20 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { evaluatePermission, loadWorkMode, type WorkModeFiles } from "../src/core/work-mode.ts";
+import { evaluatePermission, loadWorkMode, workModeDirectory, type WorkModeFiles } from "../src/core/work-mode.ts";
 import { createLimitGate } from "../src/core/gate-limit.ts";
 import { createEffectLedger, createInMemoryEffectStore, deriveEffectKey, dispatchOnce, toClientOrderId } from "../src/core/effect-ledger.ts";
 
 const FRAMEWORK = "0.2.0";
+// **The runtime own resolver, not a path written by hand**, so this test cannot drift from where the host looks.
+const MODE_DIR = workModeDirectory(process.cwd(), "trading");
 const MODE_IDENTITY = { id: "trading", version: "1.0.0", governanceVersion: "1.0.0" };
 
 async function loadMode() {
 	const files: WorkModeFiles = {
-		mode: await readFile(join(process.cwd(), "modes", "trading", "MODE.md"), "utf8"),
-		governance: await readFile(join(process.cwd(), "modes", "trading", "governance.yaml"), "utf8"),
-		permissions: await readFile(join(process.cwd(), "modes", "trading", "permissions.yaml"), "utf8"),
+		mode: await readFile(join(MODE_DIR, "MODE.md"), "utf8"),
+		governance: await readFile(join(MODE_DIR, "governance.yaml"), "utf8"),
+		permissions: await readFile(join(MODE_DIR, "permissions.yaml"), "utf8"),
 	};
 	return loadWorkMode(files, { frameworkVersion: FRAMEWORK });
 }

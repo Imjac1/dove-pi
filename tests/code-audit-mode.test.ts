@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadWorkMode, evaluatePermission, type WorkModeFiles } from "../src/core/work-mode.ts";
+import { loadWorkMode, evaluatePermission, workModeDirectory, type WorkModeFiles } from "../src/core/work-mode.ts";
 import { effectClassOf } from "../src/core/effect-ledger.ts";
 import { createConformanceGate } from "../src/core/gate-conformance.ts";
 import { createAgentLoop } from "../src/core/loop-runner.ts";
@@ -14,7 +14,10 @@ import { createDoveRuntime } from "../src/runtime.ts";
 import { parseCatalog } from "../src/code-audit/catalog.ts";
 import { scanCategory } from "../src/code-audit/seed-scanner.ts";
 
-const MODE_DIR = join(process.cwd(), "modes", "code-audit");
+// **The runtime own resolver, not a path written by hand.** `workModeDirectory` is what the host calls to find a mode, so a test
+// that spelled `modes/<name>` itself would keep passing if that resolver ever changed - and would then be validating a directory the
+// runtime does not read.
+const MODE_DIR = workModeDirectory(process.cwd(), "code-audit");
 const FRAMEWORK = "0.2.0";
 const MODE_IDENTITY = { id: "code-audit", version: "1.0.0", governanceVersion: "1.0.0" };
 
