@@ -18,6 +18,7 @@ from dataclasses import replace
 import importlib
 import ntpath
 import re
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -627,7 +628,62 @@ def project_maintenance_record(payload: object) -> dict:
     return projected
 
 
-def write_maintenance_log(layout: ManagedLayout, command: str, status: str, message: str) -> Path:
+def maintenance_run_id(seed: str = "") -> str:
+    """One bounded identifier for a maintenance run.
+
+    The design says correlation fields are identifiers and bounded hashes, so this is a sixteen-character digest
+    rather than a free-form id, and it is stable for the same seed when one is given.
+    """
+    material = seed or f"{datetime.now(timezone.utc).isoformat()}-{os.getpid()}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+def write_maintenance_log(
+    layout: ManagedLayout,
+    command: str,
+    status: str,
+    message: str,
+    *,
+    record: object | None = None,
+    duration_ms: int | None = None,
+    run_id: str | None = None,
+) -> Path:
+    """Write one maintenance log, additively.
+
+    **With no `record` this is the legacy four-field write it has always been**, so a caller that does not pass
+    one gets a schema-1 readable file. **With a `record` - the `MaintenanceResult` the command produced - it
+    writes schema 2**: run identity, timing, the decision the command reached, the release it acted on, the
+    path outcome, the extensions it touched, and a sync state. That last one is reported `unknown` because the
+    installer package has no sync-state vocabulary to report - the design says an unavailable field is labelled
+    rather than guessed.
+    """
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    path = layout.logs_dir / f"maintenance-{stamp}.log"
+    payload: dict = {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "command": command,
+        "status": status,
+        "message": redact_maintenance_text(message),
+    }
+    if record is not None:
+        fields = getattr(record, "__dict__", {})
+        for name in ("changed", "current_release", "previous_release", "profile", "degraded_extensions", "path_removed"):
+            fields.setdefault(name, getattr(record, name, None))
+        payload.update({
+            "schemaVersion": MAINTENANCE_SCHEMA_VERSION,
+            "runId": run_id or maintenance_run_id(),
+            "durationMs": duration_ms if duration_ms is not None else MAINTENANCE_UNAVAILABLE,
+            "decision": "changed" if fields.get("changed") else "no_op",
+            "release": fields.get("current_release") or MAINTENANCE_UNAVAILABLE,
+            "previousRelease": fields.get("previous_release") or MAINTENANCE_UNAVAILABLE,
+            "profile": fields.get("profile") or MAINTENANCE_UNAVAILABLE,
+            "selectedExtension": list(fields.get("degraded_extensions") or ()),
+            "syncState": MAINTENANCE_UNAVAILABLE,
+            "pathRemoved": fields.get("path_removed"),
+        })
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return path
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     path = layout.logs_dir / f"maintenance-{stamp}.log"
@@ -641,7 +697,7 @@ def write_maintenance_log(layout: ManagedLayout, command: str, status: str, mess
 def emit_maintenance_result(result: MaintenanceResult, *, json_output: bool, layout: ManagedLayout | None = None) -> None:
     payload = result.to_json()
     if layout is not None and result.command not in {"update-check", "uninstall"}:
-        payload["logPath"] = str(write_maintenance_log(layout, result.command, "ready", result.message))
+        payload["logPath"] = str(write_maintenance_log(layout, result.command, "ready", result.message, record=result))
     if json_output:
         print(json.dumps(payload, ensure_ascii=False))
         return

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import tempfile
+import types
 import unittest
 
 import dove_pi
@@ -68,6 +70,60 @@ class MaintenanceEvidenceContractTest(unittest.TestCase):
     def test_a_redacted_message_is_bounded(self) -> None:
         redacted = dove_pi.redact_maintenance_text("x" * 2000, limit=100)
         self.assertLessEqual(len(redacted), 103, "bounded to the limit plus the marker")
+
+
+
+class MaintenanceLogSchemaTest(unittest.TestCase):
+    """The writer additively, with a temporary layout and never the real installation."""
+
+    def _layout(self, root: Path):
+        return types.SimpleNamespace(logs_dir=root / "logs")
+
+    def test_no_record_still_writes_the_legacy_four_field_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = dove_pi.write_maintenance_log(self._layout(Path(temporary)), "repair", "ready", "repaired")
+            written = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(sorted(written), ["at", "command", "message", "status"])
+            self.assertNotIn("schemaVersion", written, "a caller that passes no record gets schema 1 by absence")
+
+    def test_a_record_writes_schema_two_with_run_identity_and_the_decision(self) -> None:
+        record = types.SimpleNamespace(
+            changed=True, current_release="v0.2.0", previous_release="v0.1.9", profile="max",
+            degraded_extensions=("dove.audit",), path_removed=None,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = dove_pi.write_maintenance_log(
+                self._layout(Path(temporary)), "update", "ready", "updated",
+                record=record, duration_ms=4321, run_id="run-abc123",
+            )
+            written = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(written["schemaVersion"], dove_pi.MAINTENANCE_SCHEMA_VERSION)
+            self.assertEqual(written["runId"], "run-abc123")
+            self.assertEqual(written["durationMs"], 4321)
+            self.assertEqual(written["decision"], "changed")
+            self.assertEqual(written["release"], "v0.2.0")
+            self.assertEqual(written["selectedExtension"], ["dove.audit"])
+            self.assertEqual(written["syncState"], dove_pi.MAINTENANCE_UNAVAILABLE, "the field with no vocabulary is labelled")
+            for field in dove_pi.LEGACY_MAINTENANCE_FIELDS:
+                self.assertIn(field, written, "old readers keep working")
+
+    def test_a_no_op_is_recorded_as_a_no_op_not_as_a_failure(self) -> None:
+        record = types.SimpleNamespace(changed=False, current_release="v0.2.0", previous_release=None, profile="max", degraded_extensions=(), path_removed=None)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = dove_pi.write_maintenance_log(self._layout(Path(temporary)), "update", "ready", "already current", record=record)
+            written = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(written["decision"], "no_op")
+            self.assertEqual(written["previousRelease"], dove_pi.MAINTENANCE_UNAVAILABLE)
+            self.assertEqual(written["durationMs"], dove_pi.MAINTENANCE_UNAVAILABLE, "timing not measured is labelled")
+
+    def test_what_the_writer_writes_the_projection_accepts(self) -> None:
+        record = types.SimpleNamespace(changed=True, current_release="v0.2.0", previous_release=None, profile="max", degraded_extensions=(), path_removed=True)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = dove_pi.write_maintenance_log(self._layout(Path(temporary)), "install", "ready", "installed", record=record, duration_ms=99)
+            projected = dove_pi.project_maintenance_record(json.loads(path.read_text(encoding="utf-8")))
+            self.assertEqual(projected["schemaVersion"], dove_pi.MAINTENANCE_SCHEMA_VERSION)
+            self.assertFalse(projected.get("malformed", False), "the two contracts agree")
+            self.assertEqual(projected["durationMs"], 99)
 
 
 if __name__ == "__main__":
