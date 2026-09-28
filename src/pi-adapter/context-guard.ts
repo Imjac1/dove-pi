@@ -20,10 +20,15 @@ export interface ContextGuard {
 	readonly compactAdvised: boolean;
 	readonly hint: string | undefined;
 	readonly fractionUsed: number | undefined;
+	/** True when the conversation itself has grown past the configured cap. */
+	readonly messagesAdvised: boolean;
+	readonly messageCount: number | undefined;
 }
 
 export const DEFAULT_MAX_CONTEXT_FRACTION = 0.82;
 export const DEFAULT_MAX_CONTEXT_TOKENS = 150_000;
+/** The review names 120 to 150 turns; the upper end, so the hint arrives before the cache cliff rather than after. */
+export const DEFAULT_MAX_MESSAGES = 150;
 
 function envFraction(): number {
 	const raw = Number(process.env.DOVE_PI_MAX_CONTEXT_FRACTION);
@@ -33,6 +38,11 @@ function envFraction(): number {
 function envMaxTokens(): number {
 	const raw = Number(process.env.DOVE_PI_MAX_CONTEXT_TOKENS);
 	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_CONTEXT_TOKENS;
+}
+
+function envMaxMessages(): number {
+	const raw = Number(process.env.DOVE_PI_MAX_MESSAGES);
+	return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_MAX_MESSAGES;
 }
 
 function isGuardEnabled(): boolean {
@@ -46,10 +56,12 @@ function isGuardEnabled(): boolean {
 export function guardContext(input: {
 	tokens?: number | null;
 	contextWindow?: number;
+	/** How many conversation entries the host is holding, when the caller knows. */
+	messages?: number;
 	mode: AgentMode;
 }): ContextGuard {
 	if (!isGuardEnabled())
-		return { compactAdvised: false, hint: undefined, fractionUsed: undefined };
+		return { compactAdvised: false, hint: undefined, fractionUsed: undefined, messagesAdvised: false, messageCount: undefined };
 
 	const maxFraction = envFraction();
 	const maxTokens = envMaxTokens();
@@ -67,6 +79,8 @@ export function guardContext(input: {
 		return {
 			compactAdvised: true,
 			fractionUsed,
+			messagesAdvised: false,
+			messageCount: input.messages,
 			hint: `通过率达到前缀窗口的 ${(fractionUsed * 100).toFixed(0)}%（阈值 ${(maxFraction * 100).toFixed(0)}%）——建议 /compact 以保留高质量上下文。`,
 		};
 	}
@@ -81,9 +95,27 @@ export function guardContext(input: {
 		return {
 			compactAdvised: true,
 			fractionUsed,
+			messagesAdvised: false,
+			messageCount: input.messages,
 			hint: `当前会话已累积约 ${tokens.toLocaleString()} tokens（提示阈值 ${maxTokens.toLocaleString()}）。缓存失效时按整个前缀计费，前缀越大单次损失越大；任务告一段落时建议开新会话，避免长前缀在停顿后全量重算。`,
 		};
 	}
 
-	return { compactAdvised: false, hint: undefined, fractionUsed };
+	// **Turn-count guard: the only one about the conversation rather than the prefix.** A prefix can sit inside
+	// the window and still be a session nobody would choose to keep, and the review measures exactly that - one
+	// 169-turn session ending in a full cold start. **It is advice rather than control**: the host owns the
+	// conversation, so this names both ways out and takes neither.
+	const messages = input.messages;
+	const maxMessages = envMaxMessages();
+	if (messages !== undefined && messages > maxMessages) {
+		return {
+			compactAdvised: true,
+			fractionUsed,
+			messagesAdvised: true,
+			messageCount: messages,
+			hint: `当前会话已累积 ${messages} 条对话（阈值 ${maxMessages} 条）——建议 /compact，或开一个新的会话继续；两者都保留已写入的文件，Dove 不会替你删任何历史。`,
+		};
+	}
+
+	return { compactAdvised: false, hint: undefined, fractionUsed, messagesAdvised: false, messageCount: messages };
 }

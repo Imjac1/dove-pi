@@ -77,6 +77,8 @@ describe("context guard (prefix fuse)", () => {
 			compactAdvised: false,
 			hint: undefined,
 			fractionUsed: undefined,
+			messagesAdvised: false,
+			messageCount: undefined,
 		});
 	});
 
@@ -100,6 +102,30 @@ describe("context guard (prefix fuse)", () => {
 				mode: "ultra",
 			});
 			assert.equal(guard.compactAdvised, true);
+		});
+	});
+
+	it("advises on the turn count, and names both ways out without taking either", () => {
+		withEnv({ DOVE_PI_MAX_MESSAGES: "120" }, () => {
+			const under = guardContext({ tokens: 30_000, contextWindow: 1_000_000, messages: 120, mode: "standard" });
+			assert.equal(under.messagesAdvised, false, "the cap is reached at 120, not below it");
+			assert.equal(under.compactAdvised, false, "and nothing else fires either");
+			const over = guardContext({ tokens: 30_000, contextWindow: 1_000_000, messages: 121, mode: "standard" });
+			assert.equal(over.messagesAdvised, true);
+			assert.equal(over.compactAdvised, true, "the cap advises through the same field the adapter already surfaces");
+			assert.equal(over.messageCount, 121);
+			assert.match(over.hint ?? "", /\/compact/, "it names the first way out");
+			assert.match(over.hint ?? "", /新的会话|new session/, "and the second");
+		});
+	});
+
+	it("stays quiet on the turn count when the caller does not supply one", () => {
+		withEnv({ DOVE_PI_MAX_MESSAGES: "1" }, () => {
+			// The control: with the cap set to 1 a supplied count would fire, so silence means the absence, not the value.
+			const guard = guardContext({ tokens: 30_000, contextWindow: 1_000_000, mode: "standard" });
+			assert.equal(guard.messagesAdvised, false);
+			assert.equal(guard.messageCount, undefined, "a count nobody supplied is not invented");
+			assert.equal(guardContext({ tokens: 30_000, contextWindow: 1_000_000, messages: 2, mode: "standard" }).messagesAdvised, true);
 		});
 	});
 
