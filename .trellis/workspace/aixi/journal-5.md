@@ -261,3 +261,40 @@ Built the keepalive timer after measuring two things: the adapter has no schedul
 ### Next Steps
 
 - Nothing constructs the timer yet, and the allow-list entry names what would reach it: the adapter round that schedules a heartbeat. That is host integration, and its provider call needs the network.
+
+
+## Session 220: Scheduling the heartbeat, and what the callback may do
+<!-- trellis-session: v=2 fp=0f5c4b6bbfbe695f -->
+
+**Date**: 2026-09-29
+**Task**: Scheduling the heartbeat, and what the callback may do
+**Branch**: `master`
+
+### Summary
+
+Wired the keepalive timer to three hooks that already existed. The measurement that decided the shape: the host API the adapter may call is ten verbs and none of them reaches the provider, so the adapter cannot make the unsolicited request a heartbeat exists for - and the callback therefore reports instead.
+
+### Main Changes
+
+- that is the architecture rather than a limitation to work around: the host owns the provider. The callback reports through whatever context the last request supplied, which is what observe is for, and it is the same shape the guard and the fuse already have
+- the wiring: session_start at 2093 disarms any previous timer and arms a new one with a real unref-d clock, session_shutdown at 2477 disarms and drops it because the timer documents that as the caller obligation, and before_provider_request at 2922 observes and stores the context
+- and the repository told me when the module was done. The reachability check failed with these allow-list entries are now reachable, removing the entry is the definition of done for that module - and the check asserts it in both directions: an unreachable module not listed is new dead code, and a reachable one still listed is a list that rotted
+- the entry is gone and the comment left in its place records the seventh shrink
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b5aa258` | feat(adapter): arm the keepalive on session start, and let its callback report rather than act |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 797 tests, 795 pass, 0 fail, 2 skipped. Reachability, keepalive and adapter suites together: 50 cases, all passing.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The act itself is the last thing and it is out of reach: nothing in this repository can send the keepalive, because the host owns the provider.
