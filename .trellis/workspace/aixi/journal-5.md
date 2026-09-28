@@ -151,3 +151,39 @@ Wired the turn cap. The handler read ctx.sessionManager.getEntries() twice on ad
 ### Next Steps
 
 - A case that holds the cap wiring: a long session and a small cap through the adapter handler, which is possible because the count is an argument. Then the keepalive half of the review P0.3, which needs the network.
+
+
+## Session 217: A case that holds the cap wiring
+<!-- trellis-session: v=2 fp=a14e01a27202c680 -->
+
+**Date**: 2026-09-29
+**Task**: A case that holds the cap wiring
+**Branch**: `master`
+
+### Summary
+
+Held the turn cap through the adapter handler, which the previous round wired and left unheld. DOVE_PI_MAX_MESSAGES is set to 3 and restored in a finally, and the context reports 1000 tokens against a 1000000 window so neither the fraction nor the token guard can fire.
+
+### Main Changes
+
+- it is a case of its own rather than a step in the existing one, and the reason is measurable: that case fires the fraction guard on every turn because its context reports 220000 tokens against a 128000 window, and every notice shares one guardNotified flag that is one-shot, so a cap notice added there could never fire
+- the staging is three entries quiet because the comparison is greater-than, five producing one notice naming /compact and a new session and the count it saw, and five again producing nothing as the control
+- and the assertion that matters is that the other two guards stayed silent in the same turn. Without it, a case asserting a notice appears would pass if a neighbour raised it, which is the failure this line of work keeps recording
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `10b33b9` | test(adapter): hold the turn cap through the handler, with the guards beside it asserted silent |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 788 tests, 786 pass, 0 fail, 2 skipped - one more than before. The adapter suite is 35 cases, one longer.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The review list is now down to one item: P0.3 keepalive, which needs the network and the plan own offline-first constraint.
