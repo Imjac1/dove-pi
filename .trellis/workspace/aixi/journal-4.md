@@ -508,3 +508,39 @@ Held the novice-project execution claim on the first run, because the shape was 
 ### Next Steps
 
 - The request-runtime items still unheld, and the lists left elsewhere.
+
+
+## Session 172: The step that survives a mode change
+<!-- trellis-session: v=2 fp=275ac0739e8c34c1 -->
+
+**Date**: 2026-09-29
+**Task**: The step that survives a mode change
+**Branch**: `master`
+
+### Summary
+
+Read mode-controller.ts first and found the mode-change item already held: core.test.ts applies a change at the next step boundary, captures the snapshot before the change, asserts it was not lost, asserts effectiveFromStep, and asserts the current value moved - both halves in three assertions.
+
+### Main Changes
+
+- the stderr half got a case: a script writes to stderr and exits 3, and the case asserts the exit code is the process own, stderr carries the complaint, and stdout does not. The planted control moves the assertion from stderr to stdout and fails, which is the item own point rather than a value check
+- and the fallback half is not checkable from outside: executableCandidates is private and its choice depends on process.platform, so a test cannot stage a host where pwsh is missing without mocking the module
+- that applies the distinction the mode-format round drew: an honest not-checkable rather than a case that proves nothing
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f6e8120` | test(shell): hold the stderr half, and find the mode-change item already held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The Pi registration item, which is the last named request-runtime item.
