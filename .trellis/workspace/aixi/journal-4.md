@@ -329,3 +329,39 @@ Found a test item that could not be satisfied as written. The mode-format princi
 ### Next Steps
 
 - The other mode-format items, and the lists left elsewhere.
+
+
+## Session 167: The mode format list, with the checkability question
+<!-- trellis-session: v=2 fp=f1fb9e2c2ab3c228 -->
+
+**Date**: 2026-09-29
+**Task**: The mode format list, with the checkability question
+**Branch**: `master`
+
+### Summary
+
+Accounted for every mode-format item and answered whether each can be checked. Seven of eight are held and checkable because they are behavioural: a well-formed mode loads, unknown fields are rejected in five places by five cases, each required field by four, the gate matrix by five, and ask_before and unlisted actions by three.
+
+### Main Changes
+
+- one is not checkable and it is the one qualified last round, and the difference is the one that round drew - a behaviour can be exercised, and a statement about the shape of a codebase can only be approximated
+- several case names carry the item own words, which is the strongest form here: loads a well-formed three-file mode, and answers an unlisted action with the stance the mode declared and with nothing else
+- so the list is finished: seven held, one qualified, none left as a count
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bb159eb` | chore(task): account for every mode-format item, and answer whether each can be checked |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 752 tests, 750 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The remaining lists in the other specifications, and the request-runtime items still unheld.
