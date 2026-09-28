@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,6 +9,7 @@ import { CapabilityInvocationService } from "../src/core/capability-invocation.t
 import { CAPABILITY_PROTOCOL_VERSION, parseCapabilityInvocationRequest, parseCapabilityInvocationResponse, type CapabilityInvocationRequest } from "../src/core/capability-protocol.ts";
 import { CapabilityRegistry } from "../src/core/capability-registry.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
+import { createDoveRuntime } from "../src/runtime.ts";
 
 function request(name: string, overrides: Partial<CapabilityInvocationRequest> = {}): CapabilityInvocationRequest {
 	return {
@@ -158,6 +160,28 @@ describe("Capability Protocol", () => {
 			assert.equal((await ledger.findIncompleteCapabilityExecutions()).length, 0);
 		} finally {
 			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+	it("runs a capability in a root that has never been initialised", async () => {
+		// **What this holds and what it does not.** It holds the execution half of the novice-project item: a runtime composed with no
+		// arguments in a directory that has no `.dove/` resolves a capability and runs it. **The initialization half is structural** -
+		// `createDoveRuntime` takes no parameters, so there is nothing to hand it - and the control below asserts the root really is
+		// bare, so this is about absence and not about a project that happens to be there.
+		// It does not hold a project whose state exists and is unreadable, which the provider suite covers, and it does not hold the
+		// black-box path through the launcher.
+		const root = await mkdtemp(join(tmpdir(), "dove-novice-runtime-"));
+		try {
+			const runtime = createDoveRuntime();
+			const service = new CapabilityInvocationService(runtime.capabilities, new ExecutionLedger(join(root, "execution.jsonl")));
+			const result = await service.invoke(request("dev.node_version", {
+				arguments: {},
+				context: { cwd: root, mode: "standard", taskId: "novice", stepId: "start" },
+				correlation: { requestId: "novice-1", hostSessionId: "host" },
+			}) as never);
+			assert.equal(result.status, "success", "a capability runs in a directory with no .dove");
+			assert.equal(existsSync(join(root, ".dove")), false, "the control: no native state was created in this root");
+		} finally {
+			await rm(root, { recursive: true, force: true });
 		}
 	});
 });
