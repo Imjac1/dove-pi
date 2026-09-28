@@ -1503,3 +1503,41 @@ Held every dove-pi invocation in both READMEs against the CLI own help: shell is
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 91: Three first-class commands with no document anywhere
+<!-- trellis-session: v=2 fp=7686915e5c9fa7a9 -->
+
+**Date**: 2026-09-28
+**Task**: Three first-class commands with no document anywhere
+**Branch**: `master`
+
+### Summary
+
+cache, token and extensions are in LOCAL_CLI_COMMANDS, so a user can run them, and none of the three appeared in either README or the CLI help. Reading them split them: extensions is invoked by the router itself to reconcile the profile it just installed, while cache and token are audits whose only caller is the CLI dispatch.
+
+### Main Changes
+
+- so extensions is internal by construction and the other two are user-facing and were simply unfindable. Both audits are named in the help now, and the internal one is declared rather than left to inference
+- and the declaration is a set rather than a comment: INTERNAL_CLI_COMMANDS sits beside LOCAL_CLI_COMMANDS, and a test asserts in both directions that the difference is exactly what the help names. An exception that gains a mention is a command nobody declared; a command that loses its mention is one nobody can find
+- nothing in the repository stated which commands are public, which is why the absence of three read as an oversight rather than a convention - so the fix is a statement rather than three descriptions
+- the second direction got its own negative control: naming extensions in the help makes the check fail with that sentence, and removing it makes it pass. The first direction had already been proven live by the previous round failing on shell
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `035c765` | fix(cli): two audits become findable, and the internal command says so |
+| `cdc1a51` | chore(task): record the classification of the three undocumented commands |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 118 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
