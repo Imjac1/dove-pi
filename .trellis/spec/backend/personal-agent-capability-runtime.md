@@ -118,7 +118,7 @@ and evidence contracts still apply to Dove-owned executors.
 | Unsupported protocol or invalid capability semver | Reject before dispatch |
 | Arguments fail the capability's declared parameter schema | Reject before approval or execution |
 | Request claims approval without a trusted host callback | Deny side effects; never start the executor |
-| RPC input line exceeds 128 KiB | Return one bounded parse error for that line, discard through its newline, then continue |
+| RPC input line exceeds 128 KiB | Return one bounded error for that line - `-32600`, since an oversized *request* is an invalid request, not a JSON parse failure - discard through its newline, then continue |
 | Duplicate project authorities | Preserve source labels and report a conflict; never silently merge |
 | Evidence reference names credential/key material | Exclude it at the shared execution boundary |
 | Capability platform is unsupported | Return `unsupported_platform` with an execution correlation ID |

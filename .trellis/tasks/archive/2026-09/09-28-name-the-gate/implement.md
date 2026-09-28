@@ -48,3 +48,19 @@ npm test
 
 1. **The status vocabulary**, if the gates cannot be told apart.
 2. **The first real turn.**
+## Correction, added later and not a rewrite
+
+**A claim in the round that produced this record was wrong.** The round-96 report of the *following* turn said the params validator is not
+reachable from `handleRpc` and that the values it would reject are accepted. Measured again with a probe that prints the whole response
+rather than treating a resolved promise as success:
+
+```text
+[]                  error -32000  diagnostics/status params must be an object.
+{"sessionId":7}     error -32000  diagnostics/status sessionId must be a string.
+{"requestId":9}     error -32000  diagnostics/status requestId must be a string.
+{"sessionId":"ok"}  result (no error)
+```
+
+**The validator is wired and the refusals happen.** The earlier measurement used `handleRpc(request).then(() => "no-error", ...)`, and
+`handleRpc` *returns* an error response rather than rejecting, so the resolved promise read as success. The revert of the code changes was
+still right - those throws are plain errors and `-32000` is the code the path already answered with - but the reason given for it was not.

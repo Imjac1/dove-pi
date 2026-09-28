@@ -181,6 +181,31 @@ interface JsonRpcShape {
 	readonly error?: { readonly message?: string };
 }
 
+describe("the diagnostics params refusal", () => {
+	it("refuses a filter that is not an object or that holds non-string ids", async () => {
+		// The specification promises a JSON-RPC error for these without reading or mutating state. Nothing held that promise: a
+		// measurement that treated a resolved response as success reported the opposite, and this is the check that would have said so.
+		const temporary = await mkdtemp(join(tmpdir(), "dove-local-rpc-params-"));
+		try {
+			const adapter = new LocalCapabilityAdapter(join(temporary, "ledger.jsonl"));
+			const ask = async (params: unknown) => {
+				const response = (await adapter.handleRpc({
+					jsonrpc: "2.0", id: 1, method: "diagnostics/status", params,
+				} as never)) as { error?: { code?: number; message?: string }; result?: unknown };
+				return response.error ? `error ${response.error.code}` : "no error";
+			};
+			assert.deepEqual(
+				[await ask([]), await ask({ sessionId: 7 }), await ask({ requestId: 9 })],
+				["error -32000", "error -32000", "error -32000"],
+				"a filter that is not an object, or holds a non-string id, is refused",
+			);
+			assert.equal(await ask({ sessionId: "ok" }), "no error", "and a valid filter is served");
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("the approval refusal", () => {
 	it("says which gate refused, rather than one sentence for two different gates", async () => {
 		// **Two gates, one sentence until this existed**: a caller that did not approve, and a host where no approver is registered. The
