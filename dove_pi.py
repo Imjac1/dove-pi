@@ -797,6 +797,22 @@ After installation:
   context, goal continuity, and budgets, never tool permission. Legacy core/full
   profiles remain explicit compatibility controls.
 
+Dove environment variables:
+  A user may set these for a session; each is read by the code that names it:
+    DOVE_PI_STATE_DIR, DOVE_PI_TOOL_PROFILE, DOVE_PI_THINKING_POLICY, DOVE_PI_INTERACTION_MODE,
+    DOVE_PI_REASONING_VOICE, DOVE_PI_READ_ONLY, DOVE_PI_MAX_REQUEST_ATTEMPTS,
+    DOVE_PI_MAX_CONTEXT_FRACTION, DOVE_PI_MAX_CONTEXT_TOKENS, DOVE_PI_PREFIX_FUSE,
+    DOVE_PI_DEBUG_CONTEXT, DOVE_PI_PROGRESS_REPEAT_THRESHOLD, DOVE_PI_PROGRESS_LONG_RUN_MINUTES,
+    DOVE_PI_PROGRESS_ERROR_THRESHOLD, DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_LIMIT,
+    DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_THRESHOLD,
+    DOVE_PI_PROGRESS_INTERACTIVE_QUESTION_HARD_STOP_THRESHOLD
+  The launcher sets these for the extension it starts, and overwrites whatever is there:
+    DOVE_PI_EXTENSION_ORIGIN, DOVE_PI_EXTENSION_TRUST, DOVE_PI_EXTENSION_ENTRY,
+    DOVE_PI_EXTENSION_VERSION, DOVE_PI_FRAMEWORK_VERSION, DOVE_PI_WORKSPACE_MODE,
+    DOVE_PI_WORKSPACE_MODE_OVERRIDE
+  DOVE_PI_SUBAGENT_EXECUTABLE, DOVE_PI_SUBAGENT_PREFIX_ARGS, DOVE_PI_HOME and DOVE_PI_SHELL_TIMEOUT_SECONDS
+  are read too, and the READMEs cover them where they are used.
+
 Cache compatibility:
   Custom OpenRouter providers receive Pi session affinity automatically.
   Set DOVE_PI_DISABLE_SESSION_AFFINITY=1 only for proxies that reject it.

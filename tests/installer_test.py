@@ -1,3 +1,4 @@
+import ast
 import contextlib
 import io
 import json
@@ -438,6 +439,52 @@ class RuntimeMinimumTests(unittest.TestCase):
             source,
             "the launcher Python check and the declared minimum have drifted apart",
         )
+
+
+class EnvironmentVariableTests(unittest.TestCase):
+    """Every variable the help names is one the code reads.
+
+    Measured before this existed: the code reads twenty-seven `DOVE_PI_` variables and the documents named four of them. Seven are set by
+    the launcher for the extension it starts - internal by construction, the same reading a previous round gave the `extensions` command -
+    and the rest are read by a session and were named nowhere, including plainly user-facing knobs like `DOVE_PI_PREFIX_FUSE` and the
+    context budget pair. **A knob a user cannot find is a knob that does nothing**, which is the quiet failure this holds against.
+
+    **The check errs toward silence**: it asks whether the name appears in the code at all, not whether it is read at the right moment,
+    because any mention counts and a name that appears nowhere is the thing this can be sure about.
+    """
+
+    def test_every_variable_the_help_names_is_named_by_the_code(self):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            self.assertEqual(main(["--help"]), 0)
+        help_text = captured.getvalue()
+
+        named = sorted(set(re.findall(r"\b(DOVE_PI_[A-Z0-9_]+)", help_text)))
+        self.assertTrue(named, "the help no longer names any Dove variable, which is its own kind of wrong")
+
+        # **The Python side is parsed rather than searched, and the negative control is what forced that.** The help text lives inside
+        # dove_pi.py, so a search over that file found the name in the very block that names it - the check passed over a planted
+        # variable that nothing reads. An ast walk cannot make that mistake: it sees reads, not text.
+        tree = ast.parse((ROOT / "dove_pi.py").read_text(encoding="utf-8"))
+        read_in_python = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Subscript) and getattr(node.value, "attr", None) == "environ":
+                index = node.slice
+                if isinstance(index, ast.Constant) and isinstance(index.value, str):
+                    read_in_python.add(index.value)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
+                owner = node.func.value
+                if getattr(owner, "attr", None) == "environ" and node.args:
+                    first = node.args[0]
+                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                        read_in_python.add(first.value)
+
+        sources = ["install.ps1", "bin/dove-pi.cjs"]
+        sources += [str(path.relative_to(ROOT)).replace("\\", "/") for path in (ROOT / "src").rglob("*.ts")]
+        elsewhere = "\n".join((ROOT / name).read_text(encoding="utf-8", errors="ignore") for name in sources)
+
+        unread = [name for name in named if name not in read_in_python and name not in elsewhere]
+        self.assertEqual(unread, [], "the help names a variable nothing in the code mentions: " + ", ".join(unread))
 
 
 if __name__ == "__main__":
