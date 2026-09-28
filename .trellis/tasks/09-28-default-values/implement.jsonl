@@ -1,0 +1,2 @@
+{"file": "dove_pi.py", "reason": "Where the help states defaults and argparse applies them."}
+{"file": "install.ps1", "reason": "Where the bootstrap states its own."}
