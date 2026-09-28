@@ -257,3 +257,39 @@ Held the timeout path with a case that proves itself: a three-second sleep with 
 ### Next Steps
 
 - The request-runtime items still unheld, and the lists left elsewhere.
+
+
+## Session 165: The core that must not import Pi
+<!-- trellis-session: v=2 fp=bce890545daa832b -->
+
+**Date**: 2026-09-29
+**Task**: The core that must not import Pi
+**Branch**: `master`
+
+### Summary
+
+Measured the layer claim and found it true and unheld: 45 files in src/core, 106 import statements, none reaching Pi, and no test walks the directory - the 141 hits for src/core are imports by tests, not a read of it. A holder now walks every file, takes each specifier, and refuses any naming a Pi module.
+
+### Main Changes
+
+- the control is a real one: it writes a temporary module into src/core with a Pi import, runs the same walk, asserts the planted specifier is found, then removes the file - and both cases pass with the planted file gone
+- and the holder says what it does not cover: a dynamic await import is not an import statement and is not seen, a re-export is not seen either, and it does not decide why an import would be wrong
+- the measurement answered the first half before a holder was looked for, and the second half needed a different question - not who imports Pi but who reads the directory
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9b65587` | test(layer): hold the claim that core does not import Pi, with a control that plants one |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 752 tests, 750 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The other request-runtime items, and the mode-format claim of the same shape, which the round now suspects is also unheld.
