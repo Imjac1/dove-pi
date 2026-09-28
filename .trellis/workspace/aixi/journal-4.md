@@ -1559,3 +1559,39 @@ Measured the P1 interop task with the names the code uses. The benchmark harness
 ### Next Steps
 
 - Item 14 of 08-27-dove-interop-layer: the bilingual README sections, with the drift check in mind. Then the two P2 tasks.
+
+
+## Session 201: The bilingual README sections
+<!-- trellis-session: v=2 fp=df3aff4eda161ab7 -->
+
+**Date**: 2026-09-29
+**Task**: The bilingual README sections
+**Branch**: `master`
+
+### Summary
+
+Closed item 14 of the interop P1: both front doors now carry the adapter and plugin-reuse model. The drift rule was read before either file was touched, and it compares shape rather than meaning - heading count, fence count and table row count, with no byte rule at all.
+
+### Main Changes
+
+- one section each, in the words the PRD already uses: one reviewed capability exposed through the Pi adapter first and then through MCP and CLI/RPC with a single copy of the execution logic, and a reviewed Pi plugin package projected into observable host capabilities without registering a second Core executor
+- the shape was checked with the rule the test uses rather than by eye: before, 31 headings with 66 fences and 14 table rows in each; after, 32 with 68 and 19 in each, and an empty drift list
+- and the byte rule that is not there is worth recording: the comment above the check records a five percent difference measured when it was written, which is history rather than a constraint. Assuming a budget there would have been this round first mistake
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `607f4ee` | docs(readme): carry the adapter and plugin-reuse model in both front doors |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped, unchanged. tests/document-drift.test.ts passes.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The interop P1 now has nothing measured missing; the two P2 tasks remain, real-user web access and the usage review.
