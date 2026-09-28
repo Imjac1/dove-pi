@@ -8,6 +8,11 @@ scope:
 
 authority:
   grant: local-review
+  # **Two namespaces, and this list holds both on purpose.** `code-audit.seed`, `code-audit.disposition` and `code-audit.diff` are
+  # capability names: they are in the registry `dove-pi capability list` prints. `repo.read` and `report.write` are this mode own
+  # action names, declared in permissions.yaml and given an idempotency class below. A grant covers what the mode may do, which is both
+  # kinds, and the loader does not resolve them against the registry - measured, and it is why a reader should not assume every dotted
+  # name here is a capability.
   capabilities: [repo.read, report.write, code-audit.seed, code-audit.disposition, code-audit.diff]
   expires: "2027-01-01T00:00:00.000Z"
 
