@@ -3121,7 +3121,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
 		const promptChars = event.systemPrompt.length + event.prompt.length;
 		const remainingContextChars = getProjectContextBudget({ tokens: usage?.tokens, contextWindow, promptChars });
-		const contextGuard = guardContext({ tokens: usage?.tokens ?? null, contextWindow, mode: mode.current });
+		// **Read the session entries once rather than twice**: the guard counts them for the turn cap and the fuse
+		// reads their usage samples, and two reads of the same list on adjacent lines is how the two advisers would
+		// drift apart.
+		const sessionEntries = ctx.sessionManager.getEntries();
+		const contextGuard = guardContext({ tokens: usage?.tokens ?? null, contextWindow, messages: sessionEntries.length, mode: mode.current });
 		if (contextGuard.compactAdvised && contextGuard.hint && ctx.hasUI && !guardNotified) {
 			guardNotified = true;
 			ctx.ui.notify(contextGuard.hint, "warning");
@@ -3129,7 +3133,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// **The fuse answers a question the guard cannot**, which is why it is not folded into it: the guard reads
 		// the usage Pi reports, so a cold start re-bills the whole prefix at full price while `fractionUsed` is
 		// unchanged. Its own one-shot flag, so the two notices are independent facts rather than one repeated.
-		const fuse = evaluateSessionFuse(inspectCacheDiagnostics(ctx.sessionManager.getEntries()), contextWindow ?? 0);
+		const fuse = evaluateSessionFuse(inspectCacheDiagnostics(sessionEntries), contextWindow ?? 0);
 		if (fuse.state === "cold_start" && fuse.recommendation && ctx.hasUI && !fuseNotified) {
 			fuseNotified = true;
 			ctx.ui.notify(fuse.recommendation, "warning");
