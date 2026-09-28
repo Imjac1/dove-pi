@@ -25,11 +25,11 @@ context a task was built from.
 
 ## Acceptance Criteria
 
-- [ ] **AC1** Every curated entry is read, and the count is stated.
-- [ ] **AC2** Each path is resolved against the tree.
-- [ ] **AC3** Anything unresolvable is fixed or recorded with its reason.
-- [ ] **AC4** Any check added is justified against the ones that exist.
-- [ ] **AC5** The gate passes.
+- [x] **AC1** Every curated entry is read, and the count is stated.
+- [x] **AC2** Each path is resolved against the tree.
+- [x] **AC3** Anything unresolvable is fixed or recorded with its reason.
+- [x] **AC4** Any check added is justified against the ones that exist.
+- [x] **AC5** The gate passes.
 
 ## Out of scope
 
