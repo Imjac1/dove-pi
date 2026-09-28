@@ -1957,3 +1957,39 @@ The fuse wiring has a holder of its own. It stages a billed cold start as two me
 ### Next Steps
 
 - The status line and the fuse both have holders now. What remains unheld in that handler is everything else it does, which is a seam question rather than a case question.
+
+
+## Session 212: The seam question, measured and answered no
+<!-- trellis-session: v=2 fp=14a536c251374088 -->
+
+**Date**: 2026-09-29
+**Task**: The seam question, measured and answered no
+**Branch**: `master`
+
+### Summary
+
+Measured the before_agent_start handler instead of assuming it needed a seam: 233 lines inside a 3491-line file, six top-level calls of which five are already named units with their own suites, thirty-seven locals and fifteen branches. So its complexity is in sequencing and bindings, not in logic nothing tests.
+
+### Main Changes
+
+- the verdict is negative and worth stating plainly: no seam is needed, and proposing one would be a refactor for its own sake. What holds this handler is what holds a composition root - the end-to-end adapter suite, thirty-four cases, driving the real handler through a fake extension host
+- and a wrong earlier claim was corrected by the measurement: an earlier round called it a three-thousand-line event handler, when the handler is 233 lines inside a 3491-line file. Those are different claims and only one is about the handler
+- what would change the answer is written down: a branch whose decision is inline - a computation, a classification, a policy - that nothing holds. Not short lines, many locals, or a long file, which are what orchestration looks like
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f92da3` | chore(task): answer the seam question with a measurement, and answer it no |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 785 tests, 783 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Nothing named remains in this repository. The project open tasks are all handled and every artefact built in this span has a holder.
