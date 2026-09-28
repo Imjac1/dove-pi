@@ -1352,3 +1352,41 @@ Built the import graph over src and tests: 103 modules, none unreferenced. A cle
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 87: The one shipped file no typechecker has ever read
+<!-- trellis-session: v=2 fp=e7fd485da4d7dc68 -->
+
+**Date**: 2026-09-28
+**Task**: The one shipped file no typechecker has ever read
+**Branch**: `master`
+
+### Summary
+
+bin/dove-pi.cjs is the stable launcher on PATH, six kilobytes of argument handling, executed by CI smoke and never read by a checker because it is .cjs and the include holds .ts and .mts. Running a checker over it reports thirteen TS2339s, and all thirteen are one artifact of JavaScript inference.
+
+### Main Changes
+
+- the artifact: the spread in { ...process.env, PI_SKIP_VERSION_CHECK: 1 } does not carry an index signature into a JavaScript object literal inferred type, so every later assignment reads as a property that does not exist. Adding --types node changed nothing, which ruled out a missing types package
+- reading them is what mattered, because the error shape pointed at a real defect worth ruling out: an env object built from scratch would drop the parent environment and a launched child would lose PATH. The file spreads process.env, so it does not. That is the value of running a checker over a file nobody had asked about - not the errors it prints but the question they made me ask
+- the include stays as it is, and the reason is written in tsconfig.json beside the neighbouring decisions, so the next person does not re-run the experiment. What covers the launcher is execution: CI runs pi:smoke for --version and --help
+- the round produced a decision and a note rather than a change, because the honest answer to whether that file needs typechecking was no, and the measurement is what makes the answer cost nothing to trust
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a534a05` | docs(tsconfig): why the launcher is out of the include, measured rather than assumed |
+| `d59f094` | chore(task): record the launcher measurement, the thirteen artifacts and the decision |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 739 tests, 737 pass, 0 fail, 2 skipped. Doctor: exit 0. npm run pi:smoke prints Dove Pi 0.2.0 (Pi 0.84.3). The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
