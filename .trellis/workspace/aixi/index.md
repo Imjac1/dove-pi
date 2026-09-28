@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 184
+- **Total Sessions**: 185
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~980 | Active |
+| `journal-4.md` | ~1017 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 185 | 2026-09-29 | The one action, named exactly | `b4668ca` | `master` |
 | 184 | 2026-09-29 | The pattern, counted, and the list emptied | `bc3e498` | `master` |
 | 183 | 2026-09-29 | The check that needed a network nobody measured | `71bfaf2` | `master` |
 | 182 | 2026-09-29 | The two conclusions that lean on the layer fact | `9c76e82` | `master` |

@@ -978,3 +978,40 @@ Counted the pattern of conclusions about machines that were never asked, and fou
 ### Next Steps
 
 - The first real turn, which requires this machine to be changed rather than a capability that is missing.
+
+
+## Session 185: The one action, named exactly
+<!-- trellis-session: v=2 fp=345bb64b265566b1 -->
+
+**Date**: 2026-09-29
+**Task**: The one action, named exactly
+**Branch**: `master`
+
+### Summary
+
+Named the remaining action from the launcher help rather than from memory: dove-pi update, which the help describes as atomically updating Dove and its release-locked Pi runtime. update --check already reported what it would act on, the v0.2.0 release and Pi 0.84.3, so the check and the update are a matched pair.
+
+### Main Changes
+
+- what it would change is not the repository: it writes a managed release under the user application directory and installs Pi, so nothing this session has done on files would be affected - which is why the boundary is not about the repository at all
+- and the boundary is a permission one: the standing instruction is to confirm before safety-sensitive operations unless explicitly authorised, and the session context says approval prompts are disabled and escalation is not to be requested. The confirmation cannot be obtained inside this loop
+- so the action is not taken, not because it would fail but because nothing here can authorise it. The party who can is the user, whose answer is recorded as unknown rather than assumed
+- that is the precise form of the boundary: not can this be done, but who may say yes
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4668ca` | chore(task): name the one action exactly, from the help rather than from memory |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The user answer that would authorise dove-pi update, which would install Pi 0.84.3 and open the first real turn. Everything reachable without it is done.
