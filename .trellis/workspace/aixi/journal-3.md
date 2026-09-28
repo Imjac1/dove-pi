@@ -818,3 +818,40 @@ Ran the two rpc methods left unrun. capabilities/list returns the registry; invo
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 126: The half of the boundary that lets something through
+<!-- trellis-session: v=2 fp=54d810218c6576ed -->
+
+**Date**: 2026-09-28
+**Task**: The half of the boundary that lets something through
+**Branch**: `master`
+
+### Summary
+
+Measured the granting side of the approval boundary. The union is not_required, granted, denied, unavailable, and one gate checks approval !== granted. dev.typecheck with granted reached execution and failed on the empty temporary project rather than on permission, so the gate does open.
+
+### Main Changes
+
+- and it does not open for a writing capability: dev.project_test is denied with the same granted value that let the other through, so there are two gates and one status - a caller cannot tell approval from policy, because both arrive as approval_denied
+- that is the same shape as the error-code collapse two rounds ago, in the one place where telling them apart matters most
+- what the round did not establish is which other gate refuses the write: it intended to read the denial envelope error field and did not get that far, so it is not named here because it was not measured
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a8c94e` | chore(task): measure the half of the approval boundary that lets something through |
+| `873165f` | chore(task): archive 09-28-rpc-granted |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 742 tests, 740 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Name the gate that refuses a writing capability with approval granted, which is the measurement this round did not finish. The first real turn still needs a Pi host.
