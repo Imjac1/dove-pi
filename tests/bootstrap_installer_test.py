@@ -403,5 +403,21 @@ class BootstrapParameterSurfaceTests(unittest.TestCase):
         )
 
 
+    def test_readme_examples_name_only_switches_the_script_declares(self):
+        """An example may omit switches, and must not invent one.
+
+        The READMEs show `.-\install.ps1 -NoPath -NoFont -NoExtensions` under a sentence about avoiding PATH and font changes - a
+        purpose-bound example rather than an enumeration, which is why it is not held to completeness. What it must be is true: a
+        switch an example names and the script does not declare is a command that fails when a reader copies it. So the assertion is
+        one-directional on purpose, and the contract - which does claim to list the surface - keeps the both-directions check.
+        """
+        declared = self._declared_switches()
+        for name in ("README.md", "README.en.md"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            named = set(re.findall(r"(?<![A-Za-z])-([A-Z][A-Za-z0-9]+)", " ".join(text.splitlines())))
+            invented = {switch for switch in named if switch in {"NoPath", "NoFont", "NoExtensions", "Profile", "Verify", "Proxy"}} - declared
+            self.assertEqual(invented, set(), name + " names a bootstrap switch the script does not declare")
+
+
 if __name__ == "__main__":
     unittest.main()
