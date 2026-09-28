@@ -1487,3 +1487,39 @@ Ran the umbrella last step and closed a P0 that named four coupled defects. The 
 ### Next Steps
 
 - The other open tasks: interop layer, real-user web access, usage review, and the P0 adaptive formal workflow, which is the next P0.
+
+
+## Session 199: Reading the adaptive formal workflow
+<!-- trellis-session: v=2 fp=83cf46fa68fd11dc -->
+
+**Date**: 2026-09-29
+**Task**: Reading the adaptive formal workflow
+**Branch**: `master`
+
+### Summary
+
+Read the next P0, 09-01-dove-adaptive-formal-workflow, and found its twenty-three plan boxes all ticked while its validation section reports 235 TypeScript tests where the suite now runs 778. Its claims were measured against the source rather than taken from the boxes, and they hold.
+
+### Main Changes
+
+- held: NATIVE_FORMAL_ARTIFACTS names prd, design, implement and acceptance; nativeTaskDirectory builds .dove/tasks/<id>; NativeTaskPhase and NativeGoalStatus give the phases R3 names; the .trellis adapter reads legacy state; and the fast-lane case in pi-adapter.test.ts holds the request and task separation
+- and the measurement mistake is recorded: my first search used the names the plan used rather than the names the code uses, and reported none for three of the four claims. That is the ninth time this session has mistaken its own expectation for the repository, and the first time it nearly produced a false negative about someone else work
+- nothing was missing but the archive, and its stale numbers are left alone: rewriting another task history to look current is not this round work
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b292856` | chore(task): read the next P0, and archive it because its plan was already done |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The three remaining open tasks: interop layer, real-user web access, and the usage review.

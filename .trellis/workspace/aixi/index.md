@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 198
+- **Total Sessions**: 199
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1489 | Active |
+| `journal-4.md` | ~1525 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 199 | 2026-09-29 | Reading the adaptive formal workflow | `b292856` | `master` |
 | 198 | 2026-09-29 | The parent integration review, and the umbrella closed | `69c41b3`, `495b199` | `master` |
 | 197 | 2026-09-29 | The full validation, and the criteria held against it | `9039a3a` | `master` |
 | 196 | 2026-09-29 | The summary that explains repeated maintenance | `9343af9` | `master` |
