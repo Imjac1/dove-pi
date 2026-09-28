@@ -1326,3 +1326,40 @@ Mapped the behaviour tables across the specifications: seventeen files carry tab
 ### Next Steps
 
 - The six Tests Required lists in framework-core.md, beginning with the adapter parity question the first one leaves open.
+
+
+## Session 140: The six required-test lists, item by item
+<!-- trellis-session: v=2 fp=7c65697cd05d3d68 -->
+
+**Date**: 2026-09-28
+**Task**: The six required-test lists, item by item
+**Branch**: `master`
+
+### Summary
+
+Read all six Tests Required lists in framework-core.md. Scenario 1 six items and scenario 6 five items are held, most of them in the specification own words: capability-scope.test.ts denies an action the issuing agent does not hold however plausible the name, refuses a delegate that widens by claiming a broader resource, and exposes no path that renders the capability set into model-visible text.
+
+### Main Changes
+
+- and the adapter parity item the previous round called unheld is held: pi-agent-core-adapter.test.ts has the paired halves at :63 and :69, the invocation log at :76, and the parity claim itself at :85 - applies the framework own guards, so the guarantees do not depend on which loop is running
+- that search for the phrase external adapter was the fourth time this session confused no match for my pattern with no holder
+- scenario 1 item 6 is held by practice rather than by name: the host suite opens a request with before_agent_start in eleven cases, the way the host does, and enforces a mode sandbox claim at the tool boundary
+- and scenarios 2, 4 and 5 in full and four items of scenario 3 are named as unchecked, because their searches returned 34 to 124 candidates each and a wide count is a candidate list rather than an answer
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7589f5a` | chore(task): read all six required-test lists, and answer the parity question |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 746 tests, 744 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Scenarios 2, 4 and 5 of the required-test lists, and four items of scenario 3, which this round named as unchecked rather than implying.
