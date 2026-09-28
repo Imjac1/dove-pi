@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 173
+- **Total Sessions**: 174
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~582 | Active |
+| `journal-4.md` | ~618 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 174 | 2026-09-29 | The two quality guidelines | `3e36c0f` | `master` |
 | 173 | 2026-09-29 | The registration that must not change the contracts | `07de9ab` | `master` |
 | 172 | 2026-09-29 | The step that survives a mode change | `f6e8120` | `master` |
 | 171 | 2026-09-29 | The holder, with the shape read first | `90a8db7` | `master` |

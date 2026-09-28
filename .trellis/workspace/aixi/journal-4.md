@@ -580,3 +580,39 @@ Answered the checkability question for the last request-runtime item. The adapte
 ### Next Steps
 
 - The lists left elsewhere in the specifications, with the 24 KiB budget in mind for any correction.
+
+
+## Session 174: The two quality guidelines
+<!-- trellis-session: v=2 fp=90cf7d30bb84fdb9 -->
+
+**Date**: 2026-09-29
+**Task**: The two quality guidelines
+**Branch**: `master`
+
+### Summary
+
+Read the last two unread blocks on the map and found they are command lists rather than claims: the backend Testing Requirements is a block of five commands and the frontend one is a sentence naming pi:smoke plus the full suite for UI-affecting changes. So the checkability question has a third answer - instructions to run.
+
+### Main Changes
+
+- and following them found something: pi:smoke exits 0 and turns out to be dove-pi --version and --help, the two commands this session has run all along, while release:check exits 2 and always will
+- release:check is a script entry that cannot work: the Python tool requires a manifest, an archive, a checksum, a bootstrap and an asset, and the npm entry passes none of them. The workflow passes them itself, held by test_release_workflow_runs_readiness_after_gates_before_publish, so the readiness check runs in CI and not from this script
+- no fix was made: inventing arguments would produce a script that appears to work and checks the wrong thing - the failure mode every round since the mode-format qualification has watched for
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3e36c0f` | chore(task): read the two quality guidelines, and find a script entry that cannot run |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5. And npm run pi:smoke exits 0.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The release:check entry, recorded as unrunnable, and the lists left elsewhere.
