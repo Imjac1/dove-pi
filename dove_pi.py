@@ -818,6 +818,14 @@ def main(arguments: Sequence[str]) -> int:
             local_cli_index += 1
             continue
         break
+    # **A help flag is answered wherever it appears, for the commands the local CLI owns.** `capability --help` used to fall
+    # through to the local CLI, which answered a usage error for a group that needs a subcommand - so asking a command for its own
+    # help failed for six of the fourteen the router advertises, while `install --help` prints its own argparse help and must keep
+    # doing so. This guard covers exactly the local CLI commands, and a bare `--help` is never a value: the flags that take one
+    # spell it inside `--args=...`.
+    if arguments and arguments[0] in LOCAL_CLI_COMMANDS and any(argument in {"-h", "--help"} for argument in arguments):
+        print_help()
+        return 0
     if local_cli_index > 0 and local_cli_index < len(arguments) and arguments[local_cli_index] in LOCAL_CLI_COMMANDS:
         return run_local_cli(arguments[local_cli_index:])
     if arguments and arguments[0] in {"install", "setup"}:
