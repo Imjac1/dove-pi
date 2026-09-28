@@ -1123,3 +1123,39 @@ Read the P0 that reports four of five done and found it is an umbrella whose own
 ### Next Steps
 
 - 08-30-dove-audit-observability-regression, and its first plan item: define additive evidence and redaction contracts.
+
+
+## Session 189: The evidence and redaction contracts
+<!-- trellis-session: v=2 fp=b995298b0a65a672 -->
+
+**Date**: 2026-09-29
+**Task**: The evidence and redaction contracts
+**Branch**: `master`
+
+### Summary
+
+Did the remaining child task first plan item, and did it as code rather than prose. The child design.md already fixed the answer in seventeen lines, so the item was to name and pin the contracts: project_maintenance_record projects legacy four-field records as schema 1 with additive fields labelled unavailable, and redact_maintenance_text bounds a message and masks bearer, API-key, credential, private-key and environment shapes.
+
+### Main Changes
+
+- what was read first: the execution ledger already carries schemaVersion 1 and a projection whose comment says it deliberately drops arbitrary details so a diagnostic query cannot echo secrets, which is redaction by projection on the TypeScript side. dove_pi.py line 580 writes exactly the four fields the child calls legacy, and no test covered that log format
+- two controls are in place: ordinary text is left alone by the redaction, so it is about shapes rather than every word; and a record passed to the projection is asserted unchanged, which is what never rewrite history means as a test rather than a promise
+- this is the first real code work in this span - sixty-seven lines across dove_pi.py and a new installer test file, and the installer suite went from green to green at Ran 130 tests, OK
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2212812` | feat(installer): define the maintenance evidence and redaction contracts |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. npm run test:installer: 130 tests, OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child second plan item: extend maintenance logs with run identity, timing, decision, release, path, extension and sync summaries.
