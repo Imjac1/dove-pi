@@ -22,11 +22,11 @@ send exactly that and hold the answer against what the docs promise.
 
 ## Acceptance Criteria
 
-- [ ] **AC1** The documented request is sent and its response recorded.
-- [ ] **AC2** Two refusals are provoked and recorded.
-- [ ] **AC3** Whether the process exits on its own is stated.
-- [ ] **AC4** The fixture is removed and this repository is untouched.
-- [ ] **AC5** The gate passes.
+- [x] **AC1** The documented request is sent and its response recorded.
+- [x] **AC2** Two refusals are provoked and recorded.
+- [x] **AC3** Whether the process exits on its own is stated.
+- [x] **AC4** The fixture is removed and this repository is untouched.
+- [x] **AC5** The gate passes.
 
 ## Out of scope
 
