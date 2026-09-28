@@ -76,6 +76,66 @@ describe("Pi adapter", () => {
 		assert.equal(isReadOnlyShellCommand("bash", { command: "unknown-tool --inspect" }), false);
 	});
 
+	it("reports a cold start and a growing prefix through the fuse, once each", async () => {
+		// **A case of its own because the flags are closure state.** Every notice the adapter raises is one-shot per
+		// `extension(api)` call, so a case asserting a notice has to own the handler that raises it - which is what
+		// the fuse wiring round meant by a different harness. This is that harness, with only what the fuse path
+		// touches.
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const notifications: string[] = [];
+		let sessionEntries: unknown[] = [];
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return representativeTools.map((name) => ({ name })); },
+			setActiveTools() {},
+			getActiveTools() { return [...representativeTools]; },
+			getThinkingLevel() { return "max"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			hasUI: true,
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify: (message) => notifications.push(message) },
+			sessionManager: { getEntries: () => sessionEntries, getSessionId: () => "fuse-session" },
+			// The type omits it because most cases never read it; the handler checks for it at runtime.
+			getContextUsage: () => ({ tokens: 220_000, contextWindow: 128_000 }),
+		};
+		// The entry shape `inspectCacheDiagnostics` reads, taken from its own extraction rather than guessed: an
+		// assistant message with a usage record, timestamps in milliseconds.
+		const assistant = (timestamp: number, input: number, cacheRead: number) => ({
+			type: "message",
+			message: { role: "assistant", provider: "p", model: "m", timestamp, usage: { input, cacheRead, cacheWrite: 0 } },
+		});
+		const turn = () => events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "turn", systemPrompt: "" }, context);
+		const coldStarts = () => notifications.filter((message) => /full miss/.test(message));
+		const pressures = () => notifications.filter((message) => /prompt prefix is/.test(message));
+		// **1. A billed cold start, which is the state this reading exists to add.** Two messages six minutes apart,
+		// the second reading no cache: the idle case the derivation recognizes. It is staged first because the
+		// notice is one-shot, and because it is the only state the wiring reports.
+		sessionEntries = [assistant(1_000_000, 400, 39_600), assistant(1_000_000 + 6 * 60 * 1000, 180_000, 0)];
+		notifications.length = 0;
+		await turn();
+		assert.equal(coldStarts().length, 1, `the billed cold start is reported: ${JSON.stringify(notifications)}`);
+		assert.match(coldStarts()[0] ?? "", /idle/, "and it names the miss reason the entries carry");
+		// **2. A grown prefix is *not* this reading business, and the case says so.** Every sample read its cache,
+		// so the ratio is 140300 of a 128000 window and the guard raises its own hint - while the fuse stays quiet,
+		// because wiring it to repeat what the guard already says would be the duplicate this session keeps
+		// recording. The assertion is that no *fuse* notice appears, not that nothing does.
+		sessionEntries = [assistant(2_000_000, 200, 19_800), assistant(2_000_100, 300, 120_000)];
+		notifications.length = 0;
+		await turn();
+		assert.equal(pressures().length, 0, `the fuse leaves growth to the guard: ${JSON.stringify(notifications)}`);
+		assert.equal(coldStarts().length, 0, "and there was no miss to report either");
+		// **3. The control.** The flag is one-shot, so an identical turn reports nothing at all.
+		notifications.length = 0;
+		await turn();
+		assert.equal(notifications.length, 0, "neither notice repeats");
+	});
+
 	it("registers modes, shortcuts, capabilities, and doctor", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: FakeContext) => Promise<void> }>();
 		const shortcuts = new Map<string, { handler: (ctx: FakeContext) => Promise<void> }>();
@@ -1382,6 +1442,8 @@ describe("Pi adapter", () => {
 interface FakeContext {
 	hasUI?: boolean;
 	model?: unknown;
+	/** Present where the handler reads it; most cases never do, which is why it is optional. */
+	getContextUsage?: () => { tokens?: number; contextWindow?: number };
 	ui: {
 		theme: { fg: (color: string, value: string) => string };
 		setStatus: (key: string, value: string | undefined) => void;
