@@ -29,6 +29,23 @@ command and subcommand, drove both headless interfaces, measured the approval bo
 not a task** - there is nothing here to read, run, measure or fix that has not been - **which is why this round changed no file but its own
 record.**
 
+## And the gate went red once, transiently, and the commit went out anyway
+
+```text
+the gate call      typecheck 0, npm test: 757 tests, 754 pass, 1 FAIL, 2 skipped
+the re-run         npm test: 757 tests, 755 pass, 0 fail, 2 skipped
+windows-runtime    8 of 8, on its own, after the failure
+which test flaked  unknown: the saved output was overwritten by the re-run before it was read
+```
+
+**Two things are wrong here and only one of them is the test.** The failure did not reproduce, and **the commit was made while the gate was
+red** - which the session own procedure says not to do. The re-run is green, so the tree is sound, **but the round should not have committed
+before confirming that.**
+
+**And the flake is recorded as unexplained rather than attributed to a guess.** The plausible source is the two timing-dependent cases this
+session added - real child processes, and a one-millisecond timeout beside a three-second sleep - **but plausible is not measured**, and after
+this many rounds of mistaking a pattern for a fact, naming a cause without evidence is the one thing not to do.
+
 ## Validation commands
 
 ```powershell
