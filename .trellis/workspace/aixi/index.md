@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 153
-- **Last Active**: 2026-09-28
+- **Total Sessions**: 154
+- **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1837 | Active |
+| `journal-3.md` | ~1873 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 154 | 2026-09-29 | Who consumes the source manifest | `a21ba10` | `master` |
 | 153 | 2026-09-28 | Reports drift without reverting it | `77ba557` | `master` |
 | 152 | 2026-09-28 | The function that leaves it unknown | `364d373` | `master` |
 | 151 | 2026-09-28 | Read the item in full, and ask which module decodes | `1f78178` | `master` |

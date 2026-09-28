@@ -1835,3 +1835,39 @@ Held the drift claim and found it is two claims with two holders. compareDoveExt
 ### Next Steps
 
 - The source-install drift consequence named in the previous round, and the lists left unheld across the other specifications.
+
+
+## Session 154: Who consumes the source manifest
+<!-- trellis-session: v=2 fp=7ebda34a85e1788e -->
+
+**Date**: 2026-09-29
+**Task**: Who consumes the source manifest
+**Branch**: `master`
+
+### Summary
+
+Read the five-link chain that prevents a false drift report: an absent generator leaves dove_extension empty, release.py omits the field when empty, validation is skipped for it, extension-identity.ts returns project_newer or unknown for an absent managed identity, and project_newer is not diverged. Link four is the one nothing holds - the identity suite contains undefined zero times.
+
+### Main Changes
+
+- and it corrects my own wording from two rounds ago: I wrote that unknown is the absence of a value and not a state, which was half right. The manifest omits the field, and the classifier names the resulting condition unknown, beside diverged in its sync state vocabulary
+- so the corrected chain is a designed path with a named terminal state rather than an inert omission, and its last link is untested
+- the callers were read as the method requires: install_source runs inside MaintenanceLock and hands the manifest to prepare_source, and three source-install cases exercise it, the first comparing the whole source tree byte for byte
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a21ba10` | chore(task): read the chain that prevents a false drift report, and find its last link untested |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The untested branch at extension-identity.ts:82, which is the third candidate unheld promise this audit has found, and the lists still unheld across the other specifications.
