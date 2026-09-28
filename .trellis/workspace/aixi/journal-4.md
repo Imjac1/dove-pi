@@ -1849,3 +1849,39 @@ Showed the cache line in /status by default and kept the goal line behind the fl
 ### Next Steps
 
 - The review has nothing left that is real work in this repository. Its P1 question - why the model does not invoke a capability advertised in two places - needs a host running a real turn.
+
+
+## Session 209: A holder for the status command
+<!-- trellis-session: v=2 fp=6008afbe3d8a2d36 -->
+
+**Date**: 2026-09-29
+**Task**: A holder for the status command
+**Branch**: `master`
+
+### Summary
+
+Closed the gap two rounds named. A search for commands.get(status) across the whole suite returned nothing, so the command four rounds pointed at had never been exercised. Four assertions plus a control now hold it inside the case that already builds the harness.
+
+### Main Changes
+
+- the seam already existed: the harness captures commands into a map and collects notifications into an array, and another case already drives a command through it. So the holder is assertions inside an existing case rather than a new harness, which is why the suite count is unchanged and the coverage is not
+- the two halves are asserted separately because they cost differently: the cache line shows without asking for full, the goal line does not, and the hint the old code printed is asserted gone because it became untrue
+- and the fuse wiring line still has no holder of its own: it sits in the request path rather than behind a command, and its notice needs a context whose getContextUsage reports a grown prefix. That is a different harness, named rather than assumed closed by this work
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad21f90` | test(adapter): hold the status line that four rounds pointed at and no test ever invoked |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped, unchanged in count with more coverage. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- A holder for the fuse wiring line, which needs a context reporting a grown prefix - a different harness from the one this round used.
