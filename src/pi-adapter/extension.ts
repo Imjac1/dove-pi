@@ -1145,7 +1145,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const full = args.trim().toLowerCase() === "full";
 			const sessionId = (ctx?.sessionManager as { getSessionId?: () => string } | undefined)?.getSessionId?.();
 			const goalEfficiency = full ? inspectGoalEfficiency(await ledger.read(), sessionId) : undefined;
-			const cacheText = full ? ` Cache: ${formatCacheDiagnostics(cache)}. Goals: ${formatGoalEfficiency(goalEfficiency!)}.` : " Use /status full for cache diagnostics.";
+			// **The cache line is always shown; the goal line waits for `full`.** The two halves cost differently: the
+			// cache text is formatted from diagnostics already inspected above, while the goal line needs
+			// `await ledger.read()`. So the cheap half is no longer behind a flag, and the hint it used to print
+			// ("Use /status full for cache diagnostics") is gone because it is no longer true.
+			const cacheText = ` Cache: ${formatCacheDiagnostics(cache)}.${
+				full ? ` Goals: ${formatGoalEfficiency(goalEfficiency!)}.` : ""
+			}`;
 			const strategy = currentStrategySnapshot(ctx);
 			const strategyText = full
 				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
