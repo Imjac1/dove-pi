@@ -1,0 +1,2 @@
+{"file": "dove_pi.py", "reason": "The router whose help handling was fixed."}
+{"file": "bin/dove-pi.cjs", "reason": "The stable launcher, which routes to the same program."}
