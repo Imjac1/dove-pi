@@ -361,6 +361,39 @@ class CliHelpCoverageTests(unittest.TestCase):
                 name + " names a command the CLI help does not: " + ", ".join(sorted(missing)),
             )
 
+    def test_every_local_command_is_either_public_or_declared_internal(self):
+        """The set of commands a user can run is the help list plus the exceptions, and nothing else.
+
+        Measured before this existed: cache, token and extensions were runnable and documented nowhere. Reading them split them -
+        extensions is invoked by the router itself, while cache and token are audits whose only caller is the CLI dispatch - so the
+        first is internal by construction and the other two are user-facing and were simply unfindable.
+
+        Both directions are asserted, because the two ways to get this wrong are opposite: an exception that gains a mention is a
+        command nobody declared, and a command that loses its mention is one nobody can find.
+        """
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            self.assertEqual(main(["--help"]), 0)
+        help_text = captured.getvalue()
+
+        public = {
+            command
+            for command in dove_pi.LOCAL_CLI_COMMANDS - dove_pi.INTERNAL_CLI_COMMANDS
+            if re.search(r"dove-pi[ \t]+" + re.escape(command) + r"\b", help_text) is None
+        }
+        self.assertEqual(public, set(), "a command a user can run is named nowhere: " + ", ".join(sorted(public)))
+
+        declared = {
+            command
+            for command in dove_pi.INTERNAL_CLI_COMMANDS
+            if re.search(r"dove-pi[ \t]+" + re.escape(command) + r"\b", help_text) is not None
+        }
+        self.assertEqual(
+            declared,
+            set(),
+            "an internal command is named in the help, so it is not internal: " + ", ".join(sorted(declared)),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

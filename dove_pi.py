@@ -67,6 +67,12 @@ LOCAL_CLI_COMMANDS = frozenset({
     "doctor", "project", "task", "session", "skills", "web", "cache",
     "token", "capability", "rpc", "mcp", "extensions", "workspace", "shell",
 })
+# **The commands a user is meant to run are the ones the help names, and this set is the exceptions.** Measured: `cache`, `token` and
+# `extensions` appeared in neither README nor the help, and reading them split them - `extensions` is invoked by this router itself to
+# reconcile the profile it just installed, so a user never runs it, while `cache` and `token` are audits whose only caller is the CLI
+# dispatch. A command that is in LOCAL_CLI_COMMANDS and not in this set must be named in the help, which a test asserts in both
+# directions: an exception that gains a mention is a command, and a command that loses its mention is undiscoverable.
+INTERNAL_CLI_COMMANDS = frozenset({"extensions"})
 LOCAL_CLI_PREFIX_FLAGS = frozenset({"--offline", "--skip-version-check"})
 PUBLIC_BOOTSTRAP = "irm https://github.com/Imjac1/dove-pi/releases/latest/download/install.ps1 | iex"
 
@@ -778,6 +784,8 @@ After installation:
   dove-pi capability list | dove-pi capability run <name>
   dove-pi rpc | dove-pi mcp
   dove-pi skills [query]
+  dove-pi token | dove-pi cache
+  dove-pi token audits token use; dove-pi cache audits prompt-cache behaviour
   dove-pi web status | dove-pi web auth <hosts...> [profile=name]
   dove-pi project doctor
   dove-pi project init
