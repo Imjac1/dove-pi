@@ -1776,3 +1776,40 @@ The fuse had six holders and no caller. It is wired at the site where guardConte
 ### Next Steps
 
 - The usage review P2 items: editor alignment across hosts, dispatch through the Trellis lifecycle, and surfacing the diagnostics the fuse now also reads.
+
+
+## Session 207: The editor alignment across hosts
+<!-- trellis-session: v=2 fp=b51590352d307fa6 -->
+
+**Date**: 2026-09-29
+**Task**: The editor alignment across hosts
+**Branch**: `master`
+
+### Summary
+
+Measured the review P2 three items before changing anything, and all three exist already. The adapter detects a host without replace, insert and undo and says so by name; formatCacheDiagnostics is called at extension.ts:1148 to build a status line on a full path; and Trellis is a first-class provider kind.
+
+### Main Changes
+
+- the review wording acknowledges the Pi side was fine and the editor item was about the other host, which is a host behaviour rather than a change this repository owns
+- the diagnostics being behind a full flag makes it a visibility question rather than a missing capability, which is a smaller and different piece of work
+- and the dispatch policy has zero call sites in the adapter - that is a host-side routing fact rather than a missing adapter feature
+- the pattern is worth more than the three verdicts: the review is a telemetry document. It measured session transcripts and concluded what to change in the product, and three of its recommendations are already built, two with the exact words it asks for. Reading a telemetry document as a repository work list produces findings like this, and the honest response is to say so rather than build a fourth mechanism
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc4bb5d` | chore(task): measure the review P2, and find all three items already exist |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- One real visibility change remains from the review - showing the diagnostics by default rather than behind a full flag. Its P1 question needs a host running a real turn.

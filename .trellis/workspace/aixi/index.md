@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 206
+- **Total Sessions**: 207
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1778 | Active |
+| `journal-4.md` | ~1815 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 207 | 2026-09-29 | The editor alignment across hosts | `dc4bb5d` | `master` |
 | 206 | 2026-09-29 | Wiring the fuse into the request path | `f33fcba` | `master` |
 | 205 | 2026-09-29 | The incentive to invoke a capability | `719a87e` | `master` |
 | 204 | 2026-09-29 | The session-size fuse | `57a1543` | `master` |
