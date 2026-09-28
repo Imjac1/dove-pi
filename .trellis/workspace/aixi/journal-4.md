@@ -1921,3 +1921,39 @@ The round tried to hold the fuse wiring through the adapter harness and ends wit
 ### Next Steps
 
 - The fuse case, written down to the entry shape and the tool: a case of its own with its own extension(api), staged warm then cold then identical, using tools.edit with an anchor after reading the file.
+
+
+## Session 211: The fuse case, written down and then written
+<!-- trellis-session: v=2 fp=20d8170fcf259949 -->
+
+**Date**: 2026-09-29
+**Task**: The fuse case, written down and then written
+**Branch**: `master`
+
+### Summary
+
+The fuse wiring has a holder of its own. It stages a billed cold start as two messages six minutes apart with the second reading no cache and asserts one notice naming idle, then stages a grown prefix and asserts the fuse stays quiet, with an identical third turn as the control for the one-shot flag.
+
+### Main Changes
+
+- and the second stage is the one worth explaining: the wiring reports cold_start only, because the guard already covers growth, and building a second mechanism beside one that works is the failure this session keeps recording. So the assertion is that no fuse notice appears, not that nothing does
+- three measurements replaced three guesses: the fuse was run directly on the staged entries to learn the logic was right and the stages were the wrong way round; the wiring condition was read; and the interface indentation was measured with Node after two edit attempts failed because the anchor was written from expectation
+- and two operational facts about the tools: tools.read returned 661 lines of a 1394-line file and truncates long lines inside those, and tools.edit matches against that truncated view, so an anchor past the truncation point cannot match however correct it is. That is what the previous round own refusal was
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ee5b1b6` | test(adapter): hold the fuse wiring, which reports a cold start and leaves a grown prefix to the guard |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 785 tests, 783 pass, 0 fail, 2 skipped - one more than before. The adapter suite is 34 cases, one longer.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The status line and the fuse both have holders now. What remains unheld in that handler is everything else it does, which is a seam question rather than a case question.
