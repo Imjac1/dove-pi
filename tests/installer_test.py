@@ -337,6 +337,12 @@ class CliHelpCoverageTests(unittest.TestCase):
     **One direction on purpose**: a README may show a way in without listing everything, so naming fewer commands than the router has is
     not a defect. Naming a command a reader cannot then find in the help is.
 
+    **The layer below this one is clean, measured after the flags**: every subcommand the usage strings name is one the dispatch handles.
+    The thickest is `task`, whose usage names ten - list, current, status, continue, verify, convergence, create, start, finish, archive -
+    and `src/commands/task.ts` handles exactly those ten, six as branches and four through the mutation path. `project` names four and
+    dispatches four, `shell` three and three, `web`, `workspace`, `capability` and `session` likewise. **The READMEs and the help name
+    subsets**, which is what a way in is allowed to be.
+
     **What this does not cover, measured in the round after it**: the flags. The help names eighteen and the READMEs twenty-three, and every
     one of them is accepted - by the program the document is about, which is not always this one. `--cwd`, `--prompt`, `--scenario` and
     `--launcher` belong to `scripts/real-dove-blackbox.mjs` and the READMEs name them under that script, so a check over this program
