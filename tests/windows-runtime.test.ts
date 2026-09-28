@@ -17,6 +17,23 @@ describe("PowerShell runtime", () => {
 });
 
 describe("Windows doctor", () => {
+	it("marks a pre-aborted run interrupted, and does not when nothing aborts it", async () => {
+		// **What this holds and what it does not.** It holds the cancellation half of the shell boundary: an already-aborted signal is
+		// checked before the child produces anything, so `interrupted` is set deterministically rather than by a race. **It is also
+		// the regression test for a defect**: this case found `kill EINVAL` escaping asynchronously, because killing a process that
+		// has not started throws on Windows, and the abort path called `kill` unguarded.
+		// It does not hold an abort arriving mid-run - that needs a live process and timing - and it does not hold the timeout,
+		// which shares the abort path.
+		const controller = new AbortController();
+		controller.abort();
+		const aborted = await runPowerShell("Write-Output 'personal-agent-ok'", { signal: controller.signal, timeoutMs: 10_000 });
+		assert.equal(aborted.interrupted, true, "a pre-aborted signal marks the run interrupted");
+		// The control, in place: the same call with no signal is not interrupted, so the assertion is about the signal and not about a
+		// field that is always true.
+		const clean = await runPowerShell("Write-Output 'personal-agent-ok'", { timeoutMs: 10_000 });
+		assert.equal(clean.interrupted, false, "the control: nothing aborted it");
+		assert.equal(clean.exitCode, 0, "and it ran to completion");
+	});
 	it("reports runtime and tool availability", async () => {
 		const report = await inspectWindowsEnvironment(process.cwd());
 		assert.equal(report.available, true);

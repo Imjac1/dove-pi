@@ -45,7 +45,15 @@ function runWithExecutable(executable: string, script: string, options: PowerShe
 		let timer: NodeJS.Timeout | undefined;
 		const abort = () => {
 			interrupted = true;
-			child.kill();
+			// **A killed child may already be gone, or may never have started.** A pre-aborted signal reaches here immediately
+			// after `spawn`, and killing a process that has not started raises `EINVAL` on Windows - asynchronously, so it
+			// escapes as an unhandled error rather than reaching the caller as a rejection. The interruption is already
+			// recorded above, which is what the caller reads, so a failure to signal is not worth throwing.
+			try {
+				child.kill();
+			} catch {
+				// The child never started or has already exited; `interrupted` already says what happened.
+			}
 		};
 		if (options.signal) {
 			if (options.signal.aborted) abort();
