@@ -561,3 +561,40 @@ Ran the last two state-writing chains in a temporary project: task convergence s
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 119: The capabilities, run rather than listed
+<!-- trellis-session: v=2 fp=6c2f9994daedf318 -->
+
+**Date**: 2026-09-28
+**Task**: The capabilities, run rather than listed
+**Branch**: `master`
+
+### Summary
+
+Ran capabilities in a temporary project for the first time. A valid run exits zero with the protocol envelope; a failing condition exits one with status failure and the underlying error preserved verbatim; and the refusals are named - a missing argument gives Capability arguments do not match the advertised parameter schema, an unknown name gives Unknown capability.
+
+### Main Changes
+
+- and the declaration became a measurement: three capabilities declare read_only, three were run, and the temporary project was compared before and after with nothing changed
+- the git_status failure is worth keeping: it exits one because the temporary directory is not a repository, and it reports git own message rather than a paraphrase of it, with a typed failure code beside it
+- what it does not prove is that a capability which writes behaves as declared: four declare workspace_write and one system_change, and none was run here, which is the same boundary every functional check in this session has met
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `06d640f` | chore(task): run the capabilities, and observe what the declarations claimed |
+| `d9f8628` | chore: archive the capability-run task |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
