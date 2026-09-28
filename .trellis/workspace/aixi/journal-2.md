@@ -1276,3 +1276,41 @@ Read both sides of the installer parameter surface: install.ps1 declares Profile
 ### Next Steps
 
 - The READMEs still do not name -Profile or -Verify for the piped install path, which is a product-document decision rather than a contract one. The first real turn still needs a Pi host.
+
+
+## Session 85: Do the READMEs claim to list the bootstrap switches
+<!-- trellis-session: v=2 fp=17fc5af347eb7494 -->
+
+**Date**: 2026-09-28
+**Task**: Do the READMEs claim to list the bootstrap switches
+**Branch**: `master`
+
+### Summary
+
+The open question was whether the READMEs are missing -Profile and -Verify. Read first, as the previous round learned to: both show .\install.ps1 -NoPath -NoFont -NoExtensions under a sentence about avoiding PATH and font changes, and say advanced switches in the plural. That is a purpose-bound example, not an enumeration, so the READMEs are not wrong and nothing in them changed.
+
+### Main Changes
+
+- what the example must be is true, and that is checkable in one direction: a switch an example names and the script does not declare is a command that fails when a reader copies it, while an example that omits switches is still an example
+- so the installer suite asserts one direction for the READMEs and the contract keeps the both-directions check, because the contract is the document that does claim to list the surface: two assertions, two documents, each held to what it actually says
+- the round produced a decision rather than a change, and recorded the quote it rests on, because a decision with its evidence is worth as much as an edit and does not risk making a true document false
+- this is the third time this session that reading a pattern as a claim produced a false finding, and the first time the pattern was checked before anything was changed
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2d8b81c` | test(installer): the README examples may omit switches, and must not invent one |
+| `88f3911` | chore(task): record the README decision and the one-directional check it produced |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 116 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task. The READMEs could name where the full switch list lives, which is a product-document decision rather than a correctness one.
