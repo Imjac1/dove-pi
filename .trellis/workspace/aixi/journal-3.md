@@ -450,3 +450,40 @@ Measured through the barrel the previous round could not see through: project-pr
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 116: The other barrels
+<!-- trellis-session: v=2 fp=817ab0b522bb599f -->
+
+**Date**: 2026-09-28
+**Task**: The other barrels
+**Branch**: `master`
+
+### Summary
+
+Measured the two barrels in src: project-provider/index.ts with nine export-star and five importers, and trellis-adapter/index.ts with three importers in src and one in tests. Both are load-bearing, neither is an export wall without a consumer, and nothing was removed.
+
+### Main Changes
+
+- and two counts of mine were wrong in opposite directions. The previous round reported fourteen importers where the real number of import statements is five, because it counted mentions - one hit was a test using the path inside a type assertion. This round own scanner reported one importer where there are three, because it built its pattern from the repository-relative path while imports are written relatively
+- the honest conclusion is about my method rather than the code: this repository already has a check that resolves imports properly, the reachability test that walks relative edges forward from the entry points, and it is green. Two rounds ago I removed a text-search check as a weaker duplicate of it; since then I hand-built three more scanners of the same kind, and both errors this round are errors a resolved graph would not make
+- so the rule this session should carry forward: when the question is what imports what, use the tool that resolves imports, and write one only when there is not one already
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2fe303` | chore(task): measure the other barrels, and record two wrong counts of my own |
+| `d73970e` | chore(task): archive 09-28-other-barrels |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
