@@ -1871,3 +1871,40 @@ Read the five-link chain that prevents a false drift report: an absent generator
 ### Next Steps
 
 - The untested branch at extension-identity.ts:82, which is the third candidate unheld promise this audit has found, and the lists still unheld across the other specifications.
+
+
+## Session 155: A holder for the branch that prevents a false drift report
+<!-- trellis-session: v=2 fp=ae2ea8572ed69150 -->
+
+**Date**: 2026-09-29
+**Task**: A holder for the branch that prevents a false drift report
+**Branch**: `master`
+
+### Summary
+
+Held the branch that prevents a false drift report: compareDoveExtensionIdentity answers project_newer for an absent managed identity and unknown for an absent pair, and the suite that owns classification never passed undefined. A case now does, with the control inside it - the same function given something to compare does report diverged.
+
+### Main Changes
+
+- a planted control was run as well, flipping the expectation and watching the case fail with CONTROL: this must fail, then reverting it
+- the case says what it does not hold: not that the absent identity is produced, which is source_release_manifest and the serialiser, and not anything about a real adapter beside a real project
+- this is the third candidate the audit found and the first closed by adding a holder rather than finding one, and it is the last link of a chain whose other four links were already held
+- and the round made one mistake before it started: it read a 09-28 path for a task created under 09-29, because the date had rolled over. The tool created the right directory and printed its name; only the path written from memory was wrong - the same class of error as the eight word-searches
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d140a4` | test(identity): hold the branch that prevents a false drift report |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 748 tests, 746 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The lists still unheld across the other specifications, now that the three candidate promises the audit found are all held.
