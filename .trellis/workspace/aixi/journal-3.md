@@ -342,3 +342,40 @@ Classified the 74 absent tracked files into three groups, all accounted for: 52 
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 113: The catalog the code-audit scanner reads
+<!-- trellis-session: v=2 fp=e0400b6bb7e696da -->
+
+**Date**: 2026-09-28
+**Task**: The catalog the code-audit scanner reads
+**Branch**: `master`
+
+### Summary
+
+Measured whether the shipped catalog is parsed, valid and held: modes/code-audit/catalog/typescript.json is parsed by tests/code-audit-seed.test.ts from the same path the capability reads through DEFAULT_CATALOG, and the test asserts its schema version, language and category count.
+
+### Main Changes
+
+- my premise was wrong: I wrote that nothing watches the catalog. That is the reading a fixture-based test would not give, and it is the one that matters - the shipped file is the one under test
+- and the count of eleven categories is the good kind of count, the thing the house rule calls a claim with no reader turned into a held fact: adding or removing a category fails the suite. Worth noting beside the rule, because the rule is about counts nobody checks
+- nothing was fixed and no check was added: the catalog is parsed, validated and held, and a second check would be the weaker duplicate a previous round taught this session to stop writing
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4857b2c` | chore(task): the shipped audit catalog is parsed by a test, and my premise was wrong |
+| `8f5137b` | chore(task): archive 09-28-audit-catalog |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
