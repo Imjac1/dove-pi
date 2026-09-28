@@ -688,3 +688,40 @@ Re-measured the standing correction and found it accurate: 421 archived pointers
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and nothing else that this environment can reach.
+
+
+## Session 177: The evidence chain, verified
+<!-- trellis-session: v=2 fp=01f6f1e95fd432b6 -->
+
+**Date**: 2026-09-29
+**Task**: The evidence chain, verified
+**Branch**: `master`
+
+### Summary
+
+Verified the evidence chain: 176 index rows one per session, 346 distinct commits named and every one resolves, and 182 archived tasks on disk against the 181 counted before this round archived one more. The index, the journal and the archive agree with each other and with git.
+
+### Main Changes
+
+- reachable work is done: every behaviour table and required-test section read, every command and subcommand run, both headless interfaces driven, the approval boundary and the read-only switch measured, every script in package.json accounted for, one defect found and fixed, and four unheld promises closed with cases
+- and one round gave the session its own failure: the gate reported 754 pass and 1 fail, the re-run reported 755 pass and 0 fail, and which test flaked is unknown because the saved output was overwritten before it was read. The commit went out while the gate was red, which the session own procedure says not to do
+- the flake is recorded as unexplained rather than attributed to a guess - the plausible source is the two timing-dependent cases this session added, but plausible is not measured
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `180553c` | chore(task): verify the evidence chain, and say what is left |
+| `5a1dc81` | chore(task): record a transient gate failure and an unexplained flake |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped, confirmed twice after the transient failure. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and nothing else this environment can reach.
