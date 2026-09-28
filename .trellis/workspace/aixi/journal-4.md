@@ -1266,3 +1266,39 @@ Did the child fourth plan item. summarizeExecutionRecords is built on parseLedge
 ### Next Steps
 
 - The child fifth plan item: add legacy, malformed, incomplete and secret-bearing fixtures.
+
+
+## Session 193: The fixtures that try to break the reader
+<!-- trellis-session: v=2 fp=a502bf09d1cd5e10 -->
+
+**Date**: 2026-09-29
+**Task**: The fixtures that try to break the reader
+**Branch**: `master`
+
+### Summary
+
+Did the child fifth plan item, and the fixtures found a real defect. parseLedgerLines dropped a line that did not parse but kept a parsed value whose typeof is object, which a JSON array satisfies - so an array reached the summary with no kind and threw on startsWith, taking the whole summary down on exactly the malformed input this reader exists to survive.
+
+### Main Changes
+
+- the fix requires isRecord plus a string kind, which is what the contract already says rather than a new rule, since ExecutionRecord requires kind
+- four fixtures: a legacy ledger with no correlation anywhere, a malformed one mixing a cut JSON line with valid JSON that is not an object, an incomplete one whose last line a crash cut short, and a secret-bearing one whose summary is asserted to carry none of three planted secrets
+- and three assertions were wrong about the fixtures themselves - five records where the file holds four, five tool calls where three parse, two unattributable calls where one has no correlation. Each was written from expectation rather than from the file, and each was corrected by counting the file
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d007ce6` | fix(core): refuse a parsed line that is not a record, and add the fixtures that found it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 777 tests, 775 pass, 0 fail, 2 skipped - seven more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child sixth plan item, and the fixtures are in place for it: build the isolated archived-scenario E2E replay.
