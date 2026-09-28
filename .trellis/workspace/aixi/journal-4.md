@@ -1632,3 +1632,39 @@ Read the next P2 and found it carried a template PRD - Goal TBD, Requirements TB
 ### Next Steps
 
 - 08-28-dove-pi-usage-review, which has a real plan to read rather than a template to fill.
+
+
+## Session 203: Reading the usage review plan
+<!-- trellis-session: v=2 fp=f9c791fcbc7ba7fd -->
+
+**Date**: 2026-09-29
+**Task**: Reading the usage review plan
+**Branch**: `master`
+
+### Summary
+
+Read the last open task, whose 7524-character plan is built from real session telemetry: 192M prompt tokens across two workspaces, cache hit rates of 97 to 99.9 percent, one 169-turn session ending in a full cold start at 179915 input tokens, and bash used 580 and 229 times. Its P0 is a session-size fuse.
+
+### Main Changes
+
+- its sharpest claim was measured and half of it is wrong: it says the execution ledger has only project mutation with grep -c capability at zero, but the ledger carries 28 kind literals including seven capability ones, and fast-path.ts has five append sites with capability.blocked, capability.started and capability.completed
+- what the plan measured was the session tool-call count - agent_run_capability and agent_run_recipe at zero - a fact about the model never invoking one, not about the ledger failing to record it. The reuse-rate metric it asks for already exists; what is missing is something that consumes it plus an incentive to invoke
+- and that merge is this session own recurring class, now six instances long: the count readers, the truncated task name, the nine word-searches, the harness flags, the spec budget read with statSync, and this. Measuring one thing and concluding another is the shape they share
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3957aee` | chore(task): measure the usage review sharpest claim, and separate its two halves |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The usage review P0: a session-size fuse that compacts or suggests /compact when the prompt prefix nears the context window. That is a runtime behaviour change rather than a reading.
