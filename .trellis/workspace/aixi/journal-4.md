@@ -1339,3 +1339,39 @@ Reconnoitred the child sixth plan item, the largest of the eight, and establishe
 ### Next Steps
 
 - One grep in the driver for where the ledger is written, then the replay itself: tests/archived-scenario-replay.test.ts modelled on the existing --scenario cases.
+
+
+## Session 195: The replay, with the ledger path known
+<!-- trellis-session: v=2 fp=57390019ea77745f -->
+
+**Date**: 2026-09-29
+**Task**: The replay, with the ledger path known
+**Branch**: `master`
+
+### Summary
+
+Built the isolated archived-scenario replay. The ledger is at stateDir/execution.jsonl with stateDir under the scenario root, and the run summary carries scenarioRoot, so the test builds the path exactly rather than guessing it. The replay drives four ordered steps through the public launcher with the faux provider and asserts no tool call ran twice and no redelivery needed coalescing.
+
+### Main Changes
+
+- and it says what the ledger cannot show rather than implying it can: duplicate extension registration was one of the four defects the audit proved, but a registration is not a ledger kind
+- the finding that changes how the harness is called: the driver exits zero even when the scenario fails, reporting the outcome inside its summary as exitCode, scenarioFailed and stderr. A caller checking only the process code would call a failed run a pass, so the replay asserts summary.exitCode first
+- and it took four wrong attempts to get three flags right, all because a read of the existing suite returned the spawn line truncated at terminal width and the truncation hid them. The existing call had it all along - the same class as the count readers and the word-searches: a value taken from a view of the file rather than from the file
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `de92d2f` | test(harness): replay the archived scenario in isolation, and find the driver exits zero on failure |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped - one more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child seventh plan item: validate repeated maintenance explanations and incomplete-session reporting.
