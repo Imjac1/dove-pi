@@ -1449,3 +1449,41 @@ Ran the child five validation commands together and all five pass: typecheck, th
 ### Next Steps
 
 - The parent umbrella last step: run the parent integration review and archive the tree. The eight child items are done.
+
+
+## Session 198: The parent integration review, and the umbrella closed
+<!-- trellis-session: v=2 fp=ec9df39c4225c357 -->
+
+**Date**: 2026-09-29
+**Task**: The parent integration review, and the umbrella closed
+**Branch**: `master`
+
+### Summary
+
+Ran the umbrella last step and closed a P0 that named four coupled defects. The four cross-child gates held against what exists: ownership by the layer check and by this span touching no core module, no Pi extension and no user state; logs redacted and bounded by six installer cases and four ledger cases; README needing no change because nothing was user-visible.
+
+### Main Changes
+
+- and the runtime spec gate is answered by the constraint rather than by an edit: the contracts are verified and the specification cannot take them, sitting 37 normalized bytes under its 24 KiB limit with its second-level heading list pinned by the budget suite, so a new section would fail twice
+- a measurement mistake is recorded because it is the session own class: I measured the spec with statSync and read 24933 bytes as over budget, while the test normalizes CRLF first and reads 24539. The difference is 394 CRLF endings, counted twice by statSync - measuring with my own instrument rather than the test own, which is the same class as the count readers, the truncated task name and the four wrong harness flags
+- under the umbrella and over eight rounds: the evidence and redaction contracts, the log growing to schema 2 with run identity and timing, correlateExecutionRecords, summarizeExecutionRecords built on the one reader, four fixtures that found a real defect in that reader, the isolated replay and the finding that the driver exits zero on failure, summarize_maintenance_logs, and the full five-command validation
+- two of the child acceptance criteria remain unmet and named: the summary does not report cross-turn stagnation or cache-prefix changes, because the record vocabulary has no kind for either
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `69c41b3` | chore: archive the parent umbrella and the review task |
+| `495b199` | chore: archive the parent-review task |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 778 tests, 776 pass, 0 fail, 2 skipped. npm run test:installer: 140 tests, OK. npm run doctor: healthy. npm run pi:smoke: exit 0.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The other open tasks: interop layer, real-user web access, usage review, and the P0 adaptive formal workflow, which is the next P0.
