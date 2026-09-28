@@ -81,14 +81,15 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// It answers a question a person asks (what do we have), not one the harness asks while serving a request - and a
 	// summary the harness acted on would be a control.
 	"src/core/harness-corpus.ts": { reason: "a reading, consumed by scripts/harness-corpus.mts and its test; deliberately not reached by the harness", wiredBy: null },
-	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
-	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
+	// **These two said "no milestone in this task claims it" while that task was open, and it is archived.** The
+	// wording is corrected rather than the entries, because they are still true: nothing has reached these since.
+	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone claimed it while that task was open, and none has since", wiredBy: null }, 
+	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone claimed it while that task was open, and none has since", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
 	"src/adapters/loop-scripted.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
 	// **`src/pi-adapter/session-keepalive.ts` left this list when the adapter began arming it on session start and
 	// observing it on every provider request** - the seventh shrink, and the one the check stated the rule for:
 	// *removing the entry is the definition of done for that module*.
-	// (The entry below stays for the reason it always had.)
 
 };
 
