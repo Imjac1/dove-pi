@@ -225,3 +225,39 @@ Measured the review P0.3 keepalive before building it, and found the review inte
 ### Next Steps
 
 - This one is now down to its timer. The review list has nothing else that is real work in this repository.
+
+
+## Session 219: The timer, with its clock injected
+<!-- trellis-session: v=2 fp=4967566ad98b7066 -->
+
+**Date**: 2026-09-29
+**Task**: The timer, with its clock injected
+**Branch**: `master`
+
+### Summary
+
+Built the keepalive timer after measuring two things: the adapter has no scheduling facility at all, and the host event vocabulary is sixteen callbacks of which none means time passed. So a timer is the only way to observe idleness, and it takes its clock as an argument so the scheduling rules are testable.
+
+### Main Changes
+
+- the class enforces three rules the policy cannot know alone: observe re-arms, because a session that is talking needs no heartbeat; disarm is the caller obligation on shutdown, because a timer outliving its session would send the next one a request nobody asked for; and a due callback disarms itself first, so a slow callback cannot stack a second heartbeat
+- and the fake clock had to model a timer rather than a switch. The first run failed with a session that just talked is not idle, because the fake fired whatever was pending regardless of when it was due, so a test could fire early and read the result as a defect. A fake that does not model the thing it stands in for produces findings about the fake
+- and importing a module from a test does not make it reachable: the walk starts from entry points, and a test file is not one. The allow-list entry from the previous round stands, which the reachability suite confirmed in both directions
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d424765` | feat(adapter): build the keepalive timer with its clock injected, so the decision is testable |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 797 tests, 795 pass, 0 fail, 2 skipped - four more than before. The keepalive suite is 9 cases, the reachability suite 6.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Nothing constructs the timer yet, and the allow-list entry names what would reach it: the adapter round that schedules a heartbeat. That is host integration, and its provider call needs the network.
