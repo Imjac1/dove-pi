@@ -1230,3 +1230,39 @@ Did the child third plan item. contracts.ts already states the rule it needs at 
 ### Next Steps
 
 - The child fourth plan item: implement read-only audit summary text and JSON output, which consumes these groups.
+
+
+## Session 192: The audit summary command
+<!-- trellis-session: v=2 fp=ec8caa8b836fd446 -->
+
+**Date**: 2026-09-29
+**Task**: The audit summary command
+**Branch**: `master`
+
+### Summary
+
+Did the child fourth plan item. summarizeExecutionRecords is built on parseLedgerLines, which the file itself records as the one reader of the ledger line format because five of them disagreed, so it adds no second reading of the file. It counts the lifecycle, terminal reasons, coalesced redeliveries, duplicate tool calls and unlinkable groups.
+
+### Main Changes
+
+- the first implementation of tools.observed counted distinct identifiers plus the ones with none, which is a different quantity from how many calls ran. The test failed with 3 !== 4 and the implementation was fixed - that is what the case was for
+- and the new suite exposed a real race: code-audit-mode.test.ts reads a directory listing and then opens each file, while core-layer.test.ts plants a control module in that same directory and removes it in the same test. Both run in one process, so a name read a moment ago can be gone a moment later - very likely the unexplained transient from round 148
+- the walk now skips a vanished file and asserts it read more than twenty, so an everything-vanished run cannot pass by skipping
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8735ec3` | feat(core): summarize a ledger read-only, and fix a race the new tests exposed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 770 tests, 768 pass, 0 fail, 2 skipped - six more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child fifth plan item: add legacy, malformed, incomplete and secret-bearing fixtures.
