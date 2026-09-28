@@ -118,3 +118,42 @@ Counted across 113 archived tasks: 209 criteria ticked and 497 unticked, with 88
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 107: The paths the task contexts curate
+<!-- trellis-session: v=2 fp=75f8e638eefc2ab0 -->
+
+**Date**: 2026-09-28
+**Task**: The paths the task contexts curate
+**Branch**: `master`
+
+### Summary
+
+Measured 236 context files and 584 curated entries: 66 paths did not resolve. Fifty-eight were the same shape - an entry pointing inside the task own directory, which archiving moves to archive/<month>/<name>/ - so archiving a task breaks every entry that pointed at it, and nothing noticed because the entries read fine.
+
+### Main Changes
+
+- five more pointed at files that moved with another task archive and are repointed to where those files now are; the result is 3 broken pointers where there were 66
+- three point at files that are gone: a research document from a task that did not archive it, and tests/module-graph.test.ts, which I removed two rounds after curating it. Those stay, because a curated entry is also a record of what was curated
+- the tool is what broke them: task.py archive moves the directory and rewrites nothing
+- no check was added, because one that every curated path resolves would go red after every archive, and a check nobody can keep is worse than a measurement that says why
+- the round also followed the practice set last round: this task own PRD boxes are ticked, because its criteria are met and verified here
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da3dbdb` | fix(tasks): repoint the curated context entries that archiving broke |
+| `340493d` | chore(task): record the 66 broken pointers, the 58 that were one shape, and the 3 that stay |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
