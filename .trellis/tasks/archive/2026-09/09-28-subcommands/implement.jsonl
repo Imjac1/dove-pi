@@ -1,0 +1,2 @@
+{"file": "src/cli.ts", "reason": "Where the subcommands are dispatched and where the usage strings name them."}
+{"file": "README.md", "reason": "What a reader is told to run."}
