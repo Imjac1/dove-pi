@@ -39,7 +39,7 @@ import { projectExtensionCapabilities } from "../extensions/capabilities.ts";
 import { createDoveRuntime } from "../runtime.ts";
 import { migrateLegacyDoveState, resolveDoveStateDir } from "../core/state-dir.ts";
 import { DOVE_EXTENSION_ID, doveImplementationDigest, type DoveExtensionIdentity } from "../core/extension-identity.ts";
-import { restoreLatestContextSnapshot } from "./context-snapshot.ts";
+import { CONTEXT_SNAPSHOT_SCHEMA_VERSION, restoreLatestContextSnapshot } from "./context-snapshot.ts";
 import {
 	decidableChanges,
 	movementKey,
@@ -3237,7 +3237,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					content: messageForTurn,
 					display: false,
 					details: {
-						schemaVersion: 2,
+						schemaVersion: CONTEXT_SNAPSHOT_SCHEMA_VERSION,
 						cachePolicyVersion: 2,
 						logicalRequestId: requestPlan.requestId,
 						epoch: snapshotForTurn ? requestContextEpoch : `${epoch ?? "chat"}:request:${requestPlan.requestId}`,

@@ -487,5 +487,37 @@ class EnvironmentVariableTests(unittest.TestCase):
         self.assertEqual(unread, [], "the help names a variable nothing in the code mentions: " + ", ".join(unread))
 
 
+class CrossLanguageSchemaVersionTests(unittest.TestCase):
+    """A state file written by one language and read by another has no constant to share.
+
+    `installer/state.py` stamps `STATE_SCHEMA_VERSION` into the managed install state and refuses anything else on read. The TypeScript
+    side reads that same file and compares against a literal, because it cannot import a Python constant. **Two literals with nothing
+    keeping them in step is the shape a previous round found in the release digest**, and the failure is quiet: a bump on one side leaves
+    the other refusing a file the tool just wrote.
+
+    So the pair is declared here. Adding another is a line, and the check is the only thing that can hold a value across the language
+    boundary.
+    """
+
+    PAIRS = (
+        # (python file, python constant, typescript file, the literal it compares against)
+        ("installer/state.py", "STATE_SCHEMA_VERSION", "src/managed-install-status.ts"),
+    )
+
+    def test_a_version_written_in_python_and_read_in_typescript_agrees(self):
+        for python_file, constant, typescript_file in self.PAIRS:
+            source = (ROOT / python_file).read_text(encoding="utf-8")
+            declared = re.search(re.escape(constant) + r"\s*=\s*([0-9]+)", source)
+            self.assertIsNotNone(declared, python_file + " no longer declares " + constant + " as a number")
+            value = declared.group(1)
+
+            reader = (ROOT / typescript_file).read_text(encoding="utf-8")
+            self.assertIn(
+                "schemaVersion) !== " + value,
+                reader,
+                typescript_file + " reads the state file against a different version than " + python_file + " writes",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

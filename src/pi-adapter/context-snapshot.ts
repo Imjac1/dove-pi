@@ -3,6 +3,14 @@ import type { ContextSegment } from "../core/context-compiler.ts";
 const CONTEXT_KINDS = new Set<ContextSegment["kind"]>(["task", "spec", "memory", "journal", "workflow", "evidence", "runtime", "instruction", "skill", "resource"]);
 const CONTEXT_REASONS = new Set<ContextSegment["reason"]>(["included", "duplicate", "irrelevant", "budget", "empty"]);
 
+/**
+ * **The snapshot schema version, in one place because both sides of it are here.** The writer stamps it into the details of the
+ * `personal-agent-context` message and the decoder refuses anything else, and until this constant existed those were two literals in two
+ * files - the shape a previous round found in the release digest, where a value duplicated with nothing keeping it in step means a bump
+ * that silently stops matching.
+ */
+export const CONTEXT_SNAPSHOT_SCHEMA_VERSION = 2;
+
 export interface RestoredContextSnapshot {
 	readonly content: string;
 	readonly epoch: string;
@@ -53,7 +61,7 @@ function contentText(value: unknown): string {
 function decodeSnapshot(entry: unknown): RestoredContextSnapshot | undefined {
 	const parts = messageParts(entry);
 	if (!parts || parts.customType !== "personal-agent-context" || !isRecord(parts.details)) return undefined;
-	if (parts.details.schemaVersion !== 2 || !boundedString(parts.details.epoch, 512) || !boundedString(parts.details.revision, 512)) return undefined;
+	if (parts.details.schemaVersion !== CONTEXT_SNAPSHOT_SCHEMA_VERSION || !boundedString(parts.details.epoch, 512) || !boundedString(parts.details.revision, 512)) return undefined;
 	if (!Array.isArray(parts.details.segments) || parts.details.segments.length === 0 || !parts.details.segments.every(validSegment)) return undefined;
 	const content = contentText(parts.content);
 	if (!content.trim()) return undefined;
