@@ -305,3 +305,40 @@ Measured the platform hook configs: .codex/hooks.json names two scripts and both
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 112: The tracked files that are not there
+<!-- trellis-session: v=2 fp=fa6e01fc5449e317 -->
+
+**Date**: 2026-09-28
+**Task**: The tracked files that are not there
+**Branch**: `master`
+
+### Summary
+
+Classified the 74 absent tracked files into three groups, all accounted for: 52 files of the .claude platform which is not installed here, 20 __pycache__ .pyc for Python 3.12 while the hash list records 3.11, and 2 gitignored runtime session files. And nothing this repository acts on points at one.
+
+### Main Changes
+
+- the 86 full-path references are almost all in the tool own documentation under .agents/skills/trellis-meta, which describes the .claude platform as part of describing the tool, plus the hash file referencing its own entries. A document that describes a platform is not a config that runs one
+- the detail worth recording: the tool tracks .pyc bytecode at a Python version the current interpreter does not produce, so twenty modules appear as absent at cpython-312 while the same twenty appear as different at cpython-311 in the same comparison - two of its three categories occupied by the same bytecode, saying nothing about this repository
+- and my own search was too loose first: matching by basename reported seven references that were collisions, because inject-workflow-state.py exists under .codex/hooks and is missing under .claude/hooks. Matching the full path turned seven findings into none
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66a6f89` | chore(task): classify the 74 absent tracked files, and record the bytecode noise floor |
+| `563437c` | chore(task): archive 09-28-absent-tracked |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

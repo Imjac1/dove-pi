@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 111
+- **Total Sessions**: 112
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~307 | Active |
+| `journal-3.md` | ~344 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 112 | 2026-09-28 | The tracked files that are not there | `66a6f89`, `563437c` | `master` |
 | 111 | 2026-09-28 | The scripts the hook configurations name | `a6be7d1`, `cb11a74` | `master` |
 | 110 | 2026-09-28 | What I have edited against what the tool tracks | `533bfd0` | `master` |
 | 109 | 2026-09-28 | Whether the tool that breaks the pointers is mine to fix | `392cede`, `62b084a` | `master` |
