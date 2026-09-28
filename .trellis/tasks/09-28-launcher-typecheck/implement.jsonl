@@ -1,0 +1,2 @@
+{"file": "bin/dove-pi.cjs", "reason": "The file being checked."}
+{"file": "tsconfig.json", "reason": "The include that leaves it out."}
