@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 162
+- **Total Sessions**: 163
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~187 | Active |
+| `journal-4.md` | ~223 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 163 | 2026-09-29 | A guard for the kill that throws EINVAL | `e873a60` | `master` |
 | 162 | 2026-09-29 | A commit path that missed the file it changed | `aab09bc` | `master` |
 | 161 | 2026-09-29 | The cancellation half of the shell boundary | `fe8cbaf` | `master` |
 | 160 | 2026-09-29 | The shell boundary and the mode change | `b6d19a5` | `master` |

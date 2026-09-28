@@ -185,3 +185,39 @@ A follow-up to the cancellation round, because its journal entry said the tree w
 ### Next Steps
 
 - The guard for child.kill in the abort path, which is still the round after this one.
+
+
+## Session 163: A guard for the kill that throws EINVAL
+<!-- trellis-session: v=2 fp=b5f1580907222bbe -->
+
+**Date**: 2026-09-29
+**Task**: A guard for the kill that throws EINVAL
+**Branch**: `master`
+
+### Summary
+
+Guarded child.kill with a try/catch and a comment saying why: a pre-aborted AbortSignal reaches abort immediately after spawn, and killing a process that has not started raises EINVAL on Windows, escaping asynchronously. interrupted is already recorded, so a failure to signal is not worth throwing.
+
+### Main Changes
+
+- the reproduction became the regression test: the case that found the defect passes now, its control passes with it, and flipping the expectation fails with CONTROL: this must fail
+- and the timeout calls the same abort, so the guard covers that path - the existing case passing timeoutMs still passes, though the timeout firing is not separately tested and is named rather than implied
+- the changed files were named in the git add rather than the task directory alone, which is what the previous round got wrong and had to fix in a follow-up commit
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e873a60` | fix(shell): guard the kill that throws EINVAL when a signal is already aborted |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 749 tests, 747 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The timeout firing itself, which shares the abort path and is not separately tested.
