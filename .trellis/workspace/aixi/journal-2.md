@@ -1200,3 +1200,41 @@ The shipped modes are validated, and each of the three suites spelled modes/<nam
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 83: The release gate, run on artifacts built from this tree
+<!-- trellis-session: v=2 fp=60a6cf9c6a1ba59e -->
+
+**Date**: 2026-09-28
+**Task**: The release gate, run on artifacts built from this tree
+**Branch**: `master`
+
+### Summary
+
+The one release link never exercised here was the readiness gate, because it needs five artifacts. Built what the workflow builds - a stage of the shipped roots plus release.json, zipped, with its checksum and the bootstrap - and ran it: it passed, Release ready: v0.2.0 (0.2.0+621790d), assets=4.
+
+### Main Changes
+
+- it refused three times on the way and every refusal was correct and mine: an untracked task directory, a tag that does not match the package version, and a manifest built before a later commit. Walking to the pass is what turned those refusals into evidence that the gate works
+- and the walk exposed a gap in the suite: the spec names five kinds of refusal under one word, and three and a half were covered - the dirty case tested unstaged tracked changes while the untracked-files refusal was untested, and neither mismatch had a case
+- three cases added, mirroring the fixtures already there. The installer suite went from 111 to 114 tests, OK
+- the round followed the rule it wrote for itself last round: the task existed before the first edit, and this time the artifacts record the plan rather than reconstructing it
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `74c7073` | test(release): cover the two refusals the readiness gate gave when it was finally run |
+| `294f7c7` | chore(task): record the gate run, its three refusals and the three cases they exposed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 114 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task. The release chain is now exercised end to end except a real install, which writes outside the repository.
