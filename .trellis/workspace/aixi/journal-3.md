@@ -964,3 +964,39 @@ Read every consumer of the authorize contract the last round widened. The answer
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 130: What the read-only switch actually blocks
+<!-- trellis-session: v=2 fp=57e656ea9a991b8c -->
+
+**Date**: 2026-09-28
+**Task**: What the read-only switch actually blocks
+**Branch**: `master`
+
+### Summary
+
+Measured the switch. It is read in ten places and all of them are in the adapter: throws, project task change, convergence metadata, workspace restore and patch, the capability authorizer, and the agent_doctor report. The rpc entry point does not consult it, so with DOVE_PI_READ_ONLY=1 a writing capability over rpc is denied because no approver is configured rather than because the session is read-only.
+
+### Main Changes
+
+- the outcome is the same and the reason is different, which is exactly what the previous round message made visible
+- and the tool doctor reports runtime.readOnly while the standalone doctor carries no such field, which a walk for any readOnly key in its output confirms
+- neither is fixed here because neither claim is false: the switch blocks what it says on the paths it guards. What the measurement adds is scope - it is an adapter control rather than a runtime property, and only one of the two doctors says so
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `818815d` | chore(task): measure what the read-only switch blocks, and what it does not |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 743 tests, 741 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Whether the switch should be a runtime property rather than an adapter control, and whether the standalone doctor should report it, are design decisions the measurement now supports. The first real turn still needs a Pi host.
