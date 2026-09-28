@@ -1579,3 +1579,41 @@ Every flag the documents name is accepted by the program the document is about: 
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 93: The tests the runner actually runs
+<!-- trellis-session: v=2 fp=1b161baec5979609 -->
+
+**Date**: 2026-09-28
+**Task**: The tests the runner actually runs
+**Branch**: `master`
+
+### Summary
+
+Measured: 75 test files, all at depth one, none nested - so the suite pattern matches every one of them without depending on how a double star is interpreted. The behavioural question could not be answered here: three attempts, TAP, the spec reporter and an explicit-file run, and none of them reports which files were loaded. The precise question answered it instead.
+
+### Main Changes
+
+- the assumption was written nowhere, so it is asserted: a nested test file would make the runner pattern meaning-bearing, and the check says so where the next person will find it
+- and the check failed its own negative control first: recursive readdir returns backslashes on Windows, so a filter looking for a forward slash matched nothing and the check passed over a planted nested file
+- this is the first check this session whose control found it - the previous three passed on the first try, which is exactly why the fourth was worth running
+- and the test file itself taught one more thing: its doc comment contained the glob pattern, whose star-slash closed the comment early and produced a syntax error, which is why the pattern is described in words there
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dd066d3` | test(tests): the runner pattern is unambiguous because every test file is at depth one |
+| `09af467` | chore(task): record the runner pattern measurement and the control that found the dead filter |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 739 tests, 737 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5. The new check fails with a nested test file planted and passes without it.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

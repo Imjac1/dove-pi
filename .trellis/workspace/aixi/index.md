@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 92
+- **Total Sessions**: 93
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1581 | Active |
+| `journal-2.md` | ~1619 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 93 | 2026-09-28 | The tests the runner actually runs | `dd066d3`, `09af467` | `master` |
 | 92 | 2026-09-28 | The switches the documents name | `29258af`, `ad5a762` | `master` |
 | 91 | 2026-09-28 | Three first-class commands with no document anywhere | `035c765`, `cdc1a51` | `master` |
 | 90 | 2026-09-28 | The commands the READMEs tell a reader to run | `008f110`, `e886fdb` | `master` |
