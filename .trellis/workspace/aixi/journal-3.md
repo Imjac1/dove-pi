@@ -1217,3 +1217,39 @@ Wrote the promise-to-holder mapping into the specification as a second table und
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 137: Whether the standing corrections still hold
+<!-- trellis-session: v=2 fp=cb24e8e2a9056e75 -->
+
+**Date**: 2026-09-28
+**Task**: Whether the standing corrections still hold
+**Branch**: `master`
+
+### Summary
+
+Held both corrections in the AGENTS.md repository-owned section against the repository. Both hold: workflow.md contains the full .trellis path that does not exist here and no .codex path, so the correction is accurate and still needed; and task.py is in the template hash list with 181 entries, with 396 archived curated entries of which 394 resolve.
+
+### Main Changes
+
+- the first check nearly went wrong the way this session keeps going wrong: two grep hits showed the document naming the script by bare file name, and reading those as the whole answer would have concluded the note inaccurate. Asking the exact question - does the file contain the full path - answered True
+- one paragraph was added, at the smallest size: the note numbers were framed as a measurement at a time so they were not stale, but 58 of 66 reads as current to someone skimming, so it now carries 394 of 396 and says which two are broken and why the warning is not historical
+- so the round changed one paragraph and confirmed two standing claims, which is a result and not a non-result
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `585c346` | docs(agents): hold the standing corrections against the repository, and date their numbers |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 745 tests, 743 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 136
+- **Total Sessions**: 137
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1219 | Active |
+| `journal-3.md` | ~1255 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 137 | 2026-09-28 | Whether the standing corrections still hold | `585c346` | `master` |
 | 136 | 2026-09-28 | The promises and the tests that hold them, written down | `aabbb3a` | `master` |
 | 135 | 2026-09-28 | How two promises are implemented, if they are | `ec820df` | `master` |
 | 134 | 2026-09-28 | Every promised refusal and what holds it | `e27f006` | `master` |
