@@ -725,3 +725,39 @@ Verified the evidence chain: 176 index rows one per session, 346 distinct commit
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and nothing else this environment can reach.
+
+
+## Session 178: Chasing the flake, with the output kept this time
+<!-- trellis-session: v=2 fp=386f4efaffe15990 -->
+
+**Date**: 2026-09-29
+**Task**: Chasing the flake, with the output kept this time
+**Branch**: `master`
+
+### Summary
+
+Ran the full suite three times, each output saved before the next started, and all three are 757 tests with 755 pass, 0 fail and 2 skipped. The flake did not reproduce.
+
+### Main Changes
+
+- the saved files are what made the runs readable after the fact, which is the procedure the previous round failed - and it failed twice more in this round own reading, since two patterns built from what I expected the line to look like matched nothing against a file whose lines begin with markup
+- that is the same class as the nine word-searches this session that failed: a pattern is a guess until it is read against the thing it is supposed to match. The third attempt printed the file instead and the numbers were there all along
+- settled: the suite is stable across three consecutive full runs, so the earlier failure was not a standing condition. Not settled: whether it was a flake at all or a one-off from the machine, and no cause is named because none was measured
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f45d1bb` | chore(task): chase the flake, and find three clean full runs |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped, and the same in three earlier consecutive runs.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and nothing else this environment can reach.

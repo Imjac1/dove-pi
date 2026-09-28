@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 177
+- **Total Sessions**: 178
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~727 | Active |
+| `journal-4.md` | ~763 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 178 | 2026-09-29 | Chasing the flake, with the output kept this time | `f45d1bb` | `master` |
 | 177 | 2026-09-29 | The evidence chain, verified | `180553c`, `5a1dc81` | `master` |
 | 176 | 2026-09-29 | What is genuinely undone, measured | `e0867f8` | `master` |
 | 175 | 2026-09-29 | The two scripts nobody runs | `6586f96` | `master` |
