@@ -298,3 +298,39 @@ Wired the keepalive timer to three hooks that already existed. The measurement t
 ### Next Steps
 
 - The act itself is the last thing and it is out of reach: nothing in this repository can send the keepalive, because the host owns the provider.
+
+
+## Session 221: The ten modules nothing reaches
+<!-- trellis-session: v=2 fp=a4c929097297eddd -->
+
+**Date**: 2026-09-29
+**Task**: The ten modules nothing reaches
+**Branch**: `master`
+
+### Summary
+
+Read the reachability register rather than assuming it is a defect list. Ten entries with sizes and reasons: four are readings whose class is documented, two are pre-existing, two are a reference loop, and two are adapters for a loop the host owns. It is not a list of defects, it is a list of things that know what they are.
+
+### Main Changes
+
+- and it is accurate including where it is transitive: dispatcher has five matches in five files and checkpoint a hundred and forty-eight in eighteen, both including source files, and both from files that are themselves unreachable. The walk is transitive and the entries are about reachability from an entry point rather than about mentions
+- two entries said no milestone in this task claims it, and that task is archived, so the sentence had stopped being answerable by a reader. Corrected to say no milestone claimed it while that task was open and none has since, which is still true of both entries
+- and a stray parenthetical left behind said the entry below stays for the reason it always had, when the entry below had left the list two rounds earlier. Removed
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eabafd8` | docs(harness): correct two reachability entries whose wording had gone stale |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 797 tests, 795 pass, 0 fail, 2 skipped. The reachability suite is 6 cases.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The register is honest and the review list is closed. What remains is the first real turn, which needs a host running a session.

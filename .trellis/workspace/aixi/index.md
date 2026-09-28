@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 220
+- **Total Sessions**: 221
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~300 | Active |
+| `journal-5.md` | ~336 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 221 | 2026-09-29 | The ten modules nothing reaches | `eabafd8` | `master` |
 | 220 | 2026-09-29 | Scheduling the heartbeat, and what the callback may do | `b5aa258` | `master` |
 | 219 | 2026-09-29 | The timer, with its clock injected | `d424765` | `master` |
 | 218 | 2026-09-29 | The keepalive whose own evidence contradicted it | `9287c93`, `e3b009b` | `master` |
