@@ -1,6 +1,5 @@
 /** Host-neutral contract for isolated child work. Core must not import a Pi host. */
 export type SubagentCapability = "read" | "grep" | "find" | "ls";
-export type SubagentRunState = "launching" | "running" | "succeeded" | "failed" | "cancelled";
 
 export interface SubagentRequest {
 	readonly dispatchId: string;
@@ -34,8 +33,3 @@ export interface SubagentProvider<TResult> {
 	cancel(runId: string): Promise<SubagentTerminal<TResult>>;
 }
 
-export function subagentError(terminal: SubagentTerminal<unknown>): Error {
-	const code = terminal.error?.code ?? `subagent_${terminal.state}`;
-	const summary = terminal.error?.summary ?? `Subagent ended in ${terminal.state} state.`;
-	return new Error(`[${code}] ${summary}`);
-}

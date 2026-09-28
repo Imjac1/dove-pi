@@ -94,14 +94,6 @@ export function resolveThinkingLevel(
 	return modeThinkingLevel(mode);
 }
 
-export function formatPolicy(
-	state: ThinkingPolicyState,
-	mode: AgentMode,
-): string {
-	if (state.kind === "lock") return `lock:${state.level}`;
-	if (state.kind === "off") return "off (manual only)";
-	return `auto (${mode} -> ${modeThinkingLevel(mode)})`;
-}
 
 /** Human-readable one-liner for the status bar / /status output. */
 export function formatPolicyShort(

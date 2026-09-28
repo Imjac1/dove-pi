@@ -57,9 +57,6 @@ export async function inspectWorkspacePath(cwd: string, inputPath: string): Prom
 	}
 }
 
-export async function readWorkspaceText(cwd: string, inputPath: string): Promise<string> {
-	return await readFile(resolveSafePath(cwd, inputPath), "utf8");
-}
 
 export async function createWorkspaceSnapshot(cwd: string, inputPaths: readonly string[] = ["."]): Promise<WorkspaceSnapshot> {
 	const root = resolve(cwd);
