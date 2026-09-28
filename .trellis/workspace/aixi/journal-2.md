@@ -1912,3 +1912,39 @@ Measured the four defaults the help states against the code that applies them: v
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 102: What each capability declares about itself
+<!-- trellis-session: v=2 fp=fbde81c9b32ce824 -->
+
+**Date**: 2026-09-28
+**Task**: What each capability declares about itself
+**Branch**: `master`
+
+### Summary
+
+Read the declarations capability list prints for all fourteen capabilities and held each against what it does: nine declare read_only, four workspace_write, one system_change. Every declaration matches its implementation - the only write in src/capabilities is in code-audit.diff, which declares workspace_write, and code-audit.seed declares read_only and genuinely does not write.
+
+### Main Changes
+
+- the vocabulary is a closed union in contracts.ts, so a misspelled effect fails the compiler, and the two most safety-relevant declarations are held by assertions that carry their reasons - one of them says classifying the scanner as a write would be a lie
+- the round found nothing to fix and one thing about my own method: I concluded system_change was held by nothing and it is held, because the searches that missed it were mine - I grepped for sideEffects and read_only and not for the value
+- this is the third time this session an extraction of mine produced a false finding, and the first where reading the result before writing anything stopped it
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2c06315` | chore(task): record the capability declarations, clean in both directions |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

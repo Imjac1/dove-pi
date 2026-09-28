@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 101
+- **Total Sessions**: 102
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1914 | Active |
+| `journal-2.md` | ~1950 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 102 | 2026-09-28 | What each capability declares about itself | `2c06315` | `master` |
 | 101 | 2026-09-28 | The defaults, as documented and as coded | `24a28ec`, `c49e731` | `master` |
 | 100 | 2026-09-28 | The schema versions Dove writes and the ones it accepts | `ebf092a` | `master` |
 | 99 | 2026-09-28 | The environment variables, as documented and as read | `7e5b07d` | `master` |
