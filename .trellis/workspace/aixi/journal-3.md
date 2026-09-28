@@ -379,3 +379,38 @@ Measured whether the shipped catalog is parsed, valid and held: modes/code-audit
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 114: The exports nothing references
+<!-- trellis-session: v=2 fp=966b58080f2790f6 -->
+
+**Date**: 2026-09-28
+**Task**: The exports nothing references
+**Branch**: `master`
+
+### Summary
+
+Measured 742 exported symbols in src. The crude count said 272 were not referenced in another file, which was 97% noise; what is dead is a declaration nothing names anywhere, and nine met that. Four were genuinely dead and are removed; five are re-exported by a barrel and stay.
+
+### Main Changes
+
+- the four removed: a run-state union and an error helper in core/subagent.ts, a formatter in pi-adapter/thinking-policy.ts, and a file reader in windows-runtime/workspace.ts. The removal was verified three ways - the typecheck is clean, the suite is 741 with nothing failing, and the re-scan shows four fewer exports
+- the five left alone are the limit of the measurement: project-provider/index.ts re-exports three modules with export-star, so a symbol reachable through a barrel is exported even though nothing names it. A text search cannot see that, which is the same limit the module-graph round ran into from the other direction
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3d61d6` | refactor(src): remove four exports nothing names, and say why five more stay |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
