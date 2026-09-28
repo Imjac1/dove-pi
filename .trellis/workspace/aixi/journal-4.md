@@ -77,3 +77,39 @@ Held the four request-runtime items verbatim: one plan and one terminal record, 
 ### Next Steps
 
 - The rest of the first request-runtime list, seven items, and the lists still unheld elsewhere.
+
+
+## Session 160: The shell boundary and the mode change
+<!-- trellis-session: v=2 fp=d285244e8f7ec74d -->
+
+**Date**: 2026-09-29
+**Task**: The shell boundary and the mode change
+**Branch**: `master`
+
+### Summary
+
+Measured the shell boundary and found five behaviours implemented with one asserted: exitCode is asserted, while stderr, timeoutMs, the cancellation signal and result.interrupted, and the pwsh-then-powershell fallback are all implemented and unexercised. The vocabulary named all five before any test was read.
+
+### Main Changes
+
+- one asserted out of five is recorded as its own finding rather than as unheld, because the behaviours exist and nothing would go red if three of them stopped working
+- the mode-change and native-absence items were not reached and are named as unchecked rather than left to look done
+- and one lead: PowerShellResult.interrupted and PowerShellOptions.signal are the cancellation half, and the suite never passes a signal - the same shape as the CLI approval flag
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b6d19a5` | chore(task): measure the shell boundary, and find five behaviours implemented with one asserted |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 748 tests, 746 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The signal and interrupted cancellation half, the mode-change item, and the native-absence item.
