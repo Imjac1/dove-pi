@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 141
+- **Total Sessions**: 142
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1402 | Active |
+| `journal-3.md` | ~1439 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 142 | 2026-09-28 | The last two required-test lists | `12cedc3` | `master` |
 | 141 | 2026-09-28 | The authority matrix, row by row | `bbfdeff`, `08d0ca4` | `master` |
 | 140 | 2026-09-28 | The six required-test lists, item by item | `7589f5a` | `master` |
 | 139 | 2026-09-28 | Which table hides the next gap | `7ffdde4` | `master` |

@@ -1400,3 +1400,40 @@ Eight of the nine rows of the authority matrix are held in the matrix own words,
 ### Next Steps
 
 - Scenarios 4 and 5 of the required-test lists, which remain unchecked and named as such.
+
+
+## Session 142: The last two required-test lists
+<!-- trellis-session: v=2 fp=6287a52c8e2d111d -->
+
+**Date**: 2026-09-28
+**Task**: The last two required-test lists
+**Branch**: `master`
+
+### Summary
+
+Held the eleven items of scenarios 4 and 5 and found every one of them held. Byte stability is held literally by two suites, two identical matches are separated by occurrence index, and the three states of an edit read updated, absent and new in the specification words.
+
+### Main Changes
+
+- only completed effects enter a checkpoint, asserted on completedEffectKeys directly, and restore refuses a mode version with rather than continuing another mode work
+- and the context suite holds a boundary claim with the reason the specification gives for it: applies to every channel, because the incident came through the one that was exempt
+- the result is a negative and worth saying plainly: no item of these two lists is unheld. The previous three rounds found two genuinely unheld safety promises and this round found none
+- and it empties the list of things this audit named and did not do: six required-test lists across three rounds, all read and held
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `12cedc3` | chore(task): hold the last two required-test lists, and find every item held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - now the only named thing this environment cannot reach.
