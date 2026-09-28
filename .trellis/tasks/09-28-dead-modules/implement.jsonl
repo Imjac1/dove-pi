@@ -1,0 +1,2 @@
+{"file": "src/cli.ts", "reason": "An entry point that nothing imports."}
+{"file": "src/pi-adapter/extension.ts", "reason": "The file Pi loads."}
