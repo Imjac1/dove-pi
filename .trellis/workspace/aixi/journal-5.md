@@ -334,3 +334,39 @@ Read the reachability register rather than assuming it is a defect list. Ten ent
 ### Next Steps
 
 - The register is honest and the review list is closed. What remains is the first real turn, which needs a host running a session.
+
+
+## Session 222: Closing the review task, and one more survey
+<!-- trellis-session: v=2 fp=b681ba65489e7b45 -->
+
+**Date**: 2026-09-29
+**Task**: Closing the review task, and one more survey
+**Branch**: `master`
+
+### Summary
+
+Closed the last task whose work is done: 08-28-dove-pi-usage-review was open on disk while its P0 had landed, its keepalive was built and wired, and every other item had a verdict. Its research file was left exactly as its author wrote it, and moved to the archive with the task.
+
+### Main Changes
+
+- and the record-mode survey now lists the same two open tasks and no others, so the open list and the survey agree. An hour ago they differed by the one task this round closed
+- what the survey then found is nothing reachable: the review list is closed, the reachability register is read and correct, and the two pre-existing modules nothing reaches are known and recorded, with deleting them being a decision rather than a cleanup
+- so the honest answer to what is left is one thing rather than an absence: the first real turn, which needs a host running a session. Pi is installable from here and installing it changes this machine, which is the one action this loop may not take
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `481001f` | chore(task): close the last finished task, and survey until the answer is one thing |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 797 tests, 795 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- One task is open and it waits on a person; the first real turn waits on a host. Nothing else in this repository is reachable work.
