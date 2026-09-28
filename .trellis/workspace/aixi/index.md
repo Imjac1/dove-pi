@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 87
+- **Total Sessions**: 88
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1392 | Active |
+| `journal-2.md` | ~1430 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 88 | 2026-09-28 | Modules on the Python side, and the duplicate the refinement found | `9aabb38`, `0dbf020` | `master` |
 | 87 | 2026-09-28 | The one shipped file no typechecker has ever read | `a534a05`, `d59f094` | `master` |
 | 86 | 2026-09-28 | Modules in src that nothing imports | `22847a9`, `5953d20` | `master` |
 | 85 | 2026-09-28 | Do the READMEs claim to list the bootstrap switches | `2d8b81c`, `88f3911` | `master` |

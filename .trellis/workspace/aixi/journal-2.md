@@ -1390,3 +1390,41 @@ bin/dove-pi.cjs is the stable launcher on PATH, six kilobytes of argument handli
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 88: Modules on the Python side, and the duplicate the refinement found
+<!-- trellis-session: v=2 fp=7114028e05f25508 -->
+
+**Date**: 2026-09-28
+**Task**: Modules on the Python side, and the duplicate the refinement found
+**Branch**: `master`
+
+### Summary
+
+The Python module graph is clean: nine candidates across installer, dove_pi.py and scripts, nothing unreferenced. So the round went to the refinement - modules named by tests and by nothing in the product - and found seven, one of them a whole subsystem.
+
+### Main Changes
+
+- tests/harness-reachability.test.ts already asserts exactly that, and more: it resolves import edges forward from the entry points and holds the unreachable set to an allow-list in both directions, with a reason and a milestone per entry. Its header names the defect it was built for: twelve of thirty-five modules under src/core were loaded by nothing that runs
+- so the check written two rounds ago was a weaker duplicate of it, and the assertion written this round was a third list for the same claim. The text search reports a module as reached when another unreachable module names it; the resolved graph does not
+- tests/module-graph.test.ts is removed, and the round is a reduction rather than an addition: a second home for one claim is how two lists come to disagree, and the stronger check was already there with better evidence
+- the two implementations of the check disagreed on two modules, and measuring why is what found the duplicate: my test never included scripts because its file walker filters to .ts before the .mts filter runs
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9aabb38` | test(src): remove a weaker duplicate of the reachability check that already existed |
+| `0dbf020` | chore(task): record the clean python graph and the duplicate the refinement found |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. The reachability test is 6 of 6. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
