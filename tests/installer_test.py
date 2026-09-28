@@ -519,5 +519,30 @@ class CrossLanguageSchemaVersionTests(unittest.TestCase):
             )
 
 
+class BootstrapDefaultTests(unittest.TestCase):
+    """The bootstrap defaults to max, and the flag it passes defaults to the stored profile.
+
+    Both are deliberate - the bootstrap is the fresh-install path and the flag is the maintenance path - and until a round measured
+    them, neither document said what the bootstrap applies. A user running the downloaded script without `-Profile` gets `max` even when a
+    profile is stored, because the script passes the flag unconditionally.
+
+    **A default is the behaviour a user gets by saying nothing**, which makes it the most-used value and the least examined. This holds
+    the two statements against the two declarations.
+    """
+
+    def test_the_bootstrap_defaults_are_the_ones_the_contract_states(self):
+        bootstrap = (ROOT / "install.ps1").read_text(encoding="utf-8")
+        contract = (ROOT / ".trellis" / "spec" / "backend" / "personal-agent-managed-install.md").read_text(encoding="utf-8")
+
+        for parameter, value in (("Profile", "max"), ("Verify", "quick")):
+            declaration = "[string]$" + parameter + " = '" + value + "'"
+            self.assertIn(declaration, bootstrap, "install.ps1 no longer defaults -" + parameter + " to " + value)
+            self.assertIn(
+                "-" + parameter + " " + value,
+                contract,
+                "the contract does not state the bootstrap default -" + parameter + " " + value,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
