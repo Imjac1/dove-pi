@@ -1948,3 +1948,41 @@ Read the declarations capability list prints for all fourteen capabilities and h
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 103: The state paths the documents name
+<!-- trellis-session: v=2 fp=6cde1dfd85aab680 -->
+
+**Date**: 2026-09-28
+**Task**: The state paths the documents name
+**Branch**: `master`
+
+### Summary
+
+The help for --profile said the stored profile comes from .dove/manifest.json, and that file is not in the layout the code builds: .dove holds state.json, tasks, sessions.jsonl, project-mutation.lock, project.json, effects and workspace.json. The manifest path in the code is .dove/project.json, and the profiles mapping that sentence pointed at is read by the Windows Terminal font code.
+
+### Main Changes
+
+- the stored profile is the one the managed install recorded, in the install state, with max as the fallback - which state.py declares and both helps now say
+- two strings, not one: the argparse help carried the false path and the printed help carried a vague phrase, and they are different text. Both name the same source now
+- and the check had to be relaxed before it was right: its first version demanded my own wording from the printed help, which was vague and not false. The invariant is that both name the same source and that the path exists nowhere
+- the control is what proved it live: putting the path back makes the check fail with it quoted, and removing it makes it pass
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0c5d672` | fix(cli): the profile help named a path that exists nowhere |
+| `dd717f3` | chore(task): record the path that exists nowhere and the two strings that named it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. Installer tests: 124 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
