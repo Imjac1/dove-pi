@@ -473,3 +473,38 @@ Placed the native-absence item: it is held by architecture and named nowhere. sr
 ### Next Steps
 
 - A named holder for the novice-runtime item, using the request helper in capability-protocol.test.ts rather than a guessed shape.
+
+
+## Session 171: The holder, with the shape read first
+<!-- trellis-session: v=2 fp=0fe37e1d9dc7dfcf -->
+
+**Date**: 2026-09-29
+**Task**: The holder, with the shape read first
+**Branch**: `master`
+
+### Summary
+
+Held the novice-project execution claim on the first run, because the shape was read first: request(name, overrides) at capability-protocol.test.ts:12, the registry helper at :24, and the two classes that suite already imports. The case composes the runtime with no arguments and runs dev.node_version in a root with no .dove, with the control asserting the root is still bare.
+
+### Main Changes
+
+- and last round the same case took two attempts and six calls, both failures from guessing a shape that was one file away. This round read the file first and spent four - so the reading paid for itself and the margin is the note worth keeping
+- a planted control flipping the expected status fails the case, so the assertion is about the run rather than a status that is always returned
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `90a8db7` | test(runtime): hold the novice-project execution claim, with the shape read first |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 756 tests, 754 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The request-runtime items still unheld, and the lists left elsewhere.
