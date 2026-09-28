@@ -598,3 +598,39 @@ Ran capabilities in a temporary project for the first time. A valid run exits ze
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 120: The task lifecycle, moved through rather than read
+<!-- trellis-session: v=2 fp=4ebc805f34c1c91d -->
+
+**Date**: 2026-09-28
+**Task**: The task lifecycle, moved through rather than read
+**Branch**: `master`
+
+### Summary
+
+Ran the lifecycle in a temporary project with the state read after each step: create gives rev 1 and active/intake, start gives rev 2 with the same status and phase, finish gives rev 3 and completed/completed, status leaves rev at 3, and archive refuses a finished task with No current task.
+
+### Main Changes
+
+- four things observed rather than read. The revision increments per mutation and not per read. start records an operation without moving the phase, so what it changes is which task is current. finish moves status and phase together. And archive refuses a completed task because it is no longer current, naming the thing that is missing rather than the command that failed
+- the refusal this round was going to provoke is the one the lifecycle produced on its own
+- the fixture was removed and this repository is untouched
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e65cccd` | chore(task): run the task lifecycle and read the state after each step |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

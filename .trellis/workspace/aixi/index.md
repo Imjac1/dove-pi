@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 119
+- **Total Sessions**: 120
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~600 | Active |
+| `journal-3.md` | ~636 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 120 | 2026-09-28 | The task lifecycle, moved through rather than read | `e65cccd` | `master` |
 | 119 | 2026-09-28 | The capabilities, run rather than listed | `06d640f`, `d9f8628` | `master` |
 | 118 | 2026-09-28 | The other chain that writes state | `fc3b8de`, `5da07a3` | `master` |
 | 117 | 2026-09-28 | The task command chain in a temporary project | `ad37646`, `a939579` | `master` |
