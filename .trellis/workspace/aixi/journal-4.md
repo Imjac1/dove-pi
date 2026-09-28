@@ -1740,3 +1740,39 @@ Measured the usage review P1 against the adapter before writing anything, and bo
 ### Next Steps
 
 - Wiring the fuse into the request path, which is a behaviour change of its own, and the review P2 items.
+
+
+## Session 206: Wiring the fuse into the request path
+<!-- trellis-session: v=2 fp=1d1f2311f3ed8fae -->
+
+**Date**: 2026-09-29
+**Task**: Wiring the fuse into the request path
+**Branch**: `master`
+
+### Summary
+
+The fuse had six holders and no caller. It is wired at the site where guardContext is already called, under its own one-shot flag, so the two notices are independent facts rather than one repeated - and beside the guard rather than folded into it, because it answers a different question.
+
+### Main Changes
+
+- the diagnostics were already reachable there: inspectCacheDiagnostics(ctx.sessionManager.getEntries()) is called at three other places in the same file, which is why the wiring is four lines rather than a new seam
+- an undefined context window is passed as zero, which the fuse answers ok for by design, since dividing by an unknown window would produce a number that looks like a measurement
+- and what this does not have is stated because it is true: the wiring line has no direct holder. It lives inside a three-thousand-line event handler with no seam to test it through, so the fuse own six cases hold the decision and the suite holds the call site compiling
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f33fcba` | feat(adapter): wire the session fuse beside the guard that already advises compaction |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped, unchanged. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The usage review P2 items: editor alignment across hosts, dispatch through the Trellis lifecycle, and surfacing the diagnostics the fuse now also reads.
