@@ -752,6 +752,12 @@ Common controls:
   --clean                  rebuild the managed application release
   --no-extension-updates   install missing Dove extensions but keep configured versions
 
+Shell configuration:
+  dove-pi shell status
+  dove-pi shell set <bash.exe path> [--scope global|project]
+  dove-pi shell reset [--scope global|project]
+  Chooses the bash Dove's Pi shell tool runs; doctor reports the effective path.
+
 Workspace mode:
   dove-pi workspace status
   dove-pi workspace set development|pentest

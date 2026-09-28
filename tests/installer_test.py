@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -12,6 +13,9 @@ from unittest.mock import Mock, patch
 import dove_pi
 from dove_pi import format_version, launch, main, package_versions, parse_install, parse_managed_update, run_installed_cli_json, without_user_path_entry, workspace_mode_from_file
 from installer.manager import MaintenanceResult
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class InstallerCliTests(unittest.TestCase):
@@ -320,6 +324,42 @@ class ManagedUpdateCliTests(unittest.TestCase):
             self.assertEqual(payload["status"], "error")
             self.assertEqual(payload["failedStep"], "rollback")
             self.assertTrue(Path(payload["logPath"]).is_file())
+
+
+class CliHelpCoverageTests(unittest.TestCase):
+    """Every command the READMEs document is named in the CLI own help.
+
+    Found by holding the two against each other. `shell` is documented in both READMEs with its own section and five mentions each, is a
+    first-class local CLI command in the router, runs, and appeared nowhere in `dove-pi --help` - so a reader who saw the README could not
+    find it from the tool. Three other commands, `cache`, `token` and `extensions`, are also absent from the help, and none of them is
+    named in either README, which is what makes their absence consistent and this one not.
+
+    **One direction on purpose**: a README may show a way in without listing everything, so naming fewer commands than the router has is
+    not a defect. Naming a command a reader cannot then find in the help is.
+    """
+
+    def test_commands_the_readmes_name_are_named_in_the_help(self):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            self.assertEqual(main(["--help"]), 0)
+        help_text = captured.getvalue()
+
+        for name in ("README.md", "README.en.md"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            # **[ \t]+ and not \\s+**: the first version matched across a line break and read "python .\\dove_pi.py install"
+            # on the next line as a command named after dove-pi. A pattern that crosses lines is not reading the document it
+            # claims to read.
+            documented = set(re.findall(r"dove-pi[ \t]+([a-z][a-z-]*)", text))
+            missing = {
+                command
+                for command in documented
+                if re.search(r"dove-pi[ \t]+" + re.escape(command) + r"\b", help_text) is None
+            }
+            self.assertEqual(
+                missing,
+                set(),
+                name + " names a command the CLI help does not: " + ", ".join(sorted(missing)),
+            )
 
 
 if __name__ == "__main__":
