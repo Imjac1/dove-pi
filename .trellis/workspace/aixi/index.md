@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 158
+- **Total Sessions**: 159
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~43 | Active |
+| `journal-4.md` | ~79 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 159 | 2026-09-29 | The request ledger and the client account | `efafd1b` | `master` |
 | 158 | 2026-09-29 | The three answers and the client account | `b15b233` | `master` |
 | 157 | 2026-09-29 | The corpus summary and the sentence it must not say | `a767115` | `master` |
 | 156 | 2026-09-29 | The project context list, five items left | `3cc3eae` | `master` |

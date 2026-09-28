@@ -41,3 +41,39 @@ Held the three answers where they live: inside and unresolved are asserted in ha
 ### Next Steps
 
 - The client-account item, still unlocated, and the request-runtime lists.
+
+
+## Session 159: The request ledger and the client account
+<!-- trellis-session: v=2 fp=0b0a1addbc19385b -->
+
+**Date**: 2026-09-29
+**Task**: The request ledger and the client account
+**Branch**: `master`
+
+### Summary
+
+Held the four request-runtime items verbatim: one plan and one terminal record, coalesces in-flight redelivery but not the same text after settlement, steering and follow-up deliveries associated with the active logical request, and additive ledger records parsed by correlation. And found the client account in failure-reading.ts, where a lookup keyed by request id is the item own phrase.
+
+### Main Changes
+
+- the record kinds are not where a client lives: thirty-four kinds and none is a client or an account. That was asked because the item is about a ledger, and the answer moved the search to the code rather than repeating the word
+- and the two holders are verbatim: carries a client account when the caller supplies one and never merges it into the mechanism, and leaves the other failures alone when a ledger holds more than one
+- so the item that survived two word-searches and produced a homonym was found by asking a vocabulary, then moving to the code - the names live in the implementation and the tests only call them
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `efafd1b` | chore(task): hold the request ledger items, and find the client account in the code rather than the tests |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 748 tests, 746 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The rest of the first request-runtime list, seven items, and the lists still unheld elsewhere.
