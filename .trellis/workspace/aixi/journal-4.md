@@ -833,3 +833,39 @@ Read the goal-tool policy that every round prompt names, and found it is not a d
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and the goal stays active, by the policy it carries.
+
+
+## Session 181: The fallback, and whether it can be observed
+<!-- trellis-session: v=2 fp=ad91302a8105e926 -->
+
+**Date**: 2026-09-29
+**Task**: The fallback, and whether it can be observed
+**Branch**: `master`
+
+### Summary
+
+Re-tested an earlier conclusion and found it wrong. pwsh is not installed here, so executableCandidates returns both names, the first throws, isMissingExecutable catches it and powershell.exe runs - the fallback fires on every call to the module, and the result executable field is what records it.
+
+### Main Changes
+
+- what the earlier conclusion missed is that the fallback does not need to be forced in order to be observed, on a machine where the first candidate is absent
+- the case asserts the executable is one of the two candidates, pinning the field to its domain, and it does not claim to hold the fallback as such, because forcing the second candidate would need the first to be missing and a test cannot stage that
+- and the shell module five behaviours are now all accounted for: exit code, stderr, timeout, cancellation, and the executable field with the fallback recorded as fired
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d98efea` | test(shell): hold the executable field, and find the fallback fires on this machine |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 758 tests, 756 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and the goal stays active by the policy it carries.
