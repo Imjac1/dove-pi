@@ -1194,3 +1194,39 @@ Did the child second plan item. MaintenanceResult carries eleven fields and its 
 ### Next Steps
 
 - The child third plan item: correlate lifecycle records from the first three children.
+
+
+## Session 191: Correlating the lifecycle records
+<!-- trellis-session: v=2 fp=527115473f157947 -->
+
+**Date**: 2026-09-29
+**Task**: Correlating the lifecycle records
+**Branch**: `master`
+
+### Summary
+
+Did the child third plan item. contracts.ts already states the rule it needs at line 99 - correlation identifiers are optional for legacy records but required for new runs - and the thirty-four record kinds map onto the three children, so correlateExecutionRecords groups by requestId then sessionId then attemptId and counts the families each group carries.
+
+### Main Changes
+
+- the key is chosen by strength: requestId identifies one logical user request, sessionId is wider, and attemptId is narrower and does not pull a record out of its request group. A record carrying none of them is grouped under unlinked and its group is marked incomplete, which is where legacy records land - labelled rather than given a key invented from the timestamp
+- a control holds that a kind no child claimed reports other rather than being forced into one of the three families
+- three mistakes on the way, all the session own recurring class: ExecutionRecordKind used without being imported; a totals reader whose pattern assumed whitespace before the word and so matched nothing against a line beginning with a marker, exactly the round 152 failure; and task.py create seeding prd.md only, so implement.md has to be written by hand - the second round in a row to reach the commit step without it
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea80e7c` | feat(core): correlate lifecycle records by the strongest identifier they carry |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 764 tests, 762 pass, 0 fail, 2 skipped - five more than before. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The child fourth plan item: implement read-only audit summary text and JSON output, which consumes these groups.
