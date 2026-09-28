@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-2.md`
-- **Total Sessions**: 103
+- **Active File**: `journal-3.md`
+- **Total Sessions**: 104
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1988 | Active |
+| `journal-3.md` | ~45 | Active |
+| `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 104 | 2026-09-28 | The .dove paths the READMEs name | `4ad8e80`, `30c6b9a` | `master` |
 | 103 | 2026-09-28 | The state paths the documents name | `0c5d672`, `dd717f3` | `master` |
 | 102 | 2026-09-28 | What each capability declares about itself | `2c06315` | `master` |
 | 101 | 2026-09-28 | The defaults, as documented and as coded | `24a28ec`, `c49e731` | `master` |
