@@ -77,6 +77,18 @@ export const SESSION_FUSE_PREFIX_RATIO = 0.8;
  *
  * **It recommends and does not act.** The review asks for compaction or a suggestion, and a suggestion is what a
  * reading can honestly produce: a compaction decided here would change a conversation the caller owns.
+ *
+ * **What it adds beside `context-guard.ts`, measured rather than assumed.** That module already answers a
+ * related question and is wired in: `guardContext({ tokens, contextWindow, mode })` returns `compactAdvised`, a
+ * `hint`, and a `fractionUsed`, the adapter notifies the UI on it and folds the hint into the request guidance,
+ * and `tests/context-guard.test.ts` holds it. **Its input is the context usage Pi reports**, so it can see a
+ * prefix that has grown but not **what the last call cost** - a cold start re-bills the whole prefix at full price
+ * while the usage fraction is unchanged. **That is the fact this reading adds**, and it is the one the review
+ * asks to be surfaced at P3.
+ *
+ * **What it does not yet have, stated because the gap is real**: it is not wired into the adapter. The adapter
+ * calls `guardContext` and not this, so today the reading has holders and no consumer. **Wiring it in is a
+ * behaviour change on the request path, which is its own round rather than a tail-end edit here.**
  */
 export function evaluateSessionFuse(
 	diagnostics: CacheDiagnostics,
