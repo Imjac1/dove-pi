@@ -1510,3 +1510,39 @@ Read the four Tests Required lists in capability-runtime.md and tested the claim
 ### Next Steps
 
 - The safety items of the third and fourth lists in capability-runtime.md, and the twelve other specifications that carry required-test sections.
+
+
+## Session 145: The safety items the last round named
+<!-- trellis-session: v=2 fp=eea6a32a7ca97a8d -->
+
+**Date**: 2026-09-28
+**Task**: The safety items the last round named
+**Branch**: `master`
+
+### Summary
+
+All seven items of the third and fourth required-test lists are held, most verbatim: windows-runtime.test.ts rolls back a patch when an operation fails, rejects traversal and reserved snapshot paths, and snapshots, detects drift and restores files plus additions; development-capabilities.test.ts runs dev.node_version through Fast Path.
+
+### Main Changes
+
+- and I searched for a file named after the feature when there is no such test file - the suite is named after the layer, and holds four of the seven items in the order the list gives them. That is the fifth time this session has read no match for my pattern as no holder
+- the failure this time was a filename rather than a phrase; the counts a search produces are candidates, and the conclusion needs the file that owns the behaviour, which is not always the file named after it
+- the first attempt to start this task failed because the check context named src/core/workspace-transaction.ts, a file I invented. The workflow refused an empty check.jsonl - the same mistake meeting a guard instead of a search
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ec20c6` | chore(task): hold the seven safety items, and find the holder under a layer name |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The twelve other specifications that carry required-test sections, and the four lists in capability-runtime.md are now all read and held.
