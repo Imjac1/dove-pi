@@ -47,6 +47,94 @@ export interface KeepaliveReading {
  * for. **And the disabled branch is checked first**, so an installation that has not opted in never even computes
  * the comparison.
  */
+
+/**
+ * The scheduling half, with its clocks injected.
+ *
+ * **Why it takes a timer rather than calling `setTimeout` itself**: the adapter has no scheduling facility and
+ * the host fires callbacks rather than time, so this is the only part of the keepalive that can act without a
+ * request. **Injecting the clock is what makes the decision testable** - the scheduling rules are the same in a
+ * test and in production, and only the provider call the callback makes is out of reach.
+ */
+export interface KeepaliveClock {
+	readonly now: () => number;
+	readonly setTimer: (callback: () => void, delayMs: number) => unknown;
+	readonly clearTimer: (handle: unknown) => void;
+}
+
+export interface KeepaliveTimerOptions {
+	readonly clock: KeepaliveClock;
+	/** Called when a keepalive is due. **This is the only place a request can be made**, and the policy never calls it itself. */
+	readonly onDue: () => void;
+	readonly idleMs?: number;
+}
+
+/**
+ * Arm, observe and disarm a keepalive.
+ *
+ * **The rules it enforces, and each answers something the policy cannot know on its own:**
+ *
+ * - `observe()` records that a request happened, and **re-arms or cancels**: a session that is talking needs no
+ *   heartbeat, and one that falls silent past the interval does.
+ * - **`disarm()` is the caller obligation on session shutdown.** A timer surviving its session would send the
+ *   next session a request nobody asked for, which is worse than a cold cache.
+ * - **A due callback disarms itself first**, so a slow callback cannot stack a second heartbeat behind the first.
+ */
+export class SessionKeepaliveTimer {
+	private handle: unknown = undefined;
+	private lastRequestAt: number | undefined;
+	private disabled = true;
+
+	public constructor(private readonly options: KeepaliveTimerOptions) {
+		// **Assigned here rather than in a field initializer**, which would run before the parameter property exists:
+		// TypeScript reports exactly that as `options is used before its initialization`.
+		this.lastRequestAt = options.clock.now();
+	}
+
+	/** Start watching. Until this is called nothing is scheduled, which is the offline-first default made operal. */
+	public arm(): void {
+		this.disabled = false;
+		this.lastRequestAt = this.options.clock.now();
+		this.reschedule();
+	}
+
+	/** Record a request and push the next heartbeat out behind it. */
+	public observe(): void {
+		this.lastRequestAt = this.options.clock.now();
+		if (!this.disabled) this.reschedule();
+	}
+
+	/** Stop for good, and clear anything pending. Called on session shutdown. */
+	public disarm(): void {
+		this.disabled = true;
+		if (this.handle !== undefined) {
+			this.options.clock.clearTimer(this.handle);
+			this.handle = undefined;
+		}
+	}
+
+	private reschedule(): void {
+		if (this.handle !== undefined) {
+			this.options.clock.clearTimer(this.handle);
+			this.handle = undefined;
+		}
+		const since = this.options.clock.now() - (this.lastRequestAt ?? this.options.clock.now());
+		const reading = evaluateSessionKeepalive({
+			sinceLastRequestMs: since,
+			enabled: true,
+			...(this.options.idleMs === undefined ? {} : { idleMs: this.options.idleMs }),
+		});
+		const delay = reading.due ? 0 : (this.options.idleMs ?? KEEPALIVE_IDLE_MS) - Math.max(0, since);
+		this.handle = this.options.clock.setTimer(() => {
+			this.handle = undefined;
+			if (this.disabled) return;
+			// Disarm before calling out: a callback slower than the interval must not stack heartbeats.
+			this.disabled = true;
+			this.options.onDue();
+		}, delay);
+	}
+}
+
 export function evaluateSessionKeepalive(input: {
 	readonly sinceLastRequestMs?: number;
 	readonly enabled?: boolean;
