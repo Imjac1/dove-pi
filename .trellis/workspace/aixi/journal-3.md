@@ -1253,3 +1253,40 @@ Held both corrections in the AGENTS.md repository-owned section against the repo
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 138: The authorisation table and what holds it
+<!-- trellis-session: v=2 fp=8851c22e1695c000 -->
+
+**Date**: 2026-09-28
+**Task**: The authorisation table and what holds it
+**Branch**: `master`
+
+### Summary
+
+Named the holder of each row of the authorisation table, read rather than guessed. Four were held: Direct Core by capability-protocol.test.ts, Pi by pi-adapter.test.ts, JSON-RPC by local-rpc.test.ts and MCP by mcp-adapter.test.ts, which asserts dove_invoke exposes no approve argument.
+
+### Main Changes
+
+- and one was implemented and held by nothing: the CLI parses --approve and injects the authorizer at cli.ts:360 and :371, and searching the tests for the flag, for createLocalAdapter and for capability run found nothing - the only approve literal in the suite is the MCP assertion that it is absent there
+- a holder was added, driving the real CLI in a temporary project: without the flag the output says approval_denied, with it the gate opens and the capability is what fails, because a temporary project has no test script
+- and the control was run: with the assertion planted backwards the test fails with CONTROL: this must fail, so it holds the behaviour rather than passing for its own reasons
+- a safety row with no holder is the defect the column exists to make visible, and this is the first genuinely unheld promise the audit has found
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `31c1385` | test(cli): hold the authorisation row that nothing held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 746 tests, 744 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
