@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 165
+- **Total Sessions**: 166
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~295 | Active |
+| `journal-4.md` | ~331 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 166 | 2026-09-29 | The mode id that must not appear in core | `98324c9` | `master` |
 | 165 | 2026-09-29 | The core that must not import Pi | `9b65587` | `master` |
 | 164 | 2026-09-29 | The timeout that fires | `6ef4a61` | `master` |
 | 163 | 2026-09-29 | A guard for the kill that throws EINVAL | `e873a60` | `master` |

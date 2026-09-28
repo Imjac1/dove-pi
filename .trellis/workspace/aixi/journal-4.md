@@ -293,3 +293,39 @@ Measured the layer claim and found it true and unheld: 45 files in src/core, 106
 ### Next Steps
 
 - The other request-runtime items, and the mode-format claim of the same shape, which the round now suspects is also unheld.
+
+
+## Session 166: The mode id that must not appear in core
+<!-- trellis-session: v=2 fp=dc0e27146dc9a51e -->
+
+**Date**: 2026-09-29
+**Task**: The mode id that must not appear in core
+**Branch**: `master`
+
+### Summary
+
+Found a test item that could not be satisfied as written. The mode-format principle is that a vertical adds no core code and that a mode id in executable code under src/core is a framework defect; the item restated it as a string absence, and the string is there because a workspace mode is also called pentest.
+
+### Main Changes
+
+- by the principle own words that would be a framework defect, and it is not - the hits are a workspace lens sharing a name with a vertical, which has nothing to do with needing core code. So the item was the defect
+- the item now states the principle it was standing in for and says why a string search cannot stand in for it, and no test was added because none can hold the principle and a proxy check is what made the item wrong
+- what can be held is that a mode is loaded from modes rather than built in, which is where the loader is tested
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `98324c9` | docs(spec): qualify a test item that could not be satisfied as written |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 752 tests, 750 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The other mode-format items, and the lists left elsewhere.
