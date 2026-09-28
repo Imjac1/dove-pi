@@ -1,0 +1,1 @@
+{"file": "src/code-audit/catalog.ts", "reason": "The parser, with its own definition of the shape."}
