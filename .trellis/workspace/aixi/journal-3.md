@@ -231,3 +231,40 @@ Measured the assumption this session had been making: .trellis/scripts/task.py i
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 110: What I have edited against what the tool tracks
+<!-- trellis-session: v=2 fp=7fbb614c8db6bfe2 -->
+
+**Date**: 2026-09-28
+**Task**: What I have edited against what the tool tracks
+**Branch**: `master`
+
+### Summary
+
+Re-ran the comparison against .trellis/.template-hashes.json: 181 tracked files, 73 identical, 34 different, 74 absent - the numbers reproduce the earlier round exactly. And the answer to the question: everything this session has edited is outside the tracked list, so a trellis update cannot revert any of it.
+
+### Main Changes
+
+- AGENTS.md is the one file both tracked and edited here, and it is safe for the reason its own comment gives: the managed block may be overwritten and everything outside it is preserved, and the notes added are outside it
+- and the evidence the last round wanted: task.py is tracked and already differs from its recorded hash, so the tool has updated it since those hashes were written. That was argued from the hash list then; it is visible on disk now
+- one premise of this round was wrong and I said so: I wrote that the earlier conclusion sits in AGENTS.md and is out of date. It does not sit there, it was in a task, and nothing needed correcting
+- and my extraction was wrong twice on the way: the hash file keeps its list under hashes rather than at the top level, and my first read reported one tracked file where there are 181
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `533bfd0` | chore(task): re-verify what this session edited against what the tool tracks |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
