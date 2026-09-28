@@ -99,6 +99,54 @@ class ReleaseReadinessTests(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertIn("assets=4", output.getvalue())
 
+    def test_tag_mismatch_is_rejected(self):
+        """The readiness gate compares the release tag with the package version, and a release that named the wrong tag would
+        publish a bundle whose version nobody can reconstruct. Found by running the gate on this repository with a made-up tag: it
+        refused with the package version and the tag side by side, and no case covered that message."""
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, archive, checksum = write_fixture(root)
+            with self.assertRaisesRegex(RuntimeError, "does not match package.json version"):
+                main(
+                    [
+                        "--source-root", str(root),
+                        "--tag", "v9.9.9",
+                        "--commit", "abcdef012345",
+                        "--manifest", str(manifest),
+                        "--archive", str(archive),
+                        "--checksum", str(checksum),
+                        "--bootstrap", str(ROOT / "install.ps1"),
+                        "--asset", str(archive),
+                        "--asset", str(checksum),
+                        "--asset", str(ROOT / "install.ps1"),
+                        "--asset", str(manifest),
+                        "--skip-clean-check",
+                    ]
+                )
+
+    def test_manifest_commit_mismatch_is_rejected(self):
+        """The manifest records the commit it was built at, and the gate requires the release to name that same commit: a manifest
+        built before later commits describes a tree that is no longer the one being released."""
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, archive, checksum = write_fixture(root)
+            with self.assertRaisesRegex(RuntimeError, "does not match HEAD|does not match"):
+                main(
+                    [
+                        "--source-root", str(root),
+                        "--tag", "v0.3.0",
+                        "--commit", "000000000000",
+                        "--manifest", str(manifest),
+                        "--archive", str(archive),
+                        "--checksum", str(checksum),
+                        "--bootstrap", str(ROOT / "install.ps1"),
+                        "--asset", str(archive),
+                        "--asset", str(checksum),
+                        "--asset", str(ROOT / "install.ps1"),
+                        "--asset", str(manifest),
+                        "--skip-clean-check",
+                    ]
+                )
     def test_checksum_mismatch_is_rejected(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -152,6 +200,28 @@ class ReleaseReadinessTests(unittest.TestCase):
             tracked.write_text("dirty\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "unstaged tracked changes"):
                 validate_clean_checkout(root, [])
+
+    def test_untracked_files_are_rejected(self):
+        """The second tree check, which the dirty case does not reach.
+
+        The script refuses two different things about a checkout: unstaged changes to tracked files, and files git does not know
+        about at all. A release cut from a tree carrying the second would publish a bundle whose source cannot be reconstructed from
+        the commit it names - which is what a readiness gate is for. Found by running the gate on this repository with a fresh task
+        directory in it: it refused with "untracked files", and no case covered that message.
+        """
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            tracked = root / "tracked.txt"
+            tracked.write_text("clean\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.txt"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "--quiet", "-m", "fixture"], cwd=root, check=True)
+            (root / "untracked.txt").write_text("never committed\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "untracked files"):
+                validate_clean_checkout(root, [])
+
 
 
 if __name__ == "__main__":
