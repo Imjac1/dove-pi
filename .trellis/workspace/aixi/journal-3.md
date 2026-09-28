@@ -928,3 +928,39 @@ Made the approval refusal name which of the two gates refused. The work was not 
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 129: Who else reads the contract I changed
+<!-- trellis-session: v=2 fp=6a55668c853bc64e -->
+
+**Date**: 2026-09-28
+**Task**: Who else reads the contract I changed
+**Branch**: `master`
+
+### Summary
+
+Read every consumer of the authorize contract the last round widened. The answer is that the change was as wide as its call site and no wider: fast-path uses the value as the refusal reason, the two suppliers return booleans, and the rpc path supplies nothing, which is where the new sentence appears.
+
+### Main Changes
+
+- and the truthiness check that prompted the round is not a consumer at all: its approved comes from ctx.ui.confirm, the host dialog, which returns a boolean, so reading it as one is correct
+- nothing needed fixing, which is only worth believing because every consumer was read rather than assumed
+- the two entry points also differ by design and each now says what it does: the adapter supplies an authorizer whose comment records that the host tool call is the execution decision, and the rpc path supplies none and says so
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `34d876f` | chore(task): read every consumer of the contract the last round widened |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 743 tests, 741 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
