@@ -17,6 +17,7 @@ import ctypes
 from dataclasses import replace
 import importlib
 import ntpath
+import re
 import os
 from pathlib import Path
 import shutil
@@ -570,6 +571,60 @@ def reconcile_managed_extensions(state: InstallState, *, update_extensions: bool
         )
         for spec in specs
     ]
+
+
+MAINTENANCE_SCHEMA_VERSION = 2
+
+#: What a projection reports for a field the record does not carry. The design says unavailable fields are
+#: labelled rather than guessed, and that legacy records are projected as schema 1 rather than rewritten.
+MAINTENANCE_UNAVAILABLE = "unknown"
+
+LEGACY_MAINTENANCE_FIELDS = ("at", "command", "status", "message")
+ADDITIVE_MAINTENANCE_FIELDS = ("runId", "durationMs", "decision", "release", "selectedExtension", "syncState")
+
+#: Patterns a maintenance message must never carry into evidence. The list mirrors the child task redaction
+#: requirements: bearer and API-key shapes, credentials, private-key names, and environment assignments.
+_REDACTIONS = (
+    (re.compile(r"(?i)\b(bearer|token|api[-_]?key|secret|password)\b\s*[:=]?\s*\S+"), r"\1=<redacted>"),
+    (re.compile(r"(?i)\b(private[-_ ]?key|id_rsa|id_ed25519|\.pem\b)"), "<redacted-private-key>"),
+    (re.compile(r"(?i)\b([A-Z][A-Z0-9_]{2,})=[^\s\"]+"), "<redacted-env>"),
+)
+
+
+def redact_maintenance_text(text: str, *, limit: int = 500) -> str:
+    """Bound and redact one maintenance message before it becomes evidence.
+
+    The design says payloads remain summarized and secrets are never emitted, so this bounds the length and
+    masks the shapes the child task names. A message is free text, which is why it is the field that needs
+    this and the correlation fields do not: those are identifiers by contract.
+    """
+    bounded = text if len(text) <= limit else text[:limit] + "..."
+    for pattern, replacement in _REDACTIONS:
+        bounded = pattern.sub(replacement, bounded)
+    return bounded
+
+
+def project_maintenance_record(payload: object) -> dict:
+    """Project one maintenance log record additively, for the audit summary.
+
+    Legacy records carry four fields and no version, and are projected as schema 1 with the fields a newer
+    record would add reported unavailable rather than guessed. Malformed input is reported, never raised:
+    the design says an audit projection treats log contents as untrusted data and reports incomplete counts.
+    History is not rewritten - this reads a record and returns a projection of it.
+    """
+    if not isinstance(payload, dict):
+        return {"schemaVersion": 0, "malformed": True, "reason": "record is not an object"}
+    version = payload.get("schemaVersion", 1)
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        return {"schemaVersion": 0, "malformed": True, "reason": "schemaVersion is not a positive integer"}
+    projected: dict = {"schemaVersion": version}
+    for field in LEGACY_MAINTENANCE_FIELDS:
+        value = payload.get(field)
+        projected[field] = redact_maintenance_text(value) if isinstance(value, str) else MAINTENANCE_UNAVAILABLE
+    for field in ADDITIVE_MAINTENANCE_FIELDS:
+        value = payload.get(field)
+        projected[field] = value if value is not None else MAINTENANCE_UNAVAILABLE
+    return projected
 
 
 def write_maintenance_log(layout: ManagedLayout, command: str, status: str, message: str) -> Path:
