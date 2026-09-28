@@ -9,6 +9,10 @@
  * depend on WT_SESSION: on a win32 platform we always fire the native Toast.
  * A short debounce window prevents the toast stack from spamming when Pi
  * auto-retries / compacts / runs queued follow-ups.
+ *
+ * **Turning it off**: `DOVE_PI_NOTIFY=0`, `=off` or `=false`. The same three spellings `DOVE_PI_PREFIX_FUSE` accepts, because a
+ * repository with two off idioms has one too many. Anything else, or nothing, leaves it on - this extension shipped with no switch at
+ * all, so the default must not change for anyone who liked it.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -51,6 +55,17 @@ function notify(title: string, body: string): void {
 	);
 }
 
+/**
+ * Whether the desktop notification is enabled. Off for the three spellings this repository already uses, on for everything else.
+ *
+ * Exported so the spellings are testable without spawning a process or a toast: an off switch that does not recognise a spelling is an
+ * off switch that does not work.
+ */
+export function notificationsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+	const raw = env.DOVE_PI_NOTIFY?.trim().toLowerCase();
+	return raw !== "0" && raw !== "off" && raw !== "false";
+}
+
 export default function (pi: ExtensionAPI): void {
 	const SETTLE_DEBOUNCE_MS = 1500;
 	let lastSettle = 0;
@@ -59,6 +74,7 @@ export default function (pi: ExtensionAPI): void {
 	// compact-and-retry, or continue with queued follow-ups. Debounce so a full
 	// user instruction settles to exactly one toast.
 	pi.on("agent_settled", () => {
+		if (!notificationsEnabled()) return;
 		const now = Date.now();
 		if (now - lastSettle < SETTLE_DEBOUNCE_MS) return;
 		lastSettle = now;

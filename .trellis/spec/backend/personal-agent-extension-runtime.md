@@ -64,6 +64,11 @@ dove-pi extensions install max
 - Missing packages are warnings; Pi/Node incompatibility, invalid load order, and conflicting authority packages are errors.
 - Doctor checks local settings and executables without requiring npm/network access. It must not rewrite `~/.pi/agent/settings.json` or silently install software.
 - Third-party sub-agent, background-task, plan, workspace, or security packages must remain optional when they overlap a Dove Pi authority contract.
+- **The desktop notification is a project-local extension, and it has a switch.** `.pi/extensions/notify.ts` is auto-discovered by
+  Pi in every session and fires a native Windows toast - or an OSC 777 sequence elsewhere - on every settled instruction, debounced so a
+  full instruction produces one. It **ships** (the release manifest includes the whole `.pi` root) and it **was documented nowhere and
+  could not be stopped** until this contract existed. `DOVE_PI_NOTIFY=0`, `=off` or `=false` turns it off; anything else, or nothing,
+  leaves it on, so the default does not change for anyone who liked the toast.
 - The Dove `auto` tool profile records Pi's active schema at session start and never calls `setActiveTools` because of request intent. Pi and Pi extensions remain the sole tool authorities. Intent hints select context, guidance, and budgets only. `agent_doctor` compares the observed baseline with active tools and reports final Provider payload count, schema bytes, and prefix evidence without reverting drift. Legacy `core`/`full` profiles are explicit user compatibility controls. Ultra must not force tools or unsafe parallel dispatch.
 
 ### 4. Validation & Error Matrix
