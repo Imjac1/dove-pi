@@ -34,6 +34,13 @@ written here without code marks on purpose: the documentation checks read code s
 otherwise read as one. The workflow-state mechanism itself works - that document carries thirty of its
 blocks - and the file may be replaced by a tool update, so the correction lives here, where a test holds its position.
 
+A second correction, measured rather than assumed: **archiving a task breaks the curated context entries that pointed inside it.**
+.trellis/scripts/task.py moves a task directory to `.trellis/tasks/archive/<month>/<name>/` and rewrites nothing, so every entry in
+`implement.jsonl` or `check.jsonl` whose path began with the task own directory stops resolving - 58 of 66 broken pointers in one
+measurement, and the entries read fine, which is why nobody noticed. **The script is in `.trellis/.template-hashes.json`, so the fix is not
+this repository to make**: a `trellis update` may replace it, and an edit here would be lost. What is ours is to repoint the entries after an
+archive, and to know that a fresh archive has just done it again.
+
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a
 turn runs, and [`.trellis/harness-surface.yaml`](./.trellis/harness-surface.yaml) for the editable surface those turns are bounded by.
