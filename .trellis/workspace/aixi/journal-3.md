@@ -1763,3 +1763,39 @@ The continuation item is 264 characters and has five claims, not four, and for t
 ### Next Steps
 
 - The legacy unknown fallback at installer/manager.py, whose holder was not found, and the doctor schema-drift claim.
+
+
+## Session 152: The function that leaves it unknown
+<!-- trellis-session: v=2 fp=9599816e23c5d01e -->
+
+**Date**: 2026-09-28
+**Task**: The function that leaves it unknown
+**Branch**: `master`
+
+### Summary
+
+Asked for the function rather than the word: the owner is source_release_manifest at installer/manager.py, and its name found six references in the tests where the word unknown found none. The seventh word-search failure and the third success for this direction.
+
+### Main Changes
+
+- and my previous reading of the branch was wrong: manager.py:153 is a comment, not a state. The code leaves an empty dict when the manifest generator is absent, so unknown is the absence of a value and not a string anywhere - the lead was built on reading a comment as a state
+- the function is held by name in three cases, one calling it twice and two patching it; the specific consequence the comment names - a source install must not read as drift because its identity is empty - is exercised but not asserted as that consequence, so it is named rather than concluded
+- and the doctor schema-drift claim is safety-shaped and still named, not checked here
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `364d373` | chore(task): ask for the function, and find six references where the word found none |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The doctor schema-drift claim, and the source-install drift consequence, both named and neither concluded.
