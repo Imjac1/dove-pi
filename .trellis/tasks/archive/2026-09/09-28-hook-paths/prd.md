@@ -23,11 +23,11 @@ quietest failure this repository can have.
 
 ## Acceptance Criteria
 
-- [ ] **AC1** Every configuration is read and the paths are listed.
-- [ ] **AC2** Each path is resolved.
-- [ ] **AC3** Anything unresolvable is fixed or recorded with its reason.
-- [ ] **AC4** Any check added is justified against the ones that exist.
-- [ ] **AC5** The gate passes.
+- [x] **AC1** Every configuration is read and the paths are listed.
+- [x] **AC2** Each path is resolved.
+- [x] **AC3** Anything unresolvable is fixed or recorded with its reason.
+- [x] **AC4** Any check added is justified against the ones that exist.
+- [x] **AC5** The gate passes.
 
 ## Out of scope
 
