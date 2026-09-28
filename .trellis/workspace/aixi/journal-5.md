@@ -370,3 +370,40 @@ Closed the last task whose work is done: 08-28-dove-pi-usage-review was open on 
 ### Next Steps
 
 - One task is open and it waits on a person; the first real turn waits on a host. Nothing else in this repository is reachable work.
+
+
+## Session 223: The surface that bounds every turn
+<!-- trellis-session: v=2 fp=7186047e4c0923cf -->
+
+**Date**: 2026-09-29
+**Task**: The surface that bounds every turn
+**Branch**: `master`
+
+### Summary
+
+Read harness-surface.yaml for the first time and mapped this span against it: 1156 paths changed, 1143 inside a declared component, 13 outside. The surface declares seven components bound to files, with two deliberately lacking a verifiedBy entry and the file saying why.
+
+### Main Changes
+
+- the two gaps are the honest form this session has been using: a component with no entry means nobody has stated what verifies it, which is a fact about our knowledge rather than something to fill with something plausible
+- and the thirteen outside are not noise and not a defect: the two READMEs, the launcher, the map itself, a Pi extension, and the six scripts that consume the readings - and the map own comment covers them, since it describes what a component is rather than partitioning the tree
+- though three are worth naming: the READMEs are what the drift check calls the only pair of user-facing documents and sit outside the map that says what may be edited; the scripts consume components without being one; and dove_pi.py is consistently outside a map that describes the harness rather than the installer that ships it
+- the point of the check is that this span work is inside, with the rest categories rather than stray edits. That is checking rather than surveying, which is why it was worth a round where two surveys had already answered nothing left
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `897cdc6` | chore(task): read the surface that bounds every turn, and map the span against it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 797 tests, 795 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Nothing in this repository is reachable work. One task waits on a person and the first real turn waits on a host.
