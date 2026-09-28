@@ -268,3 +268,40 @@ Re-ran the comparison against .trellis/.template-hashes.json: 181 tracked files,
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 111: The scripts the hook configurations name
+<!-- trellis-session: v=2 fp=29f3fefc9a68d76d -->
+
+**Date**: 2026-09-28
+**Task**: The scripts the hook configurations name
+**Branch**: `master`
+
+### Summary
+
+Measured the platform hook configs: .codex/hooks.json names two scripts and both exist, .codex/config.toml names none, and .claude does not exist in this install at all while 52 of its files are still in the tool own hash list. The hooks are clean.
+
+### Main Changes
+
+- the finding was one layer out: the correction in AGENTS.md named a .claude path as a second location for the workflow-state script, which was true when it was written and is not any more. It now names the .codex path and says so
+- and the first attempt at that fix broke the note own rule: it put the removed path in code marks, which is exactly what the rule forbids, because the documentation checks read code spans and a note describing a wrong path would otherwise read as one. Removing the marks is what makes it honest
+- no check was added: the front-door check cannot hold an unmarked path by design, and one that read unmarked text would flag this very note
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a6be7d1` | fix(agents): the correction named a platform that is not installed here |
+| `cb11a74` | chore: archive the hook-paths task |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
