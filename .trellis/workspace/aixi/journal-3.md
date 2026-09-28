@@ -1908,3 +1908,39 @@ Held the branch that prevents a false drift report: compareDoveExtensionIdentity
 ### Next Steps
 
 - The lists still unheld across the other specifications, now that the three candidate promises the audit found are all held.
+
+
+## Session 156: The project context list, five items left
+<!-- trellis-session: v=2 fp=36510bb51e7552e4 -->
+
+**Date**: 2026-09-29
+**Task**: The project context list, five items left
+**Branch**: `master`
+
+### Summary
+
+Held all five remaining items of the project context list, most verbatim: immediately healthy in a clean project without creating metadata, creates finishes restarts and archives compact native goals, records and lists a session without requiring a Trellis runtime, and automatic goal establishment idempotent three ways.
+
+### Main Changes
+
+- and the two behaviours this session ran by hand in earlier rounds are the ones the suite holds: task create start finish status list and archive, and session record and session list - with task-cli.test.ts saying the thing the hand-run specifically checked, without requiring a Trellis runtime
+- a bonus the list did not ask for: finishing the current goal promotes the only remaining active goal, so a project is not left with none
+- so the file list named both owners immediately - task-cli.test.ts and project-provider.test.ts - which is the tenth time asking for a name has worked and the ninth word-search would have failed
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3cc3eae` | chore(task): hold the project context list, and match two hand-run behaviours to their holders |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 748 tests, 746 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The lists still unheld in request-runtime and harness-loop, and the request-runtime items that point at the Pi tool boundary.
