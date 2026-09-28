@@ -855,3 +855,40 @@ Measured the granting side of the approval boundary. The union is not_required, 
 ### Next Steps
 
 - Name the gate that refuses a writing capability with approval granted, which is the measurement this round did not finish. The first real turn still needs a Pi host.
+
+
+## Session 127: Naming the gate that refuses a write
+<!-- trellis-session: v=2 fp=dee88bd377bc92ec -->
+
+**Date**: 2026-09-28
+**Task**: Naming the gate that refuses a write
+**Branch**: `master`
+
+### Summary
+
+Named the second gate. capability-invocation.ts holds three conditions in one authorize callback: a read-only capability passes, an unapproved caller is refused, and the third falls through to false when no approver is registered. The rpc adapter accepts an authorize option and nothing supplies it, while the CLI supplies one only under trustedCliApproval.
+
+### Main Changes
+
+- so every capability that requires approval is denied over rpc, whatever the approval field says - and that is why the two gates cannot be told apart: the status and the sentence are the same either way, which is true of the first gate and misleading about the second
+- the run confirmed it: status approval_denied with error Capability approval was not granted, which is what a client would read whether it sent granted or nothing
+- a message naming which of the two refused is the candidate fix, named rather than made, because the task was to name the gate and a user-visible string deserves its own round with its own evidence
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `138b97e` | chore(task): name the second gate, which is the approver callback |
+| `2f0d1d1` | chore(task): archive 09-28-name-the-gate |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 742 tests, 740 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- A refusal message that names which gate refused, which would separate the two without touching the status vocabulary. The first real turn still needs a Pi host.
