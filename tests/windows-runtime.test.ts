@@ -34,6 +34,21 @@ describe("Windows doctor", () => {
 		assert.equal(clean.interrupted, false, "the control: nothing aborted it");
 		assert.equal(clean.exitCode, 0, "and it ran to completion");
 	});
+	it("interrupts a run that outlives its timeout, and the duration says which ended it", async () => {
+		// **What this holds and what it does not.** It holds the timeout half of the shell boundary: a one-millisecond timeout
+		// beside a script that sleeps for three seconds has a margin of thousands, so the timeout always wins and `interrupted`
+		// is set. **The duration is the part that proves it** - a completed sleep would report three seconds, so a duration
+		// under a second and a half is evidence that the timeout ended the run rather than the script.
+		// It does not hold cancellation, which has its own case, and it does not hold a timeout that fires mid-output.
+		const timedOut = await runPowerShell("Start-Sleep -Seconds 3", { timeoutMs: 1 });
+		assert.equal(timedOut.interrupted, true, "the timeout marks the run interrupted");
+		assert.ok(timedOut.durationMs < 1_500, `the run ended in ${timedOut.durationMs}ms, not after the three-second sleep`);
+		// The mirror control: a short sleep with a long timeout completes, so the assertion above is about the timeout and not
+		// about a field that is true whenever a child is killed by anything.
+		const allowed = await runPowerShell("Start-Sleep -Milliseconds 100", { timeoutMs: 5_000 });
+		assert.equal(allowed.interrupted, false, "the control: the timeout did not fire");
+		assert.ok(allowed.durationMs >= 100, "and the script was allowed to finish its sleep");
+	});
 	it("reports runtime and tool availability", async () => {
 		const report = await inspectWindowsEnvironment(process.cwd());
 		assert.equal(report.available, true);
