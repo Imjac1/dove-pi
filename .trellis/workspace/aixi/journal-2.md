@@ -1084,3 +1084,42 @@ Measured: .pi/extensions/notify.ts ships in the release, is auto-discovered by P
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task. Everything else measured this round is either documented, tested, or referenced from something that is.
+
+
+## Session 80: The release digest did not cover the mode definitions the runtime loads
+<!-- trellis-session: v=2 fp=d7ec89b17f757133 -->
+
+**Date**: 2026-09-28
+**Task**: The release digest did not cover the mode definitions the runtime loads
+**Branch**: `master`
+
+### Summary
+
+Reading the release source roots showed the digest walked bin, src, installer, .pi and the package files - and not modes, while work-mode.ts loads modes/<id>/MODE.md and the code-audit capability reads a catalog under it. Two releases with different mode definitions could carry the same digest, and the modes decide what the running agent may do.
+
+### Main Changes
+
+- the roots moved into their own module so a test can read them: the builder writes a file when it runs, so importing it to inspect the list is impossible and a text check would compare a pattern rather than a value
+- and running it exposed the same defect one level up: the builder now imports the roots module, and that module was itself uncovered, so a change to which roots are walked would not have changed the digest. Both are covered now, and the digest is stable across two builds
+- the test holds three things: modes is included, the list covers itself and the builder, and every root resolves - because a root that resolves to nothing is silently skipped by the walk
+- the round also corrected two of my own readings: release:check exits 2 with no output under a pipeline but is an argparse usage error needing five release artifacts, and the first grep for what CI runs missed npm test because the pattern said npm run
+- and this repository already documents the trap that produced both: the managed-install contract says runtime discovery captures native output without a PowerShell pipeline before reading LASTEXITCODE
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `476bfc9` | fix(release): the digest covers the mode definitions the runtime loads |
+| `77e5ad6` | chore(task): record the digest gap and the second one the fix exposed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the new release roots test is 3 of 3.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
