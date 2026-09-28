@@ -1655,3 +1655,39 @@ Read the seven remaining required-test lists and held the four most specific ite
 ### Next Steps
 
 - The extension-runtime lists, whose items pack two to four claims each, and the two items that point at the Pi tool boundary.
+
+
+## Session 149: The list that packs safety claims
+<!-- trellis-session: v=2 fp=132661b1b413fc4b -->
+
+**Date**: 2026-09-28
+**Task**: The list that packs safety claims
+**Branch**: `master`
+
+### Summary
+
+Split the second extension-runtime list into its claims and held seven of eight, most in the words of the list: canonicalization without treating wrapper text as identity, version drift, selection precedence, managed -e unconditional, an explicit override that fails closed, and unrelated user packages not touched, which extensions.test.ts states verbatim.
+
+### Main Changes
+
+- one cluster is not located and is named as such: strict validation is held by two release installer cases, but additive identity decoding and the legacy unknown behaviour were not found, and the list says they live in release/readiness/status tests, two of which were searched
+- and the surprise: the first list, which this round set aside as deferred, is held by the same two files - settings before the single TUI renderer, missing packages warning without network calls verbatim, and conflicting max authorities detected - so deferring it would have understated the suite
+- its fourth item points at pi-adapter.test.ts, which holds continuation kinds and is not checked here
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1541a7b` | chore(task): split the extension identity list into claims, and find the deferred list held too |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The fourth item of the first extension-runtime list in pi-adapter.test.ts, and the additive decoding and legacy unknown claims the list locates in release, readiness and status tests.
