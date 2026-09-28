@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 121
+- **Total Sessions**: 122
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~672 | Active |
+| `journal-3.md` | ~708 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 122 | 2026-09-28 | The last two project subcommands | `87522be` | `master` |
 | 121 | 2026-09-28 | The three subcommands left unrun | `ffd08d0` | `master` |
 | 120 | 2026-09-28 | The task lifecycle, moved through rather than read | `e65cccd` | `master` |
 | 119 | 2026-09-28 | The capabilities, run rather than listed | `06d640f`, `d9f8628` | `master` |

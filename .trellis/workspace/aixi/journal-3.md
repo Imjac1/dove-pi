@@ -670,3 +670,39 @@ Ran task current, task continue and task verify in a temporary project. With a c
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 122: The last two project subcommands
+<!-- trellis-session: v=2 fp=b140e9bd3f48acb8 -->
+
+**Date**: 2026-09-28
+**Task**: The last two project subcommands
+**Branch**: `master`
+
+### Summary
+
+Ran project bind native and project update in a temporary project. bind native exits zero and reports the provider and root with the file set unchanged; update exits zero and says why it did nothing - Dove Native Workflow has no project template update step; and bind pi exits one naming the only value it accepts.
+
+### Main Changes
+
+- a no-op that names itself is worth more than a command that silently succeeds, and that is the shape update has
+- and the closure: every subcommand of every command has now been executed here, across this round and the two before it, except the ones needing a Pi host and the managed-install commands, which would change this machine
+- the fixture was removed and this repository is untouched
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87522be` | chore(task): run the last two project subcommands, closing the last unrun family |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
