@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 78
+- **Total Sessions**: 79
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1048 | Active |
+| `journal-2.md` | ~1086 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 79 | 2026-09-28 | A toast on every instruction, documented nowhere and impossible to turn off | `f9624a0`, `9c5884d` | `master` |
 | 78 | 2026-09-28 | The last uncomputable entry was contradicted by the file it lived in | `b46f4fc`, `0c1247e` | `master` |
 | 77 | 2026-09-28 | A round is a record, and the third axis is computable | `7ee87ab`, `0852c31` | `master` |
 | 76 | 2026-09-28 | The inside answer, from a commit found at runtime | `2df1db4`, `5189baa` | `master` |

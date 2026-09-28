@@ -1046,3 +1046,41 @@ The Pareto entry said no second objective is recorded, so there is nothing to pr
 ### Next Steps
 
 - Every axis this harness declares is now either computed or declared as a decision rather than a gap. The first real turn still needs a Pi host and a formal native task.
+
+
+## Session 79: A toast on every instruction, documented nowhere and impossible to turn off
+<!-- trellis-session: v=2 fp=c59e644c62cdf0cd -->
+
+**Date**: 2026-09-28
+**Task**: A toast on every instruction, documented nowhere and impossible to turn off
+**Branch**: `master`
+
+### Summary
+
+Measured: .pi/extensions/notify.ts ships in the release, is auto-discovered by Pi in every session, fires a Windows toast on every settled instruction, has no switch of any kind, and appears in no specification and no line of the README. It has a switch and a contract now.
+
+### Main Changes
+
+- the switch writes itself: DOVE_PI_PREFIX_FUSE is off for 0, off and false, and a repository with two off idioms has one too many - so DOVE_PI_NOTIFY follows it and defaults to on, which leaves the behavior unchanged for anyone who liked the toast
+- the predicate is exported so the spellings are testable without spawning a process or a toast, because an off switch that does not recognise a spelling is an off switch that does not work
+- and the extension runtime specification now says what fires, when, the debounce, that the extension ships, and the switch - the specification owned this subject and had nothing to say about it
+- the round began by checking four trees no round had opened: modes is documented and tested, bin and engagements are referenced from the README and the mode files, and .pi held two extensions - one named as the release entry point, and one nothing referenced, which the Pi own docs turned out to explain: every .ts in that directory is auto-discovered
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f9624a0` | fix(extension): the toast gets a switch, and the behavior gets a contract |
+| `9c5884d` | chore(task): record the undocumented toast and the switch it now has |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 735 tests, 733 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the new notify test is 2 of 2.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task. Everything else measured this round is either documented, tested, or referenced from something that is.
