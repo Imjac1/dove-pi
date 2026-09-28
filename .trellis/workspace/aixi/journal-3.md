@@ -1546,3 +1546,40 @@ All seven items of the third and fourth required-test lists are held, most verba
 ### Next Steps
 
 - The twelve other specifications that carry required-test sections, and the four lists in capability-runtime.md are now all read and held.
+
+
+## Session 146: The lists in the other specifications
+<!-- trellis-session: v=2 fp=98a27a90bc56100f -->
+
+**Date**: 2026-09-28
+**Task**: The lists in the other specifications
+**Branch**: `master`
+
+### Summary
+
+Read the lists in the other specifications and checked the three safety-shaped ones. The managed install list is fully held, much of it verbatim: zip-slip rejected by name, checksum failure keeps the current release, corrupt state blocks update without pruning, a separate process cannot take the live lock, and same-version update downloads nothing.
+
+### Main Changes
+
+- that file also holds more than the list asks - a sibling-prefix path boundary, and duplicate and link entries in the same archive - across fifty cases
+- the convergence list replay item is held the way a list would hope: task-convergence.test.ts is parameterised over the shared traces in fixtures/task-convergence-traces.json, asserting the expected state after every event
+- the audit vertical list, six items about receipt integrity, was read and named as not checked
+- and my patterns failed three more times: lock matched blocked, lease matched release, and a directory I assumed does not exist. That is the sixth time this session has read a pattern miss as an absence; the counts are candidate lists and the answer comes from the file that owns the behaviour
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `79f4b02` | chore(task): read the lists in the other specifications, and find the installer one fully held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The audit vertical list, six items about receipt integrity, and the remaining lists in extension-runtime, request-runtime, harness-loop, mode-format and project-context.
