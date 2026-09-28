@@ -1302,3 +1302,40 @@ Did the child fifth plan item, and the fixtures found a real defect. parseLedger
 ### Next Steps
 
 - The child sixth plan item, and the fixtures are in place for it: build the isolated archived-scenario E2E replay.
+
+
+## Session 194: The isolated replay of the archived scenario
+<!-- trellis-session: v=2 fp=59a888f1bb780b25 -->
+
+**Date**: 2026-09-29
+**Task**: The isolated replay of the archived scenario
+**Branch**: `master`
+
+### Summary
+
+Reconnoitred the child sixth plan item, the largest of the eight, and established exactly what it needs rather than building it. The harness takes --scenario and isolates workspace, dove-state, pi-session, run log and provider capture under a scenario root, and three existing cases already drive it with the faux provider.
+
+### Main Changes
+
+- the DOVE_PI_HOME house pattern was found in both forms - an environment variable set to a temporary directory, and an injectable object - which is how the real machine is kept out
+- and tests/harness-round.test.ts is not a turn driver despite the name: it tests the surface fence. Read, because the name would have misled a guess, which is the same class as the nine word-searches
+- the missing fact is named rather than guessed: the replay needs the ledger file the run wrote, so summarizeExecutionRecords can count the duplicates the acceptance criterion is about. The driver summary carries ledgerTerminal but nothing read here names the ledger path, which sits under a nonce-bearing scenario root
+- writing a replay asserting no duplicates from a summary with no duplicate counters would be a case that proves nothing - the failure mode the previous round caught in its own reader. The reconnaissance is worth committing; a guess dressed as a replay is not
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `59703e0` | chore(task): reconnoitre the replay harness, and name the one fact it still needs |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 777 tests, 775 pass, 0 fail, 2 skipped. No source file was changed this round.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- One grep in the driver for where the ledger is written, then the replay itself: tests/archived-scenario-replay.test.ts modelled on the existing --scenario cases.

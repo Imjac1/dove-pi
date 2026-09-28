@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 193
+- **Total Sessions**: 194
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1304 | Active |
+| `journal-4.md` | ~1341 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 194 | 2026-09-29 | The isolated replay of the archived scenario | `59703e0` | `master` |
 | 193 | 2026-09-29 | The fixtures that try to break the reader | `d007ce6` | `master` |
 | 192 | 2026-09-29 | The audit summary command | `8735ec3` | `master` |
 | 191 | 2026-09-29 | Correlating the lifecycle records | `ea80e7c` | `master` |
