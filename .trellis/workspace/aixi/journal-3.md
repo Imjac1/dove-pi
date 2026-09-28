@@ -1109,3 +1109,39 @@ Held this session four findings against the specifications. The read-only switch
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 134: Every promised refusal and what holds it
+<!-- trellis-session: v=2 fp=4df4dbbe53f445ad -->
+
+**Date**: 2026-09-28
+**Task**: Every promised refusal and what holds it
+**Branch**: `master`
+
+### Summary
+
+Held the capability runtime refusal table ten promises against what keeps them. Eight have a holder, and reading them showed the holders are the right ones: the oversized-line test drives an oversized line and a valid one after it, keeping both halves of then continue; the unimplemented-action test asserts that nothing is put to the operator.
+
+### Main Changes
+
+- two did not turn up: a duplicate project authority conflict and an evidence reference naming credential material. Neither the implementation nor a test appeared under the obvious names, and src/core/authority.ts has no hit for duplicate, conflict or merge at all
+- they are recorded as leads rather than as unheld promises, because this round was already wrong twice by pattern: a keyword sweep reported zero holders for the promise the previous round had just given one, and a guessed test filename did not exist
+- saying the suite does not hold them on the strength of two failed searches would be the third wrong conclusion, and the expensive one. The next step is to find how those two are implemented, and only then ask what keeps them
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e27f006` | chore(task): hold the refusal table ten promises against what keeps them |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 744 tests, 742 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Find how a duplicate authority conflict and a credential-bearing evidence reference are implemented, then ask what holds them - which is the lead this round named and did not chase. The first real turn still needs a Pi host.
