@@ -761,3 +761,39 @@ Ran the full suite three times, each output saved before the next started, and a
 ### Next Steps
 
 - The first real turn, which needs a Pi host - and nothing else this environment can reach.
+
+
+## Session 179: What this span actually changed, counted
+<!-- trellis-session: v=2 fp=1a165b7b1f9426a3 -->
+
+**Date**: 2026-09-29
+**Task**: What this span actually changed, counted
+**Branch**: `master`
+
+### Summary
+
+Counted the span from git: 530 commits since f822a0b, the commit that added the first 09-28 task directory. src 20 files with 1198 insertions, tests 32 files with 2491, the specifications 14 files with 777, and the task records 800 files with 18716.
+
+### Main Changes
+
+- the boundary is why the largest single changes are not this span own work: document-drift plus 456 and harness-readings plus 314 are large, and the span was defined by a directory date, so it contains everything committed after it
+- a count over a date range is a count over a date range, and calling it what this span changed would overstate it. What the count says reliably is the shape: the record dwarfs the code, at 18716 insertions against 1198 - eighteen lines of task record for every line of source
+- nothing was changed in this round but its own record, which is the honest form of work when nothing reachable is left
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `45004ce` | chore(task): account for the span, and say what the range is |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host - and nothing else this environment can reach.
