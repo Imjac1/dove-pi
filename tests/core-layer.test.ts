@@ -52,3 +52,23 @@ describe("the core layer", () => {
 		}
 	});
 });
+  it("finds no executable file under modes, which is what makes a vertical additive", () => {
+    // **What this holds and what it does not.** It holds the fact that two qualified claims lean on: **modes/ is data**. A mode is
+    // declared in markdown and yaml, so a vertical *cannot* add core code - not because a search finds no trace of it, but because it
+    // has no code to contribute. That is the structural reason behind the mode-format item that could not be satisfied as written.
+    // It does not hold that no *string* matching a mode name appears in the source: a workspace mode is also called pentest, and that
+    // is the trap the string-search version of the claim fell into.
+    const modesDirectory = join(process.cwd(), "modes");
+    const executable: string[] = [];
+    const walk = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) { walk(path); continue; }
+        if (/\.(ts|js|mts|cjs|mjs)$/.test(entry.name)) executable.push(path);
+      }
+    };
+    walk(modesDirectory);
+    assert.deepEqual(executable, [], "a mode with code in it would no longer be additive");
+    // The control: the directory was read and holds entries, so an empty result is about the extensions and not about a missing directory.
+    assert.ok(readdirSync(modesDirectory).length > 0, "the control: the modes directory was read");
+  });
