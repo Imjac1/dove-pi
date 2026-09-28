@@ -1704,3 +1704,39 @@ Did the usage review P0. The fuse reads the CacheDiagnostics the adapter already
 ### Next Steps
 
 - The usage review P1: give the model an incentive to invoke a capability, since the recording exists and the invocation does not happen. Then P3, surfacing the diagnostics the fuse now reads.
+
+
+## Session 205: The incentive to invoke a capability
+<!-- trellis-session: v=2 fp=63898d7cef543b6b -->
+
+**Date**: 2026-09-29
+**Task**: The incentive to invoke a capability
+**Branch**: `master`
+
+### Summary
+
+Measured the usage review P1 against the adapter before writing anything, and both halves of it already exist: buildCapabilityIndex is folded into the system prompt at extension.ts:3171, and line 185 already returns a suggestion to reuse agent_run_capability when a bash command matches a registered capability.
+
+### Main Changes
+
+- so P1 own diagnosis - that the model lacks an incentive - is a claim that needs re-measuring. The incentive is present in both places the review asks for and the model still does not invoke. Zero calls is not evidence that the incentive is missing, and no third mechanism was added on top of two that exist
+- and a reconciliation the session owed its own work: context-guard.ts already answers a related question, is wired in at extension.ts:3117-3120 and :3166, and is held by tests/context-guard.test.ts. The previous round fuse was written without knowing that, and the reconciliation now sits in its own doc comment
+- the fuse adds one fact the guard cannot see - guardContext reads the usage Pi reports, so a cold start re-bills the whole prefix while the usage fraction is unchanged - and it lacks one thing: it is not wired into the adapter, so it has six holders and no consumer
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `719a87e` | docs(cache): reconcile the session fuse against the guard that already existed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 784 tests, 782 pass, 0 fail, 2 skipped. tests/session-fuse.test.ts and tests/context-guard.test.ts together: 14 pass.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Wiring the fuse into the request path, which is a behaviour change of its own, and the review P2 items.
