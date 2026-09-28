@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 107
+- **Total Sessions**: 108
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~159 | Active |
+| `journal-3.md` | ~196 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 108 | 2026-09-28 | The status a task records and the place it sits | `e63d183` | `master` |
 | 107 | 2026-09-28 | The paths the task contexts curate | `da3dbdb`, `340493d` | `master` |
 | 106 | 2026-09-28 | The acceptance criteria of archived tasks | `4481809` | `master` |
 | 105 | 2026-09-28 | The commits the journal names | `c472708`, `dc91b2f` | `master` |

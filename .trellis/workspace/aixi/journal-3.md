@@ -157,3 +157,40 @@ Measured 236 context files and 584 curated entries: 66 paths did not resolve. Fi
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 108: The status a task records and the place it sits
+<!-- trellis-session: v=2 fp=a5688adb6a34064e -->
+
+**Date**: 2026-09-28
+**Task**: The status a task records and the place it sits
+**Branch**: `master`
+
+### Summary
+
+Measured 121 task.json files across the active tree and the archive. The status record is consistent in all three directions: no archived task is unmarked, no active task says completed, and all 114 completed ones carry a completedAt. That is structural rather than asserted - task.py archive sets the status and stamps the date.
+
+### Main Changes
+
+- no check was added, because the tool cannot produce a disagreement, and the measurement is what says so
+- and every task.json carries a commit field that is null in all 122 files. The field is declared and never filled, including by the archive, so it is a duplicate of a job already done in the journal, where a previous round resolved 267 shas
+- it is recorded rather than filled, because the mapping from a task to its commits is not in the task files: the journal records them per session, not per task. A field nobody fills is the same class as everything else measured here, and this one is in the tool own state file
+- one more extraction of mine was too coarse and the round caught it: the first pass reported no task with a commit field, and the field is there in every one, holding null - which my type check skipped
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e63d183` | chore(task): record the status record as consistent, and the commit field that holds nothing |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
