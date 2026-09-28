@@ -1314,3 +1314,41 @@ The open question was whether the READMEs are missing -Profile and -Verify. Read
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task. The READMEs could name where the full switch list lives, which is a product-document decision rather than a correctness one.
+
+
+## Session 86: Modules in src that nothing imports
+<!-- trellis-session: v=2 fp=66b9d4346e187dec -->
+
+**Date**: 2026-09-28
+**Task**: Modules in src that nothing imports
+**Branch**: `master`
+
+### Summary
+
+Built the import graph over src and tests: 103 modules, none unreferenced. A clean result, and the round turned it into a check rather than a note - every module in src is named by some other file, or is listed in the test with the reason nothing imports it, so the next module added is either wired or named.
+
+### Main Changes
+
+- the check is a text search rather than a resolved graph and errs toward silence on purpose: a pattern-based graph would miss a dynamic import or a re-export and report a live module as dead, and a check that cries wolf gets deleted
+- it cried wolf on the first run anyway, for a different reason: requiring the path relative to src reported wired modules as orphans, because a sibling import says ./work-mode.ts and contains only the file name. The criterion accepts either now
+- and it was given a negative control, which no other check this session has had: a planted orphan in src makes it fail and removing the file makes it pass. A test that cannot fail is not a test
+- the entry points are written out by hand with reasons, because a previous round found a file nothing referenced that was live through Pi own auto-discovery - the graph is not the authority on what runs
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `22847a9` | test(src): every module is named by something, or is an entry point with a reason |
+| `5953d20` | chore(task): record the clean module graph and the check it became |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 739 tests, 737 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5. The module graph test passes, and fails when an orphan is planted.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
