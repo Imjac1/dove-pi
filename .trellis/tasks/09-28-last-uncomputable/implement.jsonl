@@ -1,0 +1,2 @@
+{"file": "src/core/harness-axes.ts", "reason": "The module that reports both objectives and declares the third unreadable."}
+{"file": "tests/harness-axes.test.ts", "reason": "The test that already contradicts the entry."}
