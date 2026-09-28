@@ -1765,3 +1765,40 @@ Measured by running doctor rather than reading the builder: requestDiagnostics c
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 98: The runtime versions, as declared and as enforced
+<!-- trellis-session: v=2 fp=3e25405ea4abb18a -->
+
+**Date**: 2026-09-28
+**Task**: The runtime versions, as declared and as enforced
+**Branch**: `master`
+
+### Summary
+
+Measured across seven places - package.json engines, the release manifest, installer/release.py, the readiness check, both bootstrap prerequisite calls, dove_pi.py own checks and both READMEs - and they agree. Two of the places compare the manifest exactly, so a drift there fails the readiness check and therefore a release.
+
+### Main Changes
+
+- what none of that held is the value that decides what a user machine does: MIN_NODE is the comparison the launcher makes before it will run at all, and the manifest is a declaration about it. If they disagree, a user is told one thing by the release and refused by the tool
+- so the check asserts the enforcer against the declaration, for both variables - the node constant and the python comparison, which is a literal rather than a constant and is read as one
+- and it was given a negative control: lowering MIN_NODE makes it fail with the two versions side by side, and restoring it makes it pass. The file was restored exactly, which the clean tree confirms
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a01ab65` | test(installer): the minimum the launcher enforces is the minimum the release declares |
+| `525d50f` | chore(task): record the seven runtime minima and the enforcer nothing held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 740 tests, 738 pass, 0 fail, 2 skipped. Installer tests: 120 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
