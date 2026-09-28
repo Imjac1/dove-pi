@@ -1290,3 +1290,39 @@ Named the holder of each row of the authorisation table, read rather than guesse
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 139: Which table hides the next gap
+<!-- trellis-session: v=2 fp=5536fb477909642d -->
+
+**Date**: 2026-09-28
+**Task**: Which table hides the next gap
+**Branch**: `master`
+
+### Summary
+
+Mapped the behaviour tables across the specifications: seventeen files carry tables and only two name a test, the annotated one and personal-agent-runtime.md. The biggest unannotated is framework-core.md, fifty rows across six tables about gates, scope, effects and caps.
+
+### Main Changes
+
+- and reading it sharpened the question past the one the round was asked: the file is six scenarios each with the same six sections, and the fifth is Tests Required, so the document states which tests are required in six places - a countable claim with an author, and a better target than a table column
+- the first list was checked: two of its three items are held in the specification own words by loop-gate.test.ts, and the third - adapter parity - has a suite holding one case and nothing named for the rest
+- so the target for the next round is the six Tests Required lists, beginning with adapter parity, rather than a column of pointers
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7ffdde4` | chore(task): map the behaviour tables, and find the sharper target |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 746 tests, 744 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The six Tests Required lists in framework-core.md, beginning with the adapter parity question the first one leaves open.
