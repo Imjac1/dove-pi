@@ -1145,3 +1145,39 @@ Held the capability runtime refusal table ten promises against what keeps them. 
 ### Next Steps
 
 - Find how a duplicate authority conflict and a credential-bearing evidence reference are implemented, then ask what holds them - which is the lead this round named and did not chase. The first real turn still needs a Pi host.
+
+
+## Session 135: How two promises are implemented, if they are
+<!-- trellis-session: v=2 fp=6f16a13288722cd0 -->
+
+**Date**: 2026-09-28
+**Task**: How two promises are implemented, if they are
+**Branch**: `master`
+
+### Summary
+
+Both answers: duplicate project authorities are built as conflicts in context/interoperable.ts and projected through cli.ts and adapters/mcp.ts, held by interoperable-context.test.ts:25; and credential-bearing evidence goes through isSensitiveProjectPath in trellis-adapter/index.ts, held by context.test.ts:251. Neither is unheld.
+
+### Main Changes
+
+- the method is the product: the rows say duplicate project authorities and credential material, and the paragraphs above them say conflicts and .env, credential, secret, token, private-key names. Searching the document own words found both implementations in one call each
+- the previous round searched for names I invented - excludeCredential, isCredential, key material - and none of them exists, which is why two rounds of searching found nothing and one of reading found everything
+- and the correction: the previous record called the two rows leads rather than findings, which was already too weak, since both are implemented and both are held. The caution was right; the wording understated what was there
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ec820df` | chore(task): answer the lead, and find that the prose above a table is a dictionary |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 744 tests, 742 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.

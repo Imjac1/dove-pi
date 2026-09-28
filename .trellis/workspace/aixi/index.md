@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 134
+- **Total Sessions**: 135
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1147 | Active |
+| `journal-3.md` | ~1183 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 135 | 2026-09-28 | How two promises are implemented, if they are | `ec820df` | `master` |
 | 134 | 2026-09-28 | Every promised refusal and what holds it | `e27f006` | `master` |
 | 133 | 2026-09-28 | Whether my own measurements made a document stale | `e1a8c7d` | `master` |
 | 132 | 2026-09-28 | The change manifest and the verdict it feeds | `a436274` | `master` |
