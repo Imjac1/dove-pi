@@ -1,0 +1,2 @@
+{"file": "scripts/build-release-manifest.mts", "reason": "The builder whose roots decide what the digest covers."}
+{"file": "src/core/work-mode.ts", "reason": "The loader that reads modes/."}
