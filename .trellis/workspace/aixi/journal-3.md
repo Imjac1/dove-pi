@@ -1000,3 +1000,39 @@ Measured the switch. It is read in ten places and all of them are in the adapter
 ### Next Steps
 
 - Whether the switch should be a runtime property rather than an adapter control, and whether the standalone doctor should report it, are design decisions the measurement now supports. The first real turn still needs a Pi host.
+
+
+## Session 131: The convergence operations, run rather than read
+<!-- trellis-session: v=2 fp=c43c5aca72d4a5c4 -->
+
+**Date**: 2026-09-28
+**Task**: The convergence operations, run rather than read
+**Branch**: `master`
+
+### Summary
+
+Ran the convergence operations in a temporary project and read the record after each. freeze creates the record in working with the criterion pending, started moves it to in_progress without moving the state, and passed moves the criterion and the state together to ready_to_finish, each incrementing the revision.
+
+### Main Changes
+
+- the refusals prove the machine is enforced rather than advisory: once the state is ready_to_finish the operations that are not legal there are refused with the event they could not apply - Cannot apply finding.resolved, Cannot apply task.progress_reviewed - which names the transition rather than the command
+- and I guessed the finding kind and guessed wrong, so --kind defect was refused. The vocabulary is blocking, regression, follow_up, scope_change and serious_unexpected_risk, read after the fact rather than assumed before it
+- the refusal is what the round was measuring, so the guess cost one line of output rather than a wrong conclusion
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42d9a68` | chore(task): run the convergence operations, and watch the state machine move |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 743 tests, 741 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The verdict machinery needs a change manifest and a run, which is closer to the first real turn than anything else left. That turn still needs a Pi host.
