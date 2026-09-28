@@ -1465,3 +1465,41 @@ The allow-list names, for each unreachable module, the milestone that would make
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 90: The commands the READMEs tell a reader to run
+<!-- trellis-session: v=2 fp=d51859c53109ba27 -->
+
+**Date**: 2026-09-28
+**Task**: The commands the READMEs tell a reader to run
+**Branch**: `master`
+
+### Summary
+
+Held every dove-pi invocation in both READMEs against the CLI own help: shell is documented in both with its own section and five mentions each, is a first-class entry in LOCAL_CLI_COMMANDS, runs and answers with real JSON, and appeared nowhere in dove-pi --help - so a reader who saw the README could not find it from the tool.
+
+### Main Changes
+
+- the three other commands missing from the help - cache, token, extensions - appear in neither README, which is what makes their absence consistent and shell not. The help already carried a section of exactly that shape for workspace, so shell had a place to go
+- the check added is one-directional on purpose, for the reason the switch check is: a README may show a way in without listing everything, while naming a command a reader cannot then find is the defect
+- the check was wrong once, in the way this session keeps meeting: its first regex used \s+ and matched across a line break, reading python .\dove_pi.py install on the next line as a command named after dove-pi. A pattern that crosses lines is not reading the document it claims to read
+- and it was given a negative control, the second check this session to get one: with the shell block removed it fails naming shell, and with it back it passes
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `008f110` | fix(cli): the help names the shell command group it implements |
+| `e886fdb` | chore(task): record the undiscoverable shell command and the check that found it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 738 tests, 736 pass, 0 fail, 2 skipped. Installer tests: 117 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
