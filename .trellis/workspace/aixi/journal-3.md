@@ -1036,3 +1036,40 @@ Ran the convergence operations in a temporary project and read the record after 
 ### Next Steps
 
 - The verdict machinery needs a change manifest and a run, which is closer to the first real turn than anything else left. That turn still needs a Pi host.
+
+
+## Session 132: The change manifest and the verdict it feeds
+<!-- trellis-session: v=2 fp=96e2014bcec43ddc -->
+
+**Date**: 2026-09-28
+**Task**: The change manifest and the verdict it feeds
+**Branch**: `master`
+
+### Summary
+
+Read what a change manifest is before writing one: not a file but what the agent tool submits, landing in the ledger as a change.applied record carrying a TaskChange. And decided not to write one, because a by-hand manifest is a by-hand ledger record, which is what the readings suite already builds in a fixture and runs the script against.
+
+### Main Changes
+
+- the downstream half is covered; writing one here would be the fourth round this session to find the thing already exercised
+- and what a by-hand manifest could not test is the tool that writes one, changeManifestFromPiInput, assembled from what the agent sends through a tool call. That is the half this environment cannot reach
+- so the boundary is now stated precisely: the verdict machinery is reachable and exercised, the manifest production is not
+- the round read before it built, which is why it cost a reading rather than a fixture; and the workflow guard caught my one mistake - I curated a context path that does not exist, and start refused an empty jsonl
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a436274` | chore(task): read what a manifest is, and decide not to write one |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 743 tests, 741 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task - and it is now the only thing left that a reading cannot stand in for.
