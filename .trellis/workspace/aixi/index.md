@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 146
+- **Total Sessions**: 147
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1585 | Active |
+| `journal-3.md` | ~1621 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 147 | 2026-09-28 | Who owns the receipt | `413e61b` | `master` |
 | 146 | 2026-09-28 | The lists in the other specifications | `79f4b02` | `master` |
 | 145 | 2026-09-28 | The safety items the last round named | `9ec20c6` | `master` |
 | 144 | 2026-09-28 | The four lists, and a claim about test sensitivity | `078400a` | `master` |

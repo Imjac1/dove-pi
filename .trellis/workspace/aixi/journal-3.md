@@ -1583,3 +1583,39 @@ Read the lists in the other specifications and checked the three safety-shaped o
 ### Next Steps
 
 - The audit vertical list, six items about receipt integrity, and the remaining lists in extension-runtime, request-runtime, harness-loop, mode-format and project-context.
+
+
+## Session 147: Who owns the receipt
+<!-- trellis-session: v=2 fp=770c2b96c4be6d2a -->
+
+**Date**: 2026-09-28
+**Task**: Who owns the receipt
+**Branch**: `master`
+
+### Summary
+
+Asked the file list first and it named the owner in one command: code-audit-seed.test.ts, which this time is named after its behaviour. All six receipt items are held, most verbatim: the catalog loads with each of four faults rejected, seeds in the vulnerable fixture and none in the clean one, every mandatory family counted including the ones at zero, two runs byte-stable on the digest, and the five ways a receipt fails.
+
+### Main Changes
+
+- the last two rounds each spent a search first and both were wrong for a reason the file list would have shown: lock is inside blocked, lease inside release, and there is no convergence directory
+- and the suite holds more than the list asks, including the safety-shaped one: an unreadable file is a gap, and a gap blocks a clean claim
+- so the method now begins with the file list rather than a pattern, which is the correction two rounds of pattern misses earned
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `413e61b` | chore(task): ask the file list first, and find all six receipt items held |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The remaining lists in extension-runtime, request-runtime, harness-loop, mode-format and project-context, and the two convergence items that point at the Pi tool boundary.
