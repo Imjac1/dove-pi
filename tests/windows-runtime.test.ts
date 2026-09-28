@@ -49,6 +49,21 @@ describe("Windows doctor", () => {
 		assert.equal(allowed.interrupted, false, "the control: the timeout did not fire");
 		assert.ok(allowed.durationMs >= 100, "and the script was allowed to finish its sleep");
 	});
+	it("carries what the shell wrote to stderr, and a non-zero exit code, separately from stdout", async () => {
+		// **What this holds and what it does not.** It holds the `stderr` and `exitCode` fields together, which is what a caller needs to
+		// tell *what ran* from *what it complained about*: the script writes to stderr and exits non-zero, and stdout stays empty.
+		// It does not hold the `interrupted` flag, which has its own case, and it does not hold the executable fallback - see the
+		// note below the suite.
+		const failed = await runPowerShell("Write-Error 'a complaint'; exit 3", { timeoutMs: 10_000 });
+		assert.equal(failed.exitCode, 3, "the exit code is the process own, not a normalised one");
+		assert.match(failed.stderr, /a complaint/, "stderr carries what the script said");
+		assert.equal(failed.stdout.trim(), "", "and stdout does not, so the two are not merged");
+		// The control, in place: the same call without the error writes to stdout and exits zero, so the assertions above are about
+		// the script rather than about fields that are always populated.
+		const fine = await runPowerShell("Write-Output 'all good'", { timeoutMs: 10_000 });
+		assert.equal(fine.exitCode, 0, "the control: a script that succeeds exits zero");
+		assert.equal(fine.stderr.trim(), "", "and says nothing on stderr");
+	});
 	it("reports runtime and tool availability", async () => {
 		const report = await inspectWindowsEnvironment(process.cwd());
 		assert.equal(report.available, true);
