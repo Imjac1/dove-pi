@@ -85,12 +85,11 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone in this task claims it", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
 	"src/adapters/loop-scripted.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
-	// **The keepalive policy, and it is here on purpose rather than by omission.** The review P0.3 half it answers
-	// is a heartbeat that keeps the upstream cache warm, and the policy decides *whether* one is due. **What it
-	// does not have is a caller**: a timer has to schedule the decision, and that is wiring rather than policy.
-	// **So the entry names what will reach it rather than claiming nothing will** - the same distinction the other
-	// entries make between a module nothing reaches and a reading nothing should.
-	"src/pi-adapter/session-keepalive.ts": { reason: "the keepalive policy; the timer that would call it is not built, and the policy is deliberately off by default because a heartbeat is a network request", wiredBy: "the adapter round that schedules a heartbeat, which is wiring rather than this decision" },
+	// **`src/pi-adapter/session-keepalive.ts` left this list when the adapter began arming it on session start and
+	// observing it on every provider request** - the seventh shrink, and the one the check stated the rule for:
+	// *removing the entry is the definition of done for that module*.
+	// (The entry below stays for the reason it always had.)
+
 };
 
 /**

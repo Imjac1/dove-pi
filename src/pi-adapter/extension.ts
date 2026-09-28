@@ -25,6 +25,7 @@ import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts"
 import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
 import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 import { formatProgressSnapshot, ProgressGuard, type ProgressRunOptions } from "./progress-guard.ts";
+import { SessionKeepaliveTimer } from "./session-keepalive.ts";
 import { evaluateSessionFuse, formatCacheDiagnostics, formatGoalEfficiency, inspectCacheDiagnostics, inspectGoalEfficiency } from "./cache-diagnostics.ts";
 import { attributeProviderCache, inspectProviderCachePrefix, type CachePrefixSnapshot } from "../core/cache-prefix.ts";
 import { guardContext } from "./context-guard.ts";
@@ -817,6 +818,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let lastSystemPrompt: string | undefined;
 	let guardNotified = false;
 	let fuseNotified = false;
+	/**
+	 * The keepalive timer, armed per session and disarmed on shutdown.
+	 *
+	 * **Its callback reports rather than acts, and the API surface is why**: the adapter may call ten host verbs and
+	 * none of them reaches the provider, so the unsolicited request a heartbeat exists for is not something this side
+	 * can make. **The clock is real and unref’d**, so a pending heartbeat never keeps the process alive.
+	 */
+	let keepaliveTimer: SessionKeepaliveTimer | undefined;
+	let keepaliveContext: { hasUI?: boolean; ui?: { notify: (message: string, level?: string) => void } } | undefined;
 	const reasoningVoiceFlagPath = join(stateDir, "reasoning-voice");
 	function readReasoningVoiceFlag(): boolean {
 		try {
@@ -2091,6 +2101,24 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		// **Armed per session, with a real clock.** A pending heartbeat is unref’d so it cannot hold the process
+		// open, and the callback reports through whatever context the last request supplied - which is all it can
+		// do, since no host verb here reaches the provider.
+		keepaliveTimer?.disarm();
+		keepaliveTimer = new SessionKeepaliveTimer({
+			clock: {
+				now: () => Date.now(),
+				setTimer: (callback, delayMs) => { const handle = setTimeout(callback, delayMs); (handle as { unref?: () => void }).unref?.(); return handle; },
+				clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+			},
+			onDue: () => {
+				keepaliveContext?.ui?.notify(
+					"会话已空闲超过上游缓存保持的时间窗口：再发一次请求会按全价重计整个前缀。Dove 不会自己发 —— 上游属于宿主；继续对话或开新会话都行。",
+					"warning",
+				);
+			},
+		});
+		keepaliveTimer.arm();
 		pendingContinuationPlan = undefined;
 		currentRequestHadNonQuestionTool = false;
 		requestContextText = undefined;
@@ -2475,6 +2503,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async (event) => {
+		// **The caller obligation the timer documents.** One that outlived its session would report into the next
+		// one, which is worse than a cold cache.
+		keepaliveTimer?.disarm();
+		keepaliveTimer = undefined;
 		const reason = event.reason === "reload" || event.reason === "new" || event.reason === "resume" || event.reason === "fork" ? "superseded" : "cancelled";
 		// Shutdown can race the normal agent_end hook after a policy decision has
 		// already been made (for example convergence blocked a product mutation).
@@ -2920,6 +2952,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("before_provider_request", async (event, ctx) => {
+		// Every provider call is what the timer counts from, and the context it keeps is where a due callback reports.
+		keepaliveTimer?.observe();
+		keepaliveContext = ctx as unknown as typeof keepaliveContext;
 		const model = ctx.model as { contextWindow?: unknown; maxTokens?: unknown; provider?: unknown; id?: unknown } | undefined;
 		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, interactionMode, projectAvailable: projectProvider.kind !== "lightweight" });
 		// A chat request that starts using project/read tools follows the lookup
