@@ -13,6 +13,12 @@
   // they were outside this gate until a probe found a reading printing `undefined` for the observable the whole verdict
   // machinery is built around - `Property 'to' does not exist on type 'PredictedMovement'`, in a file nobody had asked the
   // type system about. `scripts/**/*.mjs` stays out: the blackbox harness is plain JavaScript and has no types to check.
+  // `bin/dove-pi.cjs` stays out for a measured reason rather than an assumed one. Checked with JavaScript checking on, it reports
+  // thirteen `TS2339`s, and all thirteen are the same artifact: the spread in `{ ...process.env, PI_SKIP_VERSION_CHECK: "1" }` does
+  // not carry an index signature into a JavaScript object literal's inferred type, so every later assignment reads as a property that
+  // does not exist. Reading them is what settled it - the object does spread the parent environment, so a launched child keeps it, and
+  // the file is not hiding a defect behind the noise. What covers the launcher is execution: CI runs `npm run pi:smoke`, which
+  // invokes it for `--version` and `--help`.
   "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mts", ".pi/**/*.ts"],
   // Fixtures under tests/fixtures are audit input, not project source: some of them are deliberately
   // incomplete (a missing import, an undeclared global) because a scanner has to cope with real code
