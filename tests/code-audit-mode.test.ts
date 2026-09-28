@@ -123,10 +123,25 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 		const stripComments = (source: string): string =>
 			source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 		const offenders: string[] = [];
+		let read = 0;
 		for (const entry of entries.filter((name) => name.endsWith(".ts"))) {
-			const source = stripComments(await readFile(join(coreDir, entry), "utf8"));
+			let source: string;
+			try {
+				source = stripComments(await readFile(join(coreDir, entry), "utf8"));
+			} catch (error) {
+				// **A file listed a moment ago can be gone a moment later.** Another suite plants a control module
+				// in this directory and removes it in the same test, and both suites run in one process - so a name
+				// read at the top of this case may not exist by the time it is opened. **A file that no longer
+				// exists cannot carry a per-vertical branch**, which is what this case is about, so it is skipped
+				// rather than reported. The count below is what stops that from becoming a quiet way to pass: if
+				// the walk read nothing, the assertion is about nothing.
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+				throw error;
+			}
+			read += 1;
 			if (source.includes("code-audit")) offenders.push(entry);
 		}
+		assert.ok(read > 20, `the walk read only ${read} core modules, too few for this to mean anything`);
 		assert.deepEqual(offenders, [], "if a vertical needs a core change, that is a framework defect, not a vertical feature");
 	});
 

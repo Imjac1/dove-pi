@@ -274,6 +274,110 @@ function nonNegativeNumber(value: unknown): number | undefined {
  * **Left open, and recorded in the contract rather than decided here**: a partial line anywhere but the end would mean the
  * append guarantee itself was broken, and nothing here says whether a reading should skip it, count it, or refuse the file.
  */
+export interface ExecutionAuditSummary {
+	readonly schemaVersion: 1;
+	readonly records: number;
+	/** How many logical requests the ledger saw, and how they ended. */
+	readonly lifecycle: Readonly<{
+		readonly received: number;
+		readonly terminal: number;
+		readonly aborted: number;
+		/** The same prompt delivered again while one was in flight, which the idempotency child exists to prevent. */
+		readonly coalescedRedeliveries: number;
+		readonly terminalReasons: Readonly<Record<string, number>>;
+	}>;
+	/** Tool calls seen, and how many identifiers were seen more than once. */
+	readonly tools: Readonly<{
+		readonly observed: number;
+		readonly duplicateToolCalls: number;
+		readonly unattributable: number;
+	}>;
+	readonly budget: Readonly<{ readonly checked: number; readonly rejected: number }>;
+	readonly providers: Readonly<{ readonly started: number; readonly completed: number; readonly rejected: number }>;
+	readonly dispatch: Readonly<{ readonly decided: number; readonly completed: number }>;
+	readonly families: Readonly<Record<ExecutionEvidenceFamily, number>>;
+	readonly groups: number;
+	readonly groupsMissingCorrelation: number;
+}
+
+const UNKNOWN_REASON = "unknown";
+
+/**
+ * Summarize a ledger read-only, for the audit command.
+ *
+ * **Built on `parseLedgerLines`, which the file records as *the one reader of the ledger line format, because
+ * five of them disagreed*** - so this adds no second reading of the file, only a projection of what that one
+ * returns. Every field is read defensively and a value that is not there is reported `unknown` rather than
+ * inferred: the design says payloads are summarized and unavailable fields are labelled.
+ *
+ * **What it does not summarize, and why that is stated rather than hidden**: cross-turn stagnation and
+ * cache-prefix changes. Stagnation is a tool-loop child decision that this vocabulary does not give a kind of
+ * its own, and cache-prefix evidence lives on the model gateway rather than on these records. **Counting
+ * something adjacent and calling it stagnation would be the failure mode this whole specification is about.**
+ */
+export function summarizeExecutionRecords(content: string): ExecutionAuditSummary {
+	const records = parseLedgerLines(content);
+	const groups = correlateExecutionRecords(records);
+	const terminalReasons: Record<string, number> = {};
+	const toolCallIds = new Set<string>();
+	let duplicateToolCalls = 0;
+	let unattributable = 0;
+	let toolCallsObserved = 0;
+	let received = 0;
+	let terminal = 0;
+	let aborted = 0;
+	let coalescedRedeliveries = 0;
+	let budgetChecked = 0;
+	let budgetRejected = 0;
+	let providerStarted = 0;
+	let providerCompleted = 0;
+	let providerRejected = 0;
+	let dispatchDecided = 0;
+	let dispatchCompleted = 0;
+	const families: Record<ExecutionEvidenceFamily, number> = { extension_identity: 0, request_lifecycle: 0, tool_loop: 0, other: 0 };
+	for (const record of records) {
+		families[executionEvidenceFamily(record.kind)] += 1;
+		switch (record.kind) {
+			case "request.received": received += 1; break;
+			case "request.redelivery.coalesced": coalescedRedeliveries += 1; break;
+			case "request.terminal": {
+				terminal += 1;
+				const reason = stringValue(record.details.reason) ?? UNKNOWN_REASON;
+				terminalReasons[reason] = (terminalReasons[reason] ?? 0) + 1;
+				if (record.details.policyAbort === true) aborted += 1;
+				break;
+			}
+			case "tool.observed": {
+				toolCallsObserved += 1;
+				const id = record.correlation?.toolCallId;
+				if (id === undefined) { unattributable += 1; break; }
+				if (toolCallIds.has(id)) duplicateToolCalls += 1;
+				toolCallIds.add(id);
+				break;
+			}
+			case "model.budget.checked": budgetChecked += 1; break;
+			case "model.budget.rejected": budgetRejected += 1; break;
+			case "provider.request.started": providerStarted += 1; break;
+			case "provider.request.completed": providerCompleted += 1; break;
+			case "provider.request.rejected": providerRejected += 1; break;
+			case "dispatch.decided": dispatchDecided += 1; break;
+			case "dispatch.completed": dispatchCompleted += 1; break;
+			default: break;
+		}
+	}
+	return Object.freeze({
+		schemaVersion: 1,
+		records: records.length,
+		lifecycle: Object.freeze({ received, terminal, aborted, coalescedRedeliveries, terminalReasons: Object.freeze(terminalReasons) }),
+		tools: Object.freeze({ observed: toolCallsObserved, duplicateToolCalls, unattributable }),
+		budget: Object.freeze({ checked: budgetChecked, rejected: budgetRejected }),
+		providers: Object.freeze({ started: providerStarted, completed: providerCompleted, rejected: providerRejected }),
+		dispatch: Object.freeze({ decided: dispatchDecided, completed: dispatchCompleted }),
+		families: Object.freeze(families),
+		groups: groups.length,
+		groupsMissingCorrelation: groups.filter((group) => !group.complete).length,
+	});
+}
 export function parseLedgerLines(content: string): readonly ExecutionRecord[] {
 	return content.split(/\r?\n/).filter(Boolean).flatMap((line) => {
 		try {
