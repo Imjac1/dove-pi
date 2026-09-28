@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 186
+- **Total Sessions**: 187
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1054 | Active |
+| `journal-4.md` | ~1089 | Active |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 187 | 2026-09-29 | The skills beside the manual steps | `1b0aa4f` | `master` |
 | 186 | 2026-09-29 | What the tools object actually carries | `f212b12` | `master` |
 | 185 | 2026-09-29 | The one action, named exactly | `b4668ca` | `master` |
 | 184 | 2026-09-29 | The pattern, counted, and the list emptied | `bc3e498` | `master` |

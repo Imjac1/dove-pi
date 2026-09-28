@@ -1052,3 +1052,38 @@ Listed the tools object for the first time and found fifty-six members where thi
 ### Next Steps
 
 - The user answer to the authorisation question, which is now on the record and not repeated. Everything reachable without it is done.
+
+
+## Session 187: The skills beside the manual steps
+<!-- trellis-session: v=2 fp=72cd6ec58ff48324 -->
+
+**Date**: 2026-09-29
+**Task**: The skills beside the manual steps
+**Branch**: `master`
+
+### Summary
+
+Read trellis-finish-work and trellis-check and found two things the manual path does not do: it runs get_context.py --mode record to survey the other open tasks, and it classifies dirty paths and bails out if code changes from the task are uncommitted. The second is a safety check the session has run without for a hundred and eighty-six sessions.
+
+### Main Changes
+
+- and the survey found five tasks that are not this session own, two of them P0: a Dove interoperability layer in progress, real-user web access, audit observability, a P0 runtime reliability task in planning, and a P0 adaptive formal workflow in progress. They are surfaced here and not touched, because whether they are done is not this session judgement to make
+- get_context.py also has modes packages and phase, none of them run in this span - the third round in a row to find a mechanism that was there
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1b0aa4f` | chore(task): read the skills, and find the survey the manual path never ran |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The five open tasks the survey surfaced, two of them P0, which are project work rather than this session own archaeology. And the authorisation question from session 186, which is on the record and not repeated.
