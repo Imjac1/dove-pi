@@ -1617,3 +1617,41 @@ Measured: 75 test files, all at depth one, none nested - so the suite pattern ma
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 94: The Python test files the installer pattern skips
+<!-- trellis-session: v=2 fp=ff407f70827c7b4b -->
+
+**Date**: 2026-09-28
+**Task**: The Python test files the installer pattern skips
+**Branch**: `master`
+
+### Summary
+
+Measured the other runner: seven python test files under tests, and active_task_test.py does not contain installer, so python -m unittest discover with the installer pattern skips it. Reading it explains it - it tests .trellis/scripts/common/active_task.py, the Trellis tooling rather than this project, and nothing in this repository runs it.
+
+### Main Changes
+
+- neither the file nor the pattern is wrong: the pattern names the installer, and this is not an installer test, while the file is the tool own in a directory where the other six are all Dove own. What was missing is a statement
+- the check holds the classification, so the next python file added under tests is either named for the suite that runs it or listed with the reason it is not - and the foreign list is asserted in both directions, because an entry naming a file that is gone is the same rot the reachability list guards against
+- the finding direction is one-way on purpose, like the switch check: the pattern may match a subset, while a file matched by nothing is the defect
+- and the check was given a negative control, the second one this session to have one and the first to be written with it from the start: a planted file makes it fail naming that file, and removing it makes it pass
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e06d5d2` | test(tests): the python test files the installer pattern skips |
+| `4738b0f` | chore(task): record the python file nothing runs and the statement that now holds it |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 739 tests, 737 pass, 0 fail, 2 skipped. Installer tests: 119 tests OK. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
