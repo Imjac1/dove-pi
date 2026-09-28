@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 132
+- **Total Sessions**: 133
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1075 | Active |
+| `journal-3.md` | ~1111 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 133 | 2026-09-28 | Whether my own measurements made a document stale | `e1a8c7d` | `master` |
 | 132 | 2026-09-28 | The change manifest and the verdict it feeds | `a436274` | `master` |
 | 131 | 2026-09-28 | The convergence operations, run rather than read | `42d9a68` | `master` |
 | 130 | 2026-09-28 | What the read-only switch actually blocks | `818815d` | `master` |

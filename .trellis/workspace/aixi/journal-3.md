@@ -1073,3 +1073,39 @@ Read what a change manifest is before writing one: not a file but what the agent
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task - and it is now the only thing left that a reading cannot stand in for.
+
+
+## Session 133: Whether my own measurements made a document stale
+<!-- trellis-session: v=2 fp=3adf0194c36e498f -->
+
+**Date**: 2026-09-28
+**Task**: Whether my own measurements made a document stale
+**Branch**: `master`
+
+### Summary
+
+Held this session four findings against the specifications. The read-only switch, the two doctors and the approval table are all already documented - the table names all four entry points, says granted is insufficient by itself, and says the JSON-RPC path has no authorizer and fails closed - so three confirmed a document rather than staling one.
+
+### Main Changes
+
+- what was stale was mine: the round that fixed the collapsed error codes changed the oversized-line response to -32600, and the line still promised a parse error. The behaviour is unchanged and the code is right for an oversized request; the sentence was what stopped being true
+- and a claim of mine was wrong: I reported that the params validator is unreachable and its values accepted, because a probe treated a resolved response as success. The refusal exists with -32000, and the archived task now carries an appended correction rather than a rewrite
+- a test now holds that refusal, which is what would have caught the error in the first place - the spec promised it and nothing checked it
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e1a8c7d` | docs(spec): correct the oversized-line response, and a claim of mine that was wrong |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 744 tests, 742 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
