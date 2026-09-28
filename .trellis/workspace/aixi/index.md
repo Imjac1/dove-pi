@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 117
+- **Total Sessions**: 118
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~526 | Active |
+| `journal-3.md` | ~563 | Active |
 | `journal-2.md` | ~1988 | Archived |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 118 | 2026-09-28 | The other chain that writes state | `fc3b8de`, `5da07a3` | `master` |
 | 117 | 2026-09-28 | The task command chain in a temporary project | `ad37646`, `a939579` | `master` |
 | 116 | 2026-09-28 | The other barrels | `b2fe303`, `d73970e` | `master` |
 | 115 | 2026-09-28 | The barrel that re-exports what nothing names | `f4ee95f`, `3e96bed` | `master` |

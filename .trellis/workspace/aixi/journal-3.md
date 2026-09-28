@@ -524,3 +524,40 @@ Ran the CLI chain that writes state, in a temporary directory: project init, two
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 118: The other chain that writes state
+<!-- trellis-session: v=2 fp=7a23d979a395529d -->
+
+**Date**: 2026-09-28
+**Task**: The other chain that writes state
+**Branch**: `master`
+
+### Summary
+
+Ran the last two state-writing chains in a temporary project: task convergence status and session record, and all five steps exit zero. And .dove/sessions.jsonl is written as one JSON object per line with schemaVersion 1 - the path an earlier round found by reading native-sessions.ts, written here by the command that declares it.
+
+### Main Changes
+
+- so every state-writing chain in the CLI has now been run rather than read: the task chain last round, the convergence chain and the session chain here, all in temporary projects and all exiting zero
+- and the round says what it does not prove: that the chain works against a Pi host. Every step ran without one, which is exactly the part this environment can exercise, and the steps needing the host are the first real turn
+- the fixture was removed afterwards and this repository is untouched, the only untracked path being the task itself
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fc3b8de` | chore(task): run the convergence and session chains, the last two writers |
+| `5da07a3` | chore(task): archive 09-28-session-chain |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 741 tests, 739 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
