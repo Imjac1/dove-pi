@@ -616,3 +616,39 @@ Read the last two unread blocks on the map and found they are command lists rath
 ### Next Steps
 
 - The release:check entry, recorded as unrunnable, and the lists left elsewhere.
+
+
+## Session 175: The two scripts nobody runs
+<!-- trellis-session: v=2 fp=33798bf297cb031f -->
+
+**Date**: 2026-09-29
+**Task**: The two scripts nobody runs
+**Branch**: `master`
+
+### Summary
+
+Ran both scripts nobody here has run. benchmark:interop exits 0 and is safe, making its own temp directory, answering in milliseconds: provider refresh at 3.36 and context compilation at 10.04 over twenty-five iterations - the first thing this session has run that measures rather than checks. release:manifest exits 0 and prints the path it wrote, release.json at the repository root, which git shows as untracked.
+
+### Main Changes
+
+- so the generator dirties the tree when it runs, and the file was deleted afterwards
+- and the pair explains the entry that cannot run: release:manifest writes a manifest and release:check validates one, but the validator requires manifest, archive, checksum, bootstrap and asset while the npm entry passes none of them
+- that is why the readiness check runs inside the workflow, where the arguments are assembled, rather than from npm run - and nothing was invented, because a caller that passes the right arguments is what the workflow is
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6586f96` | chore(task): run the two scripts nobody runs, and find one writes into the repository |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 757 tests, 755 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host, and any further reading the specifications do not answer.
