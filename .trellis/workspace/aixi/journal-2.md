@@ -1691,3 +1691,40 @@ One level below the command and switch audits: every subcommand the usage string
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 96: The capability names the documents tell a user to run
+<!-- trellis-session: v=2 fp=56bb9a65e8bce24e -->
+
+**Date**: 2026-09-28
+**Task**: The capability names the documents tell a user to run
+**Branch**: `master`
+
+### Summary
+
+Measured by running the registry rather than grepping for it: dove-pi capability list prints fourteen names, and the two the READMEs tell a user to run - workspace.inspect and dev.project_test - are both in it. The help names none, which is right, because it shows capability run <name> as a placeholder.
+
+### Main Changes
+
+- the twelve the documents do not name are discoverable by running capability list, which is a document that cannot go stale - unlike cache and token, which two rounds ago were named nowhere at all
+- the sharper reading was the mode own grant: modes/code-audit/governance.yaml lists five names under authority.capabilities, and three are capability names while repo.read and report.write are that mode own actions, declared in permissions.yaml and given an idempotency class below
+- so nothing is broken and one thing was unstated: a reader could take every dotted name in that list for a capability. The permissions file explains the mix and the governance file did not, and now does
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7fe470f` | docs(modes): the grant holds two namespaces, and now says so |
+| `bd6bf93` | chore(task): record the capability registry measurement and the two namespaces |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 739 tests, 737 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5. The mode files still load, which is what proves the added comment is a comment.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
