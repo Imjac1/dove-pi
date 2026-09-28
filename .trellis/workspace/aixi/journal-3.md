@@ -706,3 +706,40 @@ Ran project bind native and project update in a temporary project. bind native e
 ### Next Steps
 
 - The first real turn, which needs a Pi host and a formal native task.
+
+
+## Session 123: The headless interface, driven by a pipe
+<!-- trellis-session: v=2 fp=75d7d127af2daca8 -->
+
+**Date**: 2026-09-28
+**Task**: The headless interface, driven by a pipe
+**Branch**: `master`
+
+### Summary
+
+Drove the JSON-RPC interface with the request the README documents: it returns a result with rpcVersion 1.0.0 and exits on its own. But every failure left with -32700, the code for a JSON parse error: four distinct validation failures arrived as the same code, so a client keying on it could not tell a broken document from a method that does not exist.
+
+### Main Changes
+
+- JsonRpcError carries the code now - an unserved method answers -32601, a malformed request -32600, both observed through handleRpc before and after, and held by a test. The messages are unchanged, which the existing assertions require
+- and one thing I did was wrong and is reverted: I also gave the params validator codes, and measuring showed that path is not reachable from handleRpc - params values it would reject are accepted. Asserting a refusal there would have been asserting what I expected rather than what ran
+- so those three throws are plain errors again and the test records the acceptance instead, which is the honest half of a fix
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f654988` | fix(rpc): the error codes say which failure it was, not that the JSON was broken |
+| `b27faea` | chore(task): record the headless interface, its working call and the codes it collapsed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 742 tests, 740 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The first real turn, which needs a Pi host and a formal native task.
