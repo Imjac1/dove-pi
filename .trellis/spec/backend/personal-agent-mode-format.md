@@ -76,7 +76,10 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   `authority` / `gate` mappings.
 - Each required field, when absent, is rejected.
 - A YAML block-scalar description parses correctly.
-- A vertical's mode id does not appear in executable code under `src/core`.
+- A vertical adds no core code: **adding one changes no file under `src/core`**. 
+  *(The principle, not a string search: a workspace mode is also called `pentest`, so the word appears in `src/core` for a reason that has
+  nothing to do with a vertical needing core code. A test cannot hold this one - what it can hold is that the mode directory is loaded from
+  `modes/` rather than built in, which is covered where the loader is tested.)*
 - A mode declaring a gate it does not supply is refused; `none` builds no gate.
 - An excluded technique is refused at the boundary, including on a call that names no target; a phase over
   its `gate.intensity` ceiling is refused, and the ceiling counts actions actually run.
