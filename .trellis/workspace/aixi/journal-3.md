@@ -1437,3 +1437,39 @@ Held the eleven items of scenarios 4 and 5 and found every one of them held. Byt
 ### Next Steps
 
 - The first real turn, which needs a Pi host - now the only named thing this environment cannot reach.
+
+
+## Session 143: Whether the required-test sections exist elsewhere
+<!-- trellis-session: v=2 fp=d22afd8c22ec5427 -->
+
+**Date**: 2026-09-28
+**Task**: Whether the required-test sections exist elsewhere
+**Branch**: `master`
+
+### Summary
+
+Counted the required-test sections and found my hypothesis wrong: nine specifications carry them, not one. capability-runtime has four, audit-vertical and extension-runtime and request-runtime two each, and one each in convergence-record, harness-loop, managed-install, mode-format and project-context, plus both quality guidelines headed Testing Requirements.
+
+### Main Changes
+
+- twenty-three headings mention tests and seventeen lists remain unread, so the right answer was more to read rather than finished, and the round says so instead of looking for somewhere to spend itself
+- the next target is capability-runtime.md: the capability and safety specification, whose authorisation rows this session drove by running them, so its holders should be findable and their absence would matter
+- and its first list was read as a running start, containing two shapes new to this audit: an item requiring a check to be load-bearing - a claim about test sensitivity rather than behaviour - and one naming a four-transport smoke matrix whose rows are countable
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `184c61c` | chore(task): count the required-test sections, and find my hypothesis wrong |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 747 tests, 745 pass, 0 fail, 2 skipped.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The four required-test lists in capability-runtime.md, beginning with the load-bearing claim and the four-transport smoke matrix.
