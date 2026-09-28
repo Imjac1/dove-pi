@@ -709,7 +709,7 @@ def parse_install(arguments: Sequence[str]) -> argparse.Namespace:
         "--profile", "--extensions", dest="profile",
         choices=PROFILES,
         default=None,
-        help="Extension profile (default: stored profile from .dove/manifest.json, else max)",
+        help="Extension profile (default: the profile the managed install recorded, else max)",
     )
     parser.add_argument(
         "--no-extensions",
@@ -773,7 +773,8 @@ Workspace mode:
 
 Advanced controls:
   python dove_pi.py install  install from a source checkout (compatibility)
-  --profile PROFILE        max, or minimal/dev/research/security (default: stored profile, else max)
+  --profile PROFILE        max, or minimal/dev/research/security
+                           (default: the profile the managed install recorded, else max)
   --no-extensions          skip Pi extension installation
 
 Compatibility aliases remain available: --extensions, --skip-checks, and --skip-version-check.

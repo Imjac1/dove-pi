@@ -544,5 +544,39 @@ class BootstrapDefaultTests(unittest.TestCase):
             )
 
 
+class ProfileDefaultTests(unittest.TestCase):
+    """The profile fallback the help states is the one the state applies.
+
+    Measured: the help for `--profile` said the stored profile comes from `.dove/manifest.json`, and that path exists nowhere - `.dove`
+    holds state.json, tasks, sessions, project.json, effects and workspace.json, and the manifest path in the code is `.dove/project.json`.
+    The profiles mapping that sentence pointed at is read by the Windows Terminal font code, which is about a font and not a profile.
+
+    The stored profile is the one the managed install recorded, in the install state, and the fallback is `max` - which the state file
+    declares and the help now repeats. This holds the two together.
+    """
+
+    def test_the_stated_profile_fallback_is_the_applied_one(self):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            self.assertEqual(main(["--help"]), 0)
+        help_text = captured.getvalue()
+        # **The two helps are asserted to agree, not to carry a phrase I chose.** They are different strings - one printed, one
+        # argparse - and the first version of this check demanded my own wording from the printed one, which said "stored profile"
+        # and was vague rather than false. The invariant is that both name the same source, and that neither names a path that
+        # exists nowhere.
+        self.assertIn("the profile the managed install recorded, else max", help_text, "the printed help no longer states the source")
+
+        state = (ROOT / "installer" / "state.py").read_text(encoding="utf-8")
+        self.assertIn('profile: str = "max"', state, "the install state no longer defaults the profile to max")
+        self.assertIn('profile = "max"', state, "the install state no longer falls back to max when reading")
+
+        dove = (ROOT / "dove_pi.py").read_text(encoding="utf-8")
+        self.assertNotIn(
+            ".dove/manifest.json",
+            dove,
+            "a path that exists nowhere is named again",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
