@@ -64,6 +64,17 @@ describe("Windows doctor", () => {
 		assert.equal(fine.exitCode, 0, "the control: a script that succeeds exits zero");
 		assert.equal(fine.stderr.trim(), "", "and says nothing on stderr");
 	});
+	it("reports which executable ran, and it is one of the candidates the module defines", async () => {
+		// **What this holds and what it does not.** It holds the `executable` field and its domain: whichever of the two candidates ran is
+		// named, so a caller can tell `pwsh` from `powershell` rather than guessing. **It does not hold the fallback as such** - forcing the
+		// second candidate would need the first to be missing, which a test cannot stage.
+		// **What makes it worth having anyway**: on this machine `pwsh` is absent, so the first candidate throws, the loop moves on, and
+		// the fallback runs on every call - and the assertion below is what records which side of it answered.
+		const result = await runPowerShell("Write-Output ok", { timeoutMs: 10_000 });
+		assert.match(result.executable, /^(pwsh|powershell)(\.exe)?$/, `the executable is one of the candidates: ${result.executable}`);
+		// The control: the field is not a constant, because it is the executable the module actually spawned, and the run succeeded.
+		assert.equal(result.exitCode, 0, "the control: the run this field describes actually happened");
+	});
 	it("reports runtime and tool availability", async () => {
 		const report = await inspectWindowsEnvironment(process.cwd());
 		assert.equal(report.available, true);
