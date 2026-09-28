@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 77
+- **Total Sessions**: 78
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1010 | Active |
+| `journal-2.md` | ~1048 | Active |
 | `journal-1.md` | ~1969 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 78 | 2026-09-28 | The last uncomputable entry was contradicted by the file it lived in | `b46f4fc`, `0c1247e` | `master` |
 | 77 | 2026-09-28 | A round is a record, and the third axis is computable | `7ee87ab`, `0852c31` | `master` |
 | 76 | 2026-09-28 | The inside answer, from a commit found at runtime | `2df1db4`, `5189baa` | `master` |
 | 75 | 2026-09-28 | The last mile of the guide, rehearsed on a real commit | `c1b8c7c`, `3a7e672` | `master` |

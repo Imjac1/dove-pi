@@ -1008,3 +1008,41 @@ ITQ was declared uncomputable with its reason and its evidence: no per-round sco
 ### Next Steps
 
 - The Pareto axis, which needs a second measured objective and a decision about its frontier - and that is a design decision rather than a build step. The first real turn still needs a Pi host.
+
+
+## Session 78: The last uncomputable entry was contradicted by the file it lived in
+<!-- trellis-session: v=2 fp=93a6106c1e787025 -->
+
+**Date**: 2026-09-28
+**Task**: The last uncomputable entry was contradicted by the file it lived in
+**Branch**: `master`
+
+### Summary
+
+The Pareto entry said no second objective is recorded, so there is nothing to preserve against - while the same module reports crashFreeRatio and isolationRefusalsPerRequest from the same records, correlated per request, and the axes test asserts both. What is missing is a frontier, not a measurement.
+
+### Main Changes
+
+- the entry stays in the list and changes why it is there: declared for a decision rather than for a missing measurement, which is a different kind of absence and the only one left
+- preservation asks whether a run that is stable but hits isolation refusals is better or worse than one that is safe but crashes, and the module own rule about thresholds says the same about rates: a decision belongs to whoever makes it, with its own evidence
+- and the test now asserts the entry beside the two objectives, because a claim about what the harness cannot measure sits next to the code that measures it - the contradiction was only invisible because the two were never read together
+- the round also corrected my own first reading of the entry: I had taken its word that no second objective exists, and the measurement was what showed the claim was about a record field rather than about the reading
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b46f4fc` | fix(axis): the last uncomputable entry was contradicted by the file it lived in |
+| `0c1247e` | chore(task): record the correction of the last uncomputable entry |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 733 tests, 731 pass, 0 fail, 2 skipped. Installer tests and doctor pass. The spec budget test is 5 of 5, and the axes suite is 9 of 9.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Every axis this harness declares is now either computed or declared as a decision rather than a gap. The first real turn still needs a Pi host and a formal native task.
