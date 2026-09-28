@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { getProfilePackages, PROFILE_PACKAGE_IDS, type ExtensionProfile } from "../src/extensions/catalog.ts";
 import { DOVE_EXTENSION_ID, DOVE_EXTENSION_CONTRACT_VERSION, doveImplementationDigest } from "../src/core/extension-identity.ts";
+import { RELEASE_SOURCE_ROOTS } from "./release-roots.mts";
 
 interface PackageJson {
 	readonly version: string;
@@ -66,7 +67,7 @@ const profiles = Object.fromEntries(
 	]),
 );
 function sourceDigest(root: string): string {
-	const includedRoots = ["bin", "src", "installer", ".pi", "scripts/build-release-manifest.mts", "dove_pi.py", "package.json", "package-lock.json"];
+	const includedRoots = RELEASE_SOURCE_ROOTS;
 	const files: string[] = [];
 	const collect = (relative: string): void => {
 		const absolute = resolve(root, relative);
