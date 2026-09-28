@@ -1087,3 +1087,39 @@ Read trellis-finish-work and trellis-check and found two things the manual path 
 ### Next Steps
 
 - The five open tasks the survey surfaced, two of them P0, which are project work rather than this session own archaeology. And the authorisation question from session 186, which is on the record and not repeated.
+
+
+## Session 188: The project work the survey surfaced
+<!-- trellis-session: v=2 fp=30fae3262b916dfb -->
+
+**Date**: 2026-09-29
+**Task**: The project work the survey surfaced
+**Branch**: `master`
+
+### Summary
+
+Read the P0 that reports four of five done and found it is an umbrella whose own plan says not to start it. Three of its four children are archived - extension identity sync, request lifecycle idempotency and tool loop context control - and the fourth, audit observability and regression, is open.
+
+### Main Changes
+
+- so the project remaining work is one child with six acceptance criteria and eight plan items, starting with defining additive evidence and redaction contracts
+- it asks for a summary reporting lifecycle counts, abort reasons, duplicate requests and tools, stagnation and maintenance decisions, for legacy four-field logs staying readable, for redaction tests covering bearer patterns, credentials, private keys, environments, prompts and arguments, and for the full gate to pass without touching the real installation
+- and this round curated two paths that did not exist, because the survey output truncates task names and one was completed from memory: the real directory ends reliability-sync, not reliability. Both curations were corrected against a directory listing rather than another guess
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a0b58a8` | chore(task): read the P0 umbrella, and find the one child that remains |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 759 tests, 757 pass, 0 fail, 2 skipped. The spec budget test is 5 of 5.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 08-30-dove-audit-observability-regression, and its first plan item: define additive evidence and redaction contracts.
