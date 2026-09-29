@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, createWriteStream, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, createWriteStream, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -55,6 +56,24 @@ mkdirSync(dirname(outputPath), { recursive: true });
 mkdirSync(scenarioRoot, { recursive: true });
 mkdirSync(stateDir, { recursive: true });
 mkdirSync(sessionDir, { recursive: true });
+// **A real run needs the credentials the isolation hides.** `PI_CODING_AGENT_DIR` is pointed at this scenario's own
+// session root so no run can touch the operator's configuration - which also meant `--provider real` could never
+// reach the provider it names, because `models.json` and `auth.json` live in that same directory. That is why no real
+// run had ever happened: the mode was reachable and unusable. Copy the provider configuration in instead, and only
+// for a real provider, so the deterministic cases keep their own extension-registered provider untouched.
+// Which of the operator's provider files this run carried in. Names only - the contents are never logged.
+let carriedConfig = [];
+if (providerMode !== "faux") {
+  const operatorAgentDir = process.env.PI_CODING_AGENT_DIR?.trim() || resolve(homedir(), ".pi", "agent");
+  carriedConfig = ["settings.json", "models.json", "auth.json"].filter((name) => {
+    const source = resolve(operatorAgentDir, name);
+    try {
+      if (!statSync(source).isFile()) return false;
+      copyFileSync(source, resolve(sessionDir, name));
+      return true;
+    } catch { return false; }
+  });
+}
 prepareWorkspace();
 if (progressCase === "changing") {
   for (let index = 0; index < 20; index++) writeFileSync(resolve(workspaceRoot, `probe-${index}.txt`), `probe-${index}\n`, "utf8");
@@ -251,7 +270,7 @@ child.on("close", (code, signal) => {
   const planByStep = new Map(requestStepIndexes.map((index, position) => [index, plans[position]]));
   const summary = {
     caseId, scenarioSessionKey, cwd: workspaceRoot, outputPath, runLogPath, scenarioRoot, sessionDir, stateDir,
-    launcher, providerMode, dialogCase,
+    launcher, providerMode, dialogCase, carriedConfig,
     contextWindow: providerMode === "faux" && Number.isFinite(parsedContextWindow) && parsedContextWindow > 0 ? Math.floor(parsedContextWindow) : undefined,
     promptDigest: digest(primaryPrompt), durationMs: Date.now() - startedAt,
     exitCode: code, signal, harnessTimedOut, scenarioFailed, settled: stepRecords.some((step) => step.settled),
