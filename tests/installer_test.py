@@ -177,6 +177,35 @@ class InstallerCliTests(unittest.TestCase):
             self.assertEqual(launch([]), 0)
         self.assertEqual(run.call_args.kwargs["env"]["PI_SKIP_VERSION_CHECK"], "1")
 
+    def test_launch_sets_the_framework_version_a_mode_range_is_checked_against(self):
+        """The launcher's own help lists this under the variables it sets, and only the Node launcher did.
+
+        **Why the existing environment check could not see it.** `EnvironmentVariableTests` asks whether a name the help
+        gives appears *anywhere* in the code - an ast walk over this file, plus the text of `install.ps1`,
+        `bin/dove-pi.cjs` and `src/**`. `DOVE_PI_FRAMEWORK_VERSION` is set in `bin/dove-pi.cjs`, so that check passed
+        while this launcher never set it. Its own docstring states the limit: it "asks whether the name appears in the
+        code at all, not whether it is read at the right moment". A mode's declared range is checked against this value,
+        and a missing one makes the mode refuse to load, so the same project behaved differently depending on which
+        documented entry point started it. This asserts the child environment rather than the text.
+        """
+        completed = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("dove_pi.executable", return_value="node"), \
+                patch("dove_pi.PI_ENTRY") as pi_entry, \
+                patch("dove_pi.subprocess.run", return_value=completed) as run:
+            pi_entry.exists.return_value = True
+            self.assertEqual(launch([]), 0)
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(
+            environment["DOVE_PI_FRAMEWORK_VERSION"],
+            package_versions()[0],
+            "a mode's range is checked against the framework version, so it must be the release version",
+        )
+        self.assertEqual(
+            environment["DOVE_PI_EXTENSION_VERSION"],
+            environment["DOVE_PI_FRAMEWORK_VERSION"],
+            "both are set from one number here, and asserting only one lets the other be dropped unnoticed",
+        )
+
     def test_source_launcher_has_direct_pi_startup_path(self):
         source = (Path(__file__).resolve().parents[1] / "bin" / "dove-pi.cjs").read_text(encoding="utf-8")
         self.assertIn("shouldUsePiFastPath", source)

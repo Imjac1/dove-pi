@@ -469,10 +469,19 @@ def launch(arguments: Sequence[str]) -> int:
     # Keep the adapter's runtime identity aligned with the managed release
     # metadata. Project-local wrappers inherit this value but are still
     # suppressed by the process-global authority claim when they diverge.
+    #
+    # **Two names, one number, and both must be set here.** They are separate variables on purpose:
+    # one names the extension identity and the other names the framework a work mode targets. A mode's
+    # declared range is checked against the framework version, and when it is missing the mode refuses to
+    # load - every tool call in that project is then refused before it runs. bin/dove-pi.cjs sets both;
+    # this launcher set only the first, so the same project behaved differently depending on which
+    # documented entry point started it. The help text below has listed both as launcher-set all along.
     try:
-        launch_env["DOVE_PI_EXTENSION_VERSION"] = package_versions()[0]
+        release_version = package_versions()[0]
     except RuntimeError:
-        launch_env["DOVE_PI_EXTENSION_VERSION"] = "0.1.0"
+        release_version = "0.1.0"
+    launch_env["DOVE_PI_EXTENSION_VERSION"] = release_version
+    launch_env["DOVE_PI_FRAMEWORK_VERSION"] = release_version
     launch_env["DOVE_PI_EXTENSION_GUARD"] = "1"
     completed = subprocess.run(
         [*pi_command, *pi_arguments],
