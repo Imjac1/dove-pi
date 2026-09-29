@@ -285,8 +285,8 @@ dove-pi web status
 ### Dove Pi 内部
 
 ```text
-/status                 查看简要状态
-/status full            查看完整诊断
+/status                 查看简要状态，并显示当前生效的工作模式
+/status full            查看完整诊断，含上次 plan、上次终止与最近的拒绝记录
 /project                查看项目状态
 /project init           显式创建 Dove 原生项目状态（通常无需执行）
 /task ...               可选地记录、完成或归档 Dove 目标
@@ -307,7 +307,7 @@ dove-pi web status
 `/dove-thinking` 只控制思考策略，`/dove-tools` 只改变显式兼容工具档案；Auto 模式下这些设置都不改变工具权限 ——
 工具权限来自工作模式的 `permissions.yaml`，其次才是 Pi 和已安装扩展。用 `/status full` 或 `agent_doctor` 查看同一份实际生效
 快照，包括请求 intent/lane、策略来源、活动工具数、provider/read-only 预算、上下文与缓存
-观察，以及最近的终止原因。快照是诊断投影，不会新增权限或改变现有上限。只读预算中的 `hardStop` 字段保留用于兼容和观测；它是历史请求数提示，不会单独终止产生新观察的读取。只有重复且未变化的观察、重复失败或确认循环等语义上的无进展保护会终止工具调用。
+观察，以及最近的终止原因和被记录的拒绝记录。其中两项刻意分开显示，因为它们是两个不同的事实：`strategy=` 描述当前正在运行的请求，而 `lastPlan=`、`lastTerminal=`、`Refused=` 是 `/status full` 对 ledger 内容的呈现，在产生它们的请求结束后仍然存在（`agent_doctor` 以 `strategy`、`diagnostics.lastTerminal`、`diagnostics.lastRefusals` 返回同一批读数）。`/status` 会显示当前生效的工作模式，并标记加载失败的模式 —— 模式加载失败会在任何工具运行之前拒绝每一次工具调用，原因全文在 `/status full`。快照是诊断投影，不会新增权限或改变现有上限。只读预算中的 `hardStop` 字段保留用于兼容和观测；它是历史请求数提示，不会单独终止产生新观察的读取。只有重复且未变化的观察、重复失败或确认循环等语义上的无进展保护会终止工具调用。
 
 Dove 不按 Fast、Standard、Ultra 预设上下文总量，也不截取模型窗口的固定百分比。
 上下文预算只在 Pi 报告活动模型窗口和 usage 时按实际剩余容量估算；最终完整 payload
@@ -325,6 +325,7 @@ Pi 可能仍显示通用的 `Operation aborted`，但 Dove 会保留具体终止
 | `provider-round-budget` | provider 轮次观察阈值已达到 | 查看 `/status full`；该阈值不会单独中止请求 |
 | `progress-*` | 工具循环重复或停滞 | 使用已有证据，改用更窄的查询 |
 | `user-cancelled` | 用户主动取消 | 准备好后提交新请求 |
+| `convergence-*` | formal lane 下的产品变更在运行前被拒；具体状态见 `/status full` | 用 `/status full` 查看拒绝内容与所属 gate；先用 `agent_task_convergence` 冻结验收标准 |
 | `startup-conflict` / `superseded` | 会话被其他运行实例接管 | 关闭旧实例或从新会话继续 |
 
 无 UI 时运行 `dove-pi doctor`，或通过 `diagnostics/status` 查看相同的结构化原因和下一步；

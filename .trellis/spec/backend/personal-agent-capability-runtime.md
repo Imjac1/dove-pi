@@ -108,14 +108,20 @@ and evidence contracts still apply to Dove-owned executors.
   default. Evidence filtering is defense in depth at the shared execution
   boundary and applies consistently to every adapter.
 - `diagnostics/status` reads the append-only execution ledger without executing
-  capabilities and returns `schemaVersion: 1` plus optional `lastTerminal` and
-  `lastResourceObservation` records. Filters may restrict `sessionId` and/or
-  `requestId`; the projection bounds terminal strings, stop reasons, and
-  numeric resource fields and never echoes arbitrary ledger details. Pi's
-  `agent_doctor` and CLI `doctor` (under `requestDiagnostics`) use the same
+  capabilities and returns `schemaVersion: 1` plus optional `lastTerminal`,
+  `lastResourceObservation` and `lastRefusals` records. Filters may restrict
+  `sessionId` and/or `requestId`; the projection bounds terminal strings, stop
+  reasons, refusal reasons, and numeric resource fields, and never echoes
+  arbitrary ledger details - which is why a refusal carries its gate and reason
+  but not its remediation, that being long prose. A refusal is carried at all
+  because a request can be refused and continue: `checkpointed`, `blocked` and
+  "no active criterion" all return `block` without ending the request, and the
+  refusal is what the operator has to act on. Pi's `agent_doctor`, CLI `doctor`
+  (under `requestDiagnostics`) and the in-session `/status full` use the same
   projection so headless and interactive clients can attribute a generic host
-  `Operation aborted` to one stable origin/code. The existing CLI install
-  diagnostics array remains backwards compatible alongside this projection.
+  `Operation aborted`, or a refusal that wrote no terminal, to one stable
+  origin and gate. The existing CLI install diagnostics array remains backwards
+  compatible alongside this projection.
 - **A mode's grant list and the registry are different things, and the gap between them is a deployment fact.** A
   mode declares what it *authorizes*; the registry holds what this build *implements*. Six of the nine capabilities
   the shipped modes declare have no implementation (`repo.read`, `report.write`, `net.scan`, `exploit.run`,

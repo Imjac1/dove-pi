@@ -42,9 +42,10 @@ function startHost(root: string) {
 	process.chdir(root);
 	const events = new Map<string, (event: any, ctx: any) => Promise<any>>();
 	const notifications: string[] = [];
+	const commands = new Map<string, { handler: (args: string, ctx: FakeContext) => Promise<void> }>();
 	const tools = new Map<string, { name: string }>();
 	const api = {
-		registerCommand() {},
+		registerCommand(name: string, definition: { handler: (args: string, ctx: FakeContext) => Promise<void> }) { commands.set(name, definition); },
 		registerShortcut() {},
 		registerFlag() {},
 		appendEntry() {},
@@ -76,6 +77,7 @@ function startHost(root: string) {
 	return {
 		events,
 		notifications,
+		commands,
 		context,
 		tools,
 		confirmCalls,
@@ -305,6 +307,45 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const decision = await callTool(host, "bash", { command: "ls" });
 			assert.equal(decision?.block, true, "an unreadable declaration stops the action rather than degrading to no mode");
 			assert.match(decision?.reason ?? "", /\[Dove mode\]/);
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("shows the failed mode and its reason in /status, where the operator already looks", async () => {
+		// The finding these two lines exist for: a mode that fails to load refuses **every** tool call - `tool_call`
+		// refuses before the lease check - and the only notice was one session-start notification that scrolls away.
+		// `/status` is what a user types when nothing runs, and until now it named nothing about the mode. The reason is
+		// long and a single line cannot carry it, so the compact form marks the refusal and `full` carries the loader's
+		// own words rather than a paraphrase of them.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		declareMode(root, "{ not json");
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+
+			host.notifications.length = 0;
+			await host.commands.get("status")?.handler("", host.context);
+			const compact = host.notifications.at(-1) ?? "";
+			assert.match(compact, /workMode=failed/, "the compact line says the mode did not load");
+			assert.match(compact, /modeRefused/, "and marks it, rather than printing a mode id that is not in force");
+			assert.doesNotMatch(compact, /LastPlan: /, "the ledger detail still waits for full, the way the goal line does");
+
+			host.notifications.length = 0;
+			await host.commands.get("status")?.handler("full", host.context);
+			const full = host.notifications.at(-1) ?? "";
+			assert.match(full, /Work mode failed to load, and every tool call is refused until the declaration is fixed:/, "full carries the whole reason");
+			assert.match(full, /not "no mode declared"/, "and it is the loaders own message, not a summary of it");
+
+			// Read-only, and asserted rather than assumed: a status command that wrote to the ledger would become
+			// evidence about the thing it reports.
+			const ledgerFile = join(stateDir, "execution.jsonl");
+			const rows = () => (existsSync(ledgerFile) ? readFileSync(ledgerFile, "utf8").split("\n").filter((line) => line.trim() !== "").length : 0);
+			const before = rows();
+			host.notifications.length = 0;
+			await host.commands.get("status")?.handler("full", host.context);
+			assert.equal(rows(), before, "status is a reader");
 		} finally {
 			host.restoreCwd();
 		}

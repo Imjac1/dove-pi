@@ -133,6 +133,11 @@ const modeGlyphs: Readonly<Record<AgentMode, string>> = {
 	ultra: "✦",
 };
 
+/** Bound one field of a single-line operator notification. Prose belongs in the ledger, not in a scrolling notice. */
+function clipText(value: string, max: number): string {
+	return value.length <= max ? value : `${value.slice(0, Math.max(0, max - 1))}…`;
+}
+
 function displayMode(value: AgentMode): string {
 	return `${modeGlyphs[value]} ${modeLabels[value]}`;
 }
@@ -1154,11 +1159,54 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const cache = inspectCacheDiagnostics(ctx.sessionManager.getEntries());
 			const full = args.trim().toLowerCase() === "full";
 			const sessionId = (ctx?.sessionManager as { getSessionId?: () => string } | undefined)?.getSessionId?.();
-			const goalEfficiency = full ? inspectGoalEfficiency(await ledger.read(), sessionId) : undefined;
-			// **The cache line is always shown; the goal line waits for `full`.** The two halves cost differently: the
-			// cache text is formatted from diagnostics already inspected above, while the goal line needs
-			// `await ledger.read()`. So the cheap half is no longer behind a flag, and the hint it used to print
-			// ("Use /status full for cache diagnostics") is gone because it is no longer true.
+			// **One ledger read for every reader on this command.** `full` needs the goal arithmetic and the shared
+			// diagnostics projection, and two reads of the same append-only file on adjacent lines is how the two would come to
+			// disagree about which request is last.
+			const ledgerRecords = full ? await ledger.read() : undefined;
+			const goalEfficiency = ledgerRecords ? inspectGoalEfficiency(ledgerRecords, sessionId) : undefined;
+			// Read-only, and the only consumer of the projection that a person reaches without an agent in the loop. The
+			// projection already served `doctor`, `agent_doctor` and RPC; a user whose request was refused had nowhere to read
+			// the refusal back, which is the gap this closes.
+			const diagnostics = ledgerRecords ? projectExecutionDiagnostics(ledgerRecords, sessionId ? { sessionId } : {}) : undefined;
+			// **The work mode is reported because a failed load blocks every tool call and says so only once.** `tool_call`
+			// refuses before the lease check, so a user who missed the session-start notification had no way to see why nothing
+			// ran. The reason is the first line only: the full text is long and `full` carries it.
+			const workModeText = modeRefusal !== undefined
+				? `workMode=failed, modeRefused: ${clipText(modeRefusal.split("\n")[0] ?? modeRefusal, 160)}`
+				: `workMode=${activeWorkMode?.id ?? "none"}`;
+			// A count of neither: the members are listed, because a number here would be a count of what the code declares.
+			const workModeDetail = !full
+				? ""
+				: activeWorkMode !== undefined
+					? ` Work mode ${activeWorkMode.id} (${activeWorkMode.gateSemantics}); unlisted=${activeWorkMode.permissions.unlisted}; ask_before=${activeWorkMode.permissions.ask_before.join(", ") || "none"}; never_allow=${activeWorkMode.permissions.never_allow.join(", ") || "none"}; fence=${activeWorkMode.fence === undefined ? "none" : `${activeWorkMode.fence.paths.join(", ")} (${activeWorkMode.fence.shell})`}.`
+					: modeRefusal === undefined
+						? " Work mode: none declared for this workspace, so no permission list, threshold or fence is in force."
+						: ` Work mode failed to load, and every tool call is refused until the declaration is fixed: ${modeRefusal}`;
+			// The three facts a user needs after a request died, each read back rather than reconstructed. "none" and "not
+			// recorded" are kept apart on purpose: a session that recorded no refusal and a session whose refusals were
+			// dropped must not read the same.
+			const ledgerDetail = diagnostics === undefined
+				? ""
+				: (() => {
+					const plan = diagnostics.strategy;
+					const lastPlan = plan?.intent !== undefined && plan.lane !== undefined
+						? `${plan.intent}/${plan.lane}${plan.logicalRequestId === undefined ? "" : `@${plan.logicalRequestId}`}`
+						: "not recorded for this session";
+					const terminal = diagnostics.lastTerminal?.terminal;
+					const lastTerminal = terminal === undefined
+						? "none"
+						: `${terminal.code}: ${clipText(terminal.summary, 200)}${terminal.nextAction === undefined ? "" : ` -> ${clipText(terminal.nextAction, 200)}`}`;
+					const refusals = diagnostics.lastRefusals;
+					const refused = refusals === undefined
+						? "none recorded for this session"
+						: refusals.map((refusal) => `${refusal.action}/${refusal.gate}/${clipText(refusal.reason, 200)}`).join("; ");
+					return ` LastPlan: ${lastPlan}. LastTerminal: ${lastTerminal}. Refused: ${refused}.`;
+				})();
+			// **The cache line is always shown; the two ledger lines wait for `full`.** The halves cost differently: the cache
+			// text is formatted from diagnostics already inspected above, while the goal arithmetic and the request diagnostics
+			// both need the ledger - so `full` reads it once and both halves use that one read. The cheap half is no longer
+			// behind a flag, and the hint it used to print ("Use /status full for cache diagnostics") is gone because it is
+			// no longer true.
 			const cacheText = ` Cache: ${formatCacheDiagnostics(cache)}.${
 				full ? ` Goals: ${formatGoalEfficiency(goalEfficiency!)}.` : ""
 			}`;
@@ -1166,7 +1214,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const strategyText = full
 				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
 				: "";
-			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText} ${detail}`, "info");
+			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText}${ledgerDetail}${workModeDetail} ${detail}`, "info");
 		},
 	});
 

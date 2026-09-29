@@ -312,8 +312,8 @@ switches only to previous; `uninstall --yes` removes only Dove-managed files and
 ### Inside Dove Pi
 
 ```text
-/status                 show compact status
-/status full            show full diagnostics
+/status                 show compact status, including the work mode in force
+/status full            show full diagnostics, including the last plan, the last terminal and the latest refusals
 /project                show project status
 /project init           explicitly create native project state (normally unnecessary)
 /task ...               optionally record, finish, or archive a Dove goal
@@ -335,7 +335,14 @@ project-context organization, `/dove-thinking` changes thinking policy, and `/do
 only an explicit compatibility profile. In Auto mode none of these settings changes tool authority -
 that comes from the work mode's `permissions.yaml`, and only then from Pi and the installed extensions. Use `/status full` or `agent_doctor` to inspect one effective snapshot containing intent/
 lane, policy sources, active tool count, provider/read-only budgets, context and cache observations,
-and the latest terminal cause. The snapshot is diagnostic evidence; it does not add permissions or
+and the latest terminal cause, plus the refusals that were recorded. Two of those readings are kept
+apart on purpose, because they are two different facts: `strategy=` describes the request that is
+running, while `lastPlan=`, `lastTerminal=` and `Refused=` are `/status full`'s rendering of what the
+execution ledger holds, and they outlive the request that produced them. `/status` names the work mode
+in force, and marks a mode whose declaration failed to load - a failed load refuses every tool call
+before it runs, and `/status full` carries the reason. `agent_doctor` returns the same readings as
+fields, under `strategy`, `diagnostics.lastTerminal` and `diagnostics.lastRefusals`. The snapshot is
+diagnostic evidence; it does not add permissions or
 change existing ceilings. The `hardStop` field in the read-only budget is retained for compatibility
 and telemetry as a historical request-count advisory; it cannot terminate a read that produces a
 new observation. Only semantic no-progress guards, such as unchanged observations, repeated
@@ -359,6 +366,7 @@ Pi may still render the generic `Operation aborted`, but Dove preserves a specif
 | `provider-round-budget` | Provider-round observation threshold reached | Inspect `/status full`; the threshold does not abort by itself |
 | `progress-*` | A tool loop repeated or stalled | Use existing evidence and issue a narrower query |
 | `user-cancelled` | The user cancelled the request | Submit a new request when ready |
+| `convergence-*` | A formal-lane product mutation was refused before it ran; `/status full` names the state | Read `/status full` for the refusal and its gate; freeze the criteria with `agent_task_convergence` first |
 | `startup-conflict` / `superseded` | Another runtime took over the session | Close the old runtime or continue in a new session |
 
 Without a UI, run `dove-pi doctor` or query `diagnostics/status` for the same structured cause and

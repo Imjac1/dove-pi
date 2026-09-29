@@ -24,6 +24,27 @@ export interface ExecutionTerminalDiagnostic {
 	readonly terminal?: RequestTerminalEnvelope;
 }
 
+/**
+ * One refused action, bounded for a diagnostic projection.
+ *
+ * **Why a refusal is carried and not only the terminal.** A request can be refused and continue - `checkpointed`, `blocked`,
+ * and "no active criterion" all return `block: true` without aborting - and the refusal is the thing the operator has to act
+ * on. The ledger has held these rows since the gate boundary was written, and no projection exposed them, so a user whose
+ * requests kept dying saw the cause only as one notification that scrolls away.
+ *
+ * **Why `remediation` is absent.** The projection's standing rule bounds its strings and never echoes arbitrary ledger
+ * details (`personal-agent-capability-runtime.md`), and `remediation` is long prose. The operator gets the reason here and
+ * the next step from the terminal-cause table the README documents.
+ */
+export interface ExecutionRefusalDiagnostic {
+	readonly timestamp: string;
+	readonly requestId?: string;
+	readonly tool: string;
+	readonly action: string;
+	readonly gate: string;
+	readonly reason: string;
+}
+
 export interface ExecutionResourceDiagnostic {
 	readonly timestamp: string;
 	readonly taskId: string;
@@ -48,6 +69,7 @@ export interface ExecutionDiagnosticsProjection {
 	readonly strategy?: StrategySnapshot;
 	readonly lastTerminal?: ExecutionTerminalDiagnostic;
 	readonly lastResourceObservation?: ExecutionResourceDiagnostic;
+	readonly lastRefusals?: readonly ExecutionRefusalDiagnostic[];
 }
 
 /**
@@ -135,6 +157,7 @@ export function projectExecutionDiagnostics(
 	const terminalRecord = [...matching].reverse().find((record) => record.kind === "request.terminal");
 	const resourceRecord = [...matching].reverse().find((record) => record.kind === "task.convergence.observed" && isRecord(record.details) && record.details.observationOnly === true);
 	const strategyRecord = [...matching].reverse().find((record) => record.kind === "request.planned" && isRecord(record.details) && isRecord(record.details.strategy));
+	const refusalRecords = matching.filter((record) => record.kind === "gate.refused").slice(-MAX_LAST_REFUSALS);
 	const resource = resourceRecord ? projectResourceDiagnostic(resourceRecord) : undefined;
 	const strategy = strategyRecord && isRecord(strategyRecord.details) && isRecord(strategyRecord.details.strategy)
 		? mergeStrategyResources(strategyRecord.details.strategy as unknown as StrategySnapshot, resource)
@@ -144,6 +167,9 @@ export function projectExecutionDiagnostics(
 		...(strategy ? { strategy } : {}),
 		...(terminalRecord ? { lastTerminal: projectTerminalDiagnostic(terminalRecord) } : {}),
 		...(resource ? { lastResourceObservation: resource } : {}),
+		// The key is omitted rather than set to an empty array, which is what a consumer iterating keys sees: a session with no
+		// refusal must not read as one whose refusals were dropped.
+		...(refusalRecords.length > 0 ? { lastRefusals: refusalRecords.map(projectRefusalDiagnostic) } : {}),
 	};
 }
 
@@ -227,6 +253,22 @@ function projectResourceDiagnostic(record: ExecutionRecord): ExecutionResourceDi
 		...(acceptanceId ? { acceptanceId } : {}),
 		...metrics,
 		...(stopReasons && stopReasons.length > 0 ? { stopReasons } : {}),
+	};
+}
+
+/** How many refusals the projection carries. A bound rather than a count of a declaration: the ledger has no such list. */
+const MAX_LAST_REFUSALS = 8;
+
+function projectRefusalDiagnostic(record: ExecutionRecord): ExecutionRefusalDiagnostic {
+	const details = isRecord(record.details) ? record.details : {};
+	const requestId = stringValue(record.correlation?.requestId);
+	return {
+		timestamp: record.timestamp,
+		...(requestId ? { requestId: requestId.slice(0, 256) } : {}),
+		tool: (stringValue(details.tool) ?? "unknown").slice(0, 128),
+		action: (stringValue(details.action) ?? "unknown").slice(0, 256),
+		gate: (stringValue(details.gate) ?? "unknown").slice(0, 64),
+		reason: (stringValue(details.reason) ?? "no reason recorded").slice(0, 1024),
 	};
 }
 

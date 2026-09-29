@@ -7,6 +7,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createBashTool } from "@earendil-works/pi-coding-agent";
 import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, admitToolResult, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
+import { createStrategySnapshot } from "../src/core/strategy-snapshot.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
@@ -286,6 +287,65 @@ describe("Pi adapter", () => {
 		assert.match(fullStatus, /Goals: /, "full adds the goal line");
 		// The control: the two calls are not the same string, so the assertions above are about the flag.
 		assert.notEqual(plainStatus, fullStatus, "full changes the line");
+		// **The four facts a user needs after a request died, and none of them is written by this command.** The work mode is a
+		// closure variable the handler already shares; the last plan, the last terminal and the refusals are read back from the
+		// ledger, which the handler now reads once for both of its halves instead of twice.
+		assert.match(plainStatus, /workMode=none/, "no mode is declared for this workspace, and the line says so rather than omitting the field");
+		assert.doesNotMatch(plainStatus, /LastPlan: /, "the ledger detail waits for full, the same way the goal line does");
+		assert.match(fullStatus, /LastPlan: not recorded for this session/, "an empty ledger is stated, not left blank");
+		assert.match(fullStatus, /LastTerminal: none\./, "'none' here means the ledger holds no terminal record for this session");
+		assert.match(fullStatus, /Refused: none recorded for this session/, "a session with no refusal and a session whose refusals were dropped must not read the same");
+
+		// The presence case, written through the real ledger writers rather than by hand. The prompt is the one measured to reach the
+		// formal lane, because that lane is what gates product mutations and therefore what a user most needs to see named.
+		const statusLedger = new ExecutionLedger(join(adapterStateDir, "execution.jsonl"));
+		const statusPlan = createRequestPlan({ message: "设计一下这个模块", requestId: "req-status", mode: "standard", interactionMode: "auto", projectAvailable: true });
+		assert.equal(statusPlan.lane, "formal", "the wording that reaches the formal lane is the one the gate acts on");
+		await statusLedger.appendRequestPlan("pi-session", "request:req-status", statusPlan, "session-test", createStrategySnapshot({
+			plan: statusPlan,
+			interactionMode: "auto",
+			executionMode: "standard",
+			thinkingPolicy: "auto",
+			toolProfile: "auto",
+			activeToolCount: representativeTools.length,
+			providerRound: { used: 0 },
+			readOnlyBudget: { used: 0 },
+		}));
+		await statusLedger.appendGateRefused({
+			taskId: "pi-session",
+			stepId: "gate:status-refusal",
+			mode: "standard",
+			tool: "write",
+			action: "write",
+			viaCapability: false,
+			gate: "deny",
+			reason: "[Dove convergence] Freeze stable acceptance criteria before the first formal product mutation.",
+			remediation: "Resume the active acceptance criterion before mutating product files.",
+			requestId: "req-status",
+			sessionId: "session-test",
+			toolCallId: "call-status",
+		});
+		await statusLedger.appendRequestTerminal({
+			taskId: "pi-session",
+			stepId: "request:req-status",
+			mode: "standard",
+			requestId: "req-status",
+			sessionId: "session-test",
+			reason: "failed",
+			detail: "convergence-missing",
+			policyAbort: true,
+			terminal: { origin: "convergence", code: "convergence-missing", summary: "The first formal product mutation needs frozen acceptance criteria.", retryable: false, nextAction: "Freeze criteria, then resume the active acceptance criterion." },
+		});
+		const rowsBeforeStatus = (await statusLedger.read()).length;
+		notifications.length = 0;
+		await commands.get("status")?.handler("full", context);
+		const statusAfterRefusal = notifications.at(-1) ?? "";
+		assert.match(statusAfterRefusal, /LastPlan: project-work\/formal@req-status/, "the lane is read back after the request that produced it has settled");
+		assert.match(statusAfterRefusal, /LastTerminal: convergence-missing: The first formal product mutation needs frozen acceptance criteria\. -> Freeze criteria/, "the terminal envelope reaches the user, not only its code");
+		assert.match(statusAfterRefusal, /Refused: write\/deny\/\[Dove convergence\]/, "the gate and the action that was refused are both named");
+		// The read-only guarantee: the command read the ledger and wrote nothing to it, so a status call cannot become evidence about
+		// the thing it reports.
+		assert.equal((await statusLedger.read()).length, rowsBeforeStatus, "status is a reader");
 		notifications.length = 0;
 		const capabilityTool = tools.get("agent_run_capability") as { execute: (...args: unknown[]) => Promise<{ details?: { status?: string } }> };
 		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
