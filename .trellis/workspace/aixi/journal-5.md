@@ -443,3 +443,46 @@ Ran the whole gate rather than parts: typecheck, the Node suite at 795 passing, 
 ### Next Steps
 
 - The same boundary, unchanged: one task waiting on a person and the first real turn waiting on a host.
+
+
+## Session 225: The refusals a user could not read back
+<!-- trellis-session: v=2 fp=23ed8239d5a7c0d1 -->
+
+**Date**: 2026-09-29
+**Task**: The refusals a user could not read back
+**Branch**: `master`
+
+### Summary
+
+Planned from the user side first and implemented second: the framework was read to find what a person actually hits, which turned out to be a refused action no projection exposed, a work mode whose failure to load was announced once, and an intent/lane that reads idle exactly when a request has just died. Nine files, 321 insertions. Then audited the change rather than the plan, which found three defects of my own and cleared one real risk by proving it unreachable.
+
+### Main Changes
+
+- the projection carries refusals: gate.refused rows have been written since the gate boundary existed and no projection showed them, so ExecutionDiagnosticsProjection gained an optional lastRefusals bounded to 8 with reason bounded to 1024 and remediation deliberately absent, which reaches RPC diagnostics/status, doctor, agent_doctor and the new in-session reader at once instead of creating a fourth surface that can disagree with the other three
+- the operator can see why nothing runs: /status now names the work mode in force and marks a mode whose declaration failed to load, and /status full carries the loader own reason - a failed load refuses every tool call before the lease check, and until now the only notice was one session-start notification that scrolls away
+- two readings kept apart on purpose: strategy= describes the running request while lastPlan=, lastTerminal= and Refused= are read back from the ledger and outlive it. The defect was an asymmetry inside one function - terminal had a no-live-request fallback and intent/lane did not - so the fix adds a field rather than giving one field two meanings, and /status still reads the ledger exactly once
+- the review found my own work at fault three times: the English README hard-wraps at 100 columns and my insert was one 700-character line; the field names were attributed to agent_doctor as well as /status full when only the latter renders them; and the new table row was 320 characters against a table whose longest row was 195
+- a real risk checked and cleared rather than assumed: action-policy names relativeTarget ?? target in a fence refusal, so an absolute path from a tool argument could have reached the new field and the public projection. It cannot - declaredPrefixHit returns undefined for an unresolvable target, so the fallback is unreachable at that return. The other refusal sources interpolate a number, an action name, or declared identifiers
+- the session pointer was corrected: task.py start had run degraded and the active task still pointed at 09-29-report-blocker from the previous day, so sub-agent context and the journal would have resolved to the wrong task. Fixed through the supported TRELLIS_CONTEXT_ID override rather than by editing runtime state
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c86ea50` | feat(status): carry the work mode, the last plan, the last terminal and the refusals into /status |
+| `ebc1130` | chore(task): audit the harness from its user side, and find the refusals unreadable |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 804 tests, 802 pass, 0 fail, 2 skipped (the two managed-launcher cases, skipped because no launcher is installed here). npm run doctor: healthy, with requestDiagnostics carrying schemaVersion alone - the correct absence, since this workspace holds no ledger
+- [OK] the constraint suites pass together: execution-diagnostics at 7 cases including the key-absent case, document-drift, spec-context-budget, harness-reachability, and the neighbour suites at 101 cases. The command-list assertion in pi-adapter.test.ts is byte-identical to before, which is what not adding a command means
+- [OK] four failures are environmental and were proven pre-existing rather than argued: three installer cases fail because Path.home() raises with no HOME and install.ps1 detects this sandbox as non-Windows, and two suites fail under a bare node --test because this shell has an empty PATH while npm injects one. Stashing the change and running the same cases in a clean HEAD worktree produced byte-identical failure text, and the restore was verified by hashing all eight files
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- U1 stays deferred as its own task, and it is the one finding with teeth: a formal-lane first write is blocked and the request is aborted in the same call, operation=freeze is the only way out and appears nowhere in the tool description, and the path has no end-to-end test. What is unverified and must not be assumed: whether the block reason survives into session history, because if it does not, a retry has no memory of why it died
+- nothing waits on this session. The archive follows this entry, and the two remaining environment-dependent failures are worth a task of their own only if someone uses bare node --test as a gate, which the repository does not

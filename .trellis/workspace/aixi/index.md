@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 224
+- **Total Sessions**: 225
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~445 | Active |
+| `journal-5.md` | ~488 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 225 | 2026-09-29 | The refusals a user could not read back | `c86ea50`, `ebc1130` | `master` |
 | 224 | 2026-09-29 | The boundary, with its evidence | `2dfda47` | `master` |
 | 223 | 2026-09-29 | The surface that bounds every turn | `897cdc6` | `master` |
 | 222 | 2026-09-29 | Closing the review task, and one more survey | `481001f` | `master` |
