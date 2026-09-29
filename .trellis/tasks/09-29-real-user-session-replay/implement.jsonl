@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Where the scenario library may live: tests/ mirrors source boundaries, and the declared editable surface already covers tests/"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The forbidden and required patterns the run artifacts must respect, including never persisting raw prompts, tool arguments or absolute local paths"}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "The extension identity and framework-version contract D0 aligns, and the workspace launch policy the scenarios run under"}
+{"file": ".trellis/spec/backend/personal-agent-mode-format.md", "reason": "What a work mode declares and what a declaration may claim: the consent scenarios depend on a mode the loader accepts"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "The launcher is a boundary: unknown values are converted explicitly and nothing falls back silently to another authority"}

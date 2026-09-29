@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The review checklist and forbidden patterns used to verify the change"}
+{"file": ".trellis/spec/backend/personal-agent-mode-format.md", "reason": "Verify the consent scenarios exercise a declaration the loader accepts rather than one it refuses"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify the launcher change converts unknown values explicitly and introduces no silent fallback"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "This change crosses launcher, harness, scenario data and test assertions, which is the boundary this guide asks about"}
