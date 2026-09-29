@@ -486,3 +486,46 @@ Planned from the user side first and implemented second: the framework was read 
 
 - U1 stays deferred as its own task, and it is the one finding with teeth: a formal-lane first write is blocked and the request is aborted in the same call, operation=freeze is the only way out and appears nowhere in the tool description, and the path has no end-to-end test. What is unverified and must not be assumed: whether the block reason survives into session history, because if it does not, a retry has no memory of why it died
 - nothing waits on this session. The archive follows this entry, and the two remaining environment-dependent failures are worth a task of their own only if someone uses bare node --test as a gate, which the repository does not
+
+
+## Session 226: A real user session the harness can actually be
+<!-- trellis-session: v=2 fp=ea1bbc6c819863a5 -->
+
+**Date**: 2026-09-29
+**Task**: A real user session the harness can actually be
+**Branch**: `master`
+
+### Summary
+
+Planned a replay of a real user session and then built it. The reconnaissance found the flow had been planned before from 192M prompt tokens of telemetry, so this went after the one axis nothing had closed: the harness could isolate and record, but it had never modelled a person - the model was canned text, every dialog was a hardcoded refusal, and a work mode could not load at all through the source launcher.
+
+### Main Changes
+
+- the launcher now sets the framework version its own help has always claimed it sets: DOVE_PI_FRAMEWORK_VERSION was named only in that help text and assigned only by bin/dove-pi.cjs, so a project declaring a work mode refused to load and refused every tool call, while the managed launcher ran the same project fine. Two documented entry points, two behaviours, and the existing environment check could not see it because it asks whether a name appears anywhere in the code rather than whether the launcher sets it
+- the harness can be a user who consents: a step may declare dialogs, consumed in order, and the summary counts which answers the scenario supplied against which the driver defaulted - a refusal that was asked for and a refusal that was supplied used to read identically, which is the same shape as the none-versus-not-recorded defect this session fixed once already
+- seven scenarios are committed under tests/fixtures/scenarios/: approving a gated action, declining one, cancelling a request while its tool runs, resuming a session across two runs, correcting an earlier instruction, running past the turn cap, and compacting on request. Each is driven through the public launcher with its own project, state and session roots, and each has an assertion in the suite rather than inside the data file
+- cancelling is a modifier on the active step, not a step of its own, because the dispatcher sends step N+1 only after step N settles - a standalone abort could only ever cancel an idle agent. It rides the same tool-execution edge queueDuringTools uses. Session reuse is an explicit --reuse-session so the per-run suffix that keeps concurrent scenarios disjoint stays the default
+- four defects of my own were found by running rather than reading: loadScenario dropped the abort flag so the abort never fired; a refusal from compact ("Nothing to compact (session too small)") was treated as a scenario failure when it is the host behaving correctly; and a doubled escape inside two nested template literals produced an unterminated string that broke the faux provider for thirteen cases at once
+- both READMEs now describe the step fields the harness actually accepts, including the committed scenario library. The format section had stopped describing the format, which is the class of defect this repository keeps finding in its own declarations
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `956628b` | fix(launcher): set the framework version a work mode's range is checked against |
+| `81c3a63` | feat(blackbox): model a real user session, and let a scenario answer a dialog |
+| `c711ffb` | chore(task): plan the real-user session replay, and measure what it needed |
+
+### Testing
+
+- [OK] npm run typecheck: 0 errors. npm test: 811 tests, 809 pass, 0 fail, 2 skipped - up from 804 by exactly the seven new cases. The black-box suite is 18 pass, 0 fail, with all eleven pre-existing cases still green
+- [OK] npm run test:installer: 141 tests, 4 failures. The same four fail at HEAD with the changes stashed - proven by a controlled comparison, not argued - and the restore was verified byte-identical. A baseline I reported earlier in this session said one failure and was wrong: TEMP was unset, so three PowerShell-dependent cases never ran
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- the real-provider run is the one acceptance criterion still open, and it is blocked on a person: ~/.pi/agent holds only dove/, with no settings.json and no auth.json, so --provider real ends in provider-authorization-denied by construction. The command and the readings to record are in the task implement.md
+- the task is deliberately not archived while that criterion is open. The fidelity boundary is written down with it: the model is still scripted, TUI rendering is outside the harness, and only the confirm dialog is reachable because ask_user_question is not a Pi built-in
