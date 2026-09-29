@@ -205,3 +205,43 @@ node scripts/real-dove-blackbox.mjs --launcher source --provider real ^
 - **真实 provider 的网络与限流差异**，以及真模型下的长会话 / compact / 进度守护行为，本任务没有真实观测。
 
 不写这一段，后来者会把"夹具跑绿"读成"产品被测过"。
+
+### 第 7 步：真模型那次运行 —— **已执行**（2026-09-29）
+
+**命令**（`--cwd` 指向本仓库；harness 把它拷进隔离目录，所以审计碰不到原工作区）：
+
+```powershell
+node scripts/real-dove-blackbox.mjs --launcher source --provider real \
+  --cwd C:\Users\Macfy\Desktop\dsh\dove-pi \
+  --scenario tests/fixtures/scenarios/read-only-audit.json \
+  --output <仓库外>\run.jsonl --timeout-ms 480000
+```
+
+**前置（由操作者完成）**：`~/.pi/agent/models.json` 里配了 provider `ant`（`maas-api.antdigital.com`，`openai-completions`，模型 `atria-dawn-preview`），并新建 `~/.pi/agent/settings.json` 指定 `defaultProvider` / `defaultModel`。
+**这份读数不可复现**：provider、模型、日期如下，且**不得**当作可重跑的门禁。原始运行留在仓库外，未进 git。
+
+```text
+provider=ant  model=atria-dawn-preview  date=2026-09-29  launcher=source  providerMode=real
+elapsed=415.6s   exitCode=0   harnessTimedOut=false   events=503
+steps: prompt settled / /status settled / /status full settled / state settled
+dialogs: approved=0 declined=0 answered=0 cancelled=0 defaulted=0 mismatch=0 unused=0
+ledgerTerminal: reason=failed  code=retry-refused-after-effect
+resources: toolCalls=13 providerRounds=1 elapsedMs=413910 toolDurationMs=7972
+           inputTokens=85231 cacheReadTokens=2432 cacheWriteTokens=0 outputTokens=964 reasoningTokens=493
+stopReasons: [error, tool_call x6, error]
+tools the model actually called: read x9, bash x4
+cache: lastHitRate=11.1%  sessionHitRate=2.8%  4 full misses
+context: contextWindow=200000 observedTokens=23175 compacted=true omitted=false
+```
+
+### 这次真实使用找出的五件事（都不是纸面能推出来的）
+
+1. **一场真实会话以 `retry-refused-after-effect` 结束。** Dove 拒绝在一次非幂等效果之后重放 provider 失败——fail-closed 的重试策略在真实环境里真的会触发，而这条路径此前从未被真实运行走到过。`stopReasons` 首尾都是 `error`。
+2. **`/status full` 里我上个任务加的三个字段被挤出了证据。** 捕获上限是 2048 字符（`redact()`），而它们排在 `Snapshot={…}` 这一大段 JSON **之后**，所以真实会话的 `/status full` 记录在 `LastPlan:` / `LastTerminal:` / `Refused:` **之前就被截断**。TUI 里用户看得到（notify 不截断），但**证据路径看不到**。修法很小：把 `ledgerDetail` 移到 `strategyText` 之前。
+3. **同一份输出里两个 provider 轮数不一致**：`strategy` 说 `providerRounds=1`，而 goals 行说 `Provider 8`（`stopReasons` 也有 7 条）。资源观测**低报**了真实轮数。
+4. **`steps[].toolNames` 永远是空的。** `extractToolNames` 找的是 `tool_start`，而 Pi 发的是 `tool_execution_start`；这次 13 次工具调用，`toolNames` 全是 `[]`。计划里"看模型用了哪些工具"这一项因此不可用，只能从原始日志数出来（`read` x9、`bash` x4）。
+5. **缓存几乎没起作用**：`sessionHitRate=2.8%`、4 次全量未命中、`cacheReadTokens 2432 / inputTokens 85231`。这正是 192M token 那份计划最在意的轴，而这是它在一次真实会话里的第一个观测值。
+
+另有一项按预期为空：`dialogs` 全 0 —— 本仓库没有声明 work mode，所以没有 `ask_before` 闸门被触发（与设计一致，不是缺陷）。
+
+**为了让它跑起来，harness 还修了一处结构性缺陷**：`PI_CODING_AGENT_DIR` 被指向隔离目录，于是 `--provider real` **看不到操作者配的 provider** —— 这就是为什么此前从未有过真实运行：模式可达但不可用。现在真模型模式下会把 `settings.json` / `models.json` / `auth.json` 带进隔离目录（faux 模式不受影响），并在 summary 的 `carriedConfig` 里记下带了哪几个（只记名字）。
