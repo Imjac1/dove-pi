@@ -295,6 +295,14 @@ describe("Pi adapter", () => {
 		assert.match(fullStatus, /LastPlan: not recorded for this session/, "an empty ledger is stated, not left blank");
 		assert.match(fullStatus, /LastTerminal: none\./, "'none' here means the ledger holds no terminal record for this session");
 		assert.match(fullStatus, /Refused: none recorded for this session/, "a session with no refusal and a session whose refusals were dropped must not read the same");
+		// **The order is the contract, not the wording.** Evidence captures this notification through a bounded
+		// redaction, and the strategy line carries the whole `Snapshot={...}` JSON: on a real session that pushed the
+		// three ledger readings past the bound, so the only copy of them was the copy that got cut. Asserting the
+		// order catches that without having to reproduce a 2048-character capture.
+		assert.ok(
+			fullStatus.indexOf("LastPlan:") < fullStatus.indexOf("Snapshot="),
+			"the ledger readings must precede the strategy snapshot, or the evidence bound eats them",
+		);
 
 		// The presence case, written through the real ledger writers rather than by hand. The prompt is the one measured to reach the
 		// formal lane, because that lane is what gates product mutations and therefore what a user most needs to see named.

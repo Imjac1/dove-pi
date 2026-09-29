@@ -98,10 +98,14 @@ describe("Pi request lifecycle integration", () => {
 				on(name: string, handler: (event: any, context: any) => Promise<any>) { events.set(name, handler); },
 			} as unknown as ExtensionAPI;
 			extension(api);
+			// The threshold warning is gated behind `ctx.hasUI`, so a context without a UI cannot observe whether the
+			// guard held - it would pass this assertion by being unable to fail it. A UI is declared and the
+			// notifications are collected, so "did not warn" means the guard decided that, not that nobody was listening.
+			const notifications: string[] = [];
 			const context = {
-				hasUI: false, model: { contextWindow: 100_000, maxTokens: 4_096 }, signal: undefined,
+				hasUI: true, model: { contextWindow: 100_000, maxTokens: 4_096 }, signal: undefined,
 				abort() { aborts++; },
-				ui: { theme: { fg: (_color: string, value: string) => value }, setStatus() {}, notify() {}, confirm: async () => false },
+				ui: { theme: { fg: (_color: string, value: string) => value }, setStatus() {}, notify(message: string) { notifications.push(message); }, confirm: async () => false },
 				sessionManager: { getEntries: () => [], getSessionId: () => "session-retry" },
 			};
 			const startRequest = async (text: string) => {
@@ -127,6 +131,29 @@ describe("Pi request lifecycle integration", () => {
 			const limited = await failAttempt(503);
 			assert.equal(aborts, 1, "the configured third-attempt limit stops a fourth live attempt");
 			assert.equal(limited.stopReason, "aborted", "message_end must stop Pi's real post-agent retry loop before agent_end");
+			// **The two counters, and why they are two.** Measured on a real session: the observation reported 1 provider
+			// round for a request that made 8, while the goal line - which counts ledger records - said 8. The increment
+			// was guarded so a retry would not start a new round of *progress*, and that guard was also deciding the
+			// observation's number. Three attempts here: one initial and two retries, so three real provider requests.
+			const ledgerRecords = () => readFileSync(join(stateDir, "execution.jsonl"), "utf8")
+				.split("\n").filter((line) => line.trim() !== "")
+				.map((line) => JSON.parse(line) as { kind?: string; details?: Record<string, unknown> });
+			const observations = () => ledgerRecords().filter((record) => record.kind === "task.convergence.observed" && record.details?.observationOnly === true);
+			assert.equal(
+				observations().at(-1)?.details?.providerRounds,
+				3,
+				"a retry is a provider request, so the request's last observation counts every attempt",
+			);
+			// **The other half of splitting the counter: the guard that was there stays there.** The observation now
+			// counts retries, so it would be easy to "tidy away" the trigger guard while reading this code - but that
+			// guard is what keeps a retry from counting as a new round of *progress*, and it is what the threshold
+			// warning is decided on. This request made three provider requests under a chat plan whose budget is two
+			// (`effectiveProviderRoundBudget({intent:"chat",mode:"standard"}, 0)`), so an unguarded threshold would
+			// have warned; a guarded one counts a single round and stays quiet.
+			assert.ok(
+				!notifications.some((message) => /provider-round observation threshold reached/.test(message)),
+				"a retry must not count as a new round of progress, so the observation threshold does not fire early",
+			);
 			// A host may deliver the next prompt before the explicit abort's
 			// `agent_settled` callback. The new request must not inherit the old
 			// provider terminal state.
@@ -144,6 +171,21 @@ describe("Pi request lifecycle integration", () => {
 			await startRequest("mutating effect");
 			await failAttempt(503, { name: "write", id: "write-1" });
 			assert.equal(aborts, 3, "provider errors after a non-idempotent tool call do not retry");
+			// **The refusal has to say what to reconcile.** "Inspect the workspace and reconcile the effect" names
+			// nothing; on a real session that sentence was the whole of what the operator got. The refusal is per
+			// attempt, so re-submitting is already the way to continue - the message has to say so.
+			const requestTerminals = (): readonly { code?: string; nextAction?: string }[] => ledgerRecords()
+				.filter((record) => record.kind === "request.terminal")
+				.map((record) => (record.details?.terminal ?? {}) as { code?: string; nextAction?: string });
+			const effectRefusal = requestTerminals().find((terminal) => terminal.code === "retry-refused-after-effect");
+			assert.ok(effectRefusal !== undefined, "the refusal after a non-idempotent effect reaches the ledger");
+			assert.match(effectRefusal?.nextAction ?? "", /write/, "and it names the action the operator has to reconcile");
+			assert.match(effectRefusal?.nextAction ?? "", /new request is allowed/i, "and says how to continue");
+			// The control: a failure with no non-idempotent action behind it names none, so the message is a fact about
+			// this request rather than a sentence stapled to every refusal.
+			const deniedTerminal = requestTerminals().find((terminal) => terminal.code === "provider-authorization-denied");
+			assert.ok(deniedTerminal !== undefined, "the authorization refusal is recorded too");
+			assert.doesNotMatch(deniedTerminal?.nextAction ?? "", /\bwrite\b/, "a failure with no such action names none");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
 			await startRequest("run mutating recipe");

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The review checklist and forbidden patterns used to verify the change"}
+{"file": ".trellis/spec/backend/personal-agent-request-runtime.md", "reason": "Verify the retry policy and the terminal envelope are unchanged in behaviour, only in what they say"}
+{"file": ".trellis/spec/backend/personal-agent-framework-core.md", "reason": "Verify an unreadable claim is named rather than resolved in either direction"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Boundary error handling: unknown values converted explicitly, no silent fallback"}

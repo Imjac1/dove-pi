@@ -61,7 +61,7 @@ import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolic
 import { createActionPolicy, evidenceDigestsFor, type ActionPolicy } from "../core/action-policy.ts";
 import { createEffectBoundary, type EffectBoundary } from "../core/effect-boundary.ts";
 import { admit } from "../core/context-admission.ts";
-import { createFileEffectStore } from "../core/effect-store-file.ts";
+import { createFileEffectStore, listUnresolvedClaims } from "../core/effect-store-file.ts";
 import { preflightAuthority, type AuthorityDocument } from "../core/authority.ts";
 import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
@@ -600,6 +600,12 @@ const CONVERSATIONAL_ROLES = new Set(["user", "assistant", "toolresult", "tool_r
 const MAX_BACKGROUND_MESSAGE_CHARS = 8_000;
 
 /**
+ * How many non-idempotent actions one request names when a retry is refused after them. A bound, not a count of a
+ * declaration: what a request runs is not an enumeration anyone wrote down.
+ */
+const MAX_RECORDED_NON_IDEMPOTENT_ACTIONS = 8;
+
+/**
  * Admit every non-conversational message in a provider payload.
  *
  * **Why at the payload and not at each producer.** The admission rule is that a boundary guarding one channel
@@ -761,6 +767,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// `unknown` from the store, which is the fact rather than a guess about whether the effect landed.
 	let activeEffectBoundary: EffectBoundary | undefined;
 	const pendingEffects = new Map<string, string>();
+	// Where the active mode keeps its claims, so a refused retry can name what is unresolved. Absent with no mode,
+	// which is itself worth saying rather than leaving the operator to guess whether anything was checked.
+	let activeEffectsDirectory: string | undefined;
 	const subagentProvider = createConfiguredPiSubagentProvider();
 	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
@@ -780,7 +789,19 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let currentRequestHadNonQuestionTool = false;
 	let currentRequestIsTaskInventory = false;
 	let currentRequestTaskId: string | undefined;
+	// **Two counters, because these are two different quantities and one variable used to carry both.** This one
+	// counts every provider request the current logical request made, retries included: a retry costs another round,
+	// it is what the resource observation reports, and it has to agree with the ledger's own count of
+	// provider.request.completed records for the request.
+	// The non-idempotent actions this request ran. They are what "reconcile the effect" refers to when a retry is
+	// refused, and without a work mode they are the only source: the effect boundary, and so the claim store, is
+	// opened by a mode.
+	let currentRequestNonIdempotentActions: string[] = [];
+	let currentRequestNonIdempotentOverflow = 0;
 	let currentRequestProviderRounds = 0;
+	// This one counts rounds since the last progress, and a retry deliberately does not start a new one. It exists
+	// only to decide when to warn, and its behaviour is unchanged from when the two meanings shared a variable.
+	let currentRoundSinceProgress = 0;
 	let currentRequestToolCalls = 0;
 	let currentRequestStartedAt: number | undefined;
 	let currentRequestResources = emptyRequestResourceSnapshot();
@@ -809,6 +830,39 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (currentRequestHostAbortIssued || typeof ctx.abort !== "function") return;
 		currentRequestHostAbortIssued = true;
 		ctx.abort();
+	}
+
+	/**
+	 * The terminal a provider failure produces, with the recovery an operator actually needs when a non-idempotent
+	 * effect had already started.
+	 *
+	 * **Why it is composed here and not inside `terminalForFailure`.** That function is pure and takes only a
+	 * classification. What to reconcile lives in this closure: the actions this request ran, and the claim store the
+	 * active mode opened. Keeping the pure function pure is what lets it stay testable on its own.
+	 *
+	 * **Why this is a message and not a new command.** The refusal is per *attempt*: `retryDecision` reads the lease's
+	 * `nonIdempotentEffectStarted`, and `acceptSubmission` opens a fresh logical request for every new submission. So
+	 * re-submitting already is the operator saying "I checked, continue" - what was missing was being told that, not a
+	 * way to say it.
+	 */
+	async function terminalForFailureWithRecovery(failure: ProviderFailureClassification, decisionReason: string): Promise<PendingRequestTerminal> {
+		const terminal = terminalForFailure(failure, decisionReason);
+		if (decisionReason !== "non-idempotent-effect" || terminal.terminal === undefined) return terminal;
+		const parts: string[] = [];
+		if (currentRequestNonIdempotentActions.length > 0) {
+			const more = currentRequestNonIdempotentOverflow > 0 ? ` (and ${currentRequestNonIdempotentOverflow} more)` : "";
+			parts.push(`This request ran ${currentRequestNonIdempotentActions.join(", ")}${more} before the failure; check what each one changed, because the failure may have landed after it did.`);
+		}
+		if (activeEffectsDirectory !== undefined) {
+			const claims = listUnresolvedClaims(activeEffectsDirectory, MAX_RECORDED_NON_IDEMPOTENT_ACTIONS);
+			parts.push(claims.length === 0
+				? "No effect claim is unresolved for this request."
+				: `Unresolved effect claims: ${claims.map((claim) => `${claim.effectKey} (${claim.tool}${claim.target === undefined ? "" : ` -> ${claim.target}`}${claim.unreadable === true ? ", record unreadable" : ""})`).join("; ")}.`);
+		} else {
+			parts.push("No work mode was active, so there is no claim store to read; the actions above are the whole record.");
+		}
+		parts.push("Submitting a new request is allowed - the refusal applies to retrying this one automatically.");
+		return { ...terminal, terminal: { ...terminal.terminal, nextAction: parts.join(" ") } };
 	}
 	let currentProviderCall: { id: string; requestId: string; attemptId?: string; taskId: string; stepId: string; mode: AgentMode; sessionId?: string; httpStatus?: number; cachePrefix?: CachePrefixSnapshot; startedAt: number } | undefined;
 	const toolTimings = new Map<string, { startedAt: number; toolName: string }>();
@@ -1185,6 +1239,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			// The three facts a user needs after a request died, each read back rather than reconstructed. "none" and "not
 			// recorded" are kept apart on purpose: a session that recorded no refusal and a session whose refusals were
 			// dropped must not read the same.
+			//
+			// **This block is concatenated before the strategy line, and that is not cosmetic.** Evidence captures the
+			// notification through a bounded redaction, and the strategy line carries the whole `Snapshot={...}` JSON -
+			// measured on a real session, it pushed these three fields past the bound, so the one reading that exists
+			// nowhere else was the one that got cut. The strategy line has a second copy in the ledger's
+			// `request.planned` record; these three do not.
 			const ledgerDetail = diagnostics === undefined
 				? ""
 				: (() => {
@@ -1214,7 +1274,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const strategyText = full
 				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
 				: "";
-			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${strategyText}${ledgerDetail}${workModeDetail} ${detail}`, "info");
+			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${ledgerDetail}${strategyText}${workModeDetail} ${detail}`, "info");
 		},
 	});
 
@@ -2282,6 +2342,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 		}
 		activeEffectBoundary = undefined;
+		activeEffectsDirectory = undefined;
 		pendingEffects.clear();
 		if (activeWorkMode !== undefined) {
 			activeEffectBoundary = createEffectBoundary({
@@ -2291,6 +2352,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				mode: activeWorkMode,
 				store: createFileEffectStore({ directory: join(modeRoot, ".dove", "effects") }),
 			});
+			activeEffectsDirectory = join(modeRoot, ".dove", "effects");
 		}
 		if (modeRefusal !== undefined && ctx.hasUI) ctx.ui.notify(`[Dove mode] ${modeRefusal}`, "error");
 		if (activeWorkMode !== undefined && ctx.hasUI) {
@@ -2359,7 +2421,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					: lastProviderFailure ?? (stopReason === "error" ? classifyAssistantProviderFailure(lastAssistant) : undefined);
 			const retry = observedFailure ? requestLifecycle.retryDecision(observedFailure) : undefined;
 			if (observedFailure && !retry?.retry && !pendingRequestTerminal) {
-				pendingRequestTerminal = terminalForFailure(observedFailure, retry?.reason ?? observedFailure.reason);
+				pendingRequestTerminal = await terminalForFailureWithRecovery(observedFailure, retry?.reason ?? observedFailure.reason);
 			}
 			const outcome: RequestAttemptOutcome = pendingRequestTerminal?.reason === "cancelled" || (!pendingRequestTerminal && observedFailure?.reason === "cancelled")
 				? "cancelled"
@@ -2494,7 +2556,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 			lastAttemptOutcome = outcome;
 			if (pendingRequestTerminal?.policyAbort || (observedFailure && !retry?.retry && observedFailure.reason !== "cancelled")) {
-				await issueRequestHostAbort(ctx, pendingRequestTerminal ?? terminalForFailure(observedFailure!, retry?.reason ?? observedFailure!.reason));
+				await issueRequestHostAbort(ctx, pendingRequestTerminal ?? await terminalForFailureWithRecovery(observedFailure!, retry?.reason ?? observedFailure!.reason));
 			}
 		}
 		if (currentProviderCall) {
@@ -2801,6 +2863,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			pendingEffects.set(event.toolCallId, effect.effectKey);
 		}
 		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
+		// Recorded here because this is where the answer is computed, and the refusal that needs it happens later in a
+		// different hook with no access to the input any more.
+		if (!idempotent && !currentRequestNonIdempotentActions.includes(event.toolName)) {
+			if (currentRequestNonIdempotentActions.length < MAX_RECORDED_NON_IDEMPOTENT_ACTIONS) currentRequestNonIdempotentActions.push(event.toolName);
+			else currentRequestNonIdempotentOverflow += 1;
+		}
 		const progressDecision = progressGuard.beforeToolCall(event.toolCallId, event.toolName, event.input, idempotent);
 		if (progressDecision.action !== "allow") {
 			if (progressDecision.action === "terminate") {
@@ -2948,7 +3016,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				lastProviderFailure ??= classifyAssistantProviderFailure(message);
 				if (requestLifecycle.activeLease()) {
 					const decision = requestLifecycle.retryDecision(lastProviderFailure);
-					if (!decision.retry) pendingRequestTerminal = terminalForFailure(lastProviderFailure, decision.reason);
+					if (!decision.retry) pendingRequestTerminal = await terminalForFailureWithRecovery(lastProviderFailure, decision.reason);
 				}
 			} else if (stopReason !== "cancelled") {
 				lastProviderFailure = undefined;
@@ -3009,14 +3077,18 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// budget once that work is observable.
 		const providerRoundLimit = effectiveProviderRoundBudget(plan, currentRequestToolCalls);
 		const attemptTrigger = requestLifecycle.currentAttempt()?.trigger;
+		// Counted before the guard: this is the observation's number, and a retry is a provider request like any other.
+		// Measured on a real session, the guarded increment reported 1 round for a request that made 8, while the goal
+		// line - which counts ledger records - said 8. Two numbers in one output disagreeing was the defect.
+		currentRequestProviderRounds += 1;
 		if (attemptTrigger !== "provider-retry" && attemptTrigger !== "compaction-retry") {
 			// Observation threshold only: provider rounds are never a transport or
 			// stop limit. Semantic repetition/error guards own loop termination.
-			if (currentRequestProviderRounds >= providerRoundLimit && !currentRequestProviderRoundWarningIssued) {
+			if (currentRoundSinceProgress >= providerRoundLimit && !currentRequestProviderRoundWarningIssued) {
 				currentRequestProviderRoundWarningIssued = true;
 				if (ctx.hasUI) ctx.ui.notify(`Dove provider-round observation threshold reached (${providerRoundLimit}); continuing because provider rounds are not a hard limit.`, "warning");
 			}
-			currentRequestProviderRounds += 1;
+			currentRoundSinceProgress += 1;
 			currentRequestProgressSinceRound = false;
 		}
 		const contextWindow = typeof model?.contextWindow === "number" ? model.contextWindow : undefined;
@@ -3137,7 +3209,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			pendingContinuationPlan = undefined;
 			currentRequestHadNonQuestionTool = false;
 			currentRequestProviderRounds = 0;
+			currentRoundSinceProgress = 0;
 			currentRequestToolCalls = 0;
+			currentRequestNonIdempotentActions = [];
+			currentRequestNonIdempotentOverflow = 0;
 			currentRequestStartedAt = Date.now();
 			currentRequestResources = emptyRequestResourceSnapshot();
 			currentRequestProgressSinceRound = false;

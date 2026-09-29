@@ -1,4 +1,4 @@
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import type { EffectRecord, EffectStore } from "./effect-ledger.ts";
 
@@ -45,6 +45,51 @@ export class UnreadableClaimError extends Error {
 	}
 }
 
+
+/** One claim whose outcome cannot be established, as an operator needs to see it. */
+export interface UnresolvedClaim {
+	readonly effectKey: string;
+	readonly tool: string;
+	readonly target?: string;
+	readonly startedAt: string;
+	/** True when the record itself could not be read, so the effect may have run and only the record is missing. */
+	readonly unreadable?: true;
+}
+
+/**
+ * The claims in a store whose outcome is unknown, bounded, for a person to act on.
+ *
+ * **Why this exists.** A request refused after a non-idempotent effect used to end with "inspect the workspace and
+ * reconcile the effect", which names nothing. These are the claims that sentence refers to: claimed, with no
+ * outcome recorded. A claim whose record cannot be read is reported too, and marked - the store already refuses to
+ * resolve that case in either direction, and a reader that skipped it would undo that refusal by omission.
+ *
+ * A missing directory is an empty answer, not an error: a run with no work mode never opens a store.
+ */
+export function listUnresolvedClaims(directory: string, limit: number): readonly UnresolvedClaim[] {
+	let names: string[];
+	try { names = readdirSync(directory).filter((name) => name.endsWith(".json")); } catch { return []; }
+	const claims: UnresolvedClaim[] = [];
+	for (const name of names.sort()) {
+		if (claims.length >= limit) break;
+		const effectKey = name.slice(0, -".json".length);
+		let record: Partial<EffectRecord>;
+		try {
+			record = JSON.parse(readFileSync(join(directory, name), "utf8")) as Partial<EffectRecord>;
+		} catch {
+			claims.push({ effectKey, tool: "unreadable", startedAt: "unknown", unreadable: true });
+			continue;
+		}
+		if (record.outcome !== undefined && record.outcome !== "unknown") continue;
+		claims.push({
+			effectKey,
+			tool: typeof record.tool === "string" ? record.tool : "unknown",
+			...(typeof record.target === "string" ? { target: record.target } : {}),
+			startedAt: typeof record.startedAt === "string" ? record.startedAt : "unknown",
+		});
+	}
+	return claims;
+}
 export function createFileEffectStore(options: FileEffectStoreOptions): EffectStore {
 	const directory = options.directory;
 

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/personal-agent-request-runtime.md", "reason": "The retry and terminal-envelope contract D4 must not change: the refusal is per attempt, and the terminal carries the next action"}
+{"file": ".trellis/spec/backend/personal-agent-framework-core.md", "reason": "Effect identity and the gate boundary: what a claim means, and why an unresolved one must be named rather than skipped"}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "The /status and shared execution-diagnostics contract D1 reorders, and what each consumer is promised"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The forbidden and required patterns, including never persisting raw prompts or absolute paths in evidence"}

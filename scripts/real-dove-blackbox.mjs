@@ -30,6 +30,8 @@ const requestedSessionDir = valueFor("--session-dir", "");
 // Sharing a session directory across runs is an explicit choice: the per-run suffix below is what keeps concurrent
 // scenarios on disjoint runtime roots, so it stays the default and only this flag turns it off.
 const reuseSession = args.includes("--reuse-session");
+// A run that needs the credential-less path (for example, to exercise the authorization refusal) turns this off.
+const carryOperatorConfig = !args.includes("--no-operator-config");
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const nonce = createHash("sha256").update(`${requestedOutputPath}\0${caseId}\0${process.pid}\0${Date.now()}`).digest("hex").slice(0, 12);
@@ -63,7 +65,7 @@ mkdirSync(sessionDir, { recursive: true });
 // for a real provider, so the deterministic cases keep their own extension-registered provider untouched.
 // Which of the operator's provider files this run carried in. Names only - the contents are never logged.
 let carriedConfig = [];
-if (providerMode !== "faux") {
+if (providerMode !== "faux" && carryOperatorConfig) {
   const operatorAgentDir = process.env.PI_CODING_AGENT_DIR?.trim() || resolve(homedir(), ".pi", "agent");
   carriedConfig = ["settings.json", "models.json", "auth.json"].filter((name) => {
     const source = resolve(operatorAgentDir, name);
@@ -530,7 +532,7 @@ function pathWithin(parent, candidate) {
   const child = relative(resolve(parent), resolve(candidate));
   return child === "" || (!child.startsWith("..") && !isAbsolute(child));
 }
-function extractToolNames(events) { const names = new Set(); for (const event of events) if (event.type === "tool_start" && typeof event.toolName === "string") names.add(event.toolName); return [...names].sort(); }
+function extractToolNames(events) { const names = new Set(); for (const event of events) if ((event.type === "tool_execution_start" || event.type === "tool_start") && typeof event.toolName === "string") names.add(event.toolName); return [...names].sort(); }
 function readProviderEvidence(path) { try { return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => { try { const value = JSON.parse(line); return [{ model: value.model, systemPromptChars: value.systemPromptChars, messageCount: value.messageCount, messageChars: value.messageChars, toolCount: value.toolCount }]; } catch { return []; } }); } catch { return []; } }
 function readProviderIdentity(path) { try { return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } }); } catch { return []; } }
 function readSubagentEvidence(path) { try { return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).flatMap((line) => { try { const value = JSON.parse(line); return [{ argv: Array.isArray(value.argv) ? value.argv : [], cwd: value.cwd ? "<subagent-cwd>" : undefined }]; } catch { return []; } }); } catch { return []; } }

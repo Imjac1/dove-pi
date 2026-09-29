@@ -13,7 +13,7 @@ describe("real Dove Pi black-box harness", () => {
 			const project = join(root, "project");
 			const output = join(root, "run.jsonl");
 			await mkdir(project, { recursive: true });
-			const result = await runHarness(project, output);
+			const result = await runHarness(project, output, ["--no-operator-config"]);
 			assert.equal(result.code, 0);
 			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as {
 				rpcFailure?: { terminal?: { origin?: string; code?: string } };
@@ -149,13 +149,18 @@ describe("real Dove Pi black-box harness", () => {
 			]);
 			assert.equal(changing.code, 0);
 			assert.equal(repeated.code, 0);
-			const changingSummary = JSON.parse(await readFile(`${changingOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; isError?: boolean }> }>; providerEvidence?: unknown[]; ledgerTerminal?: { terminal?: { code?: string } }; resourceObservation?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number }; strategy?: { resources?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number } } };
+			const changingSummary = JSON.parse(await readFile(`${changingOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; isError?: boolean }>; toolNames?: string[] }>; providerEvidence?: unknown[]; ledgerTerminal?: { terminal?: { code?: string } }; resourceObservation?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number }; strategy?: { resources?: { toolCalls?: number; providerRounds?: number; elapsedMs?: number } } };
 			const repeatedSummary = JSON.parse(await readFile(`${repeatedOutput}.summary.json`, "utf8")) as { exitCode?: number | null; signal?: string | null; sawSettled?: boolean; steps?: Array<{ events?: Array<{ type?: string; isError?: boolean }> }>; providerEvidence?: unknown[]; ledgerTerminal?: { terminal?: { origin?: string; code?: string; nextAction?: string } } };
 			assert.equal(changingSummary.exitCode, 0);
 			assert.equal(changingSummary.signal, null);
 			assert.equal(changingSummary.sawSettled, true);
 			assert.equal(changingSummary.ledgerTerminal?.terminal?.code, "completed");
 			assert.equal(changingSummary.steps?.[0]?.events?.filter((event) => event.type === "tool_execution_start").length, 20);
+			// **What the model reached for, which nothing could read before.** `extractToolNames` looked for `tool_start`;
+			// Pi emits `tool_execution_start`, so this field was empty for every run - and with it the only way to ask
+			// whether a real model ever invokes a registered capability. Deduplicated on purpose: twenty reads are one
+			// name, not twenty.
+			assert.deepEqual(changingSummary.steps?.[0]?.toolNames, ["read"]);
 			const changingToolResults = changingSummary.steps?.[0]?.events?.filter((event) => event.type === "tool_execution_end") ?? [];
 			assert.equal(changingToolResults.length, 20);
 			assert.ok(changingToolResults.every((event) => event.isError === false), "all productive reads must return successful tool results");
@@ -191,7 +196,7 @@ describe("real Dove Pi black-box harness", () => {
 				{ kind: "prompt", message: "This step must not run." },
 				{ kind: "stats" },
 			] }), "utf8");
-			const result = await runHarness(project, output, ["--scenario", scenario], 30_000, "failed-step");
+			const result = await runHarness(project, output, ["--no-operator-config", "--scenario", scenario], 30_000, "failed-step");
 			assert.equal(result.code, 0);
 			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as {
 				scenarioFailed?: boolean;
