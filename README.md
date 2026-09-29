@@ -248,11 +248,11 @@ Dove 会直接读取当前原生目标。已有 `.trellis` 的项目仍可读取
 
 Pi 是唯一工具和执行权威。**没有声明工作模式时**，Dove 不增加权限层，只管理上下文、目标连续性、无进展循环和效率诊断。**声明工作模式后**，该 mode 的 `permissions.yaml` 会在 Pi 的 `tool_call` 边界上生效：`never_allow` 直接拒绝，`ask_before` 先向操作者确认（宿主没有确认对话框时按拒绝处理，不会静默放行），`always_allow` 声明哪些动作无需询问；**未列出的动作不归 mode 管**，仍由 Pi 和已安装扩展决定。
 
-## 完整工作流与真实验证
+## 完整工作流、CLI 冒烟检查与真实 provider 实地运行
 
 每次调用都按同一条边界处理：启动器先判断 `--version`、维护命令和本地 CLI；只有未匹配的参数才启动 Pi。CLI 在当前工作目录运行，Native 状态写入项目 `.dove/`，Pi 会话和凭据留在 Pi 用户目录。`rpc`/`mcp` 使用 stdio 时，stdout 只保留协议帧，诊断写 stderr。
 
-推荐按下面顺序做一次真实黑盒检查（使用临时项目，不要指向生产代码）：
+推荐按下面顺序做一次 **CLI** 黑盒检查（使用临时项目，不要指向生产代码）。它走的是 CLI 与本地状态，**不启动任何模型**，因此对 provider 行为一无所知：
 
 ```powershell
 $env:DOVE_PI_HOME = Join-Path $env:TEMP "dove-pi-audit-home"
@@ -269,6 +269,22 @@ dove-pi session record --title "Smoke" --test "not run"
 dove-pi capability list
 dove-pi web status
 ```
+
+### 真实 provider 实地运行
+
+要主动拿真模型跑一次，用黑盒 runner 的 `--provider real`：
+
+```powershell
+node scripts/real-dove-blackbox.mjs --launcher source --provider real `
+  --cwd <临时项目> `
+  --scenario tests/fixtures/scenarios/read-only-audit.json `
+  --output <仓库外的路径>\run.jsonl --timeout-ms 900000
+```
+
+它需要你自己配好的 provider 凭据，原始产物留在仓库外。这份读数是**测量而不是门禁**：provider、端点与模型都会漂移，
+同一条命令换一天就是另一个实验，**不能**当作基线。只有 `read-only-audit` 是给真实 provider 写的 —— 其余场景的断言
+是对脚本化响应写的。契约（读数格式，以及这样一次运行证明与不证明什么）在
+`.trellis/spec/backend/personal-agent-field-run.md`。
 
 `--offline` 和 `--skip-version-check` 可以放在已知本地 CLI 前面；它们不会把 CLI 单词当成 Pi prompt。`task verify` 只检查产物结构和规划字段，不会运行测试，也不代表验收通过。正式任务需要先冻结 acceptance，再记录 evidence，最后由用户决定 finish/archive。
 

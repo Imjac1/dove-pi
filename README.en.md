@@ -255,7 +255,7 @@ refuses, `ask_before` asks the operator first (a host with no confirmation dialo
 letting it through), and `always_allow` names the actions that need no question. An action on none of the
 lists is not the mode's business and is still decided by Pi and the installed extensions.
 
-## Full workflow and a real-user smoke check
+## Full workflow, a CLI smoke check, and a real-provider field run
 
 Every invocation follows one boundary: the launcher handles `--version`, maintenance commands,
 and local CLI families first; only unmatched arguments start Pi. The CLI runs in the current
@@ -268,7 +268,8 @@ installer layer. Install, update, repair, and diagnostic commands still use Pyth
 one process hop and avoids installer dependency loading without changing Pi tools, context, or
 request policy.
 
-Run this black-box check in a temporary project, never against production source:
+Run this CLI black-box check in a temporary project, never against production source. It drives the CLI and the
+local state and starts **no model**, so it says nothing about provider behaviour:
 
 ```powershell
 $env:DOVE_PI_HOME = Join-Path $env:TEMP "dove-pi-audit-home"
@@ -285,6 +286,23 @@ dove-pi session record --title "Smoke" --test "not run"
 dove-pi capability list
 dove-pi web status
 ```
+
+### A real-provider field run
+
+To run Dove against a real model on purpose, use the black-box runner with `--provider real`:
+
+```powershell
+node scripts/real-dove-blackbox.mjs --launcher source --provider real `
+  --cwd <a temporary project> `
+  --scenario tests/fixtures/scenarios/read-only-audit.json `
+  --output <a path outside this repository>\run.jsonl --timeout-ms 900000
+```
+
+This needs provider credentials you configured yourself, and the raw output stays outside the repository. Its
+reading is a **measurement, not a gate**: the provider, endpoint and model drift, so the same command on another
+day is a different experiment and must not be treated as a baseline. Only `read-only-audit` is written for a real
+provider - the other scenarios assert against scripted responses. The contract, including the reading format and
+what such a run does and does not prove, is in `.trellis/spec/backend/personal-agent-field-run.md`.
 
 `--offline` and `--skip-version-check` may prefix a known local CLI command; they never turn the
 CLI words into a Pi prompt. `task verify` checks artifact structure and planning fields only: it

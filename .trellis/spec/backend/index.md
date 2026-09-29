@@ -36,6 +36,7 @@ repository enforces.
 | [Personal Agent Mode Format](./personal-agent-mode-format.md) | Work-mode layout and validation, the fields a mode declares, and the refusals for the rest | Active |
 | [Bounded Harness Improvement](./personal-agent-harness-loop.md) | The instruments the harness uses to improve itself from its own evidence, and the boundaries that keep that improvement bounded | Active |
 | [Convergence Record](./personal-agent-convergence-record.md) | The convergence contract for a formal native task, and the records around it: observations, manifests, terminal classification, decisions and applied commits | Active |
+| [Field Run](./personal-agent-field-run.md) | Running Dove against a real provider on purpose: the invocation, the reading it records, and what such a run does and does not prove | Active |
 
 ---
 

@@ -16,6 +16,7 @@ const routedSpecNames = [
 	"personal-agent-audit-vertical.md",
 	"personal-agent-harness-loop.md",
 	"personal-agent-convergence-record.md",
+	"personal-agent-field-run.md",
 ] as const;
 const expectedHeadingsBySpec = {
 	"personal-agent-request-runtime.md": [
@@ -66,6 +67,7 @@ const expectedHeadingsBySpec = {
 		"Scenario: Deterministic Seeds and the Coverage Receipt",
 		"Scenario: The Finding Claim Schema",
 	],
+	"personal-agent-field-run.md": ["Scenario: Real-Provider Field Run"],
 } as const satisfies Record<(typeof routedSpecNames)[number], readonly string[]>;
 
 const readSpec = (name: string): string => readFileSync(join(backendSpecDir, name), "utf8");
