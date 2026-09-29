@@ -1,0 +1,22 @@
+{
+  "name": "read-only-audit",
+  "description": "A user asks for a bounded read-only audit of one subsystem, then inspects the session state it produced.",
+  "requires": "a real provider; --cwd points at the project to audit, which is copied, so the audit cannot touch the original",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Read src/core/execution-ledger.ts and the two callers in src/pi-adapter/extension.ts and src/cli.ts. Change nothing. Report at most three findings, each one sentence with the file and the symbol, and say which Dove capability or recipe you would run to verify each."
+    },
+    {
+      "kind": "prompt",
+      "message": "/status"
+    },
+    {
+      "kind": "prompt",
+      "message": "/status full"
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}
