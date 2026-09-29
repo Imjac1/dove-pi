@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 226
+- **Total Sessions**: 227
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~531 | Active |
+| `journal-5.md` | ~573 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 227 | 2026-09-29 | The first real session, and the four defects it exposed | `7460917`, `f5e4dac`, `d09a9cb` | `master` |
 | 226 | 2026-09-29 | A real user session the harness can actually be | `956628b`, `81c3a63`, `c711ffb` | `master` |
 | 225 | 2026-09-29 | The refusals a user could not read back | `c86ea50`, `ebc1130` | `master` |
 | 224 | 2026-09-29 | The boundary, with its evidence | `2dfda47` | `master` |

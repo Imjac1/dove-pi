@@ -529,3 +529,45 @@ Planned a replay of a real user session and then built it. The reconnaissance fo
 
 - the real-provider run is the one acceptance criterion still open, and it is blocked on a person: ~/.pi/agent holds only dove/, with no settings.json and no auth.json, so --provider real ends in provider-authorization-denied by construction. The command and the readings to record are in the task implement.md
 - the task is deliberately not archived while that criterion is open. The fidelity boundary is written down with it: the model is still scripted, TUI rendering is outside the harness, and only the confirm dialog is reachable because ask_user_question is not a Pi built-in
+
+
+## Session 227: The first real session, and the four defects it exposed
+<!-- trellis-session: v=2 fp=97dd24c93332ac27 -->
+
+**Date**: 2026-09-29
+**Task**: The first real session, and the four defects it exposed
+**Branch**: `master`
+
+### Summary
+
+Ran Dove against a real provider for the first time on this machine, and it did not work - twice for reasons that were ours, once for a reason that was the harness own. The provider turned out to be configured correctly and invisible: PI_CODING_AGENT_DIR is pointed at an isolated directory, so the mode that says "use the operator provider" could not see it. Reachable and unusable, which is why no real run had ever happened.
+
+### Main Changes
+
+- the harness now carries the provider configuration into the isolated agent directory, and only for a real provider so the deterministic cases keep their own extension-registered one. The summary records which files came in, by name - the contents are never logged. This is the fix that made a real run possible at all
+- two corrections on the operator machine, both reversible: models.json declared contextWindow 256 for a model whose endpoint accepted max_tokens 200000, and maxTokens 16384 above a 256 window is impossible - Dove providerOverhead alone is 256, so every request would have been judged over budget and aborted. Set to 200000, the conservative direction, with a backup. And settings.json did not exist, so Pi had no default provider and selected a built-in one, which is the "No API key found for the selected model" that looked like a bad key
+- a bounded read-only audit scenario is committed: read one subsystem, report at most three findings, then run /status and /status full so the session evidence contains the state a user would inspect. The first version asked for an unbounded audit of the whole repository and was still working after seven minutes, which is a scenario defect rather than a slow model
+- four defects the real run exposed, none reachable by reading: /status full pushes the three fields added in the previous task past the 2048-character evidence cap because they sit after the strategy JSON dump, so the TUI shows them and the evidence does not; providerRounds reports 1 where the goal line in the same output says Provider 8; extractToolNames looks for tool_start while Pi emits tool_execution_start, so step.toolNames is always empty and thirteen tool calls were invisible; and a real session ends in retry-refused-after-effect, which is the fail-closed retry policy firing in practice for the first time
+- and one measurement the cost programme has wanted since it was written: sessionHitRate 2.8 percent, four full misses, 2432 cache-read tokens against 85231 input. The 192M-token review concluded the cache strategy works while the prefix grows; this is the first observation of it in a real session, and the cache barely helped
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7460917` | fix(blackbox): carry the provider config into the isolated agent dir |
+| `f5e4dac` | feat(blackbox): add the bounded read-only audit scenario |
+| `d09a9cb` | chore(task): record the real run and what it found |
+
+### Testing
+
+- [OK] the run itself is the evidence and it is not reproducible: provider ant, model atria-dawn-preview, 2026-09-29, 415.6 seconds, exit 0, 503 events, 13 tool calls (read x9, bash x4), 85231 input tokens, terminal retry-refused-after-effect. Recorded in the task implement.md with the command and the non-reproducibility statement; the raw run stayed outside the repository
+- [OK] npm run typecheck and the full suite stayed green across the harness change, and the eleven pre-existing black-box cases still pass, so carrying the provider configuration in did not disturb the deterministic path
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- the four defects are a task of their own: two are a few lines, one needs the counter reset located, and the retry refusal needs a decision about whether a session dying there is the intended answer or a UX defect. The task record carries them with the evidence
+- the cost axis still has exactly one observation, so nothing about it generalises yet. A second real session would say more than any amount of reading
