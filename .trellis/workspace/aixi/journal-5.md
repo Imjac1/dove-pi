@@ -571,3 +571,43 @@ Ran Dove against a real provider for the first time on this machine, and it did 
 
 - the four defects are a task of their own: two are a few lines, one needs the counter reset located, and the retry refusal needs a decision about whether a session dying there is the intended answer or a UX defect. The task record carries them with the evidence
 - the cost axis still has exactly one observation, so nothing about it generalises yet. A second real session would say more than any amount of reading
+
+
+## Session 228: 把真实运行写成做法，并找出遮住它的四处
+<!-- trellis-session: v=2 fp=677ba846123800da -->
+
+**Date**: 2026-09-29
+**Task**: 把真实运行写成做法，并找出遮住它的四处
+**Branch**: `master`
+
+### Summary
+
+真实使用才会暴露的问题此前只被偶然走过一次。本任务把它写成做法，并诊断出缺口为何是静默的：确定性路径一直绿，而绿恰好掩盖真实路径从未被走过。
+
+### Main Changes
+
+- 新增 routed spec personal-agent-field-run.md（8,619 B / 24,576），并做四处同步：router 链接、spec-context-budget.test.ts 的两个硬编码清单、backend 索引。之所以不能折进 harness spec，是量出来的 —— 它只剩 270 B，request-runtime 只剩 37 B。
+- 把 harness 套件登记为验证 tool-implementation：找出那四条缺陷的工具此前在**任何** `verifiedBy` 里都是空白。该声明自验证 —— 测试加载真实 yaml 并拒绝解析不了的条目。
+- 两份 README 各加 1 个 ### 标题与 2 个围栏，并改写误名段落：document-drift 按计数比对两份 README 的形态，只改一边必红。
+- 协议明确写出读数不可复现、是测量而非门禁、以及只有 read-only-audit 是给真模型写的（其余 7 个的断言写给脚本化响应）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7ffa64` | docs(field-run): make a real-provider run a written practice, and name what hid it |
+| `11ac2b8` | chore(task): plan the real-usage testing gap, and record what a field run is for |
+
+### Testing
+
+- [OK] npm run typecheck PASS；spec-context-budget/document-drift/harness-surface 30 tests 30 pass 0 fail（与基线一致）；npm test 811 tests 809 pass 0 fail 2 skipped（与基线一致）；npm run test:installer 141 tests OK 0 失败。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 未做且按计划不做：bash 非幂等策略（F15）是候选议题；未新增真实运行场景（D-C 决定）；未重跑真实会话（命令未变）。
+- 遗留：real-run-findings / report-blocker / dove-pi-web 仍 active；其中 real-run-findings 的工作与 AC 均已完成却未归档。
+- 安全：models.json 仍是明文 API key，且已进入一次会话上下文，建议轮换并改为环境变量注入。
