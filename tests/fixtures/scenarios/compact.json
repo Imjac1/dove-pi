@@ -1,0 +1,21 @@
+{
+  "name": "compact",
+  "description": "A user asks for compaction and then keeps working.",
+  "requires": "nothing beyond the default faux responses; the compact response carries the summary, so it is complete before the next step",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Read the project instruction and summarize it."
+    },
+    {
+      "kind": "compact"
+    },
+    {
+      "kind": "prompt",
+      "message": "Report one remaining risk."
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}

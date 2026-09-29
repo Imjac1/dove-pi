@@ -1,0 +1,18 @@
+{
+  "name": "correction",
+  "description": "A user overturns the previous instruction instead of continuing it.",
+  "requires": "nothing beyond the default faux responses",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Audit the project and report the first finding you would act on."
+    },
+    {
+      "kind": "prompt",
+      "message": "No - not that one. Set that finding aside and report a different one instead."
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}

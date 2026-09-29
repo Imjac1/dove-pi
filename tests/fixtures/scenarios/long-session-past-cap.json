@@ -1,0 +1,30 @@
+{
+  "name": "long-session-past-cap",
+  "description": "A session runs past the configured turn cap, which must advise rather than hang.",
+  "requires": "DOVE_PI_MAX_MESSAGES set low in the harness environment; the test sets it",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Continue and report one remaining risk."
+    },
+    {
+      "kind": "prompt",
+      "message": "Continue and report one more remaining risk."
+    },
+    {
+      "kind": "prompt",
+      "message": "Continue and report one more remaining risk."
+    },
+    {
+      "kind": "prompt",
+      "message": "Continue and report one more remaining risk."
+    },
+    {
+      "kind": "prompt",
+      "message": "Continue and report one more remaining risk."
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}

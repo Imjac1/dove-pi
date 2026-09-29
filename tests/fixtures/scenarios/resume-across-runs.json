@@ -1,0 +1,14 @@
+{
+  "name": "resume-across-runs",
+  "description": "A user comes back to a session in a second run and continues it.",
+  "requires": "--reuse-session with the same --session-dir on both runs; the test drives both",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Read the project instruction and state one risk."
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}

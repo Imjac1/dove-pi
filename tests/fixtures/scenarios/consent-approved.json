@@ -1,0 +1,20 @@
+{
+  "name": "consent-approved",
+  "description": "A user is asked to approve an action the work mode gates, and approves it.",
+  "requires": "--dialog-case write, in a project whose mode lists write in ask_before",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Write the consent probe file.",
+      "dialogs": [
+        {
+          "method": "confirm",
+          "confirmed": true
+        }
+      ]
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}

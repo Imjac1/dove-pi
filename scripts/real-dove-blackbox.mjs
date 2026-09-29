@@ -19,10 +19,16 @@ const launcher = valueFor("--launcher", "dove-pi");
 const providerMode = valueFor("--provider", "real");
 const progressCase = valueFor("--progress-case", "");
 const subagentCase = valueFor("--subagent-case", "");
+// A case of its own because consent is a case of its own: the default faux responses call no tool, so nothing the
+// work mode gates ever runs, and "the user approved this action" was unrepresentable.
+const dialogCase = valueFor("--dialog-case", "");
 const parsedContextWindow = Number(valueFor("--context-window", "128000"));
 const scenarioPath = valueFor("--scenario", "");
 const legacyPrompt = valueFor("--prompt", "请检查当前项目中未完成的任务，找出一个最小、明确、可以真实完成的优化目标。先只做审计，不修改文件。说明你选择的任务、验收标准、计划执行的测试，以及可能的阻塞点。");
 const requestedSessionDir = valueFor("--session-dir", "");
+// Sharing a session directory across runs is an explicit choice: the per-run suffix below is what keeps concurrent
+// scenarios on disjoint runtime roots, so it stays the default and only this flag turns it off.
+const reuseSession = args.includes("--reuse-session");
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const nonce = createHash("sha256").update(`${requestedOutputPath}\0${caseId}\0${process.pid}\0${Date.now()}`).digest("hex").slice(0, 12);
@@ -37,7 +43,7 @@ const scenarioRoot = resolve(scenarioParent, `${basename(requestedOutputPath)}-$
 const workspaceRoot = resolve(scenarioRoot, "project");
 const stateDir = resolve(scenarioRoot, "dove-state");
 const sessionBase = resolve(requestedSessionDir || resolve(scenarioRoot, "pi-session"));
-const sessionDir = requestedSessionDir ? resolve(sessionBase, `${scenarioSlug}-${nonce}`) : sessionBase;
+const sessionDir = requestedSessionDir && !reuseSession ? resolve(sessionBase, `${scenarioSlug}-${nonce}`) : sessionBase;
 const runLogPath = resolve(scenarioRoot, basename(requestedOutputPath));
 const outputPath = requestedOutputPath;
 const providerCapturePath = resolve(scenarioRoot, `${basename(requestedOutputPath)}.provider.jsonl`);
@@ -110,6 +116,11 @@ let finalEvidenceStarted = false;
 let scenarioFinished = false;
 let scenarioFailed = false;
 let harnessTimedOut = false;
+// Every dialog the run answered, with where the answer came from. A defaulted answer and an intended one used to be
+// indistinguishable, which is exactly the fact a scenario about consent needs.
+const dialogAnswers = [];
+let dialogMismatch = 0;
+let dialogsUnused = 0;
 let closeStartedAt;
 const startedAt = Date.now();
 
@@ -131,6 +142,13 @@ const record = (event) => {
       completeActiveStep(providerWarning);
     }
   }
+  // **Cancelling is a modifier on the active step, not a step of its own.** The dispatcher sends step N+1 only after
+  // step N settles, so a standalone abort step could only ever cancel an idle agent - never the in-flight request a
+  // user actually interrupts. This rides the same edge queueDuringTools uses.
+  if (event.type === "tool_execution_start" && activeState?.abortDuringTools && !activeState.abortSent) {
+    activeState.abortSent = true;
+    writeCommand({ id: `step-${currentStep + 1}-abort`, type: "abort" });
+  }
   if (event.type === "tool_execution_start" && activeState?.queueDuringTools && !activeState.queueInjected) {
     activeState.queueInjected = true;
     const suffix = currentStep + 1;
@@ -138,8 +156,20 @@ const record = (event) => {
     writeCommand({ id: activeState.queueCommandIds[0], type: "steer", message: "Prioritize the active tool result and report it." });
     writeCommand({ id: activeState.queueCommandIds[1], type: "follow_up", message: "After that, state one remaining risk." });
   }
-  if (event.type === "extension_ui_request" && ["select", "input", "editor"].includes(event.method)) writeCommand({ type: "extension_ui_response", id: event.id, cancelled: true });
-  else if (event.type === "extension_ui_request" && event.method === "confirm") writeCommand({ type: "extension_ui_response", id: event.id, confirmed: false });
+  if (event.type === "extension_ui_request" && ["select", "input", "editor", "confirm"].includes(event.method)) {
+    const declared = activeState?.dialogs?.shift();
+    const matches = declared !== undefined && declared.method === event.method;
+    if (declared !== undefined && !matches) dialogMismatch += 1;
+    if (event.method === "confirm") {
+      const confirmed = matches && typeof declared.confirmed === "boolean" ? declared.confirmed : false;
+      dialogAnswers.push({ step: currentStep, method: "confirm", confirmed, source: matches ? "scenario" : "default" });
+      writeCommand({ type: "extension_ui_response", id: event.id, confirmed });
+    } else {
+      const answered = matches && typeof declared.value === "string";
+      dialogAnswers.push({ step: currentStep, method: event.method, cancelled: !answered, source: answered ? "scenario" : "default" });
+      writeCommand(answered ? { type: "extension_ui_response", id: event.id, value: declared.value } : { type: "extension_ui_response", id: event.id, cancelled: true });
+    }
+  }
   if (event.type !== "response") return;
 
   if (finalEvidencePending.includes(event.id)) {
@@ -161,6 +191,11 @@ const record = (event) => {
     activeCommand.responseData = event.data;
     completeActiveStep();
   } else if (activeCommand.type === "prompt" && /^\s*\//.test(activeCommand.message || "")) {
+    completeActiveStep();
+  } else if (activeCommand.type === "abort" || activeCommand.type === "compact") {
+    // Neither runs an agent, so neither can wait for agent_settled. **A refusal is an answer, not a scenario failure**:
+    // `compact` on a session with nothing to compact returns success:false with its reason, and that is the host
+    // behaving correctly. The harness records the response; whether it counts as a failure is the assertion's business.
     completeActiveStep();
   } else if (activeState?.sawSettled) completeActiveStep();
 };
@@ -216,7 +251,7 @@ child.on("close", (code, signal) => {
   const planByStep = new Map(requestStepIndexes.map((index, position) => [index, plans[position]]));
   const summary = {
     caseId, scenarioSessionKey, cwd: workspaceRoot, outputPath, runLogPath, scenarioRoot, sessionDir, stateDir,
-    launcher, providerMode,
+    launcher, providerMode, dialogCase,
     contextWindow: providerMode === "faux" && Number.isFinite(parsedContextWindow) && parsedContextWindow > 0 ? Math.floor(parsedContextWindow) : undefined,
     promptDigest: digest(primaryPrompt), durationMs: Date.now() - startedAt,
     exitCode: code, signal, harnessTimedOut, scenarioFailed, settled: stepRecords.some((step) => step.settled),
@@ -238,6 +273,17 @@ child.on("close", (code, signal) => {
     artifactEvidence: readArtifactEvidence(workspaceRoot),
     terminalConsistency: harnessTimedOut ? "harness-timeout" : rpcFailure && rpcCode !== ledgerCode ? "mismatch" : lastTerminal ? "completed-ledger-only" : "none",
     closeWaitMs: closeStartedAt ? Date.now() - closeStartedAt : undefined,
+    // `defaulted` overlaps the other counters on purpose: it says how many answers the scenario did NOT declare, which
+    // is the fact that was invisible when every answer was a hardcoded refusal.
+    dialogs: {
+      approved: dialogAnswers.filter((entry) => entry.method === "confirm" && entry.confirmed === true).length,
+      declined: dialogAnswers.filter((entry) => entry.method === "confirm" && entry.confirmed === false).length,
+      answered: dialogAnswers.filter((entry) => entry.method !== "confirm" && entry.cancelled === false).length,
+      cancelled: dialogAnswers.filter((entry) => entry.method !== "confirm" && entry.cancelled === true).length,
+      defaulted: dialogAnswers.filter((entry) => entry.source === "default").length,
+      mismatch: dialogMismatch,
+      unused: dialogsUnused,
+    },
   };
   // The JSONL run log is the redacted, user-facing evidence stream. Keep
   // filesystem paths only in the local summary sidecar.
@@ -256,13 +302,15 @@ function startNextStep() {
   currentStep += 1;
   if (currentStep >= steps.length) return requestFinalEvidence();
   const step = steps[currentStep];
-  activeState = { kind: step.kind, sawStart: false, sawEnd: false, sawSettled: false, queueDuringTools: step.queueDuringTools === true, queueInjected: false };
+  activeState = { kind: step.kind, sawStart: false, sawEnd: false, sawSettled: false, queueDuringTools: step.queueDuringTools === true, queueInjected: false, dialogs: [...(step.dialogs || [])], abortDuringTools: step.abortDuringTools === true, abortSent: false };
   // Pi's follow_up/steer RPC forms queue input for an agent that is currently
   // running. Our replay deliberately sends one step after the previous one
   // settles, so continuation is a fresh prompt in the same session, matching
   // what an interactive user submits after the response is complete.
   const type = step.kind === "state" ? "get_state" : step.kind === "stats" ? "get_session_stats" : ["follow_up", "steer"].includes(step.kind) ? "prompt" : step.kind;
-  activeCommand = { id: `step-${currentStep + 1}`, type, message: step.message || "" };
+  // `abort` and `compact` take no message; sending one would be a field the protocol never asked for.
+  activeCommand = { id: `step-${currentStep + 1}`, type };
+  if (["prompt", "follow_up", "steer"].includes(step.kind)) activeCommand.message = step.message || "";
   writeCommand(activeCommand);
 }
 
@@ -270,6 +318,7 @@ function completeActiveStep(failed = false) {
   if (!activeCommand || currentStep < 0 || stepRecords[currentStep].settled) return;
   stepRecords[currentStep].settled = !failed;
   stepRecords[currentStep].failed = failed || undefined;
+  if (activeState?.dialogs?.length) dialogsUnused += activeState.dialogs.length;
   activeCommand = undefined;
   activeState = undefined;
   if (failed) {
@@ -293,11 +342,22 @@ function loadScenario() {
   let value;
   if (scenarioPath) value = JSON.parse(readFileSync(resolve(scenarioPath), "utf8"));
   const rawSteps = Array.isArray(value) ? value : value?.steps;
-  return (rawSteps || [{ kind: "prompt", message: legacyPrompt }]).map((step) => {
-    if (typeof step === "string") return { kind: "prompt", message: step };
+  const kinds = ["prompt", "follow_up", "steer", "state", "stats", "abort", "compact"];
+  const methods = ["confirm", "select", "input", "editor"];
+  return (rawSteps || [{ kind: "prompt", message: legacyPrompt, dialogs: [] }]).map((step, index) => {
+    if (typeof step === "string") return { kind: "prompt", message: step, dialogs: [] };
     const kind = step?.kind || "prompt";
-    if (!["prompt", "follow_up", "steer", "state", "stats"].includes(kind)) throw new Error(`Unsupported black-box step kind: ${kind}`);
-    return { kind, message: typeof step?.message === "string" ? step.message : "", queueDuringTools: step?.queueDuringTools === true };
+    if (!kinds.includes(kind)) throw new Error(`Unsupported black-box step kind: ${kind}`);
+    const dialogs = step?.dialogs === undefined ? [] : step.dialogs;
+    // **A declaration the harness cannot honour is refused here, not defaulted.** Silently answering something else is
+    // how a scenario comes to assert a consent that never happened.
+    if (!Array.isArray(dialogs)) throw new Error(`Step ${index + 1} declares 'dialogs' as something other than a list`);
+    for (const dialog of dialogs) {
+      if (!methods.includes(dialog?.method)) throw new Error(`Step ${index + 1} declares an unsupported dialog method: ${JSON.stringify(dialog?.method)}`);
+      if (dialog.method === "confirm" && typeof dialog.confirmed !== "boolean") throw new Error(`Step ${index + 1} declares a confirm without a boolean 'confirmed'`);
+      if (dialog.method !== "confirm" && typeof dialog.value !== "string") throw new Error(`Step ${index + 1} declares a ${dialog.method} without a string 'value'`);
+    }
+    return { kind, message: typeof step?.message === "string" ? step.message : "", queueDuringTools: step?.queueDuringTools === true, abortDuringTools: step?.abortDuringTools === true, dialogs };
   });
 }
 
@@ -316,8 +376,11 @@ function writeFauxProvider() {
   const window = Number.isFinite(parsedContextWindow) && parsedContextWindow > 0 ? Math.floor(parsedContextWindow) : 128000;
   const mode = JSON.stringify(progressCase === "midstream" ? "repeated" : progressCase);
   const subagent = JSON.stringify(subagentCase);
+  const dialog = JSON.stringify(dialogCase);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `import { appendFileSync } from "node:fs";\nimport { fauxAssistantMessage, fauxProvider, fauxToolCall } from ${JSON.stringify(fauxModule)};\nexport default function blackboxProvider(pi) {\n  const faux = fauxProvider({ provider: "dove-blackbox", models: [{ id: "blackbox", name: "Dove Black-box", reasoning: false, contextWindow: ${window}, maxTokens: 4096 }] });\n  const mode = ${mode};\n  const subagent = ${subagent};\n  const responses = mode === "changing"\n    ? Array.from({ length: 20 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-" + index + ".txt" }, { id: "progress-read-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("Completed all changing reads."))\n    : mode === "repeated"\n      ? Array.from({ length: 4 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-same.txt" }, { id: "progress-repeat-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("This response must not be reached."))\n      : subagent === "delegated" || subagent === "unavailable"\n        ? [fauxAssistantMessage([fauxToolCall("agent_subagent", { name: "blackbox-investigation", prompt: "Read the project and return a short inventory." }, { id: "subagent-call-1" })], { stopReason: "toolUse" }), fauxAssistantMessage("Subagent investigation completed.")]\n        : Array.from({ length: 64 }, () => fauxAssistantMessage("Deterministic black-box provider response."));\n  faux.setResponses(responses);\n  pi.registerProvider("dove-blackbox", { api: faux.api, apiKey: "blackbox-test-key", models: faux.models, streamSimple(model, context, options) {\n    const messages = Array.isArray(context.messages) ? context.messages : [];\n    appendFileSync(${JSON.stringify(providerCapturePath)}, JSON.stringify({ model: model.id, systemPromptChars: typeof context.systemPrompt === "string" ? context.systemPrompt.length : 0, messageCount: messages.length, messageChars: messages.reduce((total, message) => total + JSON.stringify(message).length, 0), toolCount: Array.isArray(context.tools) ? context.tools.length : 0 }) + "\\n", "utf8");\n    return faux.provider.streamSimple(model, context, options);\n  } });\n}\n`, "utf8");
+  writeFileSync(path, `import { appendFileSync } from "node:fs";\nimport { fauxAssistantMessage, fauxProvider, fauxToolCall } from ${JSON.stringify(fauxModule)};\nexport default function blackboxProvider(pi) {\n  const faux = fauxProvider({ provider: "dove-blackbox", models: [{ id: "blackbox", name: "Dove Black-box", reasoning: false, contextWindow: ${window}, maxTokens: 4096 }] });\n  const mode = ${mode};\n  const subagent = ${subagent};\n  const dialog = ${dialog};\n  const responses = mode === "changing"\n    ? Array.from({ length: 20 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-" + index + ".txt" }, { id: "progress-read-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("Completed all changing reads."))\n    : mode === "repeated"\n      ? Array.from({ length: 4 }, (_, index) => fauxAssistantMessage([fauxToolCall("read", { path: "probe-same.txt" }, { id: "progress-repeat-" + index })], { stopReason: "toolUse" })).concat(fauxAssistantMessage("This response must not be reached."))\n      : dialog === "write"
+        ? [fauxAssistantMessage([fauxToolCall("write", { path: "consent-probe.txt", content: "approved" }, { id: "consent-write-1" })], { stopReason: "toolUse" }), fauxAssistantMessage("Wrote the probe.")]
+        : subagent === "delegated" || subagent === "unavailable"\n        ? [fauxAssistantMessage([fauxToolCall("agent_subagent", { name: "blackbox-investigation", prompt: "Read the project and return a short inventory." }, { id: "subagent-call-1" })], { stopReason: "toolUse" }), fauxAssistantMessage("Subagent investigation completed.")]\n        : Array.from({ length: 64 }, () => fauxAssistantMessage("Deterministic black-box provider response."));\n  faux.setResponses(responses);\n  pi.registerProvider("dove-blackbox", { api: faux.api, apiKey: "blackbox-test-key", models: faux.models, streamSimple(model, context, options) {\n    const messages = Array.isArray(context.messages) ? context.messages : [];\n    appendFileSync(${JSON.stringify(providerCapturePath)}, JSON.stringify({ model: model.id, systemPromptChars: typeof context.systemPrompt === "string" ? context.systemPrompt.length : 0, messageCount: messages.length, messageChars: messages.reduce((total, message) => total + JSON.stringify(message).length, 0), toolCount: Array.isArray(context.tools) ? context.tools.length : 0 }) + "\\n", "utf8");\n    return faux.provider.streamSimple(model, context, options);\n  } });\n}\n`, "utf8");
   return path;
 }
 

@@ -408,7 +408,8 @@ context ceiling.
 The black-box driver models one real Pi session. Each run gets a private project copy, Dove state,
 Pi session, and provider-capture root, so concurrent cases cannot share ledgers even when they use
 the same output parent. The legacy `--prompt` form remains a one-turn scenario; use
-`--scenario <json>` for ordered user steps:
+`--scenario <json>` for ordered user steps, and the committed library under `tests/fixtures/scenarios/` for the
+sessions a person actually has:
 
 ```json
 {"steps":[
@@ -418,6 +419,9 @@ the same output parent. The legacy `--prompt` form remains a one-turn scenario; 
   {"kind":"prompt","message":"/dove-tools core"},
   {"kind":"prompt","message":"/dove-tools auto"},
   {"kind":"follow_up","message":"Continue the audit and give acceptance criteria"},
+  {"kind":"prompt","message":"Write the report","dialogs":[{"method":"confirm","confirmed":true}]},
+  {"kind":"prompt","message":"Read every probe","abortDuringTools":true},
+  {"kind":"compact"},
   {"kind":"state"},
   {"kind":"stats"}
 ]}
@@ -432,6 +436,16 @@ whitelisted counters, never raw prompts, tool arguments, credentials, or absolut
 summary also records per-model-turn strategy values and sources, logical request IDs, active tool
 counts, and relative `.dove/` artifact facts. Slash commands and `state`/`stats` are
 `command-only` steps and do not invent ledger strategy records.
+
+A step may declare `dialogs`: the answers the host receives, consumed in order. Without one, a confirm is answered
+`false` and any other dialog `cancelled`, and the summary counts which answers the scenario supplied
+(`dialogs.approved` / `declined` / `answered` / `cancelled`) against which the driver defaulted
+(`dialogs.defaulted`) - a refusal that was asked for and a refusal that was supplied must not read the same.
+`abortDuringTools: true` cancels the request while its tool is running, which is the only way to interrupt work in
+flight, because steps are sent sequentially. `--reuse-session` with the same `--session-dir` makes a second run
+continue the first instead of getting a session root of its own; without it every run stays isolated.
+`--dialog-case write` makes the deterministic provider request a write, so a work mode that gates one has something
+to gate.
 
 ### Maintain the installation
 

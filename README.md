@@ -362,7 +362,8 @@ $env:DOVE_PI_SHELL_TIMEOUT_SECONDS = "0"    # 关闭 Dove 兜底，交由 Pi/宿
 
 黑盒回放按一个真实 Pi 会话运行：每次运行会创建独立的项目副本、Dove state、Pi session
 和 provider capture 根目录，即使多个回放共享输出父目录也不会串账。默认的 `--prompt` 仍
-兼容单回合用法；需要多回合时用 `--scenario <json>`，格式如下：
+兼容单回合用法；需要多回合时用 `--scenario <json>`，或直接用 `tests/fixtures/scenarios/` 里那些"真人真会遇到的
+会话"，格式如下：
 
 ```json
 {"steps":[
@@ -372,6 +373,9 @@ $env:DOVE_PI_SHELL_TIMEOUT_SECONDS = "0"    # 关闭 Dove 兜底，交由 Pi/宿
   {"kind":"prompt","message":"/dove-tools core"},
   {"kind":"prompt","message":"/dove-tools auto"},
   {"kind":"follow_up","message":"继续刚才的审计并给出验收标准"},
+  {"kind":"prompt","message":"写报告","dialogs":[{"method":"confirm","confirmed":true}]},
+  {"kind":"prompt","message":"读取全部探针","abortDuringTools":true},
+  {"kind":"compact"},
   {"kind":"state"},
   {"kind":"stats"}
 ]}
@@ -384,6 +388,13 @@ state/stats 并关闭 stdin，让 Pi 自己正常退出；`exitCode: 0` 且 `sig
 类型和白名单计数，不写入原始 prompt、工具参数、凭据或绝对路径。摘要还会记录每个模型
 回合的策略值与来源、逻辑请求 ID、活动工具数，以及项目 `.dove/` 产物的相对路径/计数；
 slash command 和 `state`/`stats` 是 `command-only` 步骤，不会伪造 ledger strategy。
+
+步骤可以声明 `dialogs`：主机收到的对话框答案，按顺序消费。不声明时，confirm 一律回 `false`、其余对话框一律回
+`cancelled`；摘要会分别统计哪些答案由场景提供（`dialogs.approved` / `declined` / `answered` / `cancelled`）、
+哪些由驱动默认给出（`dialogs.defaulted`）—— "被要求的拒绝"与"被默认的拒绝"不能读成同一件事。
+`abortDuringTools: true` 在该步的工具运行期间取消请求，这是唯一能打断飞行中工作的方式，因为步骤是串行发送的。
+`--reuse-session` 配合同一个 `--session-dir` 时，第二次运行会继续第一次的会话，而不是各拿一个 session 根目录；
+不给它时每次运行保持隔离。`--dialog-case write` 让确定性 provider 请求一次写操作，好让声明了闸门的工作模式有东西可闸。
 
 ### 维护安装
 

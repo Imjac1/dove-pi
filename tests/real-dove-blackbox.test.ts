@@ -424,6 +424,202 @@ describe("real Dove Pi black-box harness", () => {
 	});
 });
 
+describe("the real-user scenarios", () => {
+	/**
+	 * **What these hold that the cases above cannot.** Every other case in this file runs the deterministic provider, whose
+	 * default responses call no tool - so nothing a work mode gates ever runs, every dialog is a hardcoded refusal, and the
+	 * two most ordinary things a person does (approve an action, interrupt one) had no representation at all. These seven
+	 * drive scenarios committed under `tests/fixtures/scenarios/`, so "a real user session" is an artifact someone can run,
+	 * extend and review rather than a literal assembled inside a test.
+	 *
+	 * **What they do not hold.** The model is still scripted: these say the *situation* is reproduced, not that an agent did
+	 * useful work. A real provider is a manual, recorded run and not a gate - `~/.pi/agent/` carries no credentials here.
+	 * TUI rendering, shortcuts and custom components are outside the harness entirely, because Pi's headless surface is RPC.
+	 * And only the `confirm` dialog is reachable: `ask_user_question` is not a Pi built-in (it appears nowhere in the Pi
+	 * distribution), so the `select`/`input`/`editor` answers the harness can send have no committed scenario behind them.
+	 */
+	const scenarioPath = (name: string): string => join(process.cwd(), "tests", "fixtures", "scenarios", `${name}.json`);
+
+	/** A project whose mode gates `write`, so the consent dialog is a real gate rather than a decoration. */
+	async function consentProject(root: string): Promise<string> {
+		const project = join(root, "project");
+		const mode = join(project, "modes", "consent");
+		await mkdir(mode, { recursive: true });
+		await mkdir(join(project, ".dove"), { recursive: true });
+		await writeFile(join(project, ".dove", "mode.json"), JSON.stringify({ schemaVersion: 1, mode: "consent" }), "utf8");
+		await writeFile(join(mode, "MODE.md"), ["---", "name: consent", "description: A fixture mode whose ask_before gates one action.", "license: MIT", "---", "", "Exercise the consent boundary.", ""].join("\n"), "utf8");
+		await writeFile(join(mode, "governance.yaml"), [
+			"version: 1.0.0", 'framework: ">=0.2.0 <0.3.0"', "scope:", "  targets: [workspace]", "  environment: non-production", "  exclusions: []",
+			"authority:", "  grant: local-consent", "  capabilities: [workspace.inspect]", '  expires: "2027-01-01T00:00:00.000Z"',
+			"gate:", "  semantics: none", "  approval: none", "",
+		].join("\n"), "utf8");
+		await writeFile(join(mode, "permissions.yaml"), ["unlisted: allow", "always_allow: []", "ask_before: [write]", "never_allow: []", ""].join("\n"), "utf8");
+		return project;
+	}
+
+	async function ledgerOf(stateDir: string): Promise<Array<{ kind?: string; correlation?: { requestId?: string }; details?: Record<string, unknown> }>> {
+		const raw = await readFile(join(stateDir, "execution.jsonl"), "utf8");
+		return raw.split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line));
+	}
+
+	it("approves an action the work mode gates, and the ledger is what says so", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-consent-yes-"));
+		try {
+			const project = await consentProject(root);
+			const output = join(root, "yes.jsonl");
+			const result = await runHarness(project, output, ["--provider", "faux", "--dialog-case", "write", "--scenario", scenarioPath("consent-approved")], 30_000, "consent-approved");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as {
+				dialogs?: { approved?: number; declined?: number; defaulted?: number; unused?: number };
+				harnessTimedOut?: boolean;
+			};
+			assert.equal(summary.harnessTimedOut, false);
+			assert.equal(summary.dialogs?.approved, 1, "the scenario declared the consent and the harness put it");
+			assert.equal(summary.dialogs?.defaulted, 0, "an answer the scenario did not declare must not be what produced this");
+			assert.equal(summary.dialogs?.unused, 0, "every declared answer was consumed");
+			const records = await ledgerOf((JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as { stateDir: string }).stateDir);
+			assert.ok(records.some((record) => record.kind === "gate.approved"), "consent is recorded, not merely performed");
+			assert.ok(records.some((record) => record.kind === "tool.observed" && record.details?.tool === "write"), "and the action it authorized actually ran");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("declines the same action, and the refusal names the operator rather than the host", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-consent-no-"));
+		try {
+			const project = await consentProject(root);
+			const output = join(root, "no.jsonl");
+			const result = await runHarness(project, output, ["--provider", "faux", "--dialog-case", "write", "--scenario", scenarioPath("consent-declined")], 30_000, "consent-declined");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as { stateDir: string; dialogs?: { declined?: number; defaulted?: number } };
+			assert.equal(summary.dialogs?.declined, 1);
+			assert.equal(summary.dialogs?.defaulted, 0, "this refusal was asked for, not the harness default");
+			const records = await ledgerOf(summary.stateDir);
+			const refusal = records.find((record) => record.kind === "gate.refused");
+			assert.ok(refusal !== undefined, "a declined action is refused and recorded");
+			assert.match(String(refusal?.details?.remediation ?? ""), /declined/i, "and the refusal distinguishes a person saying no from a host that cannot ask");
+			assert.equal(records.some((record) => record.kind === "tool.observed" && record.details?.tool === "write"), false, "the action it refused did not run");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("cancels a request while its tool is running", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-cancel-"));
+		try {
+			const project = join(root, "project");
+			await mkdir(project, { recursive: true });
+			const output = join(root, "cancel.jsonl");
+			const result = await runHarness(project, output, ["--provider", "faux", "--progress-case", "changing", "--scenario", scenarioPath("cancel-mid-flight")], 60_000, "cancel-mid-flight");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as { stateDir: string; harnessTimedOut?: boolean };
+			assert.equal(summary.harnessTimedOut, false, "an abort that leaves the host hanging is not a cancellation");
+			const records = await ledgerOf(summary.stateDir);
+			const terminal = records.filter((record) => record.kind === "request.terminal").at(-1);
+			assert.equal(terminal?.details?.reason, "cancelled", "the user's interruption is classified as one");
+			assert.equal((terminal?.details?.terminal as { origin?: string } | undefined)?.origin, "user");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("resumes a session in a second run that shares its directory", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-resume-"));
+		try {
+			const project = join(root, "project");
+			await mkdir(project, { recursive: true });
+			const shared = join(root, "shared-session");
+			const first = join(root, "first.jsonl");
+			const second = join(root, "second.jsonl");
+			const sharedArgs = ["--provider", "faux", "--reuse-session", "--session-dir", shared, "--scenario", scenarioPath("resume-across-runs")];
+			await runHarness(project, first, sharedArgs, 30_000, "resume-first");
+			await runHarness(project, second, sharedArgs, 30_000, "resume-second");
+			const summaries = await Promise.all([first, second].map(async (output) => JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as { stateDir: string; sessionDir: string; exitCode: number | null; harnessTimedOut?: boolean }));
+			assert.equal(summaries[0]?.sessionDir, summaries[1]?.sessionDir, "the flag is what makes the second run continue the first");
+			assert.notEqual(summaries[0]?.sessionDir, undefined);
+			assert.ok(summaries.every((summary) => summary.exitCode === 0 && summary.harnessTimedOut === false));
+			const secondRecords = await ledgerOf(summaries[1]!.stateDir);
+			assert.ok(secondRecords.some((record) => record.kind === "request.received"), "the second run submitted a request of its own");
+			assert.equal(secondRecords.some((record) => record.kind === "request.redelivery.coalesced"), false, "and it was not mistaken for a redelivery of the first");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("treats a correction as a new logical request rather than a continuation", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-correction-"));
+		try {
+			const project = join(root, "project");
+			await mkdir(project, { recursive: true });
+			const output = join(root, "correction.jsonl");
+			const result = await runHarness(project, output, ["--provider", "faux", "--scenario", scenarioPath("correction")], 30_000, "correction");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as { stateDir: string; steps?: Array<{ kind?: string; settled?: boolean }> };
+			assert.ok((summary.steps ?? []).filter((step) => step.kind === "prompt").every((step) => step.settled === true), "both instructions were answered");
+			const records = await ledgerOf(summary.stateDir);
+			const planned = records.filter((record) => record.kind === "request.planned");
+			assert.equal(planned.length, 2, "a correction is planned as its own request, not folded into the one it overturns");
+			assert.equal(new Set(planned.map((record) => record.correlation?.requestId)).size, 2, "and the two requests have distinct identities");
+			assert.equal(records.some((record) => record.kind === "request.redelivery.coalesced"), false);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps a session that runs past the turn cap bounded instead of hanging", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-long-"));
+		const previousCap = process.env.DOVE_PI_MAX_MESSAGES;
+		try {
+			const project = join(root, "project");
+			await mkdir(project, { recursive: true });
+			const output = join(root, "long.jsonl");
+			process.env.DOVE_PI_MAX_MESSAGES = "3";
+			const result = await runHarness(project, output, ["--provider", "faux", "--scenario", scenarioPath("long-session-past-cap")], 60_000, "long-session");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as { harnessTimedOut?: boolean; steps?: Array<{ settled?: boolean; failed?: boolean }> };
+			assert.equal(summary.harnessTimedOut, false, "crossing the cap must advise, not stall the session");
+			assert.ok((summary.steps ?? []).every((step) => step.settled === true || step.failed === undefined), "every step reached an end");
+		} finally {
+			if (previousCap === undefined) delete process.env.DOVE_PI_MAX_MESSAGES;
+			else process.env.DOVE_PI_MAX_MESSAGES = previousCap;
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("compacts on request and keeps working afterwards", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-compact-"));
+		try {
+			const project = join(root, "project");
+			await mkdir(project, { recursive: true });
+			const output = join(root, "compact.jsonl");
+			const result = await runHarness(project, output, ["--provider", "faux", "--scenario", scenarioPath("compact")], 30_000, "compact");
+			assert.equal(result.code, 0);
+			const summary = JSON.parse(await readFile(`${output}.summary.json`, "utf8")) as {
+				harnessTimedOut?: boolean;
+				steps?: Array<{ kind?: string; settled?: boolean; events?: Array<{ type?: string }> }>;
+			};
+			assert.equal(summary.harnessTimedOut, false);
+			const compactStep = (summary.steps ?? []).find((step) => step.kind === "compact") as
+				| { settled?: boolean; response?: { command?: string; success?: boolean }; events?: Array<{ type?: string }> }
+				| undefined;
+			assert.ok(compactStep !== undefined, "the compact step is in the record");
+			assert.equal(compactStep?.settled, true, "it completed on its response rather than waiting for an agent that never runs");
+			// **The answer is recorded either way, and a refusal is one of the answers.** A session with too little to
+			// compact is refused with its reason ("Nothing to compact (session too small)"), which is the host behaving
+			// correctly - so this pins that the command is answered rather than asserting which way.
+			assert.equal(compactStep?.response?.command, "compact", "the host answered the command the user sent");
+			const types = (compactStep?.events ?? []).map((event) => event.type);
+			assert.ok(types.includes("compaction_start"), "the host reported the compaction it was asked for");
+			assert.ok(types.includes("compaction_end"), "and its end");
+			const lastPrompt = (summary.steps ?? []).filter((step) => step.kind === "prompt").at(-1);
+			assert.equal(lastPrompt?.settled, true, "a session that compacts is still usable afterwards");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
 function digest(value: string): string {
 	return createHash("sha256").update(value.normalize("NFC")).digest("hex").slice(0, 24);
 }

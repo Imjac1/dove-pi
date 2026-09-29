@@ -1,0 +1,15 @@
+{
+  "name": "cancel-mid-flight",
+  "description": "A user interrupts a request while its tool is running.",
+  "requires": "--progress-case changing, so a tool is genuinely in flight when the abort lands",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Read every probe file.",
+      "abortDuringTools": true
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}

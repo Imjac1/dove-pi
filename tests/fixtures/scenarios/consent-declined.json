@@ -1,0 +1,20 @@
+{
+  "name": "consent-declined",
+  "description": "The same request, and the user declines it.",
+  "requires": "--dialog-case write, in a project whose mode lists write in ask_before",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "Write the consent probe file.",
+      "dialogs": [
+        {
+          "method": "confirm",
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}
