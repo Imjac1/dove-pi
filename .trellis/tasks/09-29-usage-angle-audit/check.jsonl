@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The review checklist and forbidden patterns used to verify the change"}
+{"file": ".trellis/spec/backend/personal-agent-capability-runtime.md", "reason": "Verify both halves of the projection contract were updated together, since one consumer reading a stale clause is the defect class this task removes"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Boundary error handling: unknown values converted explicitly, no silent fallback to another authority"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Bounds what may enter the projection: logs are evidence, not a second state store, and arbitrary ledger details are never echoed"}

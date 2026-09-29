@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/personal-agent-capability-runtime.md", "reason": "The shared diagnostics projection contract this change extends: diagnostics/status, agent_doctor and CLI doctor must keep returning the same bounded fields"}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "The /status full plus agent_doctor contract for cache and execution diagnostics, and the workspace launch policy the new workMode field reports"}
+{"file": ".trellis/spec/backend/personal-agent-request-runtime.md", "reason": "Request lifecycle identity, terminal envelope and ledger correlation the projection carries into the user-facing command"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Forbidden and required patterns the edit must respect, including the prohibition on counts of what the code declares"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "This change crosses ledger to projection to command to documentation, which is the layer boundary this guide asks about"}
