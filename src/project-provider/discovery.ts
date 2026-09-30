@@ -42,15 +42,6 @@ export function discoverProject(startPath = process.cwd()): ProjectDiscovery {
 	}
 }
 
-export function isProjectRoot(path: string): boolean {
-	return isDirectory(join(resolve(path), ".trellis")) || existsSync(join(resolve(path), ".dove", "project.json"));
-}
-
-export function projectTrellisRoot(projectRoot: string): string | undefined {
-	const root = join(resolve(projectRoot), ".trellis");
-	return isDirectory(root) ? root : undefined;
-}
-
 function isDirectory(path: string): boolean {
 	try { return statSync(path).isDirectory(); } catch { return false; }
 }

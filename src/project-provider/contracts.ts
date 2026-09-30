@@ -7,8 +7,6 @@ export const PROJECT_PROVIDER_CONTRACT = "1.0" as const;
 
 export type ProjectProviderKind = "native" | "trellis" | "lightweight";
 export type ProjectTaskOperation = "create" | "start" | "finish" | "archive";
-/** @deprecated Use ProjectTaskOperation. */
-export type TrellisTaskOperation = ProjectTaskOperation;
 export type ProviderHealthStatus = "healthy" | "lightweight" | "degraded";
 
 export interface ProviderCapabilities {
