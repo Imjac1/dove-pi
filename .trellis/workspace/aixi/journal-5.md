@@ -611,3 +611,50 @@ Ran Dove against a real provider for the first time on this machine, and it did 
 - 未做且按计划不做：bash 非幂等策略（F15）是候选议题；未新增真实运行场景（D-C 决定）；未重跑真实会话（命令未变）。
 - 遗留：real-run-findings / report-blocker / dove-pi-web 仍 active；其中 real-run-findings 的工作与 AC 均已完成却未归档。
 - 安全：models.json 仍是明文 API key，且已进入一次会话上下文，建议轮换并改为环境变量注入。
+
+
+## Session 229: Finishing the audit: a measured refusal, three red-checked assertions, and the tasks behind it
+<!-- trellis-session: v=2 fp=b6d06d6660c7915c -->
+
+**Date**: 2026-09-30
+**Task**: Finishing the audit: a measured refusal, three red-checked assertions, and the tasks behind it
+**Branch**: `master`
+
+### Summary
+
+Resumed the mechanism audit mid-implementation - typecheck was red and three of its decisions were half-applied - and carried it through check, spec updates and commit to archive. Two tasks closed, one left open with its reason written down.
+
+### Main Changes
+
+- R3 landed. src/core/invocation-disposition.ts answers what an invocation is once, and the two consumers read different fields of that answer: the freeze gate reads disposition, the retry path reads replaySafe, and the two unknown defaults stay opposite on purpose with one assertion each. Equivalence was shown before deletion - a probe ran the pre-change logic beside the classifier over 48 invocations (every name in both old tables, the shell cases, the capability and recipe cases, three undeclared tools) and reported no disagreement - so the two name tables could be deleted rather than kept just in case. The probe was temporary by design; its readings are in the task record and its assertions now live in tests/invocation-disposition.test.ts.
+- The adapter finished migrating: both replay call sites read classifyInvocation(...).replaySafe, and the model-result character budget reads declaredReadOnly from the same table, so no second name set survives anywhere. declaredMutatingToolNames() lets the fence own union check compare against the declaration table instead of against a copy of it.
+- R4 was tested rather than deleted, because its path survived the measurement as the overflow guard: a work mode, a non-idempotent effect and a claim whose record cannot be read, asserting that the refusal names both and marks the unreadable one. A reader that skipped an unreadable claim would undo the store refusal by omission, which is what the case is about.
+- The gate admission of an undeclared tool is recorded and named instead of silent - gate.approved with gate: undetermined-disposition, plus a notification - so that nothing-declared-this stops reading like reviewed-and-found-harmless. It is still admitted: this is a workflow gate over a formal task, not a second Pi tool permission firewall.
+- Two defects the check caught in this session own new code. A dead isReadOnlyShellCommand import was left in the adapter after the predicate moved. And the new gate record wrote action: event.toolName with viaCapability: false while every refusal for the same call writes the resolved action, so one call would have read as two records; it now uses resolveActionIdentity.
+- Specs were updated only where there was room: framework-core (one classifier, two readings, undetermined-is-named), extension-runtime (a status line must not carry a serialized copy of a ledger projection), and field-run (the recorded retry-refused-after-effect is history rather than current behaviour). personal-agent-request-runtime.md was deliberately not touched - it sits 16 bytes below its 24 KiB budget, so the retry contract it already carries stays as it is.
+- Two tasks closed. 09-29-pointless-machinery had all eight acceptance criteria ticked with evidence. 08-28-dove-pi-web was verified against code and tests rather than taken on trust: each of its five boxes now names the code and the test that hold it, and says the closing decision was delegated to the archiving session rather than stated by the author, which is what the original placeholder note asked for.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ff8cecc` | refactor(audit): ask once what an invocation is, and delete what bought nothing |
+| `e9fa3b1` | chore(task): record the audit, the measurements behind it, and the branch R0 took |
+
+### Testing
+
+- [OK] npm run typecheck clean; npm test 816 tests / 814 pass / 0 fail / 2 skipped against the 811/809/0/2 baseline. The net +5 is accounted for: three pure-function cases left with the functions they tested (providerRoundBudget, isMeaningfulToolProgress and the classifier case that moved), eight were added.
+- [OK] npm run test:installer 141 tests OK, 0 failures - unchanged from the baseline.
+- [OK] Three red-checks, one behaviour disabled at a time. Restoring the retry refusal line fails exactly the two named cases and nothing else. Disabling the overflow guard fails exactly the new claims case. Disabling the gate unknown branch fails exactly the new admission case. Every temporary switch was reverted with git checkout and the tree is clean.
+- [OK] The R3 equivalence probe is reproducible from the command recorded in the task record. The probe file was deleted rather than committed: it was an instrument, not an artifact.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The compaction experiment is still inconclusive, and the refusal stays in place because of that: the probe never reached session_before_compact, so its single tool execution proved nothing. The next experiment is written in the task record - drive the observation tokens up with a roughly 100 KB tool result instead of lowering contextWindow, and require session_compact to be true, or the reading is inconclusive again.
+- personal-agent-request-runtime.md has 16 bytes of its 24 KiB budget left, and the routing test pins both the specification list and every specification headings. The next change that touches it has to trade text out.
+- Seven curated context entries in the archive point at files that no longer exist: two at files that are genuinely gone, the rest at task directories that were deleted. They were not repointed - the correct targets are not recoverable from here, and a guess would be worse than the broken pointer. AGENTS.md describes this class of breakage; this is its current size.
+- 09-29-report-blocker is still active and is a stub: Requirements and Acceptance Criteria are both TBD. It needs planning or closing, and that is yours to call.
