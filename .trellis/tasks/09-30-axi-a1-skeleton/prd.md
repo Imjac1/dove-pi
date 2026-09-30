@@ -17,7 +17,7 @@
 ## Requirements
 
 - **R0 建仓与门禁基线（新仓库）**：用户已决定 axi 放**新仓库**。因此在写入任何新代码**之前**，要在新仓建立与 dove-pi 等价的门禁与测试基线（`npm run typecheck`、`npm test` 816/814/0/2、`npm run test:installer` 141），并**记录原始读数**。迁移 69 个基座无关模块的方式（subtree / submodule / 复制 + 重设基线）写进本任务的 `design.md` 并说明理由。
-- **R1** 定义 `AgentLoop` 接口（自有），并提供至少一个适配器（`pi-agent-core` 的 `Agent`）。
+- **R1** **把既有的 loop 接口与适配器提升为 axi 的生产 loop**——A0.4 已查明它**不必从零定义**：`src/core/loop.ts` 已有 `AgentLoop` / `ActionGate` / `GateDecision` / `LoopOutcome` / `normalizeGateDecision`，`src/adapters/loop-pi-agent-core.ts` 与 `loop-scripted.ts` 已有两个实现，而 `tests/harness-reachability.test.ts:88-89` 把它们登记为 `wiredBy: null`（刻意不接入生产）。本任务做的是**提升**，不是重写。读数见 A0 任务的 `readings.md`。
 - **R2** 七个组件的**固定挂载点**（文件级），且必须**可被程序化修改**——语料对该类基座的硬要求是 *"General extensibility alone is insufficient."*
 - **R3** `.trellis` 式的文件树作为 axi 的"程序"；一次逻辑改动 = 一次提交。
 - **R4** 回退路径：`git revert` 能回退一次改动。
