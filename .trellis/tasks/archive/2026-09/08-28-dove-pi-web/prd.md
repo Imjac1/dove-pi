@@ -26,16 +26,28 @@ Dove 的职责不是自己实现抓取，而是**把这条路径变成一条经�
 
 ## Acceptance Criteria
 
-<!-- These are stated from what the code does, not from what was originally intended. They are deliberately
+<!-- These are stated from what the code does, not from what was originally intended. They were deliberately
      left unchecked: the person who wrote the intent should say whether these are the intent. Writing criteria
      and then checking them in the same round is the failure mode this repository specification exists to
-     prevent. -->
+     prevent.
 
-- [ ] `web.access_status` 返回一份就绪快照，且**不修改**任何文件。
-- [ ] `web.real_user_setup` 写入 `allowBrowserCookies: true` 与一个 host-scoped 的 `authFetch` 配置档。
-- [ ] 传入空的 `hosts` 时开启能力**拒绝**，并说明缺什么。
-- [ ] 两条能力都被注册进运行时，且 `src/core` 里**没有**任何网络或浏览器依赖。
-- [ ] 真实浏览器 cookie 来源（Edge/Chrome）的就绪情况被报告出来，**不**报告 cookie 内容本身。
+     **Closed 2026-09-29 by the archiving session, at the author's delegation, and by evidence rather than by
+     intent.** Each box below names the code and the test that hold it, so a later reader can see what kind of
+     confirmation this is: the work is implemented and asserted, and the author delegated the closing decision
+     rather than stating the intent themselves. -->
+
+- [x] `web.access_status` 返回一份就绪快照，且**不修改**任何文件。
+      — `src/capabilities/web-access.ts:35`（`sideEffects: ["read_only"]`，直接调 `inspectWebAccessReadiness`）；
+      `tests/web-access.test.ts:150`。
+- [x] `web.real_user_setup` 写入 `allowBrowserCookies: true` 与一个 host-scoped 的 `authFetch` 配置档。
+      — `src/capabilities/web-access.ts:66-75`；`tests/web-access.test.ts:44`、`:178`。
+- [x] 传入空的 `hosts` 时开启能力**拒绝**，并说明缺什么。
+      — `src/capabilities/web-access.ts:60-64`（报错点名 `hosts`）；`tests/web-access.test.ts:84`、`:225`。
+- [x] 两条能力都被注册进运行时，且 `src/core` 里**没有**任何网络或浏览器依赖。
+      — `src/capabilities/web-access.ts:80-85`；`tests/web-access.test.ts:133`；
+      `src/core` 内无 `web-access` 导入（grep 无命中）。
+- [x] 真实浏览器 cookie 来源（Edge/Chrome）的就绪情况被报告出来，**不**报告 cookie 内容本身。
+      — 快照字段 `edgeProfiles` / `chromeProfiles`（`src/web-access/config.ts:47-48`）；全仓无读取 cookie 值的代码路径。
 
 ## Out of Scope
 
