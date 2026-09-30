@@ -209,4 +209,57 @@
 - axi 若沿用这条链，**必须把"策略变更"当作受治改动**：独立批准 + 不依赖"让模型知道危险"。
 - 另有两条旁证要一起记：*"sandbox execution and approval handling remain **separate enforcement mechanisms**"*（沙箱与审批是两套），以及 *"Before each model request, the model receives the effective policy and workspace"*（模型**被告知**策略——**那是提示词层，不算强制**）。
 
-**P/Invoke 与探测脚本**：`%TEMP%\axi-token-probe.cs`（A0.2 用，保留）。
+---
+
+## A0.2 后半（受限令牌 + ACL）—— ✅ 三条判据全过（含一条"跑不起来"的失败配置）
+
+**判据与三个未知**见 `design.md` 的"A0.2 后半"段。探针脚本：`%TEMP%\axi-a02b-restricted-token.ps1`（保留、可重跑；`-Mode restrict|denyonly`、`-RestrictSid`、`-JailSid`）。
+**执行**：2026-09-30 19:49–19:53，非提升会话，探针树 `%USERPROFILE%\axi-a02b-probe\`（跑完已删）。
+
+### 结论（三条判据；可用配置 = 限制 SID `{S-1-1-0}`（Everyone））
+
+| 判据 | 读数 | 判定 |
+|---|---|---|
+| **3** 目标树之外仍能干活 | jail 写：退出码 **0**，`jail\from-child-jail.txt` 出现 | ✅ |
+| **1** 写不进目标树 | planeB 写：退出码 **1**，`planeB\from-child-planeb.txt` **不存在** | ✅ |
+| **2** 摘不掉限制 | 受限子进程执行 `icacls planeB /grant *S-1-5-32-545:(OI)(CI)M` → 退出码 **1**；随后再写仍失败；`planeB` 的 ACL 前后**逐字相同** | ✅ |
+
+**正向对照（`design.md` 明确要求的那一步，防"假通过"）**：由**不受限的父进程**给 planeB 临时加上 `Everyone:M` 之后，**同一个受限子进程**这次写成功了（退出码 0，`planeB\positive.txt` 出现）；撤掉该 ACE 后，**同一个写操作再次失败**。
+→ **"写不进"是 ACL 造成的，不是探针瞎了。** 没有这一步，`文件不存在` 与 `进程根本没有能力写任何东西` 无法区分。
+
+**全程非提升**：`OpenProcessToken` → `CreateRestrictedToken` → `CreateProcessAsUser` 都在普通（非提升）会话里完成，与 A0.2 第三次探测的读数一致。
+
+### 三个未知的答案
+
+1. **限制 SID 列表建不建得起来 → 建得起来。** `CreateRestrictedToken(disable=[], restrict=[S-1-1-0]) = True err=0`；`GetTokenInformation(TokenRestrictedSids)` 读回并**解出 SID 文本**（见"仪器"段的布局说明）：配置 A 读出 `S-1-5-32-545`、配置 B 读出 `S-1-1-0`，与传入值一致。
+2. **属主隐含的 DACL 写权限会不会绕过 → 不会（本配置下）。** 受限令牌里仍然带着本用户 SID（`S-1-5-21-…-1001`），而 planeB 的属主就是本用户；它**仍然改不动 planeB 的 DACL**（判据 2），ACL 前后逐字一致。
+3. **受限进程还能不能跑 → 取决于限制 SID 取哪一个**（见下）。
+
+### 一条失败配置（不能省）
+
+| 配置 | 初始化（`cmd /c exit 7`） | 判据 3（jail 写） | 结论 |
+|---|---|---|---|
+| `restrict={S-1-5-32-545}`（BUILTIN\Users） | 退出码 **0xC0000022**（STATUS_ACCESS_DENIED） | 失败（jail 里连日志都写不出） | **不可用**：进程在**初始化阶段**就被拒 |
+| `restrict={S-1-1-0}`（Everyone） | 退出码 **7**（正常执行） | 成功 | **可用** |
+
+→ **可用的限制强度是"Everyone 那一档"，不是"Users 那一档"。** 成因未定（本轮没有继续诊断）；**按读数记录，不按推断写成"因为系统 DLL 只授 Everyone"**。
+
+### 对方案的三条后果
+
+1. **Plane B 成立，而且是 axi 自己的机制**：判分权威可以放在"改进者进程写不进、也摘不掉"的地方。用户关于"强制力归 axi 自己拥有"的裁决因此**有了实测支撑**，不再是设计断言；`design.md` 决策表按"三过"那一行走。
+2. **边界是"ACL 不变量"，不只是"路径位置"**：受限进程保留 `Everyone` 能碰到的一切，因此 **Plane B 的每个路径都必须没有 `Everyone` 授予**（否则边界不成立），而 **Plane A / jail 必须显式授予 `Everyone`**（否则改进者连活都干不了）。这两条要写进规格，不能只写"Plane B 在 workspace 之外"。
+3. **强度要说实话**：这条边界等于"把改进者降到 Everyone 档"。它挡得住"写 Plane B / 改 Plane B 的 ACL"，**挡不住**一切对 `Everyone` 开放的东西。**不得写成"OS 级沙箱"**——按 §纪律 4，声明必须与实测同强度。
+
+### 仪器（三次自身缺陷 + 一处未解缺口，都留档）
+
+- **缺陷 1（第一次运行）**：`RunChild … | Out-Null` 把函数的所有诊断**连同退出码**一起吞掉 → 那一轮"子进程什么都没写"读不出原因。改法：函数不返回值，调用处不加管道。
+- **缺陷 2（第一次运行）**：`TokenRestrictedSids` 的缓冲区布局是**猜**的；`Marshal.PtrToStructure` 读出一个无效 Sid 指针，`ConvertSidToStringSid` 返回 `err=1337`（ERROR_INVALID_SID）。第二次改成"带指针解引用"的原始转储 → **AccessViolationException**（.NET 4+ 不可捕获）把整轮打死。
+  **修法**：只读**已分配缓冲区之内**的字节，布局**从字节反推**：`{DWORD GroupCount; 16 字节/项的数组; SID 数据 inline}`，SID 载荷在 `8 + 16*GroupCount` 处。现在**全程不解引用任何指针**，读回稳定给出 SID 文本。
+  → 教训与前两次同源：**仪器本身先被验证**——第一次是"猜布局"，第二次是"环境没确认"，第三次是"从特权清单推断"。
+- **缺陷 3（第三轮）**：`@()` 空数组被 PowerShell 绑成 `null` → C# `NullReferenceException`。已加空值保护。
+- **未解缺口（照记）**：受限子进程里，"同一条 cmd 行上**第二条**命令"的输出（`dir` / `whoami` / `icacls` 的 stdout）**没有落进日志**；同一写法在**不受限**的子进程里两条命令都能落（本机对照已跑）。第二条命令**确实执行了**（成功例子里它写的文件出现了）。成因未定，本轮不追。**判据 1/2 的证据不依赖这句话**（文件不存在 + 退出码 + 正向对照 + ACL 未变）。
+- **刻意没做**：`-Mode denyonly`（`SidsToDisable` = 本用户 SID，即"丢掉用户身份、保留 Users/Everyone"）。它**严格弱于**已通过的配置，不可能改变本轮判定；等定生产形态时再跑，用来挑"最弱但够用"的限制。
+
+**P/Invoke 与探测脚本**：`%TEMP%\axi-token-probe.cs`（A0.2 前半用，保留）、`%TEMP%\axi-a02b-restricted-token.ps1`（A0.2 后半用，保留、可重跑）。
+
+

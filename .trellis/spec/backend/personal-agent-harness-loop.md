@@ -21,9 +21,9 @@ that reports says so in a field a reader can check.
   observables - a criterion status, a criterion verification state, a refusal count - and they are **behaviour-shaped**
   because a verdict is read against the next round **task-level outcomes**. An **instrument change is a verifier change**,
   and the distinction the field draws is exactly this: **self-improvement is the system changing while the verifier does
-  not**, and recursive self-improvement - the system *and* the verifier rising - is the axis this project explicitly
-  declines. So the closed set is not widened to reach instruments, and this is the principled form of "there is nothing to
-  add here".
+  not**, and **recursive self-improvement - the system *and* the outer evaluator rising - is the axis this project
+  declines**, while the inner instruments may rise with the system. So the closed set is not widened to reach instruments,
+  and this is the principled form of "there is nothing to add here".
   - **Judging an instrument with the instrument own output would make the verifier its own judge.** The only observable such
     a change moves is the instrument output, and a subject that produces its own verdict is not verified - which is the
     whole reason the set is behaviour-shaped and the baseline is read by the runtime.
