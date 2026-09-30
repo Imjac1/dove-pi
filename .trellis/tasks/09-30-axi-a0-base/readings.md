@@ -123,3 +123,57 @@
 **环境事实记下：本机 PATH 上没有 `pwsh`** —— 将来新仓的脚本不要依赖它。
 
 ## A0.1 DSH 隔离可用性 —— ⏳ 等用户起 `workspace-write` 会话
+
+测试脚本见 `a0.1-live-test.md`（自包含，另一个会话读它就能跑）。
+
+**从插件文档取到的两条前置事实（可省掉一次踩坑）**：
+- `workspace-write` 允许写**会话 workspace 之内** **或平台的临时根**。→ **用 `%TEMP%` 做"越界"测试是无效的**；测试脚本因此用 `%USERPROFILE%`。
+- 被拒返回 **`FS_SANDBOX_DENIED`**，并带**当前模式**与**同回合升级提示**——即"升级为审批"这条路径是**设计里就有**的，与判据 1 的写法一致。
+
+---
+
+## A0.5 宿主与 loop 可替换性 —— ✅ 三条全部成立（结构层面）
+
+**为什么要加这一条**：用户提出"如果 axi 基于 DSH，而会话不能自调用，会很麻烦"。我此前说"会话只能由桌面应用拉起"——**那是从"`dsh` 不在这个 shell 的 PATH 上"推出来的，推错了**。本会话第三次同类错误（前两次：预测 1314、`pwsh` 探测），根因相同：**从没被验证过的仪器下结论**。以下是实测。
+
+### 结论 1：**自调用是设计里就有的**（✅）
+
+- `dsh-headless/lib/startup.js` 是**可被宿主 import 的 Cordis 插件**，其上写着用法：
+  `dsh --profile headless "<task>"` —— *"Answer one task, stream reasoning to stderr, print the final assistant message, and exit."*
+  → **一次性、可脚本化的会话**，正是回路自调用需要的东西。
+- `dsh-agent-loop` README：*"the public **`ctx.agents` API supports programmatic creation and resume**"*
+  → 除了一次性调用，还有**程序化创建与恢复 agent** 的公开 API。
+- `dsh-cmdline` / `dsh-headless` / `dsh-sdk-app` / `dsh-sdk-jsonrpc-server` / `dsh-api-gateway` **都没有 `bin`**，`main: lib/index.js` → 它们是**库**，由宿主 import。桌面应用（Electron：`%LOCALAPPDATA%\Programs\DeepSeek Harness`）只是**其中一个宿主**。
+
+**准确的表述**：不是"DSH 不能自调用"，而是"**这个会话的 shell 里没有 `dsh` 启动器**"——是**路径/发现性问题，不是架构问题**。
+
+### 结论 2：**loop 是被明确设计为可替换的**（✅）
+
+- `dsh-base` 的装配**全部是 `- id: <名字>` + `name: <包>`** 的形式（读到的前 60 个 id 都是），而 `cordis.patch.yml` 的定义就是"**按 id 定位的覆盖、禁用、插入列表**"。
+- `dsh-agent-loop` 被 `dsh-base` 与 `dsh-sdk-minimal` **当作"an explicit row"挂载** → 可被按 id 替换。
+- 最有力的一条来自它自己的文档：*"**Choose a custom `Agent` implementation** only when the standard 'call model, run tools, repeat' lifecycle is insufficient."*
+  → **axi 正是那个情形**：它需要代码内强制 + 确定性补救，标准生命周期不够。**DSH 的文档等于在说"那就换一个 `Agent`"。**
+
+### 结论 3：**强制挂在工具层，不在 loop 里**——换 loop 不会掉沙箱（✅，这条最重要）
+
+`dsh-fs-sandbox` README：*"The fence applies **per call**: **the tool layer resolves the calling session's mode and workspace root** into the same policy the bash runner receives, so the filesystem and shell families never confine to different roots."*
+
+→ 强制由 **`ctx.fs` 后端 + bash/pwsh runner 在每次调用时**解析会话的 `ctx.sandboxPolicy` 得出，**位置在 loop 之下**。所以：
+**换掉 agent loop，沙箱与政策仍然生效**；而且 fs 与 shell **不会各自界定到不同的根**（这一条正是 axi 的 A2 所需要的性质）。
+
+### 对方案的影响（§3.1 要改）
+
+| 维度 | 旧结论 | 实测后 |
+|---|---|---|
+| 谁提供 loop | axi 自己造 | axi 自己造，**但 DSH 明确支持替换 `Agent`**——这是**受支持的替换点，不是 fork** |
+| 谁提供强制 | axi 自己写 | 两层：**DSH 的工具层沙箱**（代码内、每次调用、fs/shell 同根）+ **axi 自己的闸门**（语法感知、跨调用状态、补救） |
+| 自调用 | 我误判为"不行" | **有**：`dsh --profile headless` 一次性调用 + `ctx.agents` 程序化创建/恢复 |
+| DSH 的角色 | "开发环境；可选的强制宿主" | **脚手架 + 工具层强制**；axi 是**宿主**（import 无头/SDK 入口），并**用自己的 `Agent` 替换标准 loop** |
+
+### 仍然要实测的三条（不能从文档断言）
+
+1. **真的在一个非桌面进程里起来**（`dsh-headless` 的 `startup` 我读到的是源码，没跑过）；
+2. **换掉 `Agent` 之后，端到端一次越界写仍被拒**（结论 3 是从文档推的，要测）；
+3. **`ctx.sandboxPolicy` 由谁设定**——如果它可由 agent 所在的进程改，那么它就在 Plane A 里，而**"改动它会削弱边界"正是必须由 HITL 把守的那一类改动**（解剖 §3.5.3）。
+
+**P/Invoke 与探测脚本**：`%TEMP%\axi-token-probe.cs`（A0.2 用，保留）。
