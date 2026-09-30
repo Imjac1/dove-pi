@@ -1,0 +1,33 @@
+{
+  "id": "axi-program",
+  "name": "axi-program",
+  "title": "axi：按第七版规划落地（自建薄运行时 + 自建安全子系统）",
+  "description": "把 axi 第七版规划落成可执行任务：自建薄运行时 + 自建安全子系统 + 二开运行时层与 Windows 隔离原语，不 fork 完整 harness、不做插件",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "aixi",
+  "assignee": "aixi",
+  "createdAt": "2026-09-30",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-30-axi-a0-base",
+    "09-30-axi-a1-skeleton",
+    "09-30-axi-a2-safety",
+    "09-30-axi-a3-trace",
+    "09-30-axi-a4-plane-b",
+    "09-30-axi-a5-eval"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
