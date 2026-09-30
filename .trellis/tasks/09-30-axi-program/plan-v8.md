@@ -83,7 +83,7 @@
 **结论与代价**：axi 是 **substrate + 有界自我改进回路（第 2 级）**。叫它 RSI 等于做一个**没有公开实证的声明**——社区自己的目录也承认 *"not every work listed here demonstrates RSI in the strict sense"*，且 Schmid 写明 *"Public evidence for [raising the bar] remains thin."*【一手】
 
 该目录对"可扩展基座"这一类只列了四个（Agent Zero、DeepSeek Harness、OpenClaw、Pi），并给出硬要求：*"**General extensibility alone is insufficient.** An RSI substrate should expose agent-relevant runtime components … as **programmatically modifiable surfaces** suitable for persistent self-modification experiments."*【一手】
-→ **这条要求直接决定 §3.2**：axi 的七个组件必须是**可程序化修改的文件面**，"能扩展"不算达标。
+→ **这条要求直接决定 §3.8**：axi 的七个组件必须是**可程序化修改的文件面**，"能扩展"不算达标。
 
 ---
 
@@ -107,7 +107,7 @@
 
 > **设计后果（axi 最重要的一条形状）**：**"代码内强制"的实质不是"检测更准"，而是"拦得住且还能把活干完"。** 所以安全子系统的每个部件都必须是 **检测器 + 确定性补救** 成对出现；只有检测器的强制，在测量上会退化回 88/120 那一档。→ §4.2
 
-另两条同向读数：**强制与模型无关**（三款托管模型上 **270 次组合边界运行全过**），以及"**可替换的组合边界**"（*"deterministic behavior moves into code, manifests, schemas, and validation artifacts **around a replaceable composition boundary**"*）。后者与 §3.5 的"薄 loop + 适配器"同构。【一手】
+另两条同向读数：**强制与模型无关**（三款托管模型上 **270 次组合边界运行全过**），以及"**可替换的组合边界**"（*"deterministic behavior moves into code, manifests, schemas, and validation artifacts **around a replaceable composition boundary**"*）。后者与 §3.11 的"薄 loop + 适配器"同构。【一手】
 
 ### 2.2 判分权威必须在改进者写不到的地方
 
@@ -195,7 +195,99 @@ Plane C 的宿主**故意后定**：它只需要能跑一个回合 + 写文件�
 
 **这条不变量怎么变成机制而不是口号**：靠**几何 + ACL**，不靠声明——改进者由 jailer 以受限令牌启动，Plane B 的路径对它没有 `Everyone` 授予（§4.1 给了两条不变量与实测读数）。
 
-### 3.2 七个组件与它们的文件面
+### 3.2 模块与依赖方向
+
+**本仓已经有骨架**——axi 不是从零长出来的：下面每一行都是真实文件，成熟度一列说明 A1/A2/A3 要动哪一块。
+
+| 层 | 模块（真实文件） | 职责 | 依赖谁 | 成熟度 |
+|---|---|---|---|---|
+| **契约面** | `src/core/loop.ts`（263 行） | `AgentLoop` / `ActionGate` / `GateInvocation` / `GateDecision` / `LoopOutcome` + `normalizeGateDecision` 守卫 | 只依赖 `effect-ledger` 的类型 | **已有** |
+| loop 实现 | `src/core/loop-runner.ts`（参考）· `src/adapters/loop-pi-agent-core.ts`（外部） | 跑"调模型 → 跑工具 → 重复"；**每个动作都过闸门** | `loop.ts` | 已有，但**被刻意挡在生产之外**（等 A1 提升） |
+| 闸门·**名字层** | `src/core/action-policy.ts` + 宿主 | 只读工具名的拒绝 | 无（不需要参数） | 已有 |
+| 闸门·**参数层** | `src/core/work-mode.ts`（45 KB）· `action-policy.ts` · `capability-scope.ts` · `authority.ts` | 参数级判定、能力与授权、fence / ask_before / 排除技法 | 需要一个活跃请求的 lease | 已有，但**是"名字 + 单调用"那一档** → **A2 要重写**（语法感知 / 跨调用累积 / 历史无关） |
+| **效果层** | `src/core/effect-ledger.ts` · `effect-boundary.ts` · `effect-store-file.ts` | 原子 claim，**at-most-once 派发** | 存储 | 已有 |
+| 分类器 | `src/core/invocation-disposition.ts` | **一个答案两个读者**：`disposition`（闸门读）/ `replaySafe`（重试路径读） | 名字表 / 命令行文本 / 声明 | 已有 |
+| **证据面** | `src/core/execution-ledger.ts`（51 KB）· `checkpoint.ts` · `evidence-sarif.ts` | 每次调用的记录、动作检查点、finding 身份 | 无 | 已有 → **A3 的 trace 通道接在它上面** |
+| 上下文准入 | `src/core/context-admission.ts` | 三条通道、一个边界 | 无 | 已有 |
+| **自我改进仪器** | `failure-reading.ts` · `harness-axes.ts` · `harness-corpus.ts` · `harness-round.ts` · `harness-surface.ts` · `harness-verifier.ts` | 挖失败、读轴、声明可编辑面、读回合并判 verifier | 证据面 | 已有（**Plane A 的内层，可随系统上升**） |
+| **记录与裁决** | `src/core/task-convergence.ts`（66 KB） | 冻结判据、manifest、turn reading、verdict；`CHANGE_SURFACES` 是组件的唯一名字来源 | 上面全部 | 已有 |
+| **Plane B** | —— | 判分权威的强制、held-out 切分、晋升门 | —— | **不存在（A2 建强制，A4 建判定）** |
+
+**依赖方向是单向的**，这是"记录只报告"在结构上的形态：
+`宿主 → loop → 闸门（名字 → 参数 → 效果）→ 工具 → 证据面 → 仪器 → 记录/裁决`，而**没有任何反向边**：仪器不写闸门，裁决不改证据，回路不自己动手。
+
+### 3.3 六个核心契约：框架自己拥有的六个面
+
+这六个面**已经在 `.trellis/spec/backend/personal-agent-framework-core.md` 里成文、各自带测试**——axi 的架构应当**长在它们上面**，而不是另起一套词汇。每个面都有 `Signatures / Contracts / Error Matrix / Tests` 四段，下表只取对 axi 最要紧的一行。
+
+| # | 契约 | 真实签名（节选） | 一条最要紧的约束 | 对 axi 是什么 |
+|---|---|---|---|---|
+| 1 | **Loop 拥有与闸门边界** | `AgentLoop.run(input, signal?) → LoopOutcome`；`ActionGate.evaluate(GateInvocation) → GateDecision` | **闸门对每个动作都调用，包括放行的**——否则"闸门存在但不在路径上"无法被发现；失败**必须带 `remediation`**（裸拒绝会让模型重试同一个动作） | **D1 的代码落点。** `LoopOutcome` 把 `blockedActions` 与 `refusedEffects` **分开记**，正是"闸门拒绝"与"已经跑过"两种发现 |
+| 2 | **授权图** | `validateAuthorityDocument` · `preflightAuthority` · `evaluateAuthority` | **agent 不能写自己的授权**（文档住在它的任何能力之外）；未知键一律拒绝——"静默忽略的键 = 静默缺失的约束" | **Plane B 形状的第一处既有实现**：判分/授权的东西不由被判者书写 |
+| 3 | **效果身份与 exactly-once** | `deriveEffectKey` · `dispatchOnce` · `toClientOrderId` | **原子 claim**，不是"先读后写"（那道缝就是重复的落点）；**只承诺 at-most-once 派发**，从不承诺 exactly-once | axi 的"一次逻辑改动 = 一次提交"、"keep/revert 不重复应用"用同一套身份纪律 |
+| 4 | **证据面与动作检查点** | `contentHashOf`（**不含路径**）· `fingerprintOf`（含出现序号）· `toSarifLog` / `baselineOf` · `captureCheckpoint` / `restoreCheckpoint` | 身份**不含消息文本、不含路径**（移动可观测、原位改写 = `updated`、删除 = `absent`）；**检查点的单位是"被接纳且完成的 effect"，不是模型回合**；形状变了（mode 版本 / 工具集 / 闸门）就拒绝恢复 | "证据要能被下一轮读"的既有骨架；**A3 的 trace 通道接在它上面** |
+| 5 | **上下文准入** | `admit(request)`（三条通道：`tool_result` / `extension_message` / `background_notification`） | **三条通道一个边界**（只守 `tool_result` 的边界有"有文档记载的绕法"）；超限内容的**原文不出现**——"截断"与"缺席"是两个保证 | A3 的"压缩路径不得改写证据"在结构上就落在这里 |
+| 6 | **能力域** | `createCapabilityScope(...) → {authorize, capabilitiesOf, narrow}` | 能力集**存在模型上下文之外**（导出面里没有任何把它渲染进提示词的路径）；**下级只能收窄不能放宽**；资源模式只有两种形式（精确串 / `P/**`） | 这是 09-25 研究里"最强杠杆"那条（**3/75 vs 33-47/75** 的注入抵抗）的落地形态 |
+
+### 3.4 运行时拓扑：进程、身份与通话
+
+| 进程 | 以什么身份跑 | 谁起它 | 它做什么 | 生命周期 |
+|---|---|---|---|---|
+| **jailer** | **普通用户、非提升** | Plane C 或人 | ① 布 ACL ② 造受限令牌 ③ **读回自检** ④ `CreateProcessAsUser` 起改进者 ⑤ 收集证据写回 Plane B | 每回合一次，短命 |
+| **改进者** | **受限令牌**（restrict 列表 = `Everyone`） | jailer | 在工作区里改自己的 harness，跑完一个回合 | 一个回合 |
+| **宿主** | 与 jailer 同身份（DSH 行 / Pi 扩展 / 无头 / SDK） | Plane C | 提供模型传输、工具层沙箱、会话 | 长 |
+| **Plane C 编排者** | 普通用户 | 人或定时 | 跑 mine → propose → validate，写裁决工件 | 长（**宿主故意后定**） |
+| **Plane B 的判定** | 在改进者够不到的路径上 | —— | held-out 切分 + 晋升门（A4） | —— |
+
+**三条结构性约束（架构级，不是实现细节）**：
+
+1. **改进者绝不能是自己的 jailer**——否则它能自己放宽边界。
+2. **jailer 不进入受限进程**：它布完 ACL、起完子进程就在外面等；它自己的权限**不**传给改进者。
+3. **Plane C 与 Plane B 之间只通过文件工件交换**（裁决记录），不通过共享进程或共享内存——因为 Plane C 的宿主被允许后定，而**边界不能随宿主的选型而变**。
+
+### 3.5 数据与工件：落盘的东西就是接口
+
+| 工件 | 位置 | 谁写 | 谁读 | 成熟度 |
+|---|---|---|---|---|
+| **execution ledger**（每次调用一条；append-only；**kind 由 `ExecutionRecordKind` 联合拥有**，手写的记录写错 kind 就是编译错误） | 会话 / 任务目录 | 宿主 + axi core | `failure-reading` / `harness-axes` / `harness-corpus` | 已有 |
+| **convergence record**（冻结判据、manifest、turn reading、verdict；带 `verdictOnly: true`） | `.dove/tasks/<id>/convergence.json` | `task-convergence.ts` | 人、回路、下一个回合 | 已有——但**本仓没有这个文件**，这就是"本仓从没跑过一个回合"的实测原因 |
+| **harness surface 声明**（七组件 ↔ 文件 ↔ `verifiedBy`） | `.trellis/harness-surface.yaml` | 人 / agent | `harness-surface.ts`、测试 | 已有 |
+| **failure reading**（类别 + 机制 + 可引用 `evidenceRef` + `preserve`） | 任务目录 | `failure-reading.ts` | manifest 的 `failureEvidenceRef` | 已有 |
+| **一次提交**（一次逻辑改动 = 一个提交） | git | 改进者 | 步 5 的绑定、步 7 的 surface 检查、`git revert` | 已有（过程纪律） |
+| **trace**（完整性 / 保真度 / 捕获） | **Plane B 侧**（workspace 之外） | axi 的独立拦截器 | 外部观察者、晋升门 | **不存在（A3）** |
+| **held-out 切分 + 晋升门** | **Plane B** | —— | 回路 | **不存在（A4）** |
+
+### 3.6 一次请求的时序：闸门在哪一行，补救在哪一行
+
+```
+宿主收到输入
+ └─ 建请求（lease）···················· 参数只有在这之后才是"最终"的
+     └─ 调模型（LoopProvider.stream）
+         └─ 模型给出 toolCall
+             ├─ 参数校验（schema）
+             ├─ 目标解析 target / displayTarget ···· 两者不一致 → 阻，且**不问闸门**
+             ├─ 闸门·名字层（只读名字）············ 无 lease 也能跑：**唯一永远可达的一半**
+             ├─ 闸门·参数层（参数 / 能力 / 授权 / 累积强度）···· 只在 lease 内
+             │    └─ allow / ask / block（**ask 在无对话框的 loop 里等于 block**）
+             ├─ 效果 claim（原子）················ 已 claim 过 → 不跑，记入 `refusedEffects`
+             ├─ 执行工具
+             ├─ 结果后处理（redact / truncate）···· **§4.2 的"确定性补救"就落在这一行**
+             └─ 结果过上下文准入（三条通道一个边界）
+                 └─ 回填 transcript → turn reading → 记录（证据面）
+```
+
+**一条已写明、不许含糊的限制**：**不在活跃请求内的工具调用只过名字层**——参数层读的参数只有请求内才是最终的，所以"排除技法 / fence / sandbox 声明"这类读参数的控制，在请求外**不运行**。这是量出来的形状，不是 bug；axi 若要收紧，必须**显式改这条边界并加一个测试**。
+
+### 3.7 四条纪律在代码里的落点
+
+| 纪律 | 落在哪个模块 | 由什么看住 |
+|---|---|---|
+| **D1** 强制在代码内 + 每条检测器配确定性补救 | `loop.ts` 的闸门 + 工具结果后处理钩子；`work-mode.ts` / `action-policy.ts` | **配对闸门测试**（gate off/on，`executedActions 1 → 0`）+ A2 的"拦住了还能把活干完" |
+| **D2** Plane A 永不写 Plane B | **jailer（A2）**；今天最接近的既有实现是 `authority.ts` 的"agent 不能写自己的授权" | A2 的**边界不变量回归** + `harness-surface.yaml` 的 `verifier.paths` |
+| **D3** trace 三性质 | **A3 的独立拦截器**，接在 `execution-ledger.ts` 与 `checkpoint.ts` 的骨架上 | 四种篡改 + **编造**（7% 那个失败模式）的测试 |
+| **D4** 不声明未实现的能力 | `.trellis/harness-surface.yaml`（"路径必须解析"、"键必须已声明"）+ AC-11 | `tests/harness-surface.test.ts`（双向）+ `tests/document-drift.test.ts` |
+
+### 3.8 七个组件与它们的文件面
 
 AHE 把可编辑的 harness 组件枚举为**七个固定挂载点**（`2604.25850` §3.1：system prompt、tool description、tool implementation、middleware、skill、sub-agent configuration、long-term memory），并给出"**每个可编辑组件都有文件级表示，因此动作空间显式且可回退**"。【一手】
 `awesome-rsi` 的硬要求是"必须**可程序化修改**"，"能扩展"不算达标（§1.3）。【一手】
@@ -219,7 +311,7 @@ verifier 本身**分两部分声明**（不能只声明文件）：`verifier.pat
 - `paths`：`harness-axes.ts`、`failure-reading.ts`、`harness-round.ts`、`harness-corpus.ts`、`execution-ledger.ts`、`harness-verifier.ts`；
 - `embedded`：只剩 `task-convergence.ts`，并且**原因是量出来的**——它的验证尾部用了记录模块的校验词汇（id 模式、闭集、拒绝构造器），而 `movementFromParts` 同时被记录自己的解码器调用（拒绝构造器单独有 **74 处**使用点，移动辅助函数无法在不产生值级环的前提下抽出）。**试过两次、从两个方向撞到同一堵墙，于是记录为决定而不是遗漏。**
 
-### 3.3 内层仪器：Plane A 里允许被改的那批
+### 3.9 内层仪器：Plane A 里允许被改的那批
 
 "可上升的内层"不是抽象词——它就是下面这些东西，而每个都得能读出**行为形状**的三个可观测量：criterion status / criterion verification state / refusal count。【实测】
 
@@ -235,9 +327,9 @@ verifier 本身**分两部分声明**（不能只声明文件）：`verifier.pat
 
 1. **Pareto preservation 今天算不出来**：没有任何 ledger 记录携带**第二个**测量目标，所以 SSM 三项里有一项读不到。
 2. **"sandbox violations" 今天读的是本仓自己的闸门拒绝数**，不是"边界是否守住"——那是两个不同的量：前者数 Dove 的决定，后者要 OS 层的拒绝。**A2 落地后用 jailer 的拒绝数替换它，这一格才算真读。**
-3. **harness 与 verifier 的文件级分离**（同 §3.2 的 H5）。
+3. **harness 与 verifier 的文件级分离**（同 §3.8 的 H5）。
 
-### 3.4 一次改进回合：七步，以及每一步的工件与读者
+### 3.10 一次改进回合：七步，以及每一步的工件与读者
 
 这是回路（Plane C）的**操作定义**。它不是示意流程：每一步都有具体命令与**预期读数**，读不出来时怎么办也写明了（完整版见 `.trellis/spec/guides/harness-loop-turn.md`，本仓已有）。【实测】
 
@@ -256,7 +348,7 @@ verifier 本身**分两部分声明**（不能只声明文件）：`verifier.pat
 - **改了 verifier 的改动不算一个回合**：若步 7 答 `definite`（或 `possible` 并点名符号），这次编辑动到了产生证据的代码，于是它**由它的套件和你**来判，**不由那三个可观测量判**——闭集**故意**不为它放宽。
 - **记录只报告，人决定**：回路里**没有任何东西**会自己回退；裁决记录里带着 `verdictOnly: true` 就是为了这件事，`git revert` 是**人**的动作。
 
-### 3.5 谁拥有什么：axi / DSH / Pi
+### 3.11 谁拥有什么：axi / DSH / Pi
 
 **底座判定（A0.5 实测后修订）**：**axi 是宿主，DSH 是脚手架。** axi 拥有自己的 `AgentLoop` 接口与**闸门**；DSH 提供**工具层强制、会话持久化、程序化调用、组件替换点**。【实测 + 一手】
 
@@ -278,7 +370,7 @@ verifier 本身**分两部分声明**（不能只声明文件）：`verifier.pat
 
 **为什么不 fork、不插件**：fork 完整 harness = 永久维护别人的 loop，代价与收益不成比例；做成插件/外挂 = §2.1 量到的 **88/120** 那一档。**"薄 loop + 真闸门"这个组合在语料里不存在**，这正是 axi 要做的东西，也是它值得存在的原因。【一手 + 设计】
 
-### 3.6 与 dove-pi 的关系：复用 / 重写 / 丢弃
+### 3.12 与 dove-pi 的关系：复用 / 重写 / 丢弃
 
 "重新做一套"必须回答这个问题，否则 axi 只是 dove-pi 改个名。答案按**实测的耦合边界**切。【实测】
 
@@ -342,7 +434,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 **强度照实写（D4）**：这条边界等于"**把改进者降到 `Everyone` 档**"。它挡得住写 Plane B 与改它的 ACL；**挡不住**一切对 `Everyone` 开放的东西。**不得写成"OS 级沙箱"。**
 另一条读数：`restrict={BUILTIN\Users}` 时进程在**初始化阶段**就退出 `0xC0000022`（STATUS_ACCESS_DENIED），可用档位就是 `Everyone` 那一档——**成因未定，按读数记录，不按推断补理由**。【实测】
 
-**什么会否掉它**：① 目标树被任何来路授予了 `Everyone`；② 改进者的宿主或 DSH 的沙箱策略源被会话内改动（§3.5 的风险 4）；③ 受限令牌的构造在目标平台上不可用（本机可用，且**非提升**——`CreateProcessAsUser` 在令牌是**调用方自己主令牌的受限版本**时不需要 `SeAssignPrimaryTokenPrivilege`）。【实测】
+**什么会否掉它**：① 目标树被任何来路授予了 `Everyone`；② 改进者的宿主或 DSH 的沙箱策略源被会话内改动（§3.11 的风险 4）；③ 受限令牌的构造在目标平台上不可用（本机可用，且**非提升**——`CreateProcessAsUser` 在令牌是**调用方自己主令牌的受限版本**时不需要 `SeAssignPrimaryTokenPrivilege`）。【实测】
 **失败退路**：写下"**我们不做 OS 隔离**"，A2 改走"策略 + 内容侧防御"，Plane B 退回"人以纪律充当不动点"。**是有效结论，照记。**【设计】
 
 **未定**：jailer 自身用什么实现、住在哪（A2 的 `design.md` 定）；Plane B 目标树的确切路径（A4 定）。【未定】
@@ -582,11 +674,11 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 | 本文的段 | 底稿在哪 |
 |---|---|
-| §1–§2（问题、定位、设计思路）、§3.5（底座）、§4.5（回路）、§6（路线）、§7（验收）、§8（风险）、§9（不做） | `plan.md`（第七版决策记录）——本文重排并统一标记，**未改其结论** |
+| §1–§2（问题、定位、设计思路）、§3.11（底座）、§4.5（回路）、§6（路线）、§7（验收）、§8（风险）、§9（不做） | `plan.md`（第七版决策记录）——本文重排并统一标记，**未改其结论** |
 | §2.2 的实测、§4.1 全部 | `09-30-axi-a0-base/readings.md`（A0.2 后半段） |
-| §3.2/§3.3 的组件与 verifier 声明 | `.trellis/harness-surface.yaml`；`.trellis/spec/backend/personal-agent-harness-loop.md` |
-| §3.4 的七步 | `.trellis/spec/guides/harness-loop-turn.md` |
-| §3.5 的底座修订 | `amendments.md`（§一/§二；已就地应用进 `plan.md`） |
+| §3.8/§3.9 的组件与 verifier 声明 | `.trellis/harness-surface.yaml`；`.trellis/spec/backend/personal-agent-harness-loop.md`；本仓 `src/core/*` 的真实文件与 `.trellis/spec/backend/personal-agent-framework-core.md`（§3.2–§3.7 的模块、契约、拓扑、数据、时序都从这两处来） |
+| §3.10 的七步 | `.trellis/spec/guides/harness-loop-turn.md` |
+| §3.11 的底座修订 | `amendments.md`（§一/§二；已就地应用进 `plan.md`） |
 | §1.3 的三级测试与术语 | `09-27-harness-scaffold-frontier/research/rsi-community-landscape.md`（已归档任务的调研） |
 
 **本文不是证据**：任何引文与读数都要回到上表去找原处。本文的职责是**把设计的因果讲清楚**。
