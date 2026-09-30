@@ -658,3 +658,40 @@ Resumed the mechanism audit mid-implementation - typecheck was red and three of 
 - personal-agent-request-runtime.md has 16 bytes of its 24 KiB budget left, and the routing test pins both the specification list and every specification headings. The next change that touches it has to trade text out.
 - Seven curated context entries in the archive point at files that no longer exist: two at files that are genuinely gone, the rest at task directories that were deleted. They were not repointed - the correct targets are not recoverable from here, and a guess would be worse than the broken pointer. AGENTS.md describes this class of breakage; this is its current size.
 - 09-29-report-blocker is still active and is a stub: Requirements and Acceptance Criteria are both TBD. It needs planning or closing, and that is yours to call.
+
+
+## Session 230: axi: plan converged onto one repo, the boundary landed in the product repo, and a documented cleanup
+<!-- trellis-session: v=2 fp=838e75a76329b931 -->
+
+**Date**: 2026-10-01
+**Task**: axi: plan converged onto one repo, the boundary landed in the product repo, and a documented cleanup
+**Branch**: `master`
+
+### Summary
+
+Wrote the architecture and development design, then proved the boundary rather than describing it: S0 gate parity in a scratch repo, the jailer as a module with six regressions (two criteria, the tamper criterion, the positive control). The user then decided the product and the runtime are one thing, so the scaffolding was retired into a bundle and the jailer came back into this repo (822/820/0/2, installer 141). Cleanup surveyed the whole tree: the six 'looks like junk' classes all failed (scripts, deps, the two unreachable core modules, 16 unreachable modules with recorded reasons), leaving 2.3 MB of tool backups (archived then removed), regenerable caches, and role labels on the two plan documents. Three of my own readings were wrong and are recorded as such: the 'mojibake' in task.json and in _v8-header.md were display artefacts of reading UTF-8 with the shell's default encoding, and _v8-header.md is not a duplicate of plan-v8.md (0% line coverage).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a0e58f7` | ﻿chore(task): answer who owns the sandbox policy, and what that means for axi |
+| `8e721f3` | ﻿chore(task): fold the A0.5 results into the plan revision |
+| `f0d0325` | chore(task): prove Plane B with a restricted token, and land the reading in the plan and the spec |
+| `685eca2` | chore(task): merge the plan, the A0 readings and the revision file into one document |
+| `00e953b` | chore(task): rewrite the plan as one design document rather than three stapled together |
+| `9aa40a0` | chore(task): give the plan the architecture section it was missing |
+| `70ac2dc` | chore(task): add the development design - repo layout, module list, build order |
+| `eac2eb6` | chore(task): stand up the new repo and record the gate-parity reading (S0) |
+| `3fa34ec` | chore(task): curate A1's context and record its status |
+| `b2c8dc9` | chore(task): record the jailer module and the three lessons its gate produced |
+| `2a761b0` | chore(task): converge the program prd on one repo, with the shape decision in it |
+| `5f14588` | feat(jailer): bring the boundary module back into the product repo, with its six regressions |
+| `e70b8e2` | chore(task): record the merge, the two guards it tripped, and the scaffolding retirement |
+| `363f853` | chore(cleanup): archive what only the tool backups held, then retire them |
+| `9d998ca` | chore(task): record the cleanup readings, including the three premises that failed |
+| `7db2751` | docs(plan): label both plan documents with their role instead of deleting either |
+
+### Status
+
+[OK] **Completed**
