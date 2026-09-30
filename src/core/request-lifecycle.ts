@@ -254,10 +254,26 @@ export class RequestLifecycleController {
 		if (!input.idempotent) this.#requireActive().nonIdempotentEffectStarted = true;
 	}
 
+	/**
+	 * **A started effect no longer refuses a transient provider retry, and the measurement is why.** The refusal
+	 * rested on one premise: that the replay Pi performs would run the tool a second time. Measured against raw Pi
+	 * (no Dove loaded, a scripted provider that fails on its second call and succeeds on its third, and a tool whose
+	 * every execution appends a line to a file): three provider calls, **one** tool execution. Pi retries by dropping
+	 * the failed assistant message and continuing from the transcript that already carries the tool result
+	 * (`agent-session.js:2230-2234`, then `agent.continue()`), so the tool is not re-executed and the call plus its
+	 * result stay in what the provider is asked again. The refusal therefore bought no safety on this path, while it
+	 * cost the whole request to a single 503 - twice in one real session, by its terminal reason.
+	 *
+	 * What still refuses is the overflow recovery, which the adapter cancels at its own boundary (`session_before_compact`)
+	 * where the compaction is still cancellable. That path is **unmeasured, not proven safe**: the same probe never
+	 * reached it, and the one honest difference is that compaction replaces the surrounding context with a summary,
+	 * leaving the model a weaker record that the tool already ran. An unmeasured path stays refused.
+	 *
+	 * The effect remains on the lease as the record of what the request ran, which is what the refusal there names.
+	 */
 	public retryDecision(failure: ProviderFailureClassification): { readonly retry: boolean; readonly reason: string } {
 		const lease = this.#requireActive();
 		if (failure.kind !== "transient") return { retry: false, reason: failure.reason };
-		if (lease.nonIdempotentEffectStarted) return { retry: false, reason: "non-idempotent-effect" };
 		if (lease.attemptCount >= this.#maxAttempts) return { retry: false, reason: "attempt-limit" };
 		return { retry: true, reason: failure.reason };
 	}

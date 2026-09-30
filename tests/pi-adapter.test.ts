@@ -5,7 +5,10 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createBashTool } from "@earendil-works/pi-coding-agent";
-import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, admitToolResult, effectiveProviderRoundBudget, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, isMeaningfulToolProgress, isReadOnlyShellCommand, normalizeLsToolInput, providerRoundBudget, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, admitToolResult, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+// The shell predicate moved to the one classifier module with the rest of the mutation/replay question; it is the
+// gate's reading of a command's text, and it is asserted there rather than through the adapter that consumes it.
+import { isReadOnlyShellCommand } from "../src/core/invocation-disposition.ts";
 import { createRequestPlan } from "../src/core/request-plan.ts";
 import { createStrategySnapshot } from "../src/core/strategy-snapshot.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
@@ -295,14 +298,13 @@ describe("Pi adapter", () => {
 		assert.match(fullStatus, /LastPlan: not recorded for this session/, "an empty ledger is stated, not left blank");
 		assert.match(fullStatus, /LastTerminal: none\./, "'none' here means the ledger holds no terminal record for this session");
 		assert.match(fullStatus, /Refused: none recorded for this session/, "a session with no refusal and a session whose refusals were dropped must not read the same");
-		// **The order is the contract, not the wording.** Evidence captures this notification through a bounded
-		// redaction, and the strategy line carries the whole `Snapshot={...}` JSON: on a real session that pushed the
-		// three ledger readings past the bound, so the only copy of them was the copy that got cut. Asserting the
-		// order catches that without having to reproduce a 2048-character capture.
-		assert.ok(
-			fullStatus.indexOf("LastPlan:") < fullStatus.indexOf("Snapshot="),
-			"the ledger readings must precede the strategy snapshot, or the evidence bound eats them",
-		);
+		// **The duplicate projection is gone, and the fields it used to crowd out are asserted above.** The strategy line
+		// carried a whole `Snapshot={...}` dump of the same object the ledger already holds in `request.planned`; on a
+		// real session that dump pushed the three ledger readings past the 2048-character evidence bound, so the only
+		// copy of them was the copy that got cut. Reordering them treated the symptom. Asserting the dump's absence is
+		// what holds the fix: the readings no longer share a notification with a copy of something already recorded.
+		assert.doesNotMatch(fullStatus, /Snapshot=/, "the strategy projection lives in the ledger, not in a second dump");
+		assert.match(fullStatus, /strategy=/, "and the short strategy line that is unique to this message stays");
 
 		// The presence case, written through the real ledger writers rather than by hand. The prompt is the one measured to reach the
 		// formal lane, because that lane is what gates product mutations and therefore what a user most needs to see named.
@@ -1077,15 +1079,6 @@ describe("Pi adapter", () => {
 		assert.deepEqual(readOnlyToolBudget({ intent: "execution", mode: "ultra" }), { readOnlyToolWarningThreshold: 32, readOnlyToolHardStopThreshold: 64 });
 	});
 
-	it("bounds provider rounds independently from tool calls", () => {
-		assert.equal(providerRoundBudget({ intent: "chat", mode: "fast" }), 1);
-		assert.equal(providerRoundBudget({ intent: "lookup", mode: "standard" }), 4);
-		assert.equal(providerRoundBudget({ intent: "execution", mode: "fast" }), 5);
-		assert.equal(providerRoundBudget({ intent: "execution", mode: "ultra" }), 7);
-		assert.equal(effectiveProviderRoundBudget({ intent: "chat", mode: "standard" }, 0), 2);
-		assert.equal(effectiveProviderRoundBudget({ intent: "chat", mode: "standard" }, 1), 4);
-	});
-
 	it("accumulates usage across provider rounds using Pi usage field names", () => {
 		const snapshot = emptyRequestResourceSnapshot();
 		accumulateRequestUsage(snapshot, { input: 100, cacheRead: 200, cacheWrite: 3, output: 40, reasoning: 5 });
@@ -1097,13 +1090,6 @@ describe("Pi adapter", () => {
 		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 401: request aborted" }), { kind: "terminal", reason: "authorization-denied" });
 		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 429: operation aborted" }), { kind: "transient", reason: "http_429" });
 		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
-	});
-
-	it("only treats new observations or effects as provider-round progress", () => {
-		assert.equal(isMeaningfulToolProgress({ isError: false, idempotent: false, repeatedSuccessCount: 99 }), true);
-		assert.equal(isMeaningfulToolProgress({ isError: false, idempotent: true, repeatedSuccessCount: 1 }), true);
-		assert.equal(isMeaningfulToolProgress({ isError: false, idempotent: true, repeatedSuccessCount: 2 }), false);
-		assert.equal(isMeaningfulToolProgress({ isError: true, idempotent: false, repeatedSuccessCount: 0 }), false);
 	});
 
 	it("formats task inventory as a bounded no-tool projection", () => {

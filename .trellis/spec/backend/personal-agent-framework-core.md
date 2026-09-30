@@ -43,6 +43,19 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 - Two implementations must agree: `src/core/loop-runner.ts` (reference) and
   `src/adapters/loop-pi-agent-core.ts` (external). `AgentLoop` is the interface, not the provider; both
   call `normalizeGateDecision` - a rule copied into two loops differs in one of them.
+- **There is one mutation/replay classifier, and two consumers read different fields of its answer.**
+  `src/core/invocation-disposition.ts` exports `classifyInvocation(...) -> { disposition, replaySafe, basis }`, where
+  `disposition` is `read-only | mutating | unknown` and `basis` is `name-table | command-text | declared`. The freeze
+  gate reads `disposition`; the retry path reads `replaySafe`. **The `unknown` default differs on purpose and stays
+  that way**: the gate admits an undeclared tool (it is a workflow gate over a formal task, not a second Pi tool
+  permission firewall) and the retry path refuses to call one replay-safe. Two name tables used to answer these
+  separately and disagreed about the same unknown tool - the disagreement is now one answer read twice, with each
+  reading asserted.
+- **An admitted-undetermined action is named rather than passed in silence.** The gate writes
+  `gate.approved` with `gate: "undetermined-disposition"` and notifies, so "nothing declared this" is
+  distinguishable from "reviewed and found harmless". A `command-text` basis is enough for the gate and **never**
+  enough to claim replay safety: three measured false positives (`git branch -D`, `find -delete`,
+  `sed 'w out.txt'`) change something and read as read-only.
 - **The boundary is consulted in two halves, and the host decides which can run.** `denyDecision` reads a tool
   name and nothing else, so `src/pi-adapter/extension.ts` runs it *before* its lease check; `evaluate` reads the
   arguments, so it runs only when `requestLifecycle.activeLease()` is active (`:2301`) - inside a request, where
@@ -73,6 +86,9 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
 - A case about an **argument-reading** control opens a request first (`input` plus `before_agent_start`, the way
   the host does): without a lease the handler returns after the name-only denial, so the case would be asserting
   against a call path the control never sees. Two host tests learned this the hard way.
+- The classifier's two `unknown` readings are asserted where the classifier lives
+  (`tests/invocation-disposition.test.ts`), and the gate's half - admitted, recorded, notified - through the host
+  (`tests/host-work-mode.test.ts`, which needs a formal-lane prompt because the gate asks only inside one).
 
 ### 6. Wrong vs Correct
 

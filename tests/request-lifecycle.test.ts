@@ -84,7 +84,7 @@ describe("request lifecycle", () => {
 		assert.equal(later.coalesced, false);
 	});
 
-	it("allows only bounded transient retries before non-idempotent effects", () => {
+	it("allows bounded transient retries, and a started effect no longer refuses one", () => {
 		const lifecycle = new RequestLifecycleController({ createId: deterministicIds(), maxAttempts: 3 });
 		lifecycle.acceptSubmission({ text: "deploy", source: "interactive" });
 		lifecycle.beginRequest({ prompt: "deploy" });
@@ -101,12 +101,21 @@ describe("request lifecycle", () => {
 		lifecycle.startAttempt("provider-retry");
 		assert.deepEqual(lifecycle.retryDecision(classifyProviderFailure({ httpStatus: 503 })), { retry: false, reason: "attempt-limit" });
 
+		// **The effect is a record, and the bound is the only thing left refusing.** Measured against raw Pi (R0): a
+		// provider retry after a tool ran made three provider calls and executed the tool once, because Pi continues
+		// from the transcript that already carries the tool result. So this decision may permit the retry - what the
+		// effect still does is stay on the lease, and the adapter refuses the one replay that path never measured
+		// (overflow recovery) by reading this flag at `session_before_compact`.
 		const second = new RequestLifecycleController({ createId: deterministicIds() });
 		second.acceptSubmission({ text: "deploy", source: "interactive" });
 		second.beginRequest({ prompt: "deploy" });
 		second.startAttempt("initial");
 		second.markEffectStarted({ effectId: "tool-1", idempotent: false });
-		assert.deepEqual(second.retryDecision(classifyProviderFailure({ httpStatus: 503 })), { retry: false, reason: "non-idempotent-effect" });
+		assert.equal(second.activeLease()?.nonIdempotentEffectStarted, true, "the effect is recorded on the lease");
+		assert.deepEqual(second.retryDecision(classifyProviderFailure({ httpStatus: 503 })), { retry: true, reason: "http_503" });
+		second.startAttempt("provider-retry");
+		second.startAttempt("provider-retry");
+		assert.deepEqual(second.retryDecision(classifyProviderFailure({ httpStatus: 503 })), { retry: false, reason: "attempt-limit" }, "the effect does not lift the attempt bound");
 	});
 
 	it("never retries cancellation, startup/configuration failures, or authorization denial", () => {

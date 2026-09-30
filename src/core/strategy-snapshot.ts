@@ -145,7 +145,10 @@ export function createStrategySnapshot(input: StrategySnapshotInput): StrategySn
 
 export function formatStrategySnapshot(snapshot: StrategySnapshot): string {
 	const plan = snapshot.intent && snapshot.lane ? `${snapshot.intent}/${snapshot.lane}` : "idle";
-	const round = snapshot.providerRound.limit === undefined ? `${snapshot.providerRound.used}/unknown` : `${snapshot.providerRound.used}/${snapshot.providerRound.limit}`;
+	// **A count, not a budget.** Nothing fills a provider-round limit any more, so the `used/limit` form would print a
+	// ceiling that does not exist - `providerRounds=3/unknown` reads as a budget nobody enforces. The read-only line
+	// below still prints one because it has real thresholds.
+	const round = snapshot.providerRound.limit === undefined ? `${snapshot.providerRound.used}` : `${snapshot.providerRound.used}/${snapshot.providerRound.limit}`;
 	const terminal = snapshot.terminal ? ` terminal=${snapshot.terminal.code}` : " terminal=none";
 	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${snapshot.readOnlyBudget.used}/${snapshot.readOnlyBudget.hardStop ?? "unknown"}${terminal}`;
 }

@@ -358,12 +358,49 @@ describe("the documents that name things", () => {
 		}
 	});
 
-	/** Which of the three shape counts differ between the two front doors - empty when they are in step. */
+	/**
+	 * The command lines a front door names inside its code fences, with comments removed.
+	 *
+	 * **Why comments are dropped, and why only commands are read.** The two documents are translations of each other, so
+	 * almost every fenced line differs by language: `# 15 分钟` against `# 15 minutes`, and a Chinese prompt example
+	 * against its English twin. Comparing fence contents would therefore report the translation twelve times over. What
+	 * is language-independent is the command, which is the part a reader copies and runs.
+	 */
+	const COMMAND_LINE = /^(?:\$env:[A-Za-z_]+|npm|npx|node|dove-pi|pi|git|gh|pwsh|powershell)\b/;
+	function commandLines(text: string): readonly string[] {
+		return [...text.replace(/\r\n/g, "\n").matchAll(/```[^\n]*\n([\s\S]*?)```/g)]
+			.flatMap((match) => (match[1] ?? "").split("\n"))
+			.map((line) => line.replace(/#.*$/, "").trim())
+			.filter((line) => line !== "" && COMMAND_LINE.test(line));
+	}
+
+	/** Which commands one front door names and the other does not, named so that a failure says which one. */
+	function commandDrift(zh: string, en: string): readonly string[] {
+		const count = (lines: readonly string[]): ReadonlyMap<string, number> => {
+			const byLine = new Map<string, number>();
+			for (const line of lines) byLine.set(line, (byLine.get(line) ?? 0) + 1);
+			return byLine;
+		};
+		const problems: string[] = [];
+		const passes: readonly (readonly [string, string, ReadonlyMap<string, number>, ReadonlyMap<string, number>])[] = [
+			["README.en.md", "README.md", count(commandLines(en)), count(commandLines(zh))],
+			["README.md", "README.en.md", count(commandLines(zh)), count(commandLines(en))],
+		];
+		for (const [file, other, own, theirs] of passes) {
+			for (const [line, times] of own) for (let index = theirs.get(line) ?? 0; index < times; index++) problems.push(`${file} documents '${line}' and ${other} does not`);
+		}
+		return problems;
+	}
+
+	/** Which of the four shape counts differ between the two front doors - empty when they are in step. */
 	function frontDoorDrift(zh: string, en: string): readonly string[] {
 		const shape = (text: string) => ({
 			headings: (text.match(/^#{2,3} .*/gm) ?? []).length,
 			fences: (text.match(/```/g) ?? []).length,
 			tableRows: (text.match(/^\|/gm) ?? []).length,
+			// Sorted, so this is the same multiset check the other three make: a command repeated on one side only is a
+			// difference, and the order the two documents introduce their examples in is not.
+			commands: [...commandLines(text)].sort().join("\n"),
 		});
 		const a = shape(zh);
 		const b = shape(en);
@@ -377,16 +414,34 @@ describe("the documents that name things", () => {
 		// fences and 14 table rows in each, the headings differing only as translations, and a five percent byte difference which
 		// is the language itself.
 		//
-		// **What it cannot do**: it compares shape, not meaning. A section translated badly, or a command changed in one language
-		// and not the other, passes - and saying so is the point, because a reader who trusted this for content would be wrong.
+		// **The fourth count is not a count.** Three of the four are sizes, and a size cannot see a command changed in one
+		// language: the two documents stayed the same shape while the Chinese one documented nine `dove-pi task` subcommands and
+		// two session commands the English one did not - measured before this was written, with a probe that listed them. So the
+		// fourth compares the commands themselves, which is why it fired on that drift the first time it ran.
+		//
+		// **What it cannot do**: it compares shape and commands, not meaning. A section translated badly passes, and so does a
+		// changed prose step, a changed example *argument* inside a comment, or a command quoted in prose rather than in a fence -
+		// and saying so is the point, because a reader who trusted this for content would be wrong.
 		const read = (name: string): string => readFileSync(join(process.cwd(), name), "utf8");
-		assert.deepEqual(frontDoorDrift(read("README.md"), read("README.en.md")), [], "the two READMEs drifted in shape, so one language is missing a section");
+		const zh = read("README.md");
+		const en = read("README.en.md");
+		assert.deepEqual(commandDrift(zh, en), [], "the two front doors disagree about the commands they document: " + commandDrift(zh, en).slice(0, 5).join("; "));
+		assert.deepEqual(frontDoorDrift(zh, en), [], "the two READMEs drifted in shape, so one language is missing a section");
 
 		// **Seeded both ways**: two matching documents are not reported, and an added section, then an added code block, are.
 		const base = "# R\n\n## A\n\n```sh\nx\n```\n";
 		assert.deepEqual(frontDoorDrift(base, base), [], "a matching pair");
 		assert.deepEqual(frontDoorDrift(base, base + "\n## B\n"), ["headings"], "a section in one language only");
 		assert.deepEqual(frontDoorDrift(base, base + "\n## B\n\n```sh\ny\n```\n"), ["headings", "fences"], "and a code block with it");
+
+		// **And the fourth count is proved to fire on its own**, which the cases above cannot show: they seed structural
+		// differences, so a command comparison wired to nothing would pass them. Same fence count on both sides, so nothing
+		// but the commands can differ - and the report names the command rather than only the key.
+		const fenced = (command: string): string => "# R\n\n```sh\n" + command + "\n```\n";
+		assert.deepEqual(frontDoorDrift(fenced("npm test"), fenced("npm test")), [], "the same command on both sides is not drift");
+		assert.deepEqual(frontDoorDrift(fenced("npm test"), fenced("npm run test")), ["commands"], "a command changed in one language and not the other is reported");
+		assert.deepEqual(commandDrift(fenced("npm test"), fenced("npm run test")), ["README.en.md documents 'npm run test' and README.md does not", "README.md documents 'npm test' and README.en.md does not"], "and the report says which command is missing where");
+		assert.deepEqual(frontDoorDrift(fenced("npm test\n# a translated comment"), fenced("npm test\n# 一段被翻译的注释")), [], "a translated comment inside a fence is not a command difference");
 	});
 
 	it("cites a thing and not a position, in the live code", () => {

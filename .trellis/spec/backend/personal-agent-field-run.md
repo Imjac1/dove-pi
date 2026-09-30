@@ -105,6 +105,13 @@ count, the observation's `providerRounds` and the length of `stopReasons` are al
 extracted tool names are non-empty and account for every tool call; and the terminal's `nextAction` names the
 non-idempotent action the request actually ran.
 
+**One line of that reading is history rather than current behaviour.** `detail=non-idempotent-effect
+code=retry-refused-after-effect` is what the run ended with on that date. A measured probe of Pi's provider retry
+then showed the tool is executed once across three provider calls, so the refusal no longer fires for a transient
+provider failure; it now fires only for the overflow replay, at `session_before_compact`. The recorded reading is
+left as it was recorded - a reading is evidence of what happened, not a baseline to re-run against, which is the
+rule the paragraph above already states.
+
 ### 5. Fidelity Boundary
 
 A field run does **not** cover, and must not be cited as covering:

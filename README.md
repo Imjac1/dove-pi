@@ -338,7 +338,6 @@ Pi 可能仍显示通用的 `Operation aborted`，但 Dove 会保留具体终止
 | --- | --- | --- |
 | `provider-authorization-denied` | provider 未授权或 API key 无效 | 检查 `/login` 或 provider 凭据后重试 |
 | `model-budget-rejected` | 当前请求无法放入模型上下文 | 缩小上下文或更换模型后重试 |
-| `provider-round-budget` | provider 轮次观察阈值已达到 | 查看 `/status full`；该阈值不会单独中止请求 |
 | `progress-*` | 工具循环重复或停滞 | 使用已有证据，改用更窄的查询 |
 | `user-cancelled` | 用户主动取消 | 准备好后提交新请求 |
 | `convergence-*` | formal lane 下的产品变更在运行前被拒；具体状态见 `/status full` | 用 `/status full` 查看拒绝内容与所属 gate；先用 `agent_task_convergence` 冻结验收标准 |

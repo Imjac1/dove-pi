@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import extension, { isPiToolInvocationIdempotent } from "../src/pi-adapter/extension.ts";
-import { createDoveRuntime } from "../src/runtime.ts";
+import extension from "../src/pi-adapter/extension.ts";
 
 describe("Pi request lifecycle integration", () => {
 	it("keeps retries and streaming submissions out of the next logical request", async () => {
@@ -85,7 +84,7 @@ describe("Pi request lifecycle integration", () => {
 		}
 	});
 
-	it("aborts Pi retry after the bound, on terminal HTTP status, or after non-idempotent effects", async () => {
+	it("aborts Pi retry after the bound, on terminal HTTP status, or at the overflow replay after an effect", async () => {
 		const stateDir = mkdtempSync(join(tmpdir(), "dove-pi-retry-policy-"));
 		const previousStateDir = process.env.DOVE_PI_STATE_DIR;
 		process.env.DOVE_PI_STATE_DIR = stateDir;
@@ -144,15 +143,13 @@ describe("Pi request lifecycle integration", () => {
 				3,
 				"a retry is a provider request, so the request's last observation counts every attempt",
 			);
-			// **The other half of splitting the counter: the guard that was there stays there.** The observation now
-			// counts retries, so it would be easy to "tidy away" the trigger guard while reading this code - but that
-			// guard is what keeps a retry from counting as a new round of *progress*, and it is what the threshold
-			// warning is decided on. This request made three provider requests under a chat plan whose budget is two
-			// (`effectiveProviderRoundBudget({intent:"chat",mode:"standard"}, 0)`), so an unguarded threshold would
-			// have warned; a guarded one counts a single round and stays quiet.
+			// **And the "budget" that message announced no longer exists.** Three provider requests under a chat plan
+			// used to be measured against a per-intent/mode threshold (two, for chat in standard) and warned about once
+			// it was reached. That threshold could not stop anything, so it was removed rather than left announcing a
+			// ceiling - and the count above is the whole of what remains: an observation.
 			assert.ok(
-				!notifications.some((message) => /provider-round observation threshold reached/.test(message)),
-				"a retry must not count as a new round of progress, so the observation threshold does not fire early",
+				!notifications.some((message) => /provider-round/i.test(message)),
+				"no notification claims a provider-round threshold, because none is enforced",
 			);
 			// A host may deliver the next prompt before the explicit abort's
 			// `agent_settled` callback. The new request must not inherit the old
@@ -168,9 +165,36 @@ describe("Pi request lifecycle integration", () => {
 			assert.equal(denied.stopReason, "aborted");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
+			// **The relaxation, and what it rests on.** A transient provider failure after a non-idempotent tool call
+			// used to end the request here. R0 measured Pi's provider retry as three provider calls and one tool
+			// execution - it continues from the transcript that already carries the tool result - so the request
+			// continues instead, and the effect stays on the lease as the record of what ran.
 			await startRequest("mutating effect");
 			await failAttempt(503, { name: "write", id: "write-1" });
-			assert.equal(aborts, 3, "provider errors after a non-idempotent tool call do not retry");
+			assert.equal(aborts, 2, "a provider failure after a non-idempotent tool call now continues, because Pi's provider retry does not re-run the tool");
+			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+
+			await startRequest("run mutating recipe");
+			await failAttempt(503, { name: "agent_run_recipe", id: "recipe-1", input: { name: "dev.validate_project" } });
+			assert.equal(aborts, 2, "a recipe is non-idempotent when any registered step is non-idempotent, and that does not refuse the retry either");
+			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+
+			await startRequest("run plugin tool");
+			await failAttempt(503, { name: "third_party_unknown", id: "plugin-1" });
+			assert.equal(aborts, 2, "an unknown third-party tool stays non-idempotent, and its provider retry continues");
+			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
+
+			// **The refusal that is left, at the boundary where it can still be made.** Overflow recovery is the one
+			// replay R0 never reached (its probe compacted nothing), and it is the one that rewrites the context the
+			// model sees, so the record that the tool already ran is weaker rather than absent. Pi lets a compaction be
+			// cancelled, so that is where Dove refuses: nothing is re-sent and the message still names what to
+			// reconcile. Asserted here rather than claimed, because a relaxation that quietly lost its last refusal
+			// would look exactly like this change.
+			await startRequest("compact after effect");
+			await failAttempt(503, { name: "write", id: "write-2" });
+			const compactRefusal = await events.get("session_before_compact")?.({ type: "session_before_compact", reason: "overflow", willRetry: true }, context);
+			assert.deepEqual(compactRefusal, { cancel: true }, "the overflow replay after an effect is cancelled before anything is re-sent");
+			assert.equal(aborts, 3, "and the refusal stops the run it belongs to");
 			// **The refusal has to say what to reconcile.** "Inspect the workspace and reconcile the effect" names
 			// nothing; on a real session that sentence was the whole of what the operator got. The refusal is per
 			// attempt, so re-submitting is already the way to continue - the message has to say so.
@@ -188,14 +212,13 @@ describe("Pi request lifecycle integration", () => {
 			assert.doesNotMatch(deniedTerminal?.nextAction ?? "", /\bwrite\b/, "a failure with no such action names none");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
-			await startRequest("run mutating recipe");
-			await failAttempt(503, { name: "agent_run_recipe", id: "recipe-1", input: { name: "dev.validate_project" } });
-			assert.equal(aborts, 4, "a recipe is non-idempotent when any registered step is non-idempotent");
-			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
-
-			await startRequest("run plugin tool");
-			await failAttempt(503, { name: "third_party_unknown", id: "plugin-1" });
-			assert.equal(aborts, 5, "unknown third-party tools fail closed for retry safety");
+			// **A compaction with no effect behind it is left alone.** The guard keys on the effect, not on the
+			// compaction: an ordinary overflow still recovers, which is what keeps this a refusal rather than a ban.
+			await startRequest("compact without effect");
+			await failAttempt(503, { name: "read", id: "read-1" });
+			const allowedCompaction = await events.get("session_before_compact")?.({ type: "session_before_compact", reason: "overflow", willRetry: true }, context);
+			assert.equal(allowedCompaction, undefined, "a request with no non-idempotent effect is not refused its overflow recovery");
+			assert.equal(aborts, 3, "and nothing aborts it");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
 			await startRequest("abnormal terminal path");
@@ -203,7 +226,7 @@ describe("Pi request lifecycle integration", () => {
 			await events.get("before_provider_request")?.({ type: "before_provider_request", payload: { max_tokens: 4_096, messages: [{ role: "user", content: "x" }] } }, context);
 			await events.get("after_provider_response")?.({ type: "after_provider_response", status: 401, headers: {} }, context);
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "error", errorMessage: "HTTP 401", content: [] }] }, context);
-			assert.equal(aborts, 6, "agent_end retains the structured policy reason even if message_end was skipped abnormally");
+			assert.equal(aborts, 4, "agent_end retains the structured policy reason even if message_end was skipped abnormally");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
 			await startRequest("shutdown before message end");
@@ -215,20 +238,26 @@ describe("Pi request lifecycle integration", () => {
 			await startRequest("user cancellation");
 			await events.get("agent_start")?.({ type: "agent_start" }, context);
 			await events.get("agent_end")?.({ type: "agent_end", messages: [{ role: "assistant", stopReason: "aborted", errorMessage: "Request was aborted", content: [] }] }, context);
-			assert.equal(aborts, 6, "a user cancellation is not re-aborted as policy enforcement");
+			assert.equal(aborts, 4, "a user cancellation is not re-aborted as policy enforcement");
 			await events.get("agent_settled")?.({ type: "agent_settled" }, context);
 
 			const records = readFileSync(join(stateDir, "execution.jsonl"), "utf8")
 				.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { kind: string; details?: { reason?: string; detail?: string; policyAbort?: boolean; failureReason?: string } });
 			const terminals = records.filter((record) => record.kind === "request.terminal");
 			const terminalEnvelopes = terminals.map((record) => (record.details as { terminal?: { origin?: string; code?: string; retryable?: boolean } } | undefined)?.terminal);
+			// The three `completed` rows in the middle are the harness settling requests Pi would really be retrying:
+			// after the relaxation those attempts end as `transient-failure` with no policy terminal, and this test
+			// closes each scenario by hand. They are not a claim about a real session, and they are the reason the
+			// refusal below is asserted by code and by an explicit cancel rather than by position in this list.
 			assert.deepEqual(terminals.map((record) => [record.details?.reason, record.details?.detail, record.details?.policyAbort]), [
 				["failed", "attempt-limit", true],
 				["completed", undefined, undefined],
 				["authorization-denied", "authorization-denied", true],
+				["completed", undefined, undefined],
+				["completed", undefined, undefined],
+				["completed", undefined, undefined],
 				["failed", "non-idempotent-effect", true],
-				["failed", "non-idempotent-effect", true],
-				["failed", "non-idempotent-effect", true],
+				["completed", undefined, undefined],
 				["authorization-denied", "authorization-denied", true],
 				["authorization-denied", "authorization-denied", true],
 				["cancelled", "cancelled", undefined],
@@ -237,28 +266,20 @@ describe("Pi request lifecycle integration", () => {
 				["provider", "provider-attempt-limit", true],
 				["session", "completed", false],
 				["provider", "provider-authorization-denied", false],
+				["session", "completed", false],
+				["session", "completed", false],
+				["session", "completed", false],
 				["provider", "retry-refused-after-effect", false],
-				["provider", "retry-refused-after-effect", false],
-				["provider", "retry-refused-after-effect", false],
+				["session", "completed", false],
 				["provider", "provider-authorization-denied", false],
 				["provider", "provider-authorization-denied", false],
 				["user", "user-cancelled", false],
 			]);
-			assert.deepEqual(records.filter((record) => record.kind === "request.attempt.completed").filter((record) => record.details?.failureReason).map((record) => record.details?.failureReason), ["attempt-limit", "authorization-denied", "non-idempotent-effect", "non-idempotent-effect", "non-idempotent-effect", "authorization-denied", "cancelled"]);
+			assert.deepEqual(records.filter((record) => record.kind === "request.attempt.completed").filter((record) => record.details?.failureReason).map((record) => record.details?.failureReason), ["attempt-limit", "authorization-denied", "authorization-denied", "cancelled"]);
 		} finally {
 			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
 			else process.env.DOVE_PI_STATE_DIR = previousStateDir;
 			rmSync(stateDir, { recursive: true, force: true });
 		}
-	});
-
-	it("classifies only reviewed read-only tools and fully idempotent recipes as retry-safe", () => {
-		const { capabilities, recipes } = createDoveRuntime();
-		assert.equal(isPiToolInvocationIdempotent("read", {}, capabilities, recipes), true);
-		assert.equal(isPiToolInvocationIdempotent("agent_run_capability", { name: "workspace.inspect" }, capabilities, recipes), true);
-		assert.equal(isPiToolInvocationIdempotent("agent_run_capability", { name: "dev.project_test" }, capabilities, recipes), false);
-		assert.equal(isPiToolInvocationIdempotent("agent_run_recipe", { name: "windows.readonly_baseline" }, capabilities, recipes), true);
-		assert.equal(isPiToolInvocationIdempotent("agent_run_recipe", { name: "dev.validate_project" }, capabilities, recipes), false);
-		assert.equal(isPiToolInvocationIdempotent("third_party_unknown", {}, capabilities, recipes), false);
 	});
 });

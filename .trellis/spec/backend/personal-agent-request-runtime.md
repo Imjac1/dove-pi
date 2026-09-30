@@ -1,6 +1,6 @@
 # Personal Agent Request Runtime
 
-> **Scope:** Core contracts, Pi adapter request planning, schema stability, progress bounds, and provider budgets.
+> **Scope:** Core contracts, Pi adapter request planning, schema stability, and progress bounds.
 >
 > **Canonical router:** [Personal Agent Runtime Contract](./personal-agent-runtime.md)
 > **Related specifications:** [personal-agent-capability-runtime](./personal-agent-capability-runtime.md), [personal-agent-project-context](./personal-agent-project-context.md)
@@ -236,11 +236,10 @@ outcome and usage projection. Pi records and swallows extension-hook exceptions,
 so a rejected `before_provider_request` must call the host `ctx.abort()` boundary;
 throwing alone is only the fallback for hosts that do not expose that boundary.
 
-Provider-round thresholds are diagnostic observations by intent/mode: Fast uses
-`chat=1`, `lookup=3`, `project-work=4`, `execution=5`; Standard adds one and
-Ultra adds two. They never abort transport or stop a progressing request.
-`RequestLifecycle` owns provider/network retries; semantic repetition and error
-guards remain the only loop-stop decisions.
+Provider rounds are counted, never budgeted: `providerRounds=` reports how many
+provider requests the request made, retries included, and no number is enforced
+against it. `RequestLifecycle` owns provider/network retries; semantic
+repetition and error guards remain the only loop-stop decisions.
 
 Capability executions receive a unique `executionId` and optional request,
 session, and tool-call correlation. Standalone host integrations may persist an
@@ -313,20 +312,22 @@ persist a second user entry. `request.planned` and current guidance are emitted
 once per logical request.
 
 Automatic retry is bounded and fail-closed. HTTP 408/425/429/5xx and reviewed
-transport-reset/timeout codes are transient only while the attempt limit has
-not been reached and no non-idempotent effect has started. Cancellation,
+transport-reset/timeout codes are transient while the attempt limit has not been
+reached; a started effect no longer refuses one, because Pi's provider retry
+continues from the existing tool result (measured) rather than re-executing the
+tool. The overflow replay stays refused at `session_before_compact` (`willRetry`
+is cancelled): unmeasured, and it rewrites that result away. Cancellation,
 startup conflict, invalid configuration, authorization denial, other terminal
-HTTP statuses, and any failure after a non-idempotent tool/capability effect
-are converted to an `aborted` assistant stop at `message_end` so Pi's real
-post-run retry loop cannot continue; `agent_end` also calls `ctx.abort()` as a
-host boundary. Dove keeps the policy terminal reason separately, so
-`agent_settled` records `authorization-denied`, `invalid-configuration`, or a
-`failed` detail such as `attempt-limit`/`non-idempotent-effect` instead of
-misreporting a policy abort as user cancellation. Retry safety uses a reviewed
-read-only Pi-tool allowlist, Core capability idempotency, and every capability
-step in a recipe; unknown plugin tools fail closed as non-idempotent.
-Classify provider errors by status/code/auth before generic abort wording; 401/429
-markers outrank cancellation.
+HTTP statuses, and a refused replay become an `aborted` assistant stop at
+`message_end` so Pi's real post-run retry loop cannot continue; `agent_end` also
+calls `ctx.abort()` as a host boundary. Dove keeps the policy terminal reason
+separately, so `agent_settled` records `authorization-denied`,
+`invalid-configuration`, or a `failed` detail such as
+`attempt-limit`/`non-idempotent-effect`, never the abort as user cancellation.
+Effect classification uses the reviewed read-only tool allowlist, Core
+capability idempotency, and recipe steps; unknown plugin tools fail closed as
+non-idempotent. Classify provider errors by status/code/auth before generic
+abort wording; 401/429 markers outrank cancellation.
 Events
 `request.received`, `request.redelivery.coalesced`,
 `request.attempt.started`, `request.attempt.completed`, and `request.terminal`
@@ -347,8 +348,8 @@ policy/provider cause and use `startup-failed` only for queued preflight work.
 | Same text after `agent_settled` | Create a new logical request ID |
 | Preflight fails before `before_agent_start` | Terminalize the queued lease as `startup-failed` on the next input or shutdown |
 | Steer/follow-up during an active run | Record a deliberate delivery on the active request; do not create an orphan request or retry attempt |
-| 408/425/429/reviewed 5xx or transport reset within limit | Permit the next attempt only if no non-idempotent effect started |
-| Cancellation, authorization/config/startup failure, attempt limit, or non-idempotent effect | Convert the error stop to `aborted`, call `ctx.abort()`, and preserve the structured policy terminal reason |
+| 408/425/429/reviewed 5xx or transport reset within limit | Permit the next attempt |
+| Cancellation, authorization/config/startup failure, attempt limit, or a refused replay | Convert the error stop to `aborted`, call `ctx.abort()`, and preserve the structured policy terminal reason |
 | Unknown or third-party tool | Treat as non-idempotent unless its exact read-only contract is reviewed |
 
 ### 5. Good / Base / Bad Cases
@@ -371,7 +372,7 @@ policy/provider cause and use `startup-failed` only for queued preflight work.
 - Assert provider, capability, recipe, and tool ledger records carry the same
   request/attempt chain with distinct execution IDs.
 - Assert transient retry bounds, terminal HTTP status, policy terminal detail,
-  non-idempotent capability/recipe, and unknown-plugin fail-closed behavior.
+  the refused replay, and unknown-plugin fail-closed behavior.
 - Assert legacy ledger readers ignore additive lifecycle kinds.
 
 ### 7. Wrong

@@ -971,6 +971,89 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("names the claims a refused replay leaves unresolved, including the record it cannot read", async () => {
+		// **The work-mode branch of the refusal, which had no test at all.** With no mode the message says so in words;
+		// with a mode it has to read the claim store, and a reader is only worth what its reading is worth. The fixture
+		// declares `dev.project_test`, which is registered with a `workspace_write` side effect and `idempotent: false`,
+		// so it is exactly the non-idempotent effect the overflow guard keys on.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "replay", { capability: "dev.project_test" });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "replay" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "inspect the workspace", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
+
+			// A claim taken at the boundary and left unresolved: the dispatch happened and no result arrived, which is
+			// what an interrupted dispatch actually is.
+			const decision = await callTool(host, "agent_run_capability", { name: "dev.project_test", args: {} }, "c-unresolved");
+			assert.notEqual(decision?.block, true, "an action nothing refuses is not refused: " + (decision?.reason ?? "(no reason)"));
+
+			const effectsDir = join(root, ".dove", "effects");
+			const claimed = existsSync(effectsDir) ? readdirSync(effectsDir).filter((name) => name.endsWith(".json")) : [];
+			assert.equal(claimed.length, 1, "the effect is claimed and no result has completed it");
+
+			// The store's second hazard, staged rather than described: a claim created with exclusive create whose
+			// record never landed. The store refuses to resolve it in either direction, and a reader that skipped it
+			// would undo that refusal by omission - so it is asserted here, not left to the message's prose.
+			writeFileSync(join(effectsDir, "crashed-before-record.json"), "");
+
+			const refusal = await host.events.get("session_before_compact")?.({ type: "session_before_compact", reason: "overflow", willRetry: true }, host.context);
+			assert.deepEqual(refusal, { cancel: true }, "the overflow replay after a non-idempotent effect is cancelled before anything is re-sent");
+
+			const refusalTerminals = readFileSync(join(stateDir, "execution.jsonl"), "utf8")
+				.trim().split(/\r?\n/).filter(Boolean)
+				.map((line) => JSON.parse(line) as { kind?: string; details?: { terminal?: { code?: string; nextAction?: string } } })
+				.filter((record) => record.kind === "request.terminal" && record.details?.terminal?.code === "retry-refused-after-effect");
+			const refusalTerminal = refusalTerminals.at(-1);
+			assert.ok(refusalTerminal !== undefined, "the refusal reaches the ledger, so the operator can read it after the session");
+			const nextAction = refusalTerminal?.details?.terminal?.nextAction ?? "";
+			assert.match(nextAction, /dev\.project_test/, "the operator is told which effect to reconcile, not merely that one is open");
+			assert.match(nextAction, /crashed-before-record/, "and the claim whose record cannot be read is named rather than skipped");
+			assert.match(nextAction, /record unreadable/, "and marked as unreadable, which is the state the store refuses to resolve");
+			assert.match(nextAction, /new request is allowed/i, "and says how to continue, because the refusal is per attempt");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+	it("admits an undeclared tool in the formal lane and names it, instead of admitting it in silence", async () => {
+		// **The gate's half of the one classification.** The replay path refuses an undeclared tool; the freeze gate
+		// admits it, because it is a workflow gate over a formal task rather than a second Pi tool permission firewall.
+		// Both readings are deliberate, and what this case pins is that the admission stopped being silent: an
+		// undeclared tool is now recorded and named, so "nothing declared this" cannot be read as "reviewed and found
+		// harmless" - which is the state the two-table arrangement used to produce.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "undetermined", { capability: "workspace.inspect" });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "undetermined" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			// The wording measured to reach the formal lane (`pi-adapter.test.ts` asserts the same phrase does), because
+			// the gate only asks this question of a formal request.
+			await host.events.get("input")?.({ type: "input", text: "设计一下这个模块", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "设计一下这个模块", systemPrompt: "" }, host.context);
+
+			const decision = await callTool(host, "mcp_some_server_write", { path: "src/a.ts" }, "c-undetermined");
+			assert.notEqual(decision?.block, true, "the gate admits an undeclared tool, and this is the default it was chosen to keep: " + (decision?.reason ?? "(no reason)"));
+			assert.ok(
+				host.notifications.some((message) => /is not declared as a product mutation or as read-only/.test(message)),
+				"the operator is told the admission was undetermined, rather than left to infer that the tool was reviewed: " + host.notifications.join(" | "),
+			);
+
+			const approved = readFileSync(join(stateDir, "execution.jsonl"), "utf8")
+				.trim().split(/\r?\n/).filter(Boolean)
+				.map((line) => JSON.parse(line) as { kind?: string; details?: { gate?: string; action?: string; reason?: string; viaCapability?: boolean } })
+				.find((record) => record.kind === "gate.approved" && record.details?.gate === "undetermined-disposition");
+			assert.ok(approved !== undefined, "the admission is recorded, so a later reader can tell it from a reviewed decision");
+			assert.equal(approved?.details?.action, "mcp_some_server_write", "and the record names the action rather than only the umbrella tool");
+			assert.match(approved?.details?.reason ?? "", /No declaration covers/, "and says why the gate could not decide");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 	it("admits a non-conversational message in the provider payload, and leaves the conversation alone", async () => {
 		// The channel the recorded incident used: a background/extension message that never passed the tool-result
 		// guard. The deep marker sits in the middle, so its absence proves the payload is out rather than truncated.

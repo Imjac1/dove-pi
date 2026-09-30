@@ -6,6 +6,7 @@ import { defineTool, getAgentDir, SettingsManager, type ExtensionAPI, type Exten
 import { Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { CapabilityRegistry } from "../core/capability-registry.ts";
+import { classifyInvocation, declaredReadOnly } from "../core/invocation-disposition.ts";
 import { CapabilityInvocationService } from "../core/capability-invocation.ts";
 import { CAPABILITY_PROTOCOL_VERSION } from "../core/capability-protocol.ts";
 import { executeRecipe, type RecipeRegistry } from "../core/recipe-registry.ts";
@@ -110,13 +111,6 @@ export function claimDoveRegistration(pi: ExtensionAPI, identity: DoveExtensionI
 }
 
 const modes: readonly AgentMode[] = ["fast", "standard", "ultra"];
-const REVIEWED_IDEMPOTENT_PI_TOOLS = new Set([
-	"read", "grep", "find", "ls",
-	"agent_list_capabilities", "agent_doctor", "agent_project_status", "agent_project_context", "agent_workspace_verify",
-	"lens_diagnostics", "lsp_diagnostics", "symbol_search", "project_report", "module_report", "read_symbol", "read_enclosing",
-	"web_search", "source_check", "fetch_content", "get_search_content",
-]);
-export const FORMAL_PRODUCT_MUTATION_TOOLS = new Set(["write", "edit", "replace", "insert", "delete", "mkdir", "agent_workspace_patch", "agent_workspace_restore"]);
 const modeColors: Readonly<Record<AgentMode, ThemeColor>> = {
 	fast: "thinkingLow",
 	standard: "thinkingMedium",
@@ -245,30 +239,6 @@ export function applyAdaptiveShellTimeout(
 	return { applied: true, timeoutSeconds, reason: "aggregate-verification" };
 }
 
-const READ_ONLY_SHELL_SEGMENT = /^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+))|(?:env\s+)?(?:git(?:\s+-C\s+(?:"[^"]*"|'[^']*'|\S+))?\s+(?:status|log|diff|show|ls-files|rev-parse|branch|describe|remote|tag|blame|shortlog|cat-file)\b|go\s+(?:test|vet|list|version|env)\b|(?:ls|dir|find|rg|grep|sed|awk|cat|head|tail|wc|pwd|echo|env|printenv)\b|(?:Get-ChildItem|Get-Content|Select-String|Test-Path)\b).*)$/i;
-const READ_ONLY_SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:\$\?|\d+)$/;
-
-/**
- * Shell is a general-purpose Pi tool, so its name alone cannot establish a
- * product mutation. Keep the formal mutation gate conservative while allowing
- * common read-only inspection and verification commands to run before an
- * acceptance contract is frozen.
- */
-export function isReadOnlyShellCommand(toolName: string, input: Readonly<Record<string, unknown>>): boolean {
-	if (toolName !== "bash" && toolName !== "powershell") return false;
-	const command = typeof input.command === "string" ? input.command : typeof input.script === "string" ? input.script : undefined;
-	if (!command?.trim()) return false;
-	const normalized = command
-		.replace(/\s+\d?>&\d+/g, "")
-		.replace(/\s+\d?>\s*(?:\/dev\/null|nul|\$null|(?:\/tmp\/|\/var\/tmp\/|\$TEMP[\\/]|%TEMP%[\\/]|\$env:TEMP[\\/])[^\s;|&]+)/gi, "")
-		.replace(/\s+\d?<\s*(?:\/tmp\/|\/var\/tmp\/|\$TEMP[\\/]|%TEMP%[\\/]|\$env:TEMP[\\/])[^\s;|&]+/gi, "")
-		.trim();
-	if (/[<>]/.test(normalized)) return false;
-	if (/\b(?:rm|del|erase|mv|move|cp|copy|mkdir|rmdir|touch|tee|sed\s+-i|Set-Content|Out-File|Add-Content|Remove-Item|Move-Item|Copy-Item|New-Item|git\s+(?:apply|checkout|reset|clean|restore|commit|merge|rebase|switch|add|rm)|git\s+diff\b[^;|]*--output(?:=|\s)|npm\s+(?:install|ci)|go\s+(?:generate|env\s+-w))\b/i.test(normalized)) return false;
-	const segments = normalized.split(/(?<!\\)\s*(?:&&|\|\||[;|])\s*/).map((segment) => segment.trim()).filter(Boolean);
-	return segments.length > 0 && segments.every((segment) => READ_ONLY_SHELL_SEGMENT.test(segment) || READ_ONLY_SHELL_ASSIGNMENT.test(segment));
-}
-
 function runtimeReadOnly(): boolean {
 	return /^(1|true|yes|on)$/i.test(process.env.DOVE_PI_READ_ONLY ?? "");
 }
@@ -323,33 +293,6 @@ export function classifyAssistantProviderFailure(message: unknown): ProviderFail
 		return { kind: "transient", reason: "reviewed-provider-message" };
 	}
 	return classifyProviderFailure({ category: "unknown" });
-}
-
-/**
- * Fail-closed retry classification for Pi tools. Unknown/third-party tools are
- * non-idempotent unless Dove has reviewed the exact tool or capability recipe.
- */
-export function isPiToolInvocationIdempotent(
-	toolName: string,
-	input: Readonly<Record<string, unknown>>,
-	registry: CapabilityRegistry,
-	recipes: RecipeRegistry,
-): boolean {
-	if (REVIEWED_IDEMPOTENT_PI_TOOLS.has(toolName)) return true;
-	if (toolName === "agent_run_capability") {
-		const name = typeof input.name === "string" ? input.name : undefined;
-		return name ? registry.get(name)?.idempotent === true : false;
-	}
-	if (toolName === "agent_run_recipe") {
-		const name = typeof input.name === "string" ? input.name : undefined;
-		if (!name) return false;
-		try {
-			return recipes.require(name).steps.every((step) => registry.get(step.capability)?.idempotent === true);
-		} catch {
-			return false;
-		}
-	}
-	return false;
 }
 
 export interface LsObservationMetadata {
@@ -564,10 +507,6 @@ export function accumulateRequestUsage(snapshot: RequestResourceSnapshot, usage:
 	snapshot.cacheWriteTokens += read("cacheWrite") || read("cacheWriteTokens");
 	snapshot.outputTokens += read("output") || read("outputTokens");
 	snapshot.reasoningTokens += read("reasoning") || read("reasoningTokens");
-}
-
-export function isMeaningfulToolProgress(input: { readonly isError: boolean; readonly idempotent: boolean; readonly repeatedSuccessCount: number }): boolean {
-	return !input.isError && (!input.idempotent || input.repeatedSuccessCount <= 1);
 }
 
 function terminalForFailure(failure: ProviderFailureClassification, decisionReason: string): PendingRequestTerminal {
@@ -789,24 +728,20 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	let currentRequestHadNonQuestionTool = false;
 	let currentRequestIsTaskInventory = false;
 	let currentRequestTaskId: string | undefined;
-	// **Two counters, because these are two different quantities and one variable used to carry both.** This one
-	// counts every provider request the current logical request made, retries included: a retry costs another round,
-	// it is what the resource observation reports, and it has to agree with the ledger's own count of
-	// provider.request.completed records for the request.
-	// The non-idempotent actions this request ran. They are what "reconcile the effect" refers to when a retry is
-	// refused, and without a work mode they are the only source: the effect boundary, and so the claim store, is
+	// **One counter, because there is one quantity.** This counts every provider request the current logical request
+	// made, retries included: a retry costs another round, it is what the resource observation reports, and it has to
+	// agree with the ledger's own count of provider.request.completed records for the request. It used to race a
+	// second counter that only decided when to warn, and that warning is gone with the "budget" it announced: it
+	// could not stop anything, so displaying and announcing it promised a ceiling that did not exist.
+	// The non-idempotent actions this request ran. They are what "reconcile the effect" refers to when a refusal names
+	// it, and without a work mode they are the only source: the effect boundary, and so the claim store, is
 	// opened by a mode.
 	let currentRequestNonIdempotentActions: string[] = [];
 	let currentRequestNonIdempotentOverflow = 0;
 	let currentRequestProviderRounds = 0;
-	// This one counts rounds since the last progress, and a retry deliberately does not start a new one. It exists
-	// only to decide when to warn, and its behaviour is unchanged from when the two meanings shared a variable.
-	let currentRoundSinceProgress = 0;
 	let currentRequestToolCalls = 0;
 	let currentRequestStartedAt: number | undefined;
 	let currentRequestResources = emptyRequestResourceSnapshot();
-	let currentRequestProgressSinceRound = false;
-	let currentRequestProviderRoundWarningIssued = false;
 	let currentRequestStopReasons: string[] = [];
 	let currentRequestToolDurationMs = 0;
 	let currentRequestHostAbortIssued = false;
@@ -833,14 +768,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	}
 
 	/**
-	 * The terminal a provider failure produces, with the recovery an operator actually needs when a non-idempotent
-	 * effect had already started.
+	 * The terminal a refused replay produces, with the recovery an operator actually needs when a non-idempotent
+	 * effect had already started. Its callers are the overflow-recovery guard and, before the R0 measurement, every
+	 * transient provider failure.
 	 *
 	 * **Why it is composed here and not inside `terminalForFailure`.** That function is pure and takes only a
 	 * classification. What to reconcile lives in this closure: the actions this request ran, and the claim store the
 	 * active mode opened. Keeping the pure function pure is what lets it stay testable on its own.
 	 *
-	 * **Why this is a message and not a new command.** The refusal is per *attempt*: `retryDecision` reads the lease's
+	 * **Why this is a message and not a new command.** The refusal is per *attempt*: the guard reads the lease's
 	 * `nonIdempotentEffectStarted`, and `acceptSubmission` opens a fresh logical request for every new submission. So
 	 * re-submitting already is the operator saying "I checked, continue" - what was missing was being told that, not a
 	 * way to say it.
@@ -1039,7 +975,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			toolProfile,
 			toolProfileSource: toolSource,
 			activeToolCount: (typeof pi.getActiveTools === "function" ? pi.getActiveTools() : activeToolSnapshot).length,
-			providerRound: { used: currentRequestProviderRounds, limit: currentRequestPlan ? effectiveProviderRoundBudget(currentRequestPlan, currentRequestToolCalls) : undefined },
+			providerRound: { used: currentRequestProviderRounds },
 			readOnlyBudget: { used: progress.readOnlyToolCalls, warning: readBudget.readOnlyToolWarningThreshold, hardStop: readBudget.readOnlyToolHardStopThreshold },
 			context: {
 				contextWindow,
@@ -1236,15 +1172,16 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					: modeRefusal === undefined
 						? " Work mode: none declared for this workspace, so no permission list, threshold or fence is in force."
 						: ` Work mode failed to load, and every tool call is refused until the declaration is fixed: ${modeRefusal}`;
-			// The three facts a user needs after a request died, each read back rather than reconstructed. "none" and "not
+			// **The three facts a user needs after a request died, each read back rather than reconstructed.** "none" and "not
 			// recorded" are kept apart on purpose: a session that recorded no refusal and a session whose refusals were
 			// dropped must not read the same.
 			//
-			// **This block is concatenated before the strategy line, and that is not cosmetic.** Evidence captures the
-			// notification through a bounded redaction, and the strategy line carries the whole `Snapshot={...}` JSON -
-			// measured on a real session, it pushed these three fields past the bound, so the one reading that exists
-			// nowhere else was the one that got cut. The strategy line has a second copy in the ledger's
-			// `request.planned` record; these three do not.
+			// **Why this block is still concatenated before the strategy line.** The strategy line used to end with
+			// `Snapshot={...}`, a dump of the very projection the ledger already holds in `request.planned`. Evidence
+			// captures this notification through a bounded redaction, and on a real session that dump pushed these three
+			// fields past the bound - so the reading that exists nowhere else was the one that got cut, while the dump
+			// itself was the one that had a second copy. The dump is gone rather than reordered: moving the block treated
+			// the symptom, and the projection it duplicated is one ledger read away for anyone who wants it.
 			const ledgerDetail = diagnostics === undefined
 				? ""
 				: (() => {
@@ -1272,7 +1209,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}`;
 			const strategy = currentStrategySnapshot(ctx);
 			const strategyText = full
-				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}. Snapshot=${JSON.stringify(strategy)}.`
+				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}.`
 				: "";
 			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${ledgerDetail}${strategyText}${workModeDetail} ${detail}`, "info");
 		},
@@ -2598,14 +2535,26 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
 		currentRequestResources = emptyRequestResourceSnapshot();
-		currentRequestProgressSinceRound = false;
-		currentRequestProviderRoundWarningIssued = false;
 		currentRequestStopReasons = [];
 		currentRequestHostAbortIssued = false;
 		currentRequestTerminalPersisted = false;
 		currentRequestTerminalNotified = false;
 		currentRequestToolDurationMs = 0;
 		toolTimings.clear();
+	});
+
+	pi.on("session_before_compact", async (event, ctx) => {
+		// **The replay that is still refused, and the only one left.** Overflow recovery continues the interrupted turn
+		// after the context is rewritten (`willRetry`), which is the path whose replay R0 never reached: that probe
+		// stopped at a provider retry, where Pi keeps the tool call and its result verbatim in what it asks again.
+		// Compaction replaces that surrounding context with a summary, so the model's record that the tool already ran
+		// is weaker, and whether it re-issues the call there is unmeasured. An unmeasured path stays refused, which is
+		// this repository's rule for a condition it cannot evaluate. Cancelling here is Pi's own lever: the compaction
+		// does not run and the turn is not continued, so nothing is re-sent to the provider.
+		if (!event.willRetry) return;
+		if (requestLifecycle.activeLease()?.nonIdempotentEffectStarted !== true) return;
+		await issueRequestHostAbort(ctx, await terminalForFailureWithRecovery({ kind: "terminal", reason: "non-idempotent-effect" }, "non-idempotent-effect"));
+		return { cancel: true };
 	});
 
 	pi.on("session_compact", async (event) => {
@@ -2648,8 +2597,6 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		pendingRequestTerminal = undefined;
 		nextAttemptTrigger = undefined;
 		currentRequestResources = emptyRequestResourceSnapshot();
-		currentRequestProgressSinceRound = false;
-		currentRequestProviderRoundWarningIssued = false;
 		currentRequestStopReasons = [];
 		currentRequestHostAbortIssued = false;
 		currentRequestTerminalPersisted = false;
@@ -2701,13 +2648,35 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 		}
 		if (!requestLifecycle.activeLease()) return;
-		const capabilityMutation = event.toolName === "agent_run_capability" && typeof event.input?.name === "string" && registry.get(event.input.name)?.sideEffects.some((effect) => effect !== "read_only");
-		let recipeMutation = false;
-		if (event.toolName === "agent_run_recipe" && typeof event.input?.name === "string") {
-			try { recipeMutation = recipes.require(event.input.name).steps.some((step) => registry.get(step.capability)?.sideEffects.some((effect) => effect !== "read_only")); } catch { recipeMutation = true; }
+		const invocation = classifyInvocation({ toolName: event.toolName, input: event.input, registry, recipes });
+		// **Both defaults of one classifier, read two ways.** This gate is a workflow gate over a formal task rather
+		// than a second Pi tool permission firewall, so it asks a narrower question than the replay path does: it blocks
+		// only what the declaration table calls a product mutation. An `unknown` tool is therefore admitted - and named,
+		// so that "nothing declared this" stops being indistinguishable from "this was reviewed and found harmless".
+		// The replay path reads the same classification the other way, because its question is whether the tool may run
+		// twice rather than whether it may run at all (`personal-agent-framework-core.md`).
+		if (currentRequestPlan?.lane === "formal" && invocation.disposition === "unknown") {
+			// The identity is resolved here for the same reason the refusal paths resolve it: a record whose `action` is
+			// the umbrella tool while the refusals name the resolved action would make one call read as two. This is
+			// written before the effect boundary, so a call that the boundary then refuses carries both records - under
+			// different `gate` names, which is what lets a reader tell an admission from a refusal.
+			const identity = resolveActionIdentity(event.toolName, event.input);
+			await ledger.appendGateApproved({
+				taskId: currentRequestTaskId ?? "pi-session",
+				stepId: `gate:${event.toolCallId}`,
+				mode: mode.current,
+				tool: event.toolName,
+				action: identity.action,
+				viaCapability: identity.viaCapability,
+				gate: "undetermined-disposition",
+				reason: `No declaration covers '${identity.action}' (basis: ${invocation.basis}), so the formal mutation gate cannot decide whether it changes product files.`,
+				requestId: currentRequestPlan?.requestId,
+				toolCallId: event.toolCallId,
+				sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
+			});
+			if (ctx.hasUI) ctx.ui.notify(`[Dove gate] '${event.toolName}' is not declared as a product mutation or as read-only, so the formal gate admits it undetermined. It is not replay-safe.`, "warning");
 		}
-		const shellMutation = (event.toolName === "bash" || event.toolName === "powershell") && !isReadOnlyShellCommand(event.toolName, event.input);
-		if (currentRequestPlan?.lane === "formal" && (FORMAL_PRODUCT_MUTATION_TOOLS.has(event.toolName) || shellMutation || capabilityMutation || recipeMutation)) {
+		if (currentRequestPlan?.lane === "formal" && invocation.disposition === "mutating") {
 			const convergence = currentRequestTaskId && projectProvider.readTaskConvergence ? projectProvider.readTaskConvergence(currentRequestTaskId) : { kind: "missing" as const };
 			let blockedReason: string | undefined;
 			let blockedState = "missing";
@@ -2862,7 +2831,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 			pendingEffects.set(event.toolCallId, effect.effectKey);
 		}
-		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
+		// The replay reading of the one classification. `replaySafe` rather than "idempotent" because that is the name
+		// `pi-agent-core` gives the same fact, and because what this decides is exactly whether the invocation may run
+		// twice. An `unknown` tool is not replay-safe here; the freeze gate reads the same answer the other way.
+		const idempotent = classifyInvocation({ toolName: event.toolName, input: event.input, registry, recipes }).replaySafe;
 		// Recorded here because this is where the answer is computed, and the refusal that needs it happens later in a
 		// different hook with no access to the input any more.
 		if (!idempotent && !currentRequestNonIdempotentActions.includes(event.toolName)) {
@@ -2899,13 +2871,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		const toolTiming = toolTimings.get(event.toolCallId);
 		toolTimings.delete(event.toolCallId);
-		const idempotent = isPiToolInvocationIdempotent(event.toolName, event.input, registry, recipes);
+		// The replay reading of the one classification. `replaySafe` rather than "idempotent" because that is the name
+		// `pi-agent-core` gives the same fact, and because what this decides is exactly whether the invocation may run
+		// twice. An `unknown` tool is not replay-safe here; the freeze gate reads the same answer the other way.
+		const idempotent = classifyInvocation({ toolName: event.toolName, input: event.input, registry, recipes }).replaySafe;
 		const warning = progressGuard.recordToolResult({ toolName: event.toolName, isError: event.isError, input: event.input, observation: event.content, details: event.details, idempotent });
-		// A successful read is progress only when it produced a new observation.
-		// Mutations and other non-idempotent operations remain progress boundaries;
-		// repeated identical reads must not buy a provider-round grace turn.
-		const progressSnapshot = progressGuard.snapshot();
-		if (isMeaningfulToolProgress({ isError: event.isError, idempotent, repeatedSuccessCount: progressSnapshot.repeatedSuccessCount })) currentRequestProgressSinceRound = true;
 		const toolDurationMs = toolTiming ? Math.max(0, Date.now() - toolTiming.startedAt) : 0;
 		currentRequestToolDurationMs += toolDurationMs;
 		if (warning && ctx.hasUI) ctx.ui.notify(`Dove 进度守护：${warning.message}`, "warning");
@@ -3073,24 +3043,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		keepaliveContext = ctx as unknown as typeof keepaliveContext;
 		const model = ctx.model as { contextWindow?: unknown; maxTokens?: unknown; provider?: unknown; id?: unknown } | undefined;
 		const plan = currentRequestPlan ?? createRequestPlan({ message: "", mode: mode.current, interactionMode, projectAvailable: projectProvider.kind !== "lightweight" });
-		// A chat request that starts using project/read tools follows the lookup
-		// budget once that work is observable.
-		const providerRoundLimit = effectiveProviderRoundBudget(plan, currentRequestToolCalls);
-		const attemptTrigger = requestLifecycle.currentAttempt()?.trigger;
-		// Counted before the guard: this is the observation's number, and a retry is a provider request like any other.
-		// Measured on a real session, the guarded increment reported 1 round for a request that made 8, while the goal
-		// line - which counts ledger records - said 8. Two numbers in one output disagreeing was the defect.
+		// Counted before anything else: this is the observation's number, and a retry is a provider request like any
+		// other. Measured on a real session, a guarded increment reported 1 round for a request that made 8, while the
+		// goal line - which counts ledger records - said 8. Two numbers in one output disagreeing was the defect, and
+		// the guard that caused it was the only consumer of the round threshold this change removed.
 		currentRequestProviderRounds += 1;
-		if (attemptTrigger !== "provider-retry" && attemptTrigger !== "compaction-retry") {
-			// Observation threshold only: provider rounds are never a transport or
-			// stop limit. Semantic repetition/error guards own loop termination.
-			if (currentRoundSinceProgress >= providerRoundLimit && !currentRequestProviderRoundWarningIssued) {
-				currentRequestProviderRoundWarningIssued = true;
-				if (ctx.hasUI) ctx.ui.notify(`Dove provider-round observation threshold reached (${providerRoundLimit}); continuing because provider rounds are not a hard limit.`, "warning");
-			}
-			currentRoundSinceProgress += 1;
-			currentRequestProgressSinceRound = false;
-		}
 		const contextWindow = typeof model?.contextWindow === "number" ? model.contextWindow : undefined;
 		if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return;
 		const validContextWindow: number = contextWindow;
@@ -3209,14 +3166,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			pendingContinuationPlan = undefined;
 			currentRequestHadNonQuestionTool = false;
 			currentRequestProviderRounds = 0;
-			currentRoundSinceProgress = 0;
 			currentRequestToolCalls = 0;
 			currentRequestNonIdempotentActions = [];
 			currentRequestNonIdempotentOverflow = 0;
 			currentRequestStartedAt = Date.now();
 			currentRequestResources = emptyRequestResourceSnapshot();
-			currentRequestProgressSinceRound = false;
-		currentRequestProviderRoundWarningIssued = false;
 			currentRequestStopReasons = [];
 			currentRequestHostAbortIssued = false;
 			currentRequestTerminalPersisted = false;
@@ -3524,16 +3478,6 @@ export function readOnlyToolBudget(plan: Pick<RequestPlan, "intent" | "mode"> | 
 	return { readOnlyToolWarningThreshold, readOnlyToolHardStopThreshold };
 }
 
-export function providerRoundBudget(plan: Pick<RequestPlan, "intent" | "mode">): number {
-	const base = { chat: 1, lookup: 3, "project-work": 4, execution: 5 }[plan.intent];
-	const modeExtra = plan.mode === "fast" ? 0 : plan.mode === "standard" ? 1 : 2;
-	return base + modeExtra;
-}
-
-export function effectiveProviderRoundBudget(plan: Pick<RequestPlan, "intent" | "mode">, toolCalls: number): number {
-	return providerRoundBudget(plan.intent === "chat" && toolCalls > 0 ? { intent: "lookup", mode: plan.mode } : plan);
-}
-
 /** Build the complete bounded task inventory from the projection already read
  * at the request boundary. This deterministic route needs no provider tools. */
 export function formatTaskInventoryGuidance(context: ProjectContextSnapshot): string {
@@ -3596,9 +3540,15 @@ export interface CompactedToolResult {
 
 /** Read-only observations get a tighter bound because every new result is
  * uncached input on the next provider call. Shell output keeps the legacy
- * ceiling; its side effects and complete evidence remain outside model text. */
+ * ceiling; its side effects and complete evidence remain outside model text.
+ *
+ * **The question is asked by name alone here, and the one declaration table answers it.** This is the only consumer
+ * that has no invocation to classify - a result is already in hand - so it reads the table's `readOnly` field
+ * directly rather than going through `classifyInvocation`, which needs the input and the registries. Reading the
+ * same table is what keeps this bound from drifting away from the classification; `undefined` means the tool is
+ * declared nowhere, which lands on the legacy ceiling like any other unknown tool. */
 export function getToolResultCharBudget(toolName: string, intent: RequestPlan["intent"] | undefined): number {
-	if (REVIEWED_IDEMPOTENT_PI_TOOLS.has(toolName)) {
+	if (declaredReadOnly(toolName) === true) {
 		if (intent === "lookup") return 8_000;
 		if (intent === "execution") return 16_000;
 		return 12_000;

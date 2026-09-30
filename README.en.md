@@ -222,6 +222,21 @@ You may explicitly initialize or inspect that state:
 ```powershell
 dove-pi project init
 dove-pi project doctor
+
+# Dove task workflow; commands emit JSON
+dove-pi task list
+dove-pi task current
+dove-pi task status [task]
+dove-pi task continue [task]
+dove-pi task verify [task]
+dove-pi task create "Improve cache hit rate" --description "..."
+dove-pi task start <task>
+dove-pi task finish
+dove-pi task archive <task>
+
+# Lightweight session journal
+dove-pi session record --title "Cache validation" --summary "..." --test "npm test" --next-step "..."
+dove-pi session list
 ```
 
 Initialization creates only Dove's compact index and installs no dependency or Trellis script.
@@ -381,7 +396,6 @@ Pi may still render the generic `Operation aborted`, but Dove preserves a specif
 | --- | --- | --- |
 | `provider-authorization-denied` | Provider authorization or API key failed | Check `/login` or provider credentials, then retry |
 | `model-budget-rejected` | The request did not fit the model context | Reduce context or choose another model |
-| `provider-round-budget` | Provider-round observation threshold reached | Inspect `/status full`; the threshold does not abort by itself |
 | `progress-*` | A tool loop repeated or stalled | Use existing evidence and issue a narrower query |
 | `user-cancelled` | The user cancelled the request | Submit a new request when ready |
 | `convergence-*` | A formal-lane product mutation was refused before it ran; `/status full` names the state | Read `/status full` for the refusal and its gate; freeze the criteria with `agent_task_convergence` first |
@@ -389,7 +403,7 @@ Pi may still render the generic `Operation aborted`, but Dove preserves a specif
 
 Without a UI, run `dove-pi doctor` or query `diagnostics/status` for the same structured cause and
 next action. Resource, token, and cache values are observation-only; reaching the historical
-read-only request count and provider-round thresholds are advisory and do not abort by themselves. Repeated-read progress guards can still end a stalled loop as described above.
+read-only request count is advisory and does not abort by itself. Repeated-read progress guards can still end a stalled loop as described above.
 
 ### Troubleshooting `Error: This operation was aborted`
 
