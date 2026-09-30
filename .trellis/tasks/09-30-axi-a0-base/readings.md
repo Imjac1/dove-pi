@@ -147,6 +147,18 @@
 
 **准确的表述**：不是"DSH 不能自调用"，而是"**这个会话的 shell 里没有 `dsh` 启动器**"——是**路径/发现性问题，不是架构问题**。
 
+**已实测（从本会话的 PowerShell 里真的起了它）**：
+
+- 启动器：`%LOCALAPPDATA%\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd`
+- 命令：`dsh --profile sdk --help` → **退出码 0**，输出：
+  ```
+  Usage: dsh --profile sdk [options]
+  Serve DeepSeek Harness SDK clients over stdio JSON-RPC.
+  Example:  dsh --profile sdk     serve one SDK runtime until its client disconnects
+  ```
+- → **`dsh` 是能从普通（非 Electron）进程启动的可执行入口**；**`--profile sdk` 是"在 stdio 上讲 JSON-RPC 的 SDK 运行时"** —— **这就是自调用与程序化驱动的接口**。axi 的回路可以自己 spawn 一个 `dsh` 并驱动它，**不再依赖"有人点开会话"**。
+- 另有一条**安全相关的读数**（`dsh-sdk-minimal` 文档）：*"Its **danger-full-access** policy lets the shell modify any path available to the process, so **use it only with an isolated workspace**"* → **SDK 路线默认是"不设限"的**，边界必须由 profile 的策略**显式**给出，不能假定。
+
 ### 结论 2：**loop 是被明确设计为可替换的**（✅）
 
 - `dsh-base` 的装配**全部是 `- id: <名字>` + `name: <包>`** 的形式（读到的前 60 个 id 都是），而 `cordis.patch.yml` 的定义就是"**按 id 定位的覆盖、禁用、插入列表**"。
