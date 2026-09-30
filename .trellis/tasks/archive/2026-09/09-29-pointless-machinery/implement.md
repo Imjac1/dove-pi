@@ -249,3 +249,30 @@ npm run test:installer  141 tests OK / 0 失败
 **写到一半被检查纠正的一处**：闸门的未判定记录最初写 `action: event.toolName` / `viaCapability: false`，
 而同一调用的拒绝记录写解析后的 action —— 同一次调用会读成两条不同记录。已改为 `resolveActionIdentity`。
 
+---
+
+## AC-0 的"改前会红"复核（收尾时补做，2026-09-29）
+
+AC-0 要求分支 A 的新断言**在改之前会红**。收尾时把 `request-lifecycle.ts:277` 之前那行判据
+（`if (lease.nonIdempotentEffectStarted) return { retry: false, reason: "non-idempotent-effect" };`）临时放回去，
+跑两条测试，读数如下：
+
+```text
+✖ allows bounded transient retries, and a started effect no longer refuses one
+✖ aborts Pi retry after the bound, on terminal HTTP status, or at the overflow replay after an effect
+ℹ tests 16 / pass 14 / fail 2
+```
+
+**红的正是那两条、且只有那两条** —— 放宽这件事被断言钉住了，不是"改完顺便也绿了"。
+随后 `git checkout -- src/core/request-lifecycle.ts` 还原，工作树恢复干净（本次复核不产生提交）。
+
+**同一方法逐条用在另两条新测试上**（一次只停一个行为，各跑一次）：
+
+```text
+DOVE_RED_CHECK=guard-off      → ✖ names the claims a refused replay leaves unresolved…（fail 1，仅此一条）
+DOVE_RED_CHECK=admission-off  → ✖ admits an undeclared tool in the formal lane…（fail 1，仅此一条）
+```
+
+两处临时开关用 `git checkout -- src/pi-adapter/extension.ts` 一次撤销；`DOVE_RED_CHECK` 在源码里已不存在，
+复核后三条测试 49/49 绿。**三个新行为各有一条会红的断言**，这是它们作为证据的资格。
+
