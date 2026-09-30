@@ -32,11 +32,25 @@
 - **修正**：**后半句仍对**（axi 的闸门必须自己写，见 §1.1 的 120/120 vs 88/120）；**前半句低估了 DSH**。它的方案是"**用你自己的 `Agent` 替换标准 loop，强制留在工具层**"，而那**正好是 axi 需要的形状**。
 - **一次自我纠正（留档）**：我曾断言"会话只能由桌面应用拉起，我起不了"。**那是从"`dsh` 不在这个 shell 的 PATH 上"推出来的，推错了。** 本会话第三次同类错误（另两次：从特权清单预测 1314；用 PATH 上没有的 `pwsh` 起子进程）。**根因相同：从没被验证过的仪器下结论。** 已写进 A0 的 `implement.md` 检查清单。
 
-## 四、仍未实测的三条（不得从文档断言）
+## 四、A0.5 的实测结果（三条全部有答案）
 
-1. `dsh-headless` 的 `startup` 在**非桌面进程**里真的能起来（我读到的是**源码**，没跑过）；
-2. **换掉 `Agent` 之后**，端到端一次越界写**仍被拒**（支撑 2 是从文档推的）；
-3. **`ctx.sandboxPolicy` 由谁设定**——若 agent 所在进程可改，则它属于 Plane A，而**"改动它会削弱边界"正是必须由 HITL 把守的那一类改动**。
+**① 自调用 → ✅ 已实测通过。** 启动器是 `%LOCALAPPDATA%\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd`；从本会话的 PowerShell（**普通非 Electron 进程**）执行 `dsh --profile sdk --help` → **退出码 0**，输出 *"Serve DeepSeek Harness SDK clients over stdio JSON-RPC."*
+→ **axi 的回路可以自己 spawn 一个 `dsh` 并驱动它**，不依赖"有人点开会话"。
+
+**② 换掉 `Agent` 后围栏是否还在 → ✅ 在（代码级证据，非运行时实测）。**
+围栏的策略来自**注入**：`dsh-fs-sandbox` 声明 **`static inject = ["sandboxPolicy"]`** 并读 `ctx.sandboxPolicy.defaultMode`；`dsh-sandbox-policy` 自述 **"the single owner"**，并带 `invariant.js`、`{ inject: ["sessions"] }` 把模式**绑在会话上**；而 **`dsh-agent-loop` 的注入里没有 `sandboxPolicy`** → **loop 不在这条链上**。
+**诚实标注**：这是**代码与文档级**证据；要变成运行时读数，需要真的起一个会话、替换 `Agent`、再重跑一次越界写。
+
+**③ 谁设定 `ctx.sandboxPolicy` → ✅ 三个来源，而第三条必须在规划里被当成受治改动。**
+1. **部署默认**（profile 的 `defaultPreset`；只管新建会话）；
+2. **会话级切换**：*"each session can switch modes independently. **Session choices survive restart**"*；
+3. **`/permission` 命令**：*"reports or **changes the current preset**"*。
+
+**由此对规划追加的两条硬约束**：
+- **策略变更属于 Plane A，必须过 HITL**（§2.3 / 解剖 §3.5.3）。axi 若沿用这条链，**不得把"模型被告知了模式"当作防护**——原文 *"Before each model request, the model **receives** the effective policy"* 是**提示词层**，正是 §1.1 那个 88/120 的坑。
+- **沙箱与审批是两套机制**（*"sandbox execution and approval handling remain separate enforcement mechanisms"*）→ 二者要**分别**声明与测试，不能互相顶替。
+
+**仍未做（保留为待办，不影响上面的结论）**：②的运行时确认；`sdk-minimal` 默认 `danger-full-access`（其文档自述 *"use it only with an isolated workspace"*）意味着**走 SDK 路线边界必须显式给出**。
 
 ## 五、对 A0 判据的追加
 
