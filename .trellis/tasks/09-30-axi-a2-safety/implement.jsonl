@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/09-30-axi-program/plan-v8.md", "reason": "§4.1 的边界机制（jailer 六步算法、两条不变量、强度）与 §5.2/§5.3 的模块与顺序，是本阶段的做法与判据"}
+{"file": ".trellis/spec/backend/personal-agent-framework-core.md", "reason": "闸门边界与授权图这两条契约是安全子系统必须长在上的既有形状"}

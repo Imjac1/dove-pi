@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-harness-loop.md", "reason": "verifier 边界与'改仪器不算一个回合'是 A2 的判定对照"}
+{"file": ".trellis/tasks/09-30-axi-a0-base/readings.md", "reason": "A0.2 后半的三条判据与正向对照，是本阶段回归测试的来源"}
