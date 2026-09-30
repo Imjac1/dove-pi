@@ -78,11 +78,43 @@
 
 → **对方案的修正**：语料记录的"**Windows 隔离 = Job Objects**"说法**不够准确**。**Job Objects 本身不限制文件系统写**——它限制进程与资源，并能把一个**安全令牌**施加到 job 内的进程上。文件系统那一半来自 **ACL + 令牌**；**Job Object 的角色是绑定进程集合并施加令牌**。A2/A3 与总览里的措辞按此修正。
 
-### 未测（下一个探测）
+### 已测（第三次探测：受限令牌，有效）
 
-- 本环境能否 `CreateRestrictedToken` 并**以该令牌启动进程**（需要 `SeAssignPrimaryTokenPrivilege`）；
-- `JOBOBJECT_SECURITY_LIMIT_INFORMATION` 能否把令牌施加到**整个 job**；
-- **判据 2**：受约束进程在目标树**之外**能否完成一件**正常事务**（本次被拒的 `cmd.exe` 确实跑起来了，但没让它做别的事）。
+环境事实：**Windows PowerShell 5.1**（不是 pwsh 7）、**标准用户、Medium 完整性、未提升**。令牌特权只有六项（`SeChangeNotify` 启用），**没有** `SeAssignPrimaryToken` / `SeIncreaseQuota` / `SeImpersonate` / `SeTcb`。
+
+| 调用 | 读数 |
+|---|---|
+| `OpenProcessToken(当前进程, TOKEN_ALL_ACCESS)` | **OK** |
+| `CreateRestrictedToken(..., DISABLE_MAX_PRIVILEGE)` | **OK** —— 这个调用本身不需要特权 |
+| **`CreateProcessAsUser(受限令牌, "cmd /c echo x > 目标")`** | **返回 True，错误码 0**；**受限进程写出的文件存在** |
+| `CreateProcessWithTokenW(自己的非受限令牌, …)` | **返回 False，错误码 1314**（缺少所需特权） |
+
+### 结论 3（✅ 判据 1 的强形式成立：**非提升会话也能起受限进程**）
+
+**`CreateProcessAsUser` 在我们的受限令牌上成功了，而那两条 API 的差别正是文档所描述的**：当令牌是**调用方自己主令牌的受限版本**时，**不需要 `SeAssignPrimaryTokenPrivilege`**；而 `CreateProcessWithTokenW` 需要 `SeImpersonatePrivilege`（我们没有 → 1314）。
+
+→ 这条很重要：**axi 在 Windows 上的隔离不必要求提升权限**。它推翻了我此前基于特权清单的推断（我原先预期 1314）。
+
+### 但有一个必须说清的限度（⚠️）
+
+本次用的受限令牌**只带了 `DISABLE_MAX_PRIVILEGE`**——它只剥特权，**不限制文件访问**；而这个令牌本来就没有特权可剥。所以**"能起受限进程"不等于"写不进目标树"**：文件系统那一半仍要由 **ACL** 给，而 §结论 2 已证明**同一身份可以把自己打上的 deny 摘掉**。
+
+**因此下一个探测是**：构造带**限制 SID（restricting SIDs）**的令牌，与"目标树 deny ACE"组合，检验
+1. 受限进程**写不进**目标树；
+2. 受限进程**摘不掉**那条 deny（这才是与结论 2 的区别）；
+3. **判据 2**：受限进程在目标树**之外**仍能完成一件正常事务。
+
+### 未测（更新）
+
+- **限制 SID 的构造**与组合效果（下一个探测，是 A0.2 能否给出"真隔离"的最后一环）；
+- `JOBOBJECT_SECURITY_LIMIT_INFORMATION` 能否把令牌施加到**整个 job**（需要 `SeTcb`，本令牌没有 → 预期失败，但要从实测取码，不从清单推断）；
+- 第 2 条判据在**组合**场景下的表现。
+
+### 二次自我纠正（同一实验里犯了两次同类错误，留档）
+
+**第二次探测的 `err=203` 是我的测量坏了**：我把 `GetLastWin32Error()` 包在一个 PowerShell **函数**里，函数调用本身会破坏"紧邻 P/Invoke"的即时性，于是拿到的是无关的陈旧错误码。改成**紧邻取值**后，同一次调用返回的是 **True / 0**。
+
+→ 教训与第一次同源：**测量仪器本身要先被验证**。两次错法不同（一次是进程没起来、一次是错误码取值不即时），**根因都是"从不可靠的中间量下结论"**。`design.md` 的风险清单预写了第一种，没有预写第二种——已补进清单。
 
 ### 一次自我纠正（留档）
 
