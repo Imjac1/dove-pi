@@ -553,7 +553,124 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 ---
 
-## 5. 证据台账：每条主张凭什么
+## 5. 开发设计：新仓、文件清单、构建顺序
+
+**这一节回答"实际怎么开发"**：仓库长什么样、要写哪些文件、按什么顺序写、既有模块怎么搬、门禁怎么立。它比 §7 的路线图细一层——路线图说"哪个阶段做什么"，这里说"哪个文件先写、写完拿什么验"。
+
+### 5.1 新仓的目录树
+
+```
+axi/
+├─ package.json            # 与 dove-pi 同构的三条门禁脚本（第一件事，见 §5.3 S0）
+├─ tsconfig.json           # 照抄：ES2022 / NodeNext / strict / allowImportingTsExtensions
+├─ src/
+│  ├─ core/                # ← 复用：基座无关的运行时与仪器（§3.12 ① 的清单）
+│  │   ├─ loop.ts              契约面（复用，不重写）
+│  │   ├─ loop-runner.ts       参考 loop（从"被挡在生产之外"提升为生产）
+│  │   ├─ invocation-disposition.ts · effect-ledger.ts · execution-ledger.ts
+│  │   ├─ harness-*.ts         内层仪器（可随系统上升）
+│  │   └─ task-convergence.ts  manifest / turn reading / verdict
+│  ├─ gate/                # ← 新增（A2）：语法感知 · 跨调用累积 · 历史无关 · 每条配补救
+│  ├─ jailer/              # ← 新增（A2）：Plane B 的强制（ACL + 受限令牌）
+│  ├─ trace/               # ← 新增（A3）：宿主之外的独立拦截 + 三个性质
+│  ├─ plane-b/             # ← 新增（A4）：held-out 切分 · 晋升门 · 只读 verifier 树
+│  ├─ host/                # ← 新增：宿主适配（DSH 无头/行、Pi 扩展）
+│  └─ adapters/            # ← 复用：两个 loop 适配器（含 `pi-agent-core` 那个）
+├─ tests/                  # 迁移基线 + 新测试（§5.4）
+└─ tools/                  # 探针与一次性脚本（含本轮的受限令牌探针）
+```
+
+| 目录 | 从哪来 | 处置 | 第一个要写的文件 |
+|---|---|---|---|
+| `src/core` | dove-pi 的 `src/core`（基座无关） | **复用**，逐条处置（§3.12 ④ 的可达性登记册 10 条） | `loop.ts`（直接搬，不改） |
+| `src/gate` | 无（今天的闸门在 `action-policy.ts` + `work-mode.ts` 里，是"名字 + 单调用"那一档） | **重写** | `gate/policy.ts`（实现 `ActionGate`）+ `gate/shell.ts`（语法感知） |
+| `src/jailer` | 无（本轮只留下探针与读数） | **新增** | `jailer/token.ts` + `jailer/acl.ts`；探针脚本搬进 `tools/` |
+| `src/trace` | 无（今天只有 append-only 的 `execution-ledger.ts`） | **新增**，接在证据面上 | `trace/writer.ts`（独立拦截）+ `trace/chain.ts` |
+| `src/plane-b` | 无 | **新增** | `plane-b/heldout.ts` + `plane-b/promotion.ts` |
+| `src/host` | dove-pi 的 `src/pi-adapter/extension.ts`（232 KB）**不再当核心** | **重写为薄适配器** | `host/dsh-headless.ts`（最窄的宿主） |
+| `src/adapters` | dove-pi 的 `src/adapters` | **复用** | — |
+
+### 5.2 新增模块的接口清单
+
+"要写什么"落到签名上（复用模块的接口见 §3.3 的六个契约）：
+
+| 模块 | 对外契约（拟） | 依赖 | 测试 | 阶段 |
+|---|---|---|---|---|
+| `gate/policy.ts` | `evaluate(GateInvocation) → GateDecision`（实现 `ActionGate`） | `loop.ts` 的类型 | 配对闸门测试（gate off/on） | A2 |
+| `gate/shell.ts` | `parseCommand(text) → {命令, 参数, 重定向}`，**按语法不按名字** | 无 | 三种规避手法各一个 | A2 |
+| `gate/accumulate.ts` | `fold(会话, 本次调用) → 累积视图`（跨调用拆分） | `gate/policy` | 拆分攻击 + "重试到历史淘汰" | A2 |
+| `gate/remedy.ts` | `remedyFor(decision, 上下文) → 合法产物`（**每条检测器一条**） | 会被拦的那层的上下文 | "拦住了还能把活干完" | A2 |
+| `jailer/acl.ts` | `ensureBoundary({planePaths, workPaths}) → AclReport`（两条不变量的执行者） | 平台 ACL | 不变量回归（无 `Everyone` / 有 `Everyone`） | A2 |
+| `jailer/token.ts` | `createRestricted({restrict: [sid]}) → {token, readback}`；`assertRestrictedList(readback, expected)` | 平台令牌 API | A0.2 后半的三条判据 | A2 |
+| `jailer/launch.ts` | `launchJailed(command, {planePaths, workPaths}) → {exitCode, evidence}` | 上面两个 | 端到端：受限进程跑完一个回合 | A2 |
+| `trace/writer.ts` | `append(event) → SequenceNo`（**写入路径不经 agent 宿主**） | 证据面 | 删除/定时清理/压缩路径三类 | A3 |
+| `trace/chain.ts` | `epoch() → {root, proof} · verify(proof)` | 无 | edit/delete/reorder/fork 四类篡改 | A3 |
+| `trace/anchor.ts` | `anchor(root) → 外部凭证`（32 字节级） | 外部存储 | 锚定可独立校验 | A3 |
+| `trace/receipt.ts` | `receiptOf(call) → 执行回执`（**由执行层给，不由 agent 自报**） | 派发边界 | **编造**（METR/Redwood 的 7% 模式） | A3 |
+| `plane-b/heldout.ts` | `split(tasks) → {in, heldout}`（held-out **从不给提议者**） | 无 | 提议者看不到 held-out | A4 |
+| `plane-b/promotion.ts` | `decide(candidate) → {accepted, Δin, Δho}`（`Δin ≥ 0 ∧ Δho ≥ 0 ∧ max > 0`） | `heldout` | 保守晋升：任一侧退步即拒 | A4 |
+| `plane-b/verifier-tree.ts` | `assertReadOnly(paths)`（Plane B 的只读性） | `jailer/acl` | 受限进程写不进 | A4 |
+| `host/dsh-headless.ts` | `runTurn(input) → 工件`（最窄的宿主） | `core` + `jailer` | 端到端一回合 | A1 |
+
+### 5.3 构建顺序：先走通一条最窄的端到端路径
+
+**顺序不是偏好，是依赖**：每一步都只在前一步的读数成立后才开始。
+
+| 步 | 写什么 | 拿什么验（判据） | 退出条件 |
+|---|---|---|---|
+| **S0 门禁先行** | `package.json` + `tsconfig.json` + 空 `src/` | 新仓跑出与 dove-pi **逐项相同**的三条读数：`typecheck` 0 · `test` 816/814/0/2 · `test:installer` 141 | 三条读数有原始记录。**没有这一步，"门禁不下降"无从比较** |
+| **S1 最窄的一回合** | `loop-runner` + scripted provider + 一个只读工具 + 名字层闸门 + ledger 落盘 + 打印回合 | 配对闸门测试（`executedActions 1 → 0`）；一次 keep 与一次 revert 被记录（AC-4 的骨架） | 一个回合能被打印出来，且裁决写得下 |
+| **S2 组件面与结构测试** | `.trellis/harness-surface.yaml` 的等价物 + `CHANGE_SURFACES` 的唯一名字来源 | 双向一致测试；"路径必须解析、键必须已声明" | 七组件 ↔ 文件 ↔ `verifiedBy` 全解析 |
+| **S3 jailer（A2 前半）** | `jailer/acl.ts` + `token.ts` + `launch.ts`；探针搬进 `tools/` | **A0.2 后半的三条判据做成回归**（写不进 / 摘不掉 / 能干活）+ 两条不变量 | 端到端：受限进程跑完一个回合，目标树写不进 |
+| **S4 参数层重写（A2 后半）** | `gate/*`（语法感知、累积、历史无关、补救） | 三种规避手法各一测试；故障注入（7-mutation）；"拦住了还能把活干完" | 四条判据全过，且**效用不下降** |
+| **S5 trace（A3）** | `trace/*` | 四类篡改 100% 检出；**编造**（7% 模式）能被抓；压缩路径不得改写 | 三性质各有测试与其对立面 |
+| **S6 Plane B 与回路（A4）** | `plane-b/*` + manifest 的预测→裁决闭环 | 权限边界类改动必须 HITL；一个改动能走完"预测 → 裁决 → keep/revert" | held-out 从不给提议者；晋升只在两侧都不退步时 |
+| **S7 评测（A5）** | 采用已有仪器（HarnessOpt-Bench / RSI-Bench 的两轴） | 一次带样本量的 P/R；九条方法论（McNemar / 一对失败指标 / 两个评测集 / 声明测量边界） | 读数带样本量与仪器；规模不足就把强度说低 |
+
+**每一步的退出条件都只有两条**：① 该步的判据有**原始读数**；② **门禁不下降**。两条缺一不算完成。
+
+### 5.4 迁移与门禁
+
+| 事项 | 做法 | 判据 |
+|---|---|---|
+| 三条门禁 | **在写入任何新代码之前**建立（S0） | 读数与 dove-pi 逐项相同 |
+| 69 个基座无关模块 | **复制 + 重设基线**，不用 subtree / submodule | 每个复用模块**至少一条自己的测试通过**（AC-10） |
+| 为什么不 subtree | 它会把"待处置"固化成"已搬完"——而 §3.12 要求**逐条**给出复用/重写/删 | 可达性登记册 10 条各有处置与理由 |
+| 重写三项（loop 提升、闸门参数层、trace 通道） | 不搬旧实现，但**保留旧闸门作对照臂** | 对照臂能复现 88/120 那一档的读数 |
+| 128 个测试文件 | 与基座无关的跟着搬；与 Pi 宿主强耦合的（`pi-adapter/*`）留在适配器层 | 迁移后 `test` 基线不低于 816 |
+| 本仓（dove-pi） | **不因 axi 改产品代码** | `git status` 只多任务记录文件 |
+
+### 5.5 开发约定
+
+1. **一次逻辑改动 = 一次提交**——这条在 axi 里既是开发纪律，也是运行纪律（§3.10 步 4）。
+2. **每个工作项先写"改前会红的断言"**，再写实现。
+3. **故障注入是常规手段，不是一次性动作**（7-mutation：逐条打断契约，确认对应校验器报警）。
+4. **文档与规格纪律**：spec 只描述"现在就有"的东西；规格里出现的路径必须解析；**不声明未实现的能力**。
+5. **每个工作项的完成定义（DoD）四问**：① 判据有原始读数？② 门禁不下降？③ 失败与自我纠正留档了？④ 新增能力有消费者与测试？
+6. **失败要沉淀成护栏**：`mine` 的输出包含"新护栏"，而不只是一条修正。
+
+### 5.6 工具链与环境（都是读数，不是偏好）
+
+| 项 | 事实 |
+|---|---|
+| 运行时 | **Node ≥ 22.19.0**（`engines`），ESM（`"type": "module"`） |
+| 语言与检查 | TypeScript **5.9.3**，`strict`，`module/moduleResolution: NodeNext`，`allowImportingTsExtensions`，`noEmit` |
+| 测试 | `node --import tsx --test tests/**/*.test.ts`（128 个测试文件 / 816 个用例）；installer 走 `python -m unittest` |
+| 直接依赖 | `@earendil-works/pi-agent-core`（**适配器层唯一必需的 pi 包**）、`@modelcontextprotocol/sdk`、`typebox`、`zod`、`yaml`；`pi-coding-agent` / `pi-tui` 只出现在 Pi 宿主适配器里 |
+| CI | 现在只有 `compatibility.yml` 与 `release.yml` 两个 workflow；`tsconfig.json` 的注释记录 CI 跑 `npm run pi:smoke`——**三条门禁目前靠人跑**，axi 的第一件事是让 CI 跑满它们 |
+| 本机事实（本轮已记） | **PATH 上没有 `pwsh`**（起子进程要用 `cmd.exe`）；`%TEMP%` 常被算进"可写"集合，所以越界测试不能用它 |
+
+### 5.7 开发期的风险与回退点
+
+| 风险 | 对策 / 回退 |
+|---|---|
+| 迁移把行为搞丢 | 先立基线（S0）再搬；每步门禁读数与基线**逐项**比 |
+| jailer 实现踩坑（受限令牌档位 / ACL 不变量） | 回退到"策略 + 内容侧防御"，**写下"我们没有 OS 隔离"**（§4.1）；机制本身已实测存在，所以这条指的是实现失败 |
+| 参数层重写破坏既有行为 | 旧闸门留作对照臂 + 配对测试（gate off/on） |
+| held-out 太贵、规模不足 | 降级结论强度，不伪造（§9） |
+| 顺序被压缩（"先做闸门，证据通道以后补"） | **不许**：篡改在最初几轮就出现，所以 A2 与 A3 同期（§4.2 顺序纪律） |
+
+## 6. 证据台账：每条主张凭什么
 
 读本文时如果要挑一句去核，就从这张表里挑。**"设计"那一类是需要你核对的产品决定，其余都有外部或本机出处。**
 
@@ -585,7 +702,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 ---
 
-## 6. 路线图：A0–A5，带现状
+## 7. 路线图：A0–A5，带现状
 
 | 阶段 | 产出 | 判据 | 现状（2026-09-30） |
 |---|---|---|---|
@@ -602,7 +719,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 ---
 
-## 7. 验收标准
+## 8. 验收标准
 
 | # | 标准 | 状态 |
 |---|---|---|
@@ -622,7 +739,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 ---
 
-## 8. 风险与证伪
+## 9. 风险与证伪
 
 | 风险 | 应对 |
 |---|---|
@@ -641,7 +758,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 ---
 
-## 9. 不做（明确排除项）
+## 10. 不做（明确排除项）
 
 - **不 fork 完整 harness**（Codex / Pi 都不）——永久维护别人的 loop。
 - **不把 axi 做成插件 / 外挂**——实测会过度拒绝（88/120）。
@@ -652,7 +769,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 ---
 
-## 10. 待决 / 待办
+## 11. 待决 / 待办
 
 **需要人动手的**：
 
@@ -674,7 +791,7 @@ jailer（axi 拥有的小进程，普通用户身份）
 
 | 本文的段 | 底稿在哪 |
 |---|---|
-| §1–§2（问题、定位、设计思路）、§3.11（底座）、§4.5（回路）、§6（路线）、§7（验收）、§8（风险）、§9（不做） | `plan.md`（第七版决策记录）——本文重排并统一标记，**未改其结论** |
+| §1–§2（问题、定位、设计思路）、§3.11（底座）、§4.5（回路）、§7（路线）、§8（验收）、§9（风险）、§10（不做） | `plan.md`（第七版决策记录）——本文重排并统一标记，**未改其结论** |
 | §2.2 的实测、§4.1 全部 | `09-30-axi-a0-base/readings.md`（A0.2 后半段） |
 | §3.8/§3.9 的组件与 verifier 声明 | `.trellis/harness-surface.yaml`；`.trellis/spec/backend/personal-agent-harness-loop.md`；本仓 `src/core/*` 的真实文件与 `.trellis/spec/backend/personal-agent-framework-core.md`（§3.2–§3.7 的模块、契约、拓扑、数据、时序都从这两处来） |
 | §3.10 的七步 | `.trellis/spec/guides/harness-loop-turn.md` |
