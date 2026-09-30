@@ -182,10 +182,31 @@
 | 自调用 | 我误判为"不行" | **有**：`dsh --profile headless` 一次性调用 + `ctx.agents` 程序化创建/恢复 |
 | DSH 的角色 | "开发环境；可选的强制宿主" | **脚手架 + 工具层强制**；axi 是**宿主**（import 无头/SDK 入口），并**用自己的 `Agent` 替换标准 loop** |
 
-### 仍然要实测的三条（不能从文档断言）
+### 三条实测的现状
 
-1. **真的在一个非桌面进程里起来**（`dsh-headless` 的 `startup` 我读到的是源码，没跑过）；
-2. **换掉 `Agent` 之后，端到端一次越界写仍被拒**（结论 3 是从文档推的，要测）；
-3. **`ctx.sandboxPolicy` 由谁设定**——如果它可由 agent 所在的进程改，那么它就在 Plane A 里，而**"改动它会削弱边界"正是必须由 HITL 把守的那一类改动**（解剖 §3.5.3）。
+**① 非桌面进程能不能起 → ✅ 已实测**（见上：`dsh --profile sdk --help` 退出码 0）。
+
+**② 换掉 `Agent` 后围栏是否还在 → ✅ 有代码级证据（不是文档推断，但不是运行时实测）**
+
+- `dsh-fs-sandbox/index.js`：**`static inject = ["sandboxPolicy"]`**、`this.defaultMode = ctx.sandboxPolicy.defaultMode` → 围栏的**策略来源是注入**，而注入的是**策略服务**。
+- `dsh-sandbox-policy`：*"the **single owner** of the [policy]"*；其 `invariant.js` 里 `const inject = ["invariants"]` 与 `{ inject: ["sessions"] }` → **有一条不变式把策略绑在会话上**。
+- `dsh-agent-loop` 的注入里**没有 `sandboxPolicy`** → **loop 不在这条链上**。
+- 文档：*"all enforcing capabilities use the same mode and workspace for a call"*。
+
+→ **围栏绑在"会话 + 策略服务"，不绑在 agent loop**；换 loop 不改变策略来源。
+**诚实标注**：这是**代码与文档级**证据，**不是**"换 loop 后跑了越界写"的运行时实测。要变成运行时读数，需要真的起一个会话并替换 `Agent` 后重跑一次越界写。
+
+**③ 谁设定 `ctx.sandboxPolicy` → ✅ 答案已得，且它带一个必须记下的风险**
+
+三处来源：
+1. **部署默认**（profile 配置里的 `defaultPreset`；`dsh-permission-presets`：*"A deployment can configure named presets and a default for newly created sessions"*）；
+2. **会话级切换**：*"each session can switch modes independently. **Session choices survive restart**"*；
+3. **`/permission` 命令**：*"The `/permission` command reports or **changes the current preset**"*。
+
+→ **风险（这条重要）**：策略的**归属点是 `ctx.sandboxPolicy`，而它可被会话内的命令改变**。因此：
+- 它属于 **Plane A**（agent 所在的环境能影响它），**不属于 Plane B**；
+- 而**"改动它会削弱边界"正是 §2.3 / 解剖 §3.5.3 要求 HITL 把守的那一类改动**；
+- axi 若沿用这条链，**必须把"策略变更"当作受治改动**：独立批准 + 不依赖"让模型知道危险"。
+- 另有两条旁证要一起记：*"sandbox execution and approval handling remain **separate enforcement mechanisms**"*（沙箱与审批是两套），以及 *"Before each model request, the model receives the effective policy and workspace"*（模型**被告知**策略——**那是提示词层，不算强制**）。
 
 **P/Invoke 与探测脚本**：`%TEMP%\axi-token-probe.cs`（A0.2 用，保留）。
