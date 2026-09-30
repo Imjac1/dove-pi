@@ -26,6 +26,7 @@
 - **R5 配置保护优先**：安全敏感参数改动需独立批准，且"让模型知道这是危险的"**不算防护**（`plan.md` §2.3）。
 - **R6 不声明任何未实现的能力。**
 - **R7 评测先采用已有仪器**（HarnessOpt-Bench / RSI-Bench / 前沿实验室框架），不自建评分；并遵守 `plan.md` §4.2 A5 的九条方法论（含 McNemar 配对检验与"一对失败指标"）。
+- **R8 新仓库与门禁**：axi 的代码放**新仓库**；该仓在写入任何新代码之前必须与 dove-pi 的门禁基线等价。迁移 69 个基座无关模块的方式（subtree / submodule / 复制）由 A1 的 `design.md` 决定并记录理由。
 
 ## Acceptance Criteria
 
@@ -33,7 +34,7 @@
 
 - **AC-1** v0.1 = A0 + A1 + A2 完成，且三条同时成立：能跑完整回合（mine → propose → validate → 一次提交 → 下一轮裁决）；五部件各有回归测试；判分依据与 trace 通道在 agent 可写范围之外。
 - **AC-2** 一次真实的 keep 与一次真实的 revert 被记录（提交 hash）。
-- **AC-3** 现有仓库门禁不下降：`npm run typecheck`、`npm test`（基线 816/814/0/2）、`npm run test:installer`（141 OK）。
+- **AC-3** 门禁：**新仓**的门禁与 dove-pi 基线等价（`npm run typecheck`、`npm test` 816/814/0/2、`npm run test:installer` 141），且**旧仓门禁不下降**；等价性必须有原始读数，不能只声明。
 - **AC-4** 不站到语料里唯一不存在的位置：任何被声明的隔离/权限能力都有对应消费者与测试，否则删掉声明。
 
 ## Out of Scope
@@ -50,6 +51,9 @@
 - 术语：axi 是**有界自我改进（第 2 级）**，不是 RSI；叫 RSI 等于做一个没有公开实证的声明。
 - A2 与 A3 是**没有先例**的两块（也是唯一可能做不成的地方），不排在最后。
 
-## Open Questions
+## Resolved Decisions
 
-- **axi 的代码放在哪里**（新仓库 / 本仓内新目录）——影响 A1 起的目录结构与分支策略。
+- **axi 的代码放新仓库**（用户 2026-09-30 决定）。含义：
+  1. **新仓必须在写入任何新代码之前**建立与 dove-pi 等价的门禁与测试基线（`typecheck` / `test` 816-814-0-2 / `test:installer` 141），否则"门禁不下降"无从比较；
+  2. **69 个基座无关模块要迁过去**，取舍（subtree / submodule / 复制 + 重设基线）在 A1 的 `design.md` 里定；
+  3. 本仓（dove-pi）继续作为 dove-pi 自身与规划留痕处，**不因 axi 而改动其产品代码**。
