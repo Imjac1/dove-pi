@@ -28,7 +28,7 @@
 | `.trellis/.developer` | 54 ×2 |
 | `.trellis/.version` | 6 |
 
-- **归档**：`.trellis/tasks/10-01-repo-cleanup/tool-backup-2026-09-25-unique-content.md`（161.5 KB：48 行清单带 SHA-256 + 8 段全文），与删除**落在同一次提交**（**`363f853`**）→ 删除可从历史复原（AC-5 ✅）。
+- **归档**：`.trellis/tasks/archive/2026-10/10-01-repo-cleanup/tool-backup-2026-09-25-unique-content.md`（161.5 KB：48 行清单带 SHA-256 + 8 段全文；本任务归档后路径已随之改变——这正是 `AGENTS.md` 记过的"归档打断引用"，本次共重指向 3 处），与删除**落在同一次提交**（**`363f853`**）→ 删除可从历史复原（AC-5 ✅）。
 - **体量读数（AC-4）**：工作树 **2101 → 1884 文件**、**11.7 → 9.6 MB**；`.trellis` **8.29 → 6.12 MB**。
 
 ### 门禁（两次删除之后）
