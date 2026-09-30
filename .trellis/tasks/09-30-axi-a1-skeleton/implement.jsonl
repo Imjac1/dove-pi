@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/09-30-axi-program/plan-v8.md", "reason": "开发设计 §5.3 的 S0/S1 与 §5.4 的迁移判据，是本阶段的做法与验收对照"}
+{"file": ".trellis/spec/backend/personal-agent-framework-core.md", "reason": "A1 要提升的正是这份契约里的 loop 拥有与闸门边界"}

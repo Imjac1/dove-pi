@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/personal-agent-harness-loop.md", "reason": "判定 A1 的 verifier 边界与七步回合是否被守住"}
+{"file": ".trellis/spec/guides/harness-loop-turn.md", "reason": "回合每一步的预期读数，是 A1 的验收对照"}
