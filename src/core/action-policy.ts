@@ -4,7 +4,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import type { AuthorityDocument, AuthorityRequest } from "./authority.ts";
 import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
-import { createLimitGate, readArgumentPath } from "./gate-limit.ts";
+import { createLimitGate, readArgumentPath, type LimitSpec } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
 import { evaluatePermission, FENCE_TARGETS, matchesPermission, normalizeFencePath, type WorkMode } from "./work-mode.ts";
 import type { GateLabel } from "./task-convergence.ts";
@@ -87,6 +87,9 @@ export interface ActionPolicy {
 	 * Called by the host **after** the action is dispatched, not when the policy allows it: an allowed action that
 	 * never runs, and a blocked one, must not spend the phase's budget. A phase the mode sets no ceiling for is not
 	 * counted, because there is nothing to spend.
+	 *
+	 * **The same call also spends the declared ceilings** (`limits[].max` is a ceiling per call *and* per session),
+	 * spent by the tools each limit names and by no others.
 	 */
 	recordRun(invocation: GateInvocation): void;
 	/** The per-phase counts so far, for a caller that builds the next invocation's `accumulatedIntensity`. */
@@ -295,8 +298,7 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	const cumulativeLimitBreach = (invocation: GateInvocation): GateDecision | undefined => {
 		for (const limit of declaredLimits) {
 			if (limit.max === undefined) continue;
-			const scope = limitScopes.get(limit.id);
-			if (scope !== undefined && !scope.has(invocation.tool)) continue;
+			if (!limitApplies(limit, invocation.tool)) continue;
 			const value = Number(readArgumentPath(invocation.arguments, limit.argument));
 			if (!Number.isFinite(value)) continue;
 			const already = limitSums[limit.id] ?? 0;
@@ -372,6 +374,15 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	const declaredLimits = mode.limits ?? [];
 	const limitSums: Record<string, number> = {};
 	const limitScopes = new Map(declaredLimits.map((limit) => [limit.id, limit.tools === undefined ? undefined : new Set(limit.tools)]));
+	/**
+	 * Whether a declared limit governs this tool. One predicate, because the check and the recording have to agree
+	 * about who spends a ceiling: a limit recorded against every tool and checked against one would refuse the very
+	 * call it had just judged to be inside its limit.
+	 */
+	const limitApplies = (limit: LimitSpec, tool: string): boolean => {
+		const tools = limitScopes.get(limit.id);
+		return tools === undefined || tools.has(tool);
+	};
 	const intensityOf = (invocation: GateInvocation): { phase: string; used: number } | undefined => {
 		const ceilings = mode.intensityCeilings;
 		const phase = readArgumentPath(invocation.arguments, "phase");
@@ -613,8 +624,10 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 		recordRun(invocation: GateInvocation): void {
 			// The sums are recorded before the phase check, and whether or not the call names a phase: a ceiling
 			// on an argument does not depend on the phase machinery, and returning early for a call without one
-			// would leave the sequence invisible to the cumulative check.
+			// would leave the sequence invisible to the cumulative check. A limit is spent by the tools it names,
+			// which is the same predicate the check above applies.
 			for (const limit of declaredLimits) {
+				if (!limitApplies(limit, invocation.tool)) continue;
 				const value = Number(readArgumentPath(invocation.arguments, limit.argument));
 				if (!Number.isFinite(value)) continue;
 				limitSums[limit.id] = (limitSums[limit.id] ?? 0) + value;

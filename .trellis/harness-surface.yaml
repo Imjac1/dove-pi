@@ -32,7 +32,7 @@ verifiedBy:
   system-prompt: [tests/work-mode.test.ts, tests/host-work-mode.test.ts, tests/pentest-mode.test.ts, tests/code-audit-mode.test.ts, tests/trading-mode.test.ts]
   tool-description: [tests/pi-adapter.test.ts]
   tool-implementation: [tests/task-convergence.test.ts, tests/change-verdict.test.ts, tests/failure-reading.test.ts, tests/harness-corpus.test.ts, tests/harness-round.test.ts, tests/harness-axes.test.ts, tests/harness-surface.test.ts, tests/real-dove-blackbox.test.ts]
-  middleware: [tests/action-policy.test.ts, tests/fence-drift.test.ts, tests/host-work-mode.test.ts]
+  middleware: [tests/action-policy.test.ts, tests/fence-drift.test.ts, tests/host-work-mode.test.ts, tests/evasion-spellings.test.ts, tests/gate-accumulation.test.ts]
   long-term-memory: [tests/spec-context-budget.test.ts]
 # The verifier: the code that produces the evidence the loop is judged by, and whose change is therefore not a loop turn.
 #

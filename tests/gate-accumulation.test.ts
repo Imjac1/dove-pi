@@ -84,4 +84,16 @@ describe("a ceiling is per call and per session", () => {
 		const other = policy.evaluate(invocation(9, "read_file"), { viaCapability: false });
 		assert.equal(other.outcome, "allow", "a ceiling scoped to one tool must not restrain another");
 	});
+
+	it("spends a ceiling on the tools the limit names, and only on those", () => {
+		// **The recording has to read the declaration the check reads.** The case above evaluates an unrelated
+		// tool and never runs it, so it says nothing about the sum: a `recordRun` that accumulated every declared
+		// limit for every tool would leave the evaluation above unchanged and still refuse the next legitimate
+		// `bulk` call - a control refusing a call it has just said is inside the ceiling. Measured before the fix:
+		// the call below was refused with "9 has already run in this session".
+		const policy = createActionPolicy({ mode: MODE, workspaceRoot: process.cwd(), registeredCapabilities: [] });
+		policy.recordRun(invocation(9, "read_file"));
+		const inside = policy.evaluate(invocation(1), { viaCapability: false });
+		assert.equal(inside.outcome, "allow", "an unrelated tool's recorded run must not spend the 'batch' ceiling");
+	});
 });
