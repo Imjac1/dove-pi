@@ -875,15 +875,21 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 	it("refuses a technique the mode excludes, at the boundary, on a raw capability call  [D4]", async () => {
-		// **This asserts the defect, so that the fix has somewhere to land.** Both declarations below forbid the technique
-		// `dos`: the mode's `gate.excluded_techniques`, and the engagement document's `constraints.excluded_techniques`.
-		// The call carries the technique in its arguments. It is allowed, because the authority request the policy builds
-		// carries only `{ action, target, at, evidenceDigests }` (`src/core/action-policy.ts`) while
-		// `src/core/authority.ts` needs `request.technique` to be present before it can refuse. The mode's own
-		// `gate.excluded_techniques` is worse still: `src/` has no consumer for it at all.
+		// **Both declarations below forbid the technique `dos`**, and the third assertion set is what proves the
+		// *weaker* of the two is not the one doing the work. The mode carries its own list (`work-mode.ts` validates
+		// it) and the policy checks it **before anything that could allow the call**
+		// (`src/core/action-policy.ts`), so the first call is refused and the refusal is labelled `[technique]`.
 		//
-		// When either half is wired, this test must be **inverted rather than deleted** - it is the only mechanical
-		// statement that the declaration is inert.
+		// **The second call is the point of the case**: it names no target, so no authority request can be built and
+		// the engagement document's `constraints.excluded_techniques` never sees it. It is still refused - which is
+		// why the mode carries its own list rather than relying on a grantor to have written one.
+		//
+		// This case was written to assert the *defect* - its original text said the call "is allowed, because … the
+		// mode own `gate.excluded_techniques` is worse still: `src/` has no consumer for it at all" - with the
+		// instruction to **invert it rather than delete it** once either half was wired. The inversion happened and
+		// the assertions below are the inverted ones; this paragraph is what the inversion left behind, corrected
+		// once somebody read it and found it describing a state that no longer exists. The neighbouring case - an
+		// excluded *target* - still asserts its own gap, and that assertion is deliberate.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		const engagement = writeFixtureEngagement(root);
