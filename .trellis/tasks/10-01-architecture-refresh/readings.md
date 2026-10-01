@@ -45,6 +45,25 @@
 
 - 本次动了**一个测试文件**（`tests/host-work-mode.test.ts`），而 `prd.md` 的 Out of Scope 写着"不动测试断言"。**改的是 fixture 的时钟依赖，不是断言**——断言一个字没动。之所以动它：门禁是红的，而 AC-6 要求"三条门禁读数不降"，红着无法验证后续每一步。这是我的判断，记在这里，你可以否决。
 
-## 下一步
+## 第 1 步：层清单对齐真实树 + 四层与方向 —— ✅ 完成（提交 `fb945b5`）
 
-第 1 步：把 `directory-structure.md` 的层清单对齐真实树（**7 → 14**）+ 写入四层与"箭头只能向下"。
+**改了什么**（`.trellis/spec/backend/directory-structure.md`）：
+
+- 布局块从 **7 → 14** 个目录 + 4 个根模块，每行标出它的层；补齐的七个：`adapters`、`code-audit`、`commands`、`context`、`jailer`、`skills`、`web-access`。
+- 新增一节 **"Layering and the allowed direction"**：四层（**L0 core / L1 mechanism / L2 authority / L3 host**）、规则（**只能 import 自己这层或更下面**）、以及规则背后的**实测状态**：111 个源文件里 26 个跨层，**22 向下、1 向上**（`src/core/workspace-policy.ts:4` → `src/project-provider/lock.ts`）。
+- `plane-b` 写成 **L2 且标注"not built yet"**——规格只描述现在，不描述计划（AC-3 一致性见第 4 步）。
+
+**读数**：两处规格检查 **17/17**；全量 **822 / 820 pass / 0 fail / 2 skipped**；`typecheck` **0**；installer **141 OK**。AC-1 ✅、AC-2 未动（第 2 步）。
+
+## 两条偏离（都记在案）
+
+### 1. 我违反了规格的语言约定（已修）
+
+我先写的那一页是**中文**，而 `spec/backend/index.md:43` 写着 *"All documentation should be written in **English**"*，其余 18 份规格都是英文。**这不该问你**——仓库已回答。已整页改写为英文（同锚点、同断言），测试里那份标题声明同步改；原中文版留在提交 `86c842a` 的历史里。
+
+### 2. 提交消息被 shell 吃掉（已修，且这是**第三次**同类）
+
+`git commit -m "…\"…\""` 里的 `\"` 被 PowerShell 解析掉 → **第一次提交根本没发生**，第二次的正文被当成 pathspec 截断，且它把三个文件一起收了。用**消息文件 + `git commit --amend -F <文件>`** 修正。
+
+**这一类已经三次**：① 脚本里的 `` ` ``被 here-string 变成 `<CR>/<NUL>`；② 我两次把"用默认编码读 UTF-8"当成"文件是乱码"；③ 这次引号。**规则**（写进这里的唯一目的是下次直接照做）：**中文、引号、长文本一律写成文件再让工具读，不走命令行**。
+
