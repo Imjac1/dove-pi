@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { SHELL_TOOLS, TECHNIQUE_WITNESSES } from "./argument-syntax.ts";
 import type { AuthorityDocument, AuthorityRequest } from "./authority.ts";
 import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
@@ -550,6 +551,31 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 					},
 					"technique",
 				);
+			}
+			// **The declared field is the caller's account of itself, and a caller who wants to run a forbidden
+			// technique can simply not fill it in.** So the same prohibition is also read off the arguments, by shape:
+			// `dos` is a *conduct*, and conduct shows in the command line rather than in a field named `technique`.
+			// This is the corpus's measured evasion (98% of attempts, 88% succeeding) in its cheapest form, and the
+			// answer it names is to decide by syntax rather than by a name match.
+			//
+			// Scoped to the shell, because that is where a command line is: a document that quotes `while true` is
+			// text, and refusing it would be a boundary people turn off.
+			if (excludedTechniques !== undefined && SHELL_TOOLS.has(invocation.tool)) {
+				const command = readArgumentPath(invocation.arguments, "command");
+				if (typeof command === "string" && command !== "") {
+					for (const name of excludedTechniques) {
+						const witness = TECHNIQUE_WITNESSES[name]?.(command);
+						if (witness === undefined) continue;
+						return labelled(
+							{
+								outcome: "block",
+								reason: `Technique '${name}' is excluded by mode '${mode.id}', and this command witnesses it: ${witness.witness}.`,
+								remediation: witness.remedy,
+							},
+							"technique",
+						);
+					}
+				}
 			}
 			// **The scope check comes first among the capability checks**, and it is a name lookup while the others are
 			// value lookups: a threshold and a contract ask *how* an action may run, and this asks *whether this agent may

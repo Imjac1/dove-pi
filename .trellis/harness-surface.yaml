@@ -18,7 +18,7 @@ components:
   # A component implementation surface includes its tests: the check that an edit stayed inside a surface would
   # otherwise report every real edit as outside, and the tests of a component are part of its implementation.
   tool-implementation: [src, tests]
-  middleware: [src/core/action-policy.ts, src/pi-adapter/extension.ts, tests/action-policy.test.ts, tests/host-work-mode.test.ts]
+  middleware: [src/core/action-policy.ts, src/core/argument-syntax.ts, src/pi-adapter/extension.ts, tests/action-policy.test.ts, tests/host-work-mode.test.ts]
   skill: [.agents/skills]
   subagent-config: [src/pi-adapter/subagent-provider.ts, .codex/agents]
   long-term-memory: [.trellis/spec, .trellis/workspace, .trellis/tasks]
@@ -32,7 +32,7 @@ verifiedBy:
   system-prompt: [tests/work-mode.test.ts, tests/host-work-mode.test.ts, tests/pentest-mode.test.ts, tests/code-audit-mode.test.ts, tests/trading-mode.test.ts]
   tool-description: [tests/pi-adapter.test.ts]
   tool-implementation: [tests/task-convergence.test.ts, tests/change-verdict.test.ts, tests/failure-reading.test.ts, tests/harness-corpus.test.ts, tests/harness-round.test.ts, tests/harness-axes.test.ts, tests/harness-surface.test.ts, tests/real-dove-blackbox.test.ts]
-  middleware: [tests/action-policy.test.ts, tests/fence-drift.test.ts, tests/host-work-mode.test.ts, tests/evasion-spellings.test.ts, tests/gate-accumulation.test.ts, tests/fence-alias.test.ts]
+  middleware: [tests/action-policy.test.ts, tests/fence-drift.test.ts, tests/host-work-mode.test.ts, tests/evasion-spellings.test.ts, tests/gate-accumulation.test.ts, tests/fence-alias.test.ts, tests/technique-syntax.test.ts]
   long-term-memory: [tests/spec-context-budget.test.ts]
 # The verifier: the code that produces the evidence the loop is judged by, and whose change is therefore not a loop turn.
 #
