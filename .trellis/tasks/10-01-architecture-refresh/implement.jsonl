@@ -1,1 +1,1 @@
-{"file": ".trellis/spec/backend/directory-structure.md", "reason": "本任务首先要改的就是这份声明：它的 Directory Layout 与真实树差 6 层，且缺'箭头只能向下'"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "本任务首先要改的就是这份声明：它的 Directory Layout 与真实树差 7 层（初稿写过 6，是把 core 注释里的单词 context 误当成了目录名），且缺'箭头只能向下'"}
