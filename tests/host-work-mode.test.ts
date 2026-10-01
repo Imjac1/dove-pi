@@ -932,6 +932,42 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
+	it("keeps the session's own judgement when the context is compacted  [D1]", async () => {
+		// **The third measured evasion aims at the monitor's memory, not at its rules**: an agent retries until the
+		// relevant context leaves the history. So the state that decides has to live where a retry cannot outlive
+		// it, and this case is what holds that: it spends a ceiling, compacts the context, and asks again. A change
+		// that rebuilds the policy on compaction, or that moves the accumulator into the context, turns it red.
+		//
+		// The middle assertion is what keeps this from passing vacuously: it only holds if the handler really
+		// spends the ceiling when it permits an action, so a path that never records fails here rather than
+		// quietly proving nothing.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "history", { capability: "workspace.inspect", limit: { argument: "count", max: 3 } });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "history" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			await host.events.get("input")?.({ type: "input", text: "do the work", source: "interactive" }, host.context);
+			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "do the work", systemPrompt: "" }, host.context);
+
+			const call = { name: "workspace.inspect", args: { count: 2 } };
+			const first = await callTool(host, "agent_run_capability", call, "c-history-first");
+			assert.notEqual(first?.block, true, `the first call is inside the ceiling: ${first?.reason ?? ""}`);
+			const second = await callTool(host, "agent_run_capability", call, "c-history-second");
+			assert.equal(second?.block, true, "2 + 2 crosses a ceiling of 3, and the sequence is what the mode forbade");
+
+			// The evasion itself: rewrite the surrounding context, then ask once more. Both hooks are fired, because
+			// the pair is the path that replaces the history rather than the one that only announces it.
+			await host.events.get("session_before_compact")?.({ type: "session_before_compact", willRetry: true }, host.context);
+			await host.events.get("session_compact")?.({ type: "session_compact", willRetry: true }, host.context);
+			const compacted = await callTool(host, "agent_run_capability", call, "c-history-compacted");
+			assert.equal(compacted?.block, true, "the compaction changed the judgement, so the decision depends on the history");
+			assert.match(compacted?.reason ?? "", /ceiling per call and per session|total/iu, "and it is still the accumulation refusing it, not some other rule arriving after the compaction");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 	it("claims an effect at the boundary and records its outcome when the result arrives", async () => {
 		// The fixture declares a capability the runtime has and needs no consent, so the claim is the only thing this
 		// case is about. `modes/trading` used to carry it: its `order.submit` is refused by the registration check.
