@@ -130,6 +130,56 @@
 
 **它挡不住什么（写在前面，免得后来人当成万能）**：**没有受限参数**的动作被拆分——那需要"什么使两个动作相同"的判定，属于 ① 语法解析那片。
 
+---
+
+## 检查回合（工作流 2.2：派 `trellis-check` 子代理）—— ✅ 两条阻断级缺陷
+
+**这一回合本身是一课**：我先前每轮都自己跑"三个门禁"当作检查。三个门禁全绿的那两次提交里，**两条阻断级缺陷都在**。门禁绿 ≠ 检查过。
+
+### 缺陷 A（我引入的）：**受限范围的 `max` 被每个工具花掉**
+
+一次 `recordRun` 会把**每一条**已声明 limit 都累加，只要参数路径能读到数——不管这次调用是不是该 limit 命名的工具。**实测（改前）**：
+
+```
+recordRun({tool:"read_file", arguments:{count:9}}); evaluate({tool:"bulk", arguments:{count:1}})
+  → block  "…is a ceiling per call and per session: 9 has already run…"
+```
+
+**这对已发布的模式是活的**：`modes/trading/governance.yaml` 把 `notional`/`quantity` 用 `tools: [order.submit]` 限定。而**我那条效用臂看不见它**——它只 `evaluate` 了无关工具，从没 `recordRun` 过它。**一条读起来像覆盖、实际没覆盖的测试。**
+
+修复：一个 `limitApplies(limit, tool)` 谓词**同时**供判定与记账使用（`4c7275a`）。
+
+### 缺陷 B（本来就有的）：**不变量被检查在"声明条目"上，而它说的是"整棵被声明的树"**
+
+在真实受限令牌下实测：held-out 树的一个**子项**自带 `Everyone:(OI)(CI)M`（显式 ACE，**不是继承来的**）→ 根上的 `/inheritance:r` **移不掉它** → `ensureBoundary` 报 `violations: []` → **受限进程写进了那棵本该是 Plane B 的树**（exit 0，文件真的存在）。
+
+修复：held-out 路径加 `/remove:g /T`，可写路径加 `/grant /T`（同一个缺陷的镜像症状：可写树里一个自带 ACE 的子项会把受限进程**挡在它本该能做的工作之外**，读起来像边界、其实是策略坏了）（`398025c`）。
+
+同时纠正：`readings.md` 说判据②断言"ACL 逐字不变"，而测试实际比的是一个授予**数量**；且 `icacls` 从受限令牌**读** ACL 也返回 exit 1——所以非零退出**不能**单独区分"写被拒"与"这令牌下 icacls 什么都做不了"。承重的读数是 ACL 本身。
+
+### F-7（**报告但未修**，决定权交回给我）：**fence 是词法比较，一个 junction 就绕过它**
+
+实测（`mklink /J` **不需要管理员**，status 0）：
+
+| 目标 | `relativeTarget` | `fenceHit` |
+|---|---|---|
+| `ws\.trellis\harness-surface.yaml` | `.trellis/harness-surface.yaml` | **true** ✓ |
+| `ws\link\harness-surface.yaml`（junction） | `link/harness-surface.yaml` | **false** → **放行** ✗ |
+| `ws\..trellis\harness-surface.yaml` | `undefined` | false ✗ |
+
+### 我的决定：**fence 可以碰文件系统，但只在 fence 分支里碰**
+
+- 这是一类**同一个文件的等价写法**——与我上一片关掉的那一类**同类**，而它更彻底：junction 指向哪里，词法比较根本不知道。
+- 边界的作用就是"管住 harness 自己的控制面"。**一个 junction 能绕过的边界，是在多说自己做了什么**（D4）。
+- **范围刻意收窄**：只在 fence 分支对目标做 realpath 规范化，**不改** `workspaceRelativeTarget` 本身——它还被 `harness-round.ts` 的读数共用，改它会把读数一起改掉。
+- **两条已知残差，先说清**：① 目标不存在时无法 realpath → 要**下探到最深的已存在祖先**再拼余下的段；② 检查之后再建 junction 是 TOCTOU 窗口——与 jailer 那次"读的是声明路径、不是其内容"属于同一类残差。
+
+**为什么先不做**：AC-1 的三种手法里没有 junction，而这条要动的是**判定路径上的系统调用**与一个被共用的函数——它是一个**有自己测试与取舍的切片**，不是顺手补的那一行。已列为下一步第一片。
+
+### 检查回合的读数（我自己复跑过，不采信它的数字）
+
+`typecheck` **0** · `npm test` **834 / 832 pass / 0 fail / 2 skipped**（137 套件，较基线 **+2 测试 +2 通过**）· installer **141 OK** · jailer 单独 **7 / 7**。
+
 **理由**：同一个东西内部留着第二个可以构建的地方，就是在邀请漂移——那正是形状决定要消掉的东西。历史留在 bundle 里，产物留在本仓。
 
 ### 下一步
