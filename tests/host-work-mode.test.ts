@@ -268,7 +268,14 @@ function preflightableEngagement(root: string): void {
 		readFileSync(path, "utf8")
 			.replace('sha256: "aaaa"', 'sha256: "' + digest("permission-to-test.pdf") + '"')
 			.replace(/sha256: "bbbb"/g, 'sha256: "' + digest("inventory.csv") + '"')
-			.replace('checked_at: "2026-09-25T06:00:00.000Z"', 'checked_at: "' + new Date().toISOString() + '"'),
+			.replace('checked_at: "2026-09-25T06:00:00.000Z"', 'checked_at: "' + new Date().toISOString() + '"')
+			// **The shipped example's grant window is a fixed date pair, and a wall clock eventually walks past it.**
+			// On 2026-10-01 the window closed and this test began failing with "Grant 'g-client-scope' is not
+			// active at <now>" - at a pristine checkout too, which is how it was confirmed to be a time bomb
+			// rather than a regression. The mechanism under test is the mode's `never_allow` reaching the action,
+			// not the example's calendar, so the window moves with the clock.
+			.replace('from: "2026-09-01T00:00:00.000Z"', 'from: "' + new Date(Date.now() - 86_400_000).toISOString() + '"')
+			.replace('to: "2026-10-01T00:00:00.000Z"', 'to: "' + new Date(Date.now() + 86_400_000).toISOString() + '"'),
 	);
 }
 
