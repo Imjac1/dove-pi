@@ -1,33 +1,34 @@
-# A1 执行清单
+# A1 执行清单（S1：最窄的端到端回合）
 
 ## 顺序
 
-1. [ ] **建新仓**（空仓 + 许可 + `.gitignore`），并决定仓名与位置；写进 `MIGRATION.md` 的头两行。
-2. [ ] **搬门禁**：`typecheck` / `test` / `test:installer` 三条命令在新仓可跑（此时测试数为 0）。
-3. [ ] **按原样复制**复用清单的模块（不顺手改任何东西），一次提交；记录来源提交 hash。
-4. [ ] **跑基线**：`typecheck` 干净；`test` 与 `test:installer` 的数字与 dove-pi **对齐或逐条解释差异**。
-5. [ ] **定义 `AgentLoop` 接口**（独立的接口提交，不含实现）。
-6. [ ] **接适配器**：`pi-agent-core` 的 thin `Agent`；闸门与事件记录留在 loop 内，**不放适配器**。
-7. [ ] **七个组件挂载点**（文件级、可程序化修改）。
-8. [ ] **演练 keep / revert**：一次改动 keep；再两次连续改动，`git revert` 干净回退。
-9. [ ] **三个重写项的占位与测试**：loop / 闸门 / trace 通道各有**一条新测试**（此刻可以是"未实现"的跳过测试，但必须存在）。
+1. [ ] **先证可达**：删掉 `loop-runner` 的 allow-list 条目 → 跑 `tests/harness-reachability.test.ts`。
+       **红** = 走查不认我们要用的入口 → 按设计决策 1 改入口（改完再回来删）；
+       **绿** = 可达 → 接着删 `loop-scripted`、`checkpoint` 两条。
+2. [ ] **红测试先写**：`tests/axi-turn.test.ts` 先落成对断言（`executedActions 1 → 0`）与 keep/revert 记录断言，**此时应当是红的**。
+3. [ ] **入口**：`src/cli.ts` 加诊断子命令——组合 `createAgentLoop` + `createScriptedProvider` + 一个只读工具 + `createActionPolicy` + `ExecutionLedger`，打印一次回合。
+4. [ ] **只读工具**：一个 `LoopToolSpec`（读文件）；**不做写**（写与隔离是 A2 的事）。
+5. [ ] **keep / revert 演练**：临时仓里一次提交 + 一次 `git revert`，两个 hash 与账本条目进读数。
+6. [ ] **打印读数**：回合读数写进本任务 `readings.md`（含 `executedActions`、账本条数、闸门判定）。
+7. [ ] 三条到期条目已删；跑三条门禁；提交。
 
 ## 验证
 
-- `npm run typecheck` → 干净
-- `npm test` → 与基线对齐（数字 + 差异说明）
-- `npm run test:installer` → 同上
-- `git log --oneline` → 每次逻辑改动一个提交
-- `MIGRATION.md` → 每个复用模块一条记录（来源路径 + 来源提交 + 改动）
+- `node --import tsx --test tests/axi-turn.test.ts` → 成对断言全绿
+- `node --import tsx --test tests/harness-reachability.test.ts` → 不红（条目已删）
+- `npm run typecheck` → 0
+- `npm test` → **822 / 820 pass / 0 fail / 2 skipped**
+- `npm run test:installer` → **141 OK**
+- `git log --oneline` → 每次逻辑改动一个提交，且**本仓历史里没有测试提交**
 
-## 风险点与回退
+## 风险与回退
 
-- **风险**：第 3 步顺手修改 → 基线不可比。回退：把任何改动拆成**独立提交**，先恢复原样再重做。
-- **风险**：`test:installer` 与仓结构强耦合 → 记录差异，必要时把这条门禁在新仓标记为"按同一断言、不同路径"，但**不许降低断言**。
-- **回退点**：第 4 步之前，新仓可以整体丢弃重来（此时还没写任何新代码）。
+- 第 1 步若红：**先改入口**，**不要为了让走查变绿去动走查**（那会把"接上了"变成"看起来接上了"）。
+- 第 3 步若必须改宿主的行为：**停下报告**——那是 loop 拥有权那一格。
+- 回退点：第 3 步之前整块可丢（还没有产品改动）。
 
 ## 提交前
 
-- [ ] `MIGRATION.md` 完整（模块级粒度）
-- [ ] 门禁原始读数已记录（含差异解释）
-- [ ] 旧仓 `git status` 干净且**未被本任务改动**
+- [ ] 三条门禁的原始读数（与 822/820/0/2 · 141 逐项比）
+- [ ] 到期的 allow-list 条目已删，理由写进提交信息
+- [ ] 失败与未做项如实写进 `readings.md`，包括"承诺降级"

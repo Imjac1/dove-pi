@@ -13,7 +13,7 @@
 ## 立刻可做（按这个顺序）
 
 - [x] **合回施工仓的产物**：9 个文件合进本仓（6 个 `src/jailer/*.ts` + 测试 + 助手脚本），助手按 `directory-structure.md` 落 `src/windows-runtime/jailer-host.ps1`。读数：`typecheck` 0 · `test` **822/820/0/2** · installer **141 OK**（提交 `5f14588`，读数在 `09-30-axi-a2-safety/readings.md`）
-- [ ] **随接线删掉 allow-list 条目**：`tests/harness-reachability.test.ts` 里那六条 `src/jailer/*` 是"没有人到达"的登记；当 loop 的派发路径 import `launchJailed` 时**删掉它们**——那是接线完成的定义。（合回后路径未变，条目无需改）
+- [ ] **随接线删掉 allow-list 条目**（**已纠正**）：`tests/harness-reachability.test.ts` 里到期的三条是 **`loop-runner` / `loop-scripted` / `checkpoint`**——它们由 **A1 的 S1** 接线后删掉（"接线完成 = 删条目"）。**`src/jailer/*` 那六条不在此列**：它们等到 **S6**（Plane B 真正经 jailer 起受限进程）才可达；先前写的"当 loop 的派发路径 import `launchJailed` 时删"是错的。
 - [x] **退役施工仓**：历史先导出为 `C:\Users\Macfy\Desktop\dsh\axi-scaffolding-a145fe1.bundle`（1206.5 KB，`git bundle verify` → is okay），再删目录 `C:\Users\Macfy\Desktop\dsh\axi`。原因：同一个东西里留着第二个可构建的地方就是在邀请漂移。
 - [ ] **修剩余的工件缺陷**：① 施工仓 `package.json` 自称 dove-pi —— **随退役消失，已解决**；② **`plan-v8.md` 81,319 字节 > 注入上限 32,768**（作为 implement 上下文会被截断，且**截掉的正好是 §4/§5 这些实现者最需要的部分**）——按节拆分 + 索引，清单指向"节"。
 - [ ] **`plan-v8.md` 重基**：§5.2（新仓目录树）与 §5.4（迁移）随形状决定作废；新增 §3.13「一个东西的形状」；§5.3 的顺序按实际（S3 已提前）重排。
