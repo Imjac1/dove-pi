@@ -34,6 +34,7 @@ import { resolveDoveStateDir } from "./core/state-dir.ts";
 import { parseNonNegativeHours } from "./commands/cli-options.ts";
 import { runTaskCommand } from "./commands/task.ts";
 import { runSessionCommand } from "./commands/session.ts";
+import { runAxiTurnCommand } from "./commands/axi-turn.ts";
 import { ExecutionLedger, projectExecutionDiagnostics } from "./core/execution-ledger.ts";
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./pi-adapter/subagent-provider.ts";
 import { normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "./core/workspace-policy.ts";
@@ -161,6 +162,8 @@ if (args[0] === "doctor") {
 	await runTaskCommand(args.slice(1));
 } else if (args[0] === "session") {
 	await runSessionCommand(args.slice(1));
+} else if (args[0] === "axi-turn") {
+	await runAxiTurnCommand(args.slice(1));
 } else if (args[0] === "extensions") {
 	await runExtensionsCommand(args.slice(1));
 } else if (args[0] === "workspace") {
