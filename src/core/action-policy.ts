@@ -116,11 +116,37 @@ function labelled(decision: GateDecision, gate: GateLabel): GateDecision {
  * Lowercasing is a Windows-first choice and it fails closed: on a case-insensitive filesystem a differently-cased
  * spelling addresses the same file, so a case-sensitive comparison would let `MODES/x.yaml` through the fence.
  */
+/**
+ * The decorations Win32 accepts on a path that names the same location, removed before anything compares two.
+ *
+ * The filesystem strips trailing dots and spaces from a segment, takes either separator, ignores case, and
+ * accepts the extended-length and device prefixes (`\\?\`, `\\.\`) as ornaments on the same place. A boundary
+ * that compares *the string the caller chose* against a declared path therefore refuses one spelling and
+ * lets the rest through - which is the measured evasion (`2609.30217`: 98% of attempts, 88% succeeding) in its
+ * cheapest form, and it needs no adversarial intent at all.
+ */
+export function normalizeTargetSpelling(target: string): string {
+	return target.replace(/^\\\\[?.]\\/u, "");
+}
+
+function trimTrailingDotsAndSpaces(segment: string): string {
+	// `..` is a segment whose dots mean something, and trimming it to nothing would read as the workspace root
+	// - a normalization that turns a refusal into an allowance.
+	if (segment === "" || /^\.+$/u.test(segment)) return segment;
+	return segment.replace(/[. ]+$/u, "");
+}
+
 export function workspaceRelativeTarget(workspaceRoot: string, target: string): string | undefined {
-	const resolved = isAbsolute(target) ? resolve(target) : resolve(workspaceRoot, target);
+	const requested = normalizeTargetSpelling(target);
+	const resolved = isAbsolute(requested) ? resolve(requested) : resolve(workspaceRoot, requested);
 	const inside = relative(workspaceRoot, resolved);
 	if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) return undefined;
-	return inside.replace(/\\/gu, "/").toLowerCase();
+	return inside
+		.replace(/\\/gu, "/")
+		.split("/")
+		.map(trimTrailingDotsAndSpaces)
+		.join("/")
+		.toLowerCase();
 }
 
 /** The protected prefix a target falls under, or `undefined`. A prefix matches a file exactly and a subtree. */
