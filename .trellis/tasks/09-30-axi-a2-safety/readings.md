@@ -235,6 +235,41 @@ recordRun({tool:"read_file", arguments:{count:9}}); evaluate({tool:"bulk", argum
 
 **读数**：该套件 **34 / 34**；全量 **839 / 837 pass / 0 fail / 2 skipped**；`typecheck` **0**；installer **141 OK**。
 
+---
+
+## 切片 3：语法解析（部件 ①）—— ✅（提交 `1f090a6`）
+
+**要关掉的东西**：`gate.excluded_techniques` 今天只从**声明字段** `technique` 读——**字段可以不填**，于是"我想做被禁的事"只要不填那个字段，规则就**被忽略着关掉了**。这就是语料实测规避（98% / 88%）最便宜的一种，它给的解法是**按语法判，不按名字匹配**。
+
+**红 → 绿**。红时的读数正是那两条：
+
+```
+✔ refuses the technique when the call declares it（既有的声明字段路径）
+✖ refuses it when the call says nothing about a technique and the command does the forbidden thing
+   > 'allow' !== 'block'
+✖ refuses the same thing written as a POSIX loop
+✔ still lets an ordinary command run
+✔ does not treat prose that quotes a loop as a loop
+```
+
+**建的东西**（`src/core/argument-syntax.ts`，形态照设计决策 1：**表才是工作量，解析器可后换**）：
+
+| 件 | 它做什么 |
+|---|---|
+| `splitCommandLine` | 按 shell 的方式切词，**并记住哪些词被引号包过**——`while true` 是循环，引号里的 `while true` 是散文，读原始行分不出这两者；分隔符（`;` `|` `&`）也是边界 |
+| `TECHNIQUE_WITNESSES` | 技巧名 → **见证它的形状**；`dos` 的见证是"**头部没有界的重复**"（`while true` / `while :` / `while ($true)` / `until false`），每个见证**自带补救**（"把界写进命令里：计数的循环，或单次请求"）——检测器没有补救就是这个项目专门要避免的那种东西 |
+| 作用域 | **只对 shell 工具**（`bash`/`powershell`）——命令行在那里；文档里引用一个循环不该被拒（否则就是"人们会关掉的围栏"） |
+
+**这一片自己说明的边界**：`while true` 里带 `break` 的循环在效果上是有界的，而**见证照样会拒它**——语法只显示头部。**覆盖率不靠声称**：由下一片的故障注入来量。
+
+### 这一片留下的、必须由下一片做的决定（已量）
+
+`modes/pentest/governance.yaml` 声明 `excluded_techniques: [dos, social-engineering]`，而表里**只有 `dos`** → **`social-engineering` 至今是惰性的**（和这一片之前 `dos` 的处境一样）。
+
+**这是个真缺口，不是脚注**：一条声明要么被执行、要么被拒，**不能安静地挂着**。本仓已有现成的形态——模式声明了运行时无法兑现的 `sandbox` 时就**拒绝加载**（原文："Declare one of those, or run this mode under a host that provides the isolation it names."）。
+
+**它的代价要先说清**：照那个形态做，**`modes/pentest` 会拒绝加载**，直到它的清单缩到"运行时能兑现的那些"——那是一次产品改动（要改已发布的模式声明 + 跑它的模式测试 + 把**损失**如实记下来），不是一个顺手补的开关。已列为下一片第一项。
+
 ### 检查回合的读数（我自己复跑过，不采信它的数字）
 
 `typecheck` **0** · `npm test` **834 / 832 pass / 0 fail / 2 skipped**（137 套件，较基线 **+2 测试 +2 通过**）· installer **141 OK** · jailer 单独 **7 / 7**。
