@@ -155,6 +155,29 @@ export function normalizeGateDecision(decision: unknown, gateId: string): GateDe
 }
 
 /**
+ * The refusal label a decision carries, which is what the ledger's `gate` field holds.
+ *
+ * **Read from the reason, because that is where the label already is.** A policy that labels its decisions
+ * prefixes them with `[label]`, so by the time a host sees one the class is decided. A host that wrote its own
+ * name there instead would put a value into a field whose consumer counts refusal *classes*: `countGateRefusals`
+ * splits the value on `+` and a convergence prediction may name only a member of `GATE_LABELS`
+ * (`task-convergence.ts` refuses any other subject), so a gate id lands in a class nobody can predict. That is a
+ * measured defect in this repository, not a hypothetical one - the axi turn wrote its gate's id there.
+ *
+ * **Composite is a legitimate value, not a lazy fallback.** When a reason carries no prefix - a gate a host
+ * wrapped itself - the answer is the labels the policy can produce, joined, and three separate comments say a
+ * recorded label may be composite for exactly this reason.
+ *
+ * `gates` is typed as strings rather than as `GateLabel` on purpose: this module must not depend on the
+ * convergence record's vocabulary, and a caller inside the policy passes its own labels, which a test asserts
+ * are a subset.
+ */
+export function gateLabelOf(decision: GateDecision, gates: readonly string[]): string {
+	if (decision.outcome === "allow") return gates.join("+");
+	return /^\[([a-z-]+)\]/u.exec(decision.reason)?.[1] ?? gates.join("+");
+}
+
+/**
  * The pre-execution gate.
  *
  * {@link ActionGate.evaluate} is invoked for **every** proposed action, including ones that will be

@@ -23,6 +23,7 @@ import { createActionPolicy } from "../core/action-policy.ts";
 import { ExecutionLedger } from "../core/execution-ledger.ts";
 import { createAgentLoop } from "../core/loop-runner.ts";
 import type { ActionGate, GateDecision, GateInvocation, LoopOutcome, LoopToolSpec, ToolCall, ToolResult } from "../core/loop.ts";
+import { gateLabelOf } from "../core/loop.ts";
 import { loadWorkModeFromDirectory } from "../core/work-mode.ts";
 
 /** The one tool this turn has. Reading only: nothing here can change the workspace. */
@@ -153,7 +154,11 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 			tool,
 			action: tool,
 			viaCapability: false,
-			gate: gate.id,
+			// **The class, not the gate's name.** This field is read by `countGateRefusals`, which splits it on
+			// `+` and counts refusal classes, and a convergence prediction may only name a label in `GATE_LABELS`.
+			// A gate id here - `action-policy` - would be a class nobody can predict, which is the defect this
+			// repository already states the rule against.
+			gate: gateLabelOf(decision, policy.gates),
 			reason: decision.reason,
 			remediation: decision.remediation,
 		});

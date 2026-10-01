@@ -60,6 +60,7 @@ import { changeBaseline, changeObservables, convergenceObservables, countGateRef
 import { createConfiguredPiSubagentProvider, resolvePiChildCommand } from "./subagent-provider.ts";
 import { lensEnabledForWorkspaceMode, normalizeWorkspaceMode, readWorkspacePolicy, resolveWorkspaceRoot, writeWorkspacePolicy } from "../core/workspace-policy.ts";
 import { createActionPolicy, evidenceDigestsFor, type ActionPolicy } from "../core/action-policy.ts";
+import { gateLabelOf } from "../core/loop.ts";
 import { createEffectBoundary, type EffectBoundary } from "../core/effect-boundary.ts";
 import { admit } from "../core/context-admission.ts";
 import { createFileEffectStore, listUnresolvedClaims } from "../core/effect-store-file.ts";
@@ -2745,7 +2746,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			if (decision.outcome === "block") {
 				// The gate is named in the reason by the policy itself (`[limit]`/`[conformance]`), so the ledger and the
 				// refusal text agree about which check refused the action without a second mapping here.
-				const gate = /^\[([a-z-]+)\]/.exec(decision.reason)?.[1] ?? activeActionPolicy.gates.join("+");
+				const gate = gateLabelOf(decision, activeActionPolicy.gates);
 				await ledger.appendGateRefused({
 					taskId: currentRequestTaskId ?? "pi-session",
 					stepId: `gate:${event.toolCallId}`,

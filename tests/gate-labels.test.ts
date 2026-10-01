@@ -2,6 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createActionPolicy } from "../src/core/action-policy.ts";
 import { GATE_LABELS, GATE_LABEL_NAMES } from "../src/core/task-convergence.ts";
+import { gateLabelOf } from "../src/core/loop.ts";
+import type { GateDecision } from "../src/core/loop.ts";
 import type { WorkMode } from "../src/core/work-mode.ts";
 
 /**
@@ -44,6 +46,27 @@ function mode(overrides: Partial<WorkMode> = {}): WorkMode {
 }
 
 describe("the refusal-label vocabulary", () => {
+	it("reads the class out of the reason, and never a gate's own name", () => {
+		// **What this field feeds is a count of refusal classes.** `countGateRefusals` splits the recorded value on
+		// `+`, and a convergence prediction may name only a member of this vocabulary - so a value outside the set is
+		// a refusal nobody can predict. That is the defect the comment above states the rule against, and it was real:
+		// the axi turn recorded its gate's id, `action-policy`, in the field. A gate's name is not a class, and the
+		// fallback below is what makes an unlabelled reason land in one.
+		const block = (reason: string): GateDecision => ({ outcome: "block", reason, remediation: "do the permitted thing" });
+		assert.equal(gateLabelOf(block("[limit] over the ceiling"), ["deny", "limit"]), "limit");
+		assert.equal(gateLabelOf(block("no prefix at all"), ["deny", "limit"]), "deny+limit", "an unlabelled reason falls back to the set the policy can produce");
+		assert.equal(gateLabelOf(block("action-policy says no"), ["deny"]), "deny", "a gate's own name is not a class and must not be recorded as one");
+		assert.equal(gateLabelOf({ outcome: "allow" }, ["deny"]), "deny");
+
+		// The property that closes the class: every atom it can produce comes from the vocabulary.
+		for (const label of GATE_LABELS) {
+			assert.equal(gateLabelOf(block(`[${label}] something`), []), label);
+		}
+		for (const atom of gateLabelOf(block("no prefix"), [...GATE_LABELS]).split("+")) {
+			assert.equal(GATE_LABELS.has(atom), true, `the fallback produced '${atom}', which no prediction may name`);
+		}
+	});
+
 	it("comes from one declaration, so the set and the union cannot disagree", () => {
 		assert.deepEqual([...GATE_LABELS].sort(), [...GATE_LABEL_NAMES].sort());
 		assert.equal(GATE_LABELS.size, GATE_LABEL_NAMES.length);
