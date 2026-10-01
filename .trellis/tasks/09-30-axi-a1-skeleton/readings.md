@@ -128,3 +128,22 @@ ledger records written: 0
 我在证据里看到 yaml 第 6 行说 `CHANGE_SURFACES` 在 `src/core/task-convergence.ts`，而我的 grep 只在 `src/core/harness-surface.ts` 找到这个名字——**差点据此去"修"一个正确的注释**。查证后：那个文件里的是**使用点**（import 与五处引用），**定义**确实在 `task-convergence.ts:854`。
 
 **这与那条"cites a thing and not a position"的检查是同一个盲区的两面**：检查自己的注释里写着 *"it cannot tell whether the file a citation names is the right one"*——它能禁掉位置，但**文件对不对只能靠人去核**。这次是我核了才知道。
+
+---
+
+## 一处补正：S1 的"生产路径"当时只成立一半（审计发现）
+
+我在 S1 的读数里把 `src/cli.ts` 说成是产品路径。**半句实话**：它确实是走查的四个入口之一 ✓，但 `dove_pi.py` 的 `LOCAL_CLI_COMMANDS` 里**没有** `axi-turn`，启动器打印的那份 help 也没写它 ✗ → **装完之后用户跑不到它**。
+
+**修法是这个仓自己写好的**：`dove_pi.py` 的注释说——"在 `LOCAL_CLI_COMMANDS` 里、但不在例外集合里的命令，**必须**在 help 里被点到，有测试**两向**断言"。
+
+照做之后**那条测试立刻红了** ✗：
+
+```
+FAIL: test_every_local_command_is_either_public_or_declared_internal
+AssertionError: Items in the first set but not the second
+```
+
+因为我先只补了 `cli.ts` 的 usage，而它比的是 **`dove_pi.py --help` 打印的那一份**——**两个 help 面**。两处都补上后：`Ran 141 tests / OK`，且两向复算都是 `named nowhere: none` / `internal but named: none` ✓。
+
+**这条留在读数里，因为它同时是一条方法的读数**：我是先改一处、跑测试、被抓住、才找到第二处的——**不是我一次想全的**。

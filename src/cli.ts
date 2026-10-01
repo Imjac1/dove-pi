@@ -273,7 +273,7 @@ if (args[0] === "doctor") {
 	console.log(formatCacheAudit(audit));
 } else {
 	throw new Error(
-		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi workspace status|set development|pentest | dove-pi shell status|set <path|auto> [--scope project|global] | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi extensions list|show|doctor|install",
+		"Usage: dove-pi doctor | dove-pi project [init|doctor|bind native] | dove-pi task list|current|status|continue|verify|convergence|create|start|finish|archive | dove-pi session list|record | dove-pi workspace status|set development|pentest | dove-pi shell status|set <path|auto> [--scope project|global] | dove-pi capability list|run | dove-pi rpc | dove-pi mcp | dove-pi skills [query] | dove-pi web [status|auth] | dove-pi token audit | dove-pi cache audit | dove-pi axi-turn [mode] [prompt] | dove-pi extensions list|show|doctor|install",
 	);
 }
 

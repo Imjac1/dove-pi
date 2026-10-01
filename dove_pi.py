@@ -68,6 +68,9 @@ DEFAULT_PROFILE = "max"
 LOCAL_CLI_COMMANDS = frozenset({
     "doctor", "project", "task", "session", "skills", "web", "cache",
     "token", "capability", "rpc", "mcp", "extensions", "workspace", "shell",
+    # The axi turn is a diagnostic a user runs, so it is a command and not an exception: the comment below is what
+    # decides that, and the installer suite asserts the two directions.
+    "axi-turn",
 })
 # **The commands a user is meant to run are the ones the help names, and this set is the exceptions.** Measured: `cache`, `token` and
 # `extensions` appeared in neither README nor the help, and reading them split them - `extensions` is invoked by this router itself to
@@ -956,6 +959,8 @@ After installation:
   dove-pi capability list | dove-pi capability run <name>
   dove-pi rpc | dove-pi mcp
   dove-pi skills [query]
+  dove-pi axi-turn [mode] [prompt]
+  dove-pi axi-turn runs one narrow offline turn of the framework's own loop
   dove-pi token | dove-pi cache
   dove-pi token audits token use; dove-pi cache audits prompt-cache behaviour
   dove-pi web status | dove-pi web auth <hosts...> [profile=name]
