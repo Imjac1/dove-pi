@@ -174,7 +174,37 @@ recordRun({tool:"read_file", arguments:{count:9}}); evaluate({tool:"bulk", argum
 - **范围刻意收窄**：只在 fence 分支对目标做 realpath 规范化，**不改** `workspaceRelativeTarget` 本身——它还被 `harness-round.ts` 的读数共用，改它会把读数一起改掉。
 - **两条已知残差，先说清**：① 目标不存在时无法 realpath → 要**下探到最深的已存在祖先**再拼余下的段；② 检查之后再建 junction 是 TOCTOU 窗口——与 jailer 那次"读的是声明路径、不是其内容"属于同一类残差。
 
-**为什么先不做**：AC-1 的三种手法里没有 junction，而这条要动的是**判定路径上的系统调用**与一个被共用的函数——它是一个**有自己测试与取舍的切片**，不是顺手补的那一行。已列为下一步第一片。
+**为什么当时先不做**：AC-1 的三种手法里没有 junction，而这条要动的是**判定路径上的系统调用**与一个被共用的函数——它是一个**有自己测试与取舍的切片**，不是顺手补的那一行。已列为下一步第一片。
+
+**→ 已完成（见下）。**
+
+---
+
+## F-7 实施：目录别名绕过 fence —— ✅（提交 `e8a0baf`）
+
+**红 → 绿**。红时的读数**恰好是那条缺陷**（对照组拦、别名放行）：
+
+```
+✔ refuses the fenced file spelled directly, which is the control
+✖ refuses it when a junction names it instead
+   > AssertionError: an alias named the fenced file and the fence did not see it
+     'allow' !== 'block'
+✔ still allows a file behind the same junction that the fence does not name
+```
+
+**一处先前判断的纠正**：我以为"判定路径上碰文件系统"是个新决定，要慎重——**`action-policy.ts` 早就 import 了 `node:fs`**（`existsSync` / `readFileSync`），所以这不是新面，只是把同一个模块已有的能力用到了 fence 分支上。
+
+**实现**（`src/core/action-policy.ts`）：
+
+- `canonicalTarget(path)`：从**最深的已存在祖先**取 `realpathSync`，再把余下的段拼回去。**为什么不是整条路径**——一次写可能指向还不存在的文件，而 `realpathSync` 拒绝它打不开的东西；只解析存在的那部分，才让"同一个文件"对**已存在**与**将创建**的两种都成立。
+- **两侧都规范化**：目标与 `workspaceRoot`（后者在策略构造时算一次——fence 是唯一消费者，每次调用都 realpath 一遍根是没有读数支撑的开销）。
+- **只在 fence 分支**用：`workspaceRelativeTarget` 本身不动，`harness-round.ts` 的读数因此保持原意。
+
+**残差如实写着**：检查**之后**才建的 junction 是 TOCTOU 窗口，这个方法关不掉——fence 读的是调用到达时的现状。这与 jailer 那条"读的是声明路径、不是其内容"属于同一类。
+
+**测试本身的教训**：第一版用了 `execFileSync(..., { windowsVerbatimArguments: true })` → **`typecheck` 红**（那是 `spawnSync` 的选项，不在 `execFileSync` 的类型里）。本仓记录过的那条引号教训用的正是 `spawnSync`——照它改，并把"junction 建成功"变成**断言**（否则下面每一条都会空过）。清理用 `rmdirSync`：**`rmSync(recursive)` 会顺着 junction 递归进目标**，测试里另有一条断言看住这件事。
+
+**读数**：新套件 **4 / 4**；fence 邻近五套件 **84 / 84**（规范化没有改到既有判定）；全量 **838 / 836 pass / 0 fail / 2 skipped**；`typecheck` **0**；installer **141 OK**。
 
 ### 检查回合的读数（我自己复跑过，不采信它的数字）
 
