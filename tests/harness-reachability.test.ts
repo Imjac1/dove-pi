@@ -48,11 +48,18 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// `work-mode.ts` became reachable from the host's startup path, and `gate-limit.ts`, `effect-ledger.ts` and
 	// `loop.ts` came with it (work-mode imports the first two, and gate-limit imports the loop's gate types).
 	// The assertion below is what noticed, which is the reason it asserts in both directions.
-	"src/core/loop-runner.ts": { reason: "the reference runner; M1 places the effect claim at its dispatch line, but nothing reaches this module, so the claim is exercised by tests only", wiredBy: null },
+	// **`src/core/loop-runner.ts` left this list when the axi turn command began reaching it** - the eighth
+	// shrink, and the first one caused by a consumer added *for the framework's own loop* rather than by the
+	// host. `src/commands/axi-turn.ts` composes the loop and is imported by `src/cli.ts`, which is one of the
+	// four entry points this walk starts from; the paired turn test (`tests/axi-turn.test.ts`) is what holds the
+	// behaviour still.
 	// `src/core/effect-store-file.ts` left this list when the host began composing the effect boundary at session
-	// start - the fourth shrink. That is M1's reachability gap closed for the store; `loop-runner.ts` still holds
-	// the claim for the reference loop, which nothing reaches.
-	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; reached only through the unreachable loop", wiredBy: null },
+	// start - the fourth shrink. That is M1's reachability gap closed for the store.
+	// **`checkpoint.ts` stays, with its reason corrected.** The reference runner is reachable now, but it does not
+	// compose action-boundary checkpoints: it takes a provider, a gate, tools, an executor and a turn budget, and
+	// nothing about effects. Its old reason - "reached only through the unreachable loop" - would have been right
+	// for the wrong reason, which is the failure this list exists to make visible.
+	"src/core/checkpoint.ts": { reason: "action-boundary checkpoints; the reference loop does not compose them yet, so only tests exercise the claim", wiredBy: null },
 	// `src/core/gate-conformance.ts` left this list when the action policy composed it behind the host's
 	// tool_call boundary - the third shrink, and the assertion is what noticed.
 	// `src/core/authority.ts` left this list when the mode loader began resolving a conformance mode's grant
@@ -86,7 +93,9 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	"src/core/dispatcher.ts": { reason: "pre-existing, from before the framework work; no milestone claimed it while that task was open, and none has since", wiredBy: null }, 
 	"src/core/dispatch-policy.ts": { reason: "pre-existing, from before the framework work; no milestone claimed it while that task was open, and none has since", wiredBy: null },
 	"src/adapters/loop-pi-agent-core.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
-	"src/adapters/loop-scripted.ts": { reason: "a reference adapter for a loop the host owns; reachable only from the island below", wiredBy: null },
+	// **`src/adapters/loop-scripted.ts` left this list with the same shrink as `loop-runner.ts`**: the axi turn
+	// command drives it, so the deterministic offline provider is now reached by production code rather than only
+	// by tests - which is what its own header says it was written to be.
 	// **`src/pi-adapter/session-keepalive.ts` left this list when the adapter began arming it on session start and
 	// observing it on every provider request** - the seventh shrink, and the one the check stated the rule for:
 	// *removing the entry is the definition of done for that module*.
