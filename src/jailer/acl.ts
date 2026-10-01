@@ -92,12 +92,25 @@ export function ensureBoundary(spec: BoundarySpec, tag = "boundary"): AclReport 
 			`icacls "${path}" /inheritance:r /grant:r "${owner}:(OI)(CI)F" "*${WELL_KNOWN_SID.system}:(OI)(CI)F" "*${WELL_KNOWN_SID.administrators}:(OI)(CI)F"`,
 		);
 		if (code !== 0) failures.push(`icacls failed (${String(code)}) on held-out path ${path}`);
+		// **The invariant is about the tree the entry names, and this is the measured reason.** `/inheritance:r` on the
+		// root removes what a child *inherited*, but an explicit ACE on a child survives it: with a child carrying
+		// `Everyone:(OI)(CI)M` the check below reported no violation and the constrained process wrote into that child.
+		// `/T` is what makes "no grant for the work SID" true of everything the declaration holds.
+		// **What remains open, stated rather than implied**: the read below reads the declared paths, not their
+		// contents, so a child that gains an explicit grant *after* this runs is not seen.
+		const tree = runCommandLine(`icacls "${path}" /remove:g "*${spec.workSid}" /T`);
+		if (tree !== 0) failures.push(`icacls /remove:g failed (${String(tree)}) under held-out path ${path}`);
 	}
 	for (const path of spec.workPaths) {
 		const code = runCommandLine(
 			`icacls "${path}" /inheritance:r /grant:r "${owner}:(OI)(CI)F" "*${WELL_KNOWN_SID.system}:(OI)(CI)F" "*${WELL_KNOWN_SID.administrators}:(OI)(CI)F" "*${spec.workSid}:(OI)(CI)M"`,
 		);
 		if (code !== 0) failures.push(`icacls failed (${String(code)}) on writable path ${path}`);
+		// The same shape on the writable side, for the same reason and with the opposite symptom: an item under the
+		// writable tree whose own ACE protects it keeps the work SID out, and the constrained process then cannot work
+		// where the declaration says it can - a refusal that reads like a boundary instead of like a broken policy.
+		const tree = runCommandLine(`icacls "${path}" /grant "*${spec.workSid}:(OI)(CI)M" /T`);
+		if (tree !== 0) failures.push(`icacls /grant /T failed (${String(tree)}) under writable path ${path}`);
 	}
 
 	const read = readAcl(spec, tag);

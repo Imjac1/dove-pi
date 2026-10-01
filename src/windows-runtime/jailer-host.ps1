@@ -277,7 +277,9 @@ try {
         expectedSids     = $expected
         selfCheck        = $selfCheck
         readLengthQuery  = $readErr   # 122 = ERROR_INSUFFICIENT_BUFFER from the length query: expected, not a fault
-        elevated         = ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Owner.Value
+        # The owner SID of this process's token. NOT an elevation reading: it was named `elevated` and carried an
+        # owner SID, which is the kind of field name a reader concludes from instead of checking.
+        ownerSid         = ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Owner.Value
     }
 
     if ($verb -eq 'run') {

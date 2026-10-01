@@ -2,7 +2,7 @@
 
 **This page answers one question**: while a person actually uses this harness, **who is called when**. It is the entry point from the user's seat - how the source is layered belongs to [`directory-structure.md`](./directory-structure.md), the ownership contracts to [`personal-agent-framework-core.md`](./personal-agent-framework-core.md), and how one turn runs to [`../guides/harness-loop-turn.md`](../guides/harness-loop-turn.md).
 
-**Discipline**: every claim below describes **behaviour that exists today** and carries a `file:line` anchor. The square axi will change is marked **not implemented** in §7 - this page does not claim a capability that is not there.
+**Discipline**: every claim below describes **behaviour that exists today** and carries a `file:line` anchor. §7 states where the square axi changes stands, by part: what is implemented and measured, and what is not there yet - this page does not claim a capability that is not there.
 
 ## 1. Who owns the loop
 
@@ -68,7 +68,7 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 | the agent's turn script and tool arguments | **no** | name-level evasion was measured at 98% of attempts / 88% succeeding - and it is a side effect of trying to finish the task |
 | **enforcement at the tool layer** (today) | **half** | the policy source is inside the session (the mode is session-level, so the agent cannot rewrite it) but **the enforcement site is a host hook** (§3) |
 | the person | **authority** | supplies the mode, the authority document, and the approval on privilege-boundary changes |
-| **Plane B** (axi) | **authority, and it must sit where the agent cannot reach** | **not implemented** - see §7 |
+| **Plane B** (axi) | **authority, and it must sit where the agent cannot reach** | **the mechanism exists and is measured; no runtime path composes it**, so as an authority in a running session it is not there yet - `src/jailer/acl.ts:85`, `tests/jailer.test.ts:50`; §7 |
 
 ## 6. Where the evidence lands
 
@@ -85,7 +85,16 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 1. **This repository has no `.dove/`** - so **no formal task has ever completed a recorded round here**. The line "the record reports, the person decides" is therefore **untested in place**, not proven; `../guides/harness-loop-turn.md:11` states the same precondition.
 2. **The DSH-side tool-layer policy is session-scoped** (the policy source is inside the session) - **half** trusted, not an authority.
 
-**The square axi changes (not implemented; the plan for it is the axi program)**: let the **loop be owned** rather than hosted (the gate sits on the dispatch path instead of on a host hook), and make **Plane B** an authority the agent cannot reach - enforced with ACLs and a restricted token, where **the constrained child is started by the jailer and never by the improver itself**. None of that exists today, so this page does not claim it.
+**The square axi changes, in the two states its two parts are actually in.**
+
+**Plane B: the boundary mechanism exists and is measured; no runtime path composes it yet.** `src/jailer/` (with its mechanism half in `src/windows-runtime`, `jailer-host.ps1`) sets the ACL, launches the child under a restricted token, and reads both back rather than assuming them: `ensureBoundary` (`src/jailer/acl.ts:85`) sets and then re-reads, `invariantViolations` (`src/jailer/acl.ts:56`) decides, `probeToken` (`src/jailer/token.ts:46`) verifies the restricting SID list instead of trusting `CreateRestrictedToken`'s return, and `launchJailed` (`src/jailer/launch.ts:32`) is the only way to start a child - so the improver is started by the jailer and never by itself. The cases in `tests/jailer.test.ts:50` are the readings. **The invariants, stated:**
+
+1. **A held-out path carries no grant for the work SID** - `Everyone` (`S-1-1-0`, `src/jailer/types.ts:23`), which is the tier a restricted token leaves usable here (`.trellis/tasks/09-30-axi-a0-base/readings.md`). **And the invariant is about the tree the entry names, not the entry alone**: an explicit ACE on a child survives the root's `/inheritance:r` - measured, a child carrying `Everyone:(OI)(CI)M` was reachable by the constrained process while the boundary reported no violation - so the grant is removed tree-wide (`icacls /remove:g ... /T`).
+2. **A writable path carries an explicit grant for that SID.** Without it the constrained process cannot do anything at all, and that failure looks exactly like a working boundary unless it is checked separately - which is why it is the second invariant rather than a remark.
+3. **A constrained process cannot lift the restriction.** The `icacls` grant it runs is refused *and* the ACL read back afterwards is the one it was (criterion 2), and the positive control keeps "it blocked" apart from "the probe was blind".
+4. **Strength, as measured rather than as hoped**: the `Everyone` tier - **not an OS sandbox**. What is still open is named rather than implied: the read covers the declared paths, not their contents, so a child that gains an explicit grant *after* the boundary is set is not seen; and **nothing in the runtime reaches `src/jailer/`** - the modules sit on the reachability allow-list with that reason (`tests/harness-reachability.test.ts`), and removing those entries is the definition of done for wiring it.
+
+**Owning the loop** - the gate on a dispatch path we own rather than on a host hook - is **not implemented**: §1 and §3 describe who owns the loop and where enforcement happens today.
 
 ## How to check this page
 

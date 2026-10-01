@@ -21,7 +21,7 @@
 
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeBoundary, ensureBoundary, invariantViolations, readAcl } from "../src/jailer/acl.ts";
@@ -94,6 +94,12 @@ describe("the plane B boundary", () => {
 	it("criterion 2: the constrained process cannot lift the restriction, and the ACL is unchanged", () => {
 		const before = everyoneGrantCountOnPlane();
 		assert.equal(before, 0, "the held-out path already carries a work-SID grant, so criterion 2 cannot be read");
+		// **Every rule, not only the count of one shape**: a count of work-SID grants cannot see a tamper that removed
+		// something else, and the reading this criterion is credited with is that the ACL is the one it was. **What a
+		// rule list cannot attribute is the exit code below**: `icacls "<writable path>"` read from the same token also
+		// exits 1 (measured), so "it refused" is read from the ACL and from the write that still fails, not from that
+		// code - an exit status alone would not tell a refused tamper from an instrument that cannot run at all.
+		const rulesBefore = readAcl(spec, "criterion-2-before").rules;
 		const tamper = launchJailed(spec, {
 			command: `cmd.exe /c icacls "${plane}" /grant "*${DEFAULT_WORK_SID}:(OI)(CI)M"`,
 			cwd: work,
@@ -107,6 +113,7 @@ describe("the plane B boundary", () => {
 		assert.equal(retry.ok, true);
 		assert.equal(existsSync(target), false, "the write succeeded after the tamper attempt");
 		assert.equal(everyoneGrantCountOnPlane(), before, "the held-out ACL changed, so the restriction was lifted");
+		assert.deepEqual(readAcl(spec, "criterion-2-after").rules, rulesBefore, "the held-out ACL changed, so the restriction was lifted");
 	});
 
 	it("positive control: the same test can see a write when the boundary is absent", () => {
@@ -128,5 +135,38 @@ describe("the plane B boundary", () => {
 		const report = launchJailed(spec, { command: `cmd.exe /c echo PROBE-NEG> "${after}"`, cwd: work, tag: "control-negative" });
 		assert.equal(report.ok, true);
 		assert.equal(existsSync(after), false, "removing the grant did not restore the boundary");
+	});
+
+	it("holds the invariant for the tree a held-out entry names, and not only for the entry itself", () => {
+		// **The reading that found this, before it was fixed.** `/inheritance:r` on the root removes what a child
+		// *inherited*, but an explicit ACE on a child survives it: with `plane\held-out-set` carrying
+		// `Everyone:(OI)(CI)M` - the shape a copy tool or an installer can leave - `ensureBoundary` reported no
+		// violation, the read never looked inside, and the constrained child wrote into that directory. A boundary
+		// that reports green while the side it holds out is reachable is the failure this file exists against, and
+		// the invariant is about the tree the declaration names, not about its top-level entry.
+		const held = join(plane, "held-out-set");
+		rmSync(held, { recursive: true, force: true });
+		mkdirSync(held, { recursive: true });
+		writeFileSync(join(held, "answer-key.txt"), "HELD OUT\n");
+		const preseeded = runCommandLine(`icacls "${held}" /grant "*${DEFAULT_WORK_SID}:(OI)(CI)M"`);
+		assert.equal(preseeded, 0, "the child grant has to exist before the boundary is set, or this case reads nothing");
+
+		// **Set again rather than reasoned about, and the second run is idempotent** (measured: the two rule lists
+		// come back equal), so this case can run after the others without moving the boundary they assert on.
+		const report = ensureBoundary(spec, "tree-invariant");
+		assert.deepEqual(report.violations, [], `setting the boundary failed: ${describeBoundary(report)}`);
+
+		const childRules = readAcl({ ...spec, planePaths: [held], workPaths: [] }, "tree-invariant-readback").rules;
+		const grants = childRules.filter((rule) => rule.type === "Allow" && rule.sid === DEFAULT_WORK_SID);
+		assert.deepEqual(grants, [], "a child of the held-out tree still carries a work-SID grant, so the tree is reachable");
+
+		// The invariant itself, and not only the ACL shape: the same constrained child that works on the writable
+		// side must not be able to write here.
+		const target = join(held, "from-child.txt");
+		rmSync(target, { force: true });
+		const write = launchJailed(spec, { command: `cmd.exe /c echo PROBE-INNER> "${target}"`, cwd: work, tag: "tree-invariant-write" });
+		assert.equal(write.ok, true, `the mechanism did not report honestly: ${write.failure ?? ""}`);
+		assert.notEqual(write.exitCode, 0, "the constrained child wrote into a child of the held-out tree");
+		assert.equal(existsSync(target), false, "the constrained child wrote into a child of the held-out tree");
 	});
 });
