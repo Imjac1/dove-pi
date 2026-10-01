@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { AuthorityDocument, AuthorityRequest } from "./authority.ts";
 import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
@@ -139,6 +139,38 @@ function trimTrailingDotsAndSpaces(segment: string): string {
 	return segment.replace(/[. ]+$/u, "");
 }
 
+/**
+ * The path the filesystem would actually open, as far as it exists on disk.
+ *
+ * **Why a fence cannot be purely lexical.** A junction inside the workspace names a fenced file by another
+ * spelling - `link\harness-surface.yaml` - and `mklink /J` needs no administrator (measured). The comparison
+ * below reads strings, so the alias reads as somewhere else while the filesystem opens the fenced file: the same
+ * defect as a trailing dot or an extended-length prefix, one step further out.
+ *
+ * **Why the deepest existing ancestor, not the whole path.** A write names a file that may not exist yet, and
+ * `realpathSync` refuses what it cannot open. Resolving the part that is there and re-appending the rest is what
+ * makes "the same file" true for both the file that exists and the one about to.
+ *
+ * **What stays open, stated rather than implied.** A junction created *after* this check is a time-of-check
+ * window this function cannot close: the fence reads the workspace as it is when the call arrives.
+ */
+export function canonicalTarget(path: string): string {
+	let head = path;
+	const tail: string[] = [];
+	for (;;) {
+		try {
+			const real = realpathSync(head);
+			return tail.length === 0 ? real : join(real, ...tail.reverse());
+		} catch {
+			const parent = dirname(head);
+			// Nothing on this path exists, so there is nothing to canonicalize: keep the spelling we were given.
+			if (parent === head) return path;
+			tail.push(basename(head));
+			head = parent;
+		}
+	}
+}
+
 export function workspaceRelativeTarget(workspaceRoot: string, target: string): string | undefined {
 	const requested = normalizeTargetSpelling(target);
 	const resolved = isAbsolute(requested) ? resolve(requested) : resolve(workspaceRoot, requested);
@@ -244,6 +276,9 @@ export function evidenceDigestsFor(document: AuthorityDocument, workspaceRoot: s
 
 export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	const { mode, workspaceRoot } = options;
+	// Canonicalized once: the fence is the only consumer, and paying a realpath of the root on every call for an
+	// answer that cannot change while the policy lives would be a cost with no reading behind it.
+	const canonicalWorkspaceRoot = canonicalTarget(workspaceRoot);
 	// The ceiling comes from the mode, which is read before any untrusted content is: a scope assembled later has
 	// already been influenced by what was read (design 4.3). One agent today - the mode itself - and `narrow` is there
 	// for the day a delegate exists.
@@ -454,7 +489,11 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 						);
 					} else {
 						for (const target of resolved.targets) {
-							const relativeTarget = workspaceRelativeTarget(workspaceRoot, target);
+							// **The fence asks the filesystem, not only the string.** Both sides are canonicalized so
+							// that two spellings of one location - a junction inside the workspace, or a workspace root
+							// that is itself reached through one - are compared as the location they name.
+							const spelled = isAbsolute(target) ? target : resolve(workspaceRoot, target);
+							const relativeTarget = workspaceRelativeTarget(canonicalWorkspaceRoot, canonicalTarget(spelled));
 							const hit = declaredPrefixHit(fence.paths, relativeTarget);
 							if (hit === undefined) continue;
 							return labelled(
