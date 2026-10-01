@@ -70,14 +70,14 @@ const expectedHeadingsBySpec = {
 	],
 	"personal-agent-field-run.md": ["Scenario: Real-Provider Field Run"],
 	"personal-agent-use-time-architecture.md": [
-		"1. 谁拥有 loop",
-		"2. 十八个挂载点",
-		"3. 闸门的执行点（今天）",
-		"4. 进程边界",
-		"5. 信任分级",
-		"6. 证据落盘与跨会话",
-		"7. 两处空白，与 axi 要改的那一格",
-		"怎么核对本页",
+		"1. Who owns the loop",
+		"2. The eighteen mount points",
+		"3. Where the gate is enforced (today)",
+		"4. Process boundaries",
+		"5. The trust ladder",
+		"6. Where the evidence lands",
+		"7. The two blanks, and the one square axi changes",
+		"How to check this page",
 	],
 } as const satisfies Record<(typeof routedSpecNames)[number], readonly string[]>;
 
