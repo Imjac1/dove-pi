@@ -695,3 +695,30 @@ Wrote the architecture and development design, then proved the boundary rather t
 ### Status
 
 [OK] **Completed**
+
+
+## Session 231: Use-time architecture page, the tree described as it is, and a time bomb found on the way
+<!-- trellis-session: v=2 fp=6b88a7faf1c37828 -->
+
+**Date**: 2026-10-01
+**Task**: Use-time architecture page, the tree described as it is, and a time bomb found on the way
+**Branch**: `master`
+
+### Summary
+
+Step 0 of the architecture refresh: added .trellis/spec/backend/personal-agent-use-time-architecture.md, routed from the runtime router and listed in the index, answering who is called when while a person uses the harness - the Pi host owns the loop while core/loop.ts is only the contract, the eighteen pi.on mount points with their declaration lines, the gate's live enforcement point inside the tool_call handler at extension.ts:2616, the process boundaries, the trust ladder, where the evidence lands, and two blanks stated as blanks. Step 1: directory-structure.md now lists all fourteen src directories and the four root modules with their layer, and carries a new section on the four layers and the rule that arrows only point down, with the measured state behind it - 26 of 111 files import across a layer, 22 downward and one upward. On the way this surfaced a pre-existing time bomb: modes/pentest and engagements/example-engagement carry a fixed grant window ending 2026-10-01T00:00Z, and host-work-mode.test.ts refreshed checked_at but not the window, so the suite went red the moment the clock passed it; proved pre-existing by stashing this session's changes and watching the same assertion fail at a pristine checkout, then fixed on the test side without touching an assertion. Two deviations recorded: the page was first written in Chinese while the index requires English, and a commit message was eaten by the shell, which is the third instance of text going through a command line in this repo.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5de9969` | fix(test): stop the pentest host test from depending on the wall clock |
+| `86c842a` | docs(spec): add the use-time architecture page, routed and indexed |
+| `b06360a` | chore(task): record step 0 and the expired-window time bomb it surfaced |
+| `fb945b5` | docs(spec): describe the tree as it is, and the direction the arrows point |
+| `eceba75` | chore(task): record step 1, the language fix it needed, and the third shell-text slip |
+| `7c4b906` | chore(task): record the closing state, with steps 2 to 4 still open |
+
+### Status
+
+[OK] **Completed**
