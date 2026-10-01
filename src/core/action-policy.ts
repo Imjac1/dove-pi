@@ -286,6 +286,31 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 		return Number.isFinite(number) ? number : undefined;
 	};
 
+	/**
+	 * Whether adding this call crosses a ceiling the session has already spent against.
+	 *
+	 * Returns `undefined` when nothing is crossed, and when the value cannot be read: the per-call gate reports
+	 * an absent or non-numeric argument, and reporting it twice would name two reasons for one defect.
+	 */
+	const cumulativeLimitBreach = (invocation: GateInvocation): GateDecision | undefined => {
+		for (const limit of declaredLimits) {
+			if (limit.max === undefined) continue;
+			const scope = limitScopes.get(limit.id);
+			if (scope !== undefined && !scope.has(invocation.tool)) continue;
+			const value = Number(readArgumentPath(invocation.arguments, limit.argument));
+			if (!Number.isFinite(value)) continue;
+			const already = limitSums[limit.id] ?? 0;
+			if (already + value > limit.max) {
+				return {
+					outcome: "block",
+					reason: `Limit '${limit.id}' under mode '${mode.id}' is a ceiling per call and per session: ${already} has already run in this session, and this call's ${value} would take the total to ${already + value}, above ${limit.max}.`,
+					remediation: `Do it in one call inside the ceiling, or raise the ceiling through the authority document deliberately rather than in steps the boundary cannot read as one action.`,
+				};
+			}
+		}
+		return undefined;
+	};
+
 	const toRequest = (invocation: GateInvocation): AuthorityRequest | undefined => {
 		const declared = mode.targetArgument;
 		// No declared target argument, or a call that carries no target, is "the target cannot be established" -
@@ -340,6 +365,13 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	// the count so far, not the count including this action, because whether the ceiling permits it is a decision the
 	// check below makes from the ceiling and the mode's answer, not a fact the caller could know.
 	const phaseCounts: Record<string, number> = {};
+	// **The second accumulator: what each declared ceiling has already had spent against it this session.**
+	// A ceiling is per call *and* per session - a sequence of calls each inside the ceiling is exactly what the
+	// measured evasion looks like from the outside - and the window is the session because that is where this
+	// state lives, apart from the message history that a retry can outlive.
+	const declaredLimits = mode.limits ?? [];
+	const limitSums: Record<string, number> = {};
+	const limitScopes = new Map(declaredLimits.map((limit) => [limit.id, limit.tools === undefined ? undefined : new Set(limit.tools)]));
 	const intensityOf = (invocation: GateInvocation): { phase: string; used: number } | undefined => {
 		const ceilings = mode.intensityCeilings;
 		const phase = readArgumentPath(invocation.arguments, "phase");
@@ -517,6 +549,11 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 				if (decision.outcome === "block") // The literal, not `limitGate.id`: the call site knows which gate it is evaluating, and the label it writes is the
 				// one the vocabulary checks. The behaviour is identical - the factory names that gate `limit`.
 				return labelled(decision, "limit");
+				// **The per-call gate decides first, so a sequence is only judged once each call in it is
+				// legitimate on its own.** That ordering is what keeps the cumulative check from becoming the
+				// reason for a defect the threshold gate already names.
+				const cumulative = cumulativeLimitBreach(invocation);
+				if (cumulative !== undefined) return labelled(cumulative, "limit");
 			}
 			// **The contract is checked against actions, not against tools, and a raw tool call has no action to check.**
 			// A document names actions (`net.scan`) and targets (`t-web`); a `bash` command is neither, so asking the
@@ -574,6 +611,14 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 
 		/** Record that an action ran in a phase, called by the host once the action has actually been permitted and run. */
 		recordRun(invocation: GateInvocation): void {
+			// The sums are recorded before the phase check, and whether or not the call names a phase: a ceiling
+			// on an argument does not depend on the phase machinery, and returning early for a call without one
+			// would leave the sequence invisible to the cumulative check.
+			for (const limit of declaredLimits) {
+				const value = Number(readArgumentPath(invocation.arguments, limit.argument));
+				if (!Number.isFinite(value)) continue;
+				limitSums[limit.id] = (limitSums[limit.id] ?? 0) + value;
+			}
 			const phase = readArgumentPath(invocation.arguments, "phase");
 			if (typeof phase !== "string" || phase.trim() === "" || mode.intensityCeilings === undefined || !(phase in mode.intensityCeilings)) return;
 			phaseCounts[phase] = (phaseCounts[phase] ?? 0) + 1;
