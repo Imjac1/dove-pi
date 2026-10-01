@@ -17,6 +17,7 @@ const routedSpecNames = [
 	"personal-agent-harness-loop.md",
 	"personal-agent-convergence-record.md",
 	"personal-agent-field-run.md",
+	"personal-agent-use-time-architecture.md",
 ] as const;
 const expectedHeadingsBySpec = {
 	"personal-agent-request-runtime.md": [
@@ -68,6 +69,16 @@ const expectedHeadingsBySpec = {
 		"Scenario: The Finding Claim Schema",
 	],
 	"personal-agent-field-run.md": ["Scenario: Real-Provider Field Run"],
+	"personal-agent-use-time-architecture.md": [
+		"1. 谁拥有 loop",
+		"2. 十八个挂载点",
+		"3. 闸门的执行点（今天）",
+		"4. 进程边界",
+		"5. 信任分级",
+		"6. 证据落盘与跨会话",
+		"7. 两处空白，与 axi 要改的那一格",
+		"怎么核对本页",
+	],
 } as const satisfies Record<(typeof routedSpecNames)[number], readonly string[]>;
 
 const readSpec = (name: string): string => readFileSync(join(backendSpecDir, name), "utf8");

@@ -37,6 +37,7 @@ repository enforces.
 | [Bounded Harness Improvement](./personal-agent-harness-loop.md) | The instruments the harness uses to improve itself from its own evidence, and the boundaries that keep that improvement bounded | Active |
 | [Convergence Record](./personal-agent-convergence-record.md) | The convergence contract for a formal native task, and the records around it: observations, manifests, terminal classification, decisions and applied commits | Active |
 | [Field Run](./personal-agent-field-run.md) | Running Dove against a real provider on purpose: the invocation, the reading it records, and what such a run does and does not prove | Active |
+| [Use-Time Architecture](./personal-agent-use-time-architecture.md) | Who is called when while a person uses the harness: the loop's owner, the eighteen mount points, the gate's enforcement point, process boundaries, and the trust ladder | Active |
 
 ---
 
