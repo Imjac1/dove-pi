@@ -16,7 +16,7 @@
 
 ## 剩余顺序（每片一条提交，可独立 revert）
 
-### 1. 历史无关 —— **证明片**（不是修补片）
+### 1. 历史无关 —— ✅ **已完成（提交 `9ac178a`，证明片）**
 
 **判据**：*"retry until relevant context leaves the monitor's history"*（§1.3 第三种手法）不得成立。
 
