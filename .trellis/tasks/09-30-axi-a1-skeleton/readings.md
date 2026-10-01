@@ -105,4 +105,26 @@ ledger records written: 0
 
 ## 下一步
 
-`checkpoint.ts` 仍在 allow-list 上（原因已改正为"**参照 loop 不组装 checkpoint**"）；它到期是在回路真正组装效果边界时。再往后：**S4（参数层：三种规避手法 + 故障注入）**、**S5（trace 三性质）**。
+**S2（组件面与结构测试）的结论：它已经满足了**，见下。再往后：**S4（参数层：三种规避手法 + 故障注入）**、**S5（trace 三性质）**。
+
+---
+
+## S2：组件面与结构测试 —— ✅ **已经满足**（不需要写代码）
+
+**为什么会这样**：§5.3 的 S2 是**给新仓写的**（"新仓里要有 `harness-surface.yaml` 的等价物 + `CHANGE_SURFACES` 这个唯一名字来源"）。形状决定之后是一个仓——**这些工件本来就存在**。
+
+**三条判据的读数**：
+
+| 判据 | 读数 |
+|---|---|
+| 七组件 ↔ 文件全解析 | `.trellis/harness-surface.yaml` 的 `components:` 声明全部七个（`system-prompt` / `tool-description` / `tool-implementation` / `middleware` / `skill` / `subagent-config` / `long-term-memory`），每条都解析到真实路径 |
+| `CHANGE_SURFACES` 是唯一名字来源 | 定义在 **`src/core/task-convergence.ts:854`**（`export const CHANGE_SURFACES: ReadonlySet<ChangeSurface>`），`src/core/harness-surface.ts:2` 从那里 import |
+| 双向一致测试 + 路径解析 + 键已声明 | `tests/harness-surface.test.ts` **13 / 13 pass**，含"declares every component the record vocabulary has, and nothing else"（双向）、"resolves every entry against the real tree"、以及六种拒绝形态 |
+
+`verifiedBy` 里 `skill` 与 `subagent-config` **故意未声明**——文件的原文是"一个没有条目的组件意味着**没人说过什么验证它**，这是关于我们知识状态的事实"，与"没有任何东西验证它"是两件事。这条我保留，不当缺口。
+
+### 一次差点犯的错（记下来）
+
+我在证据里看到 yaml 第 6 行说 `CHANGE_SURFACES` 在 `src/core/task-convergence.ts`，而我的 grep 只在 `src/core/harness-surface.ts` 找到这个名字——**差点据此去"修"一个正确的注释**。查证后：那个文件里的是**使用点**（import 与五处引用），**定义**确实在 `task-convergence.ts:854`。
+
+**这与那条"cites a thing and not a position"的检查是同一个盲区的两面**：检查自己的注释里写着 *"it cannot tell whether the file a citation names is the right one"*——它能禁掉位置，但**文件对不对只能靠人去核**。这次是我核了才知道。
