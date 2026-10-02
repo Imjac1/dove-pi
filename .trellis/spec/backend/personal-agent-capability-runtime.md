@@ -72,7 +72,7 @@ new CapabilityInvocationService(registry, ledger, {
 | JSON-RPC stdio | `tests/local-rpc.test.ts`, the approval refusals |
 | MCP stdio | `tests/mcp-adapter.test.ts`, which asserts `dove_invoke` exposes no `approve` argument |
 
-**The CLI row is worth the note it carries.** Its behaviour was implemented at `cli.ts:360` and `:371`, and searching the tests for the flag,
+**The CLI row is worth the note it carries.** Its behaviour was implemented at `src/cli.ts:363` and `:374`, and searching the tests for the flag,
 for `createLocalAdapter`, and for `capability run` found nothing - the only `"approve"` literal in the suite is the MCP assertion that it is
 *absent* there. **A safety row with no holder is the defect this column exists to make visible.**
 

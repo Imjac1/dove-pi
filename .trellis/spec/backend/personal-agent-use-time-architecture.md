@@ -75,14 +75,14 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 | What is recorded | Where | Anchor |
 |---|---|---|
 | the execution ledger (append-only) | `<stateDir>/execution.jsonl` | `src/pi-adapter/extension.ts:898`; the state directory resolves through `resolveDoveStateDir` (`:42`) |
-| effects / exactly-once | the effect store and its unresolved claims | `extension.ts:65` (`createFileEffectStore`, `listUnresolvedClaims`) |
-| session-level context snapshots | the latest snapshot, restorable | `extension.ts:44` (`restoreLatestContextSnapshot`) |
+| effects / exactly-once | the effect store and its unresolved claims | `src/pi-adapter/extension.ts:65` (`createFileEffectStore`, `listUnresolvedClaims`) |
+| session-level context snapshots | the latest snapshot, restorable | `src/pi-adapter/extension.ts:44` (`restoreLatestContextSnapshot`) |
 | a formal task's convergence record | `<projectRoot>/.dove/tasks/<id>/convergence.json` | `src/project-provider/native-artifacts.ts:46` |
 | who reads all of it | `scripts/harness-*.mts` and their tests | how one turn runs: `../guides/harness-loop-turn.md` |
 
 ## 7. The two blanks, and the one square axi changes
 
-1. **This repository has no `.dove/`** - so **no formal task has ever completed a recorded round here**. The line "the record reports, the person decides" is therefore **untested in place**, not proven; `../guides/harness-loop-turn.md:11` states the same precondition.
+1. **This repository has no `.dove/`** - so **no formal task has ever completed a recorded round here**. The line "the record reports, the person decides" is therefore **untested in place**, not proven; `.trellis/spec/guides/harness-loop-turn.md:11` states the same precondition.
 2. **The DSH-side tool-layer policy is session-scoped** (the policy source is inside the session) - **half** trusted, not an authority.
 
 **The square axi changes, in the two states its two parts are actually in.**

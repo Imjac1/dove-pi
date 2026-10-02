@@ -1,52 +1,56 @@
-# 审计报告：证据、复验与清单
+# 读数：锚点门与它修掉的东西
 
-## 1. 方法与它自己的可靠性
+## 计划里的第 1 步（R7 + R1）
 
-- **8 个角度 × 2（审查 + 对抗性复验）= 16 个代理**，全部只读，运行在 `32994bc` 上。
-- **一条角度被证伪**：我怀疑"fence 与被声明的可编辑面冲突" ✗——三个已发布模式（`code-audit` / `pentest` / `trading`）**都没有 `fence`** ✓，
-  所以冲突在已发布树里**没有实例**（是未来模式的风险，不是缺陷）。另有两三条被验证者判为 overstate / wrong，已剔除。
-- **我的汇总脚本本身有缺陷**：它按 claim 原文匹配验证者的结论，而验证者会改写措辞 → 结论数组被丢空（返回 `findings: 0` 而每个角度写着 `dropped: 5–10`）。
-  **所以本报告是我读原始报告 + 逐条自己复验得出的**，不是采信摘要。
-- **一条方法读数**：这个仓的三绿灯之下**仍然可以有阻断缺陷**（上一轮检查回合就是）；同样地，**审计的结论也必须被复验**——它自己就错了至少一条。
+**先红后绿，两条读数都在。**
 
-## 2. 已复验的偏差（14 处）
+### 红（门在陈旧锚点上的第一次运行）
 
-| # | 位置 | 它说 | 真相 | 状态 |
-|---|---|---|---|---|
-| 1 | `personal-agent-use-time-architecture.md` L12 | `loop.ts` "**all `interface` / `type`**" | `loop.ts` **导出函数** `normalizeGateDecision` ✗ | 待修（R2） |
-| 2 | 同页 L13 | `loop-runner` "**nothing reaches it today**" | S1 已使它可达、allow-list 条目已删 ✗ | 待修（R2） |
-| 3 | 同页 L47-49 | §3 的 `:2626`-`:2628`、`:2632` | 该路径**从未**对上（`extension.ts` 自那页诞生起逐字节未变）✗ | 待修（R1） |
-| 4 | `personal-agent-framework-core.md:61` | `extension.ts:2301` 处是 lease 守卫 | 那里现在是别的东西 ✗ | 待修（R1） |
-| 5 | `personal-agent-capability-runtime.md:75` | `cli.ts:360` / `:371` | 360 是空行 ✗ | 待修（R1） |
-| 6 | `personal-agent-use-time-architecture.md:59` | `subagent-provider.ts:60` | `resolvePiChildCommand` 在 37（定义）/ 58（调用），60 是 `}` ✗ | 待修（R1） |
-| 7 | `harness-reachability.test.ts` 注释 | "**the six shrinks** recorded below" | 实际是**第八次**（下面序号写到 eighth）✗ | 待修（R3） |
-| 8 | A2 `readings.md:28` | `tests/jailer.test.ts` **6 / 6** | 现在是 **7 / 7**（检查回合加的用例）✗ | 待修（R3） |
-| 9 | `program/prd.md:42` | `npm test` 底线 **822 / …** | 今天是 **847 / 845** ✗ | 待修（R3） |
-| 10 | `directory-structure.md:48` | 层计数 111 文件 / 26 跨层 / 22 下 / 1 上 | 今天 113 / 29 / 95 / 1 —— **规则仍成立**（唯一向上箭头仍是 `workspace-policy.ts:4`），数字是当天快照 ✗ | 待修（R5） |
-| 11-20 | plan-v8 | A1/A2 行、测试计数、"128 文件/816"、registry 10 vs 14、§3.9 gap-1 依据、§3.8 middleware 行、§5.1/5.2/5.4 的两仓形状、注入预算 | 全部复验成立 ✗ | 待修（R4，随重基） |
-| — | `init` 遗漏（**已修**） | `axi-turn` 不在 `LOCAL_CLI_COMMANDS`、两处 help 也不写它 | 已修：`85b38dd` ✓ | ✅ |
-| — | 账本 `gate` 字段（**已修**） | 我传闸门 **id**（`action-policy`），而该字段是**拒绝类别**（消费者按 `+` 拆原子、预测只能命名 `GATE_LABELS`） | 已修：`71e5c23`（`gateLabelOf` 一处实现，扩展的内联副本一并替换）✓ | ✅ |
+```
+✖ cites only paths that resolve, and lines that exist
+   5 citations cannot be followed
+```
 
-## 3. 两条结构性根因（这才是"架构偏差"本身）
+### 绿（修完引用之后）
 
-1. **散文里的数字无人守。** 规格的**路径**有检查（`harness-surface.yaml` 每条必须解析）、可达性 allow-list **两向**有检查、标签集有类型检查——
-   而**计数、序数、行数**没有任何东西守。本会话我自己就产出 4 处（第 7、8、9 条 + 第 10 条的一半）。
-2. **规格里的 `file:line` 锚点无人守。** `document-drift` **明确豁免**规格，而规格页的价值恰恰是可跳转（AC-7 要求），
-   **要求了可跳转却没人守** ✗。我上一轮写的那页一天内烂两处就是它的读数。
+```
+✔ cites only paths that resolve, and lines that exist          (29 citations read)
+✔ reports a citation whose path does not resolve, and accepts one that does   ← 门自己的敏感度自证
+```
 
-**两条门的形状**（已写进 `implement.md`）：
+## 门的能力边界：一次**撤回**，如实记录
 
-- **锚点门**：`.trellis/spec/**` 里每个 `file:line` 必须解析到**同一单元格点名过的符号**（只检查"行号存在"是抓不到漂移的），仓外固定文件显式豁免。
-- **数字门**：能从源码/测试/配置量出来的计数，要么由检查算出，要么**不写进散文**（先取证，抓不到已有过期数字就按 AC-5 记为不值得做）。
+第一版还判"**这一行点名的符号是否出现在被引行上**"，跑完就**撤回**了。理由是量出来的：
 
-## 4. 判定为"干净"的部分（沉默不覆盖它们）
+- 这些页面做的是**成组声明**——一行点四个类型、引四行（`use-time:12` 的契约行）——**名字与行不是一对一**；
+- 于是这条规则把**三处审计已确认正确**的引用判红 ✗（`:90`、`:92`、以及那行契约）；
+- **带假阳性的门比没有门更糟**：这个仓自己说过，人们会把关掉的围栏当保护——对检查也一样。
 
-可达性两向断言 ✓、四个 canary 真可达（无循环）✓、`CHANGE_SURFACES` 唯一定义处 ✓、七组件↔文件↔`verifiedBy` ✓、
-jailer 的 ACL + 受限令牌 ✓、**每条 block 必带 remedy**（类型 + 运行期守卫 + 测试）✓、
-（a）拒绝标签的**拒绝**写入者三个值全在词汇内 ✓（`undetermined-disposition` 属于 `gate.approved`，不是拒绝类别——**我先前把它算成越界是错的**）、
-层规则本身 ✓、以及"审计自己那条被证伪的角度"所覆盖的 fence × 可编辑面 ✓。
+**留下的**是**不用猜就能判**的部分：**被引路径必须能解析、被引行必须存在** ✓。它恰好抓住了那 6 处陈旧锚点里的一类——**读者跟不下去的引用**（路径是缩写、或文件已移动）✓。
 
-## 5. 下一次检查门该怎么用
+## 过程中门自己的两个 bug（都是它自己的假阳性）
 
-本任务的收尾**必须**派一次**全范围**的 `trellis-check`（上一次证明了三绿之下仍可有阻断缺陷）；
-它要检查的对象包括**这份报告本身**——报告里的位置与计数是最容易烂的部分，这正是本任务存在的理由。
+| bug | 症状 | 修法 |
+|---|---|---|
+| 默认遍历**仓根** | 读到 936 条引用（含 `.trellis/tasks/**`、`node_modules` ✗），而规格里只有 58 条 | 默认只走 `.trellis/spec` ✓ |
+| 路径正则**首字符不允许 `.`** | `` `.trellis/spec/guides/x.md:11` `` 被截成 `trellis/spec/...` ✗ → 报"无法解析" ✗ | 首字符类加入 `.` ✓ |
+
+两条都记在这里，因为它们是同一个教训的实例：**门会犯错，而它的错法是把对的东西判红**。
+
+## 这一轮修掉的引用（改前 → 改后）
+
+| 位置 | 改前 | 改后 |
+|---|---|---|
+| `capability-runtime.md:75` | `cli.ts:360` / `:371` | `src/cli.ts:363` / `:374`（**数字也是陈旧的**：360 是空行、371 是 `--args` 守卫） |
+| `use-time:78` | `extension.ts:65` | `src/pi-adapter/extension.ts:65` |
+| `use-time:79` | `extension.ts:44` | `src/pi-adapter/extension.ts:44` |
+| `use-time:85` | `../guides/harness-loop-turn.md:11` | `.trellis/spec/guides/harness-loop-turn.md:11` |
+| `framework-core.md:61` | 与 lease 检查无关的 `:2301` | `:2650`（该守卫真正的行） |
+
+**另有一处语病是这一轮我自己打出来的**（把一句好好的话改成了 `test:installer states the same precondition:` ✗），已在同一次提交里修回 ✓——记下来，因为"改一处、坏一处"正是这类工作最容易留下的东西。
+
+## 门**抓不到**什么（写在前面）
+
+**行号本身仍然可能陈旧** ✗：`use-time:48`/`:49`、`use-time:59` 这三处（审计已确认行号过期）**它判不了**，因为判它需要"引用与声明一一对应"，而那是**页面的写法**问题，不是检查的问题。三条出路写在 `implement.md`，本任务尚未决定。
+
+**下一步（本任务内）**：R1 剩余 3 处行号 + R2 两处假声明 → R3 三处陈旧计数 → R5 层页计数 → R6 数字门 → R4 plan-v8 重基。
