@@ -25,7 +25,7 @@
 
 | 读数 | 值 |
 |---|---|
-| `tests/jailer.test.ts` | **6 tests / 6 pass / 0 fail**（7.4 s） |
+| `tests/jailer.test.ts` | **7 tests / 7 pass / 0 fail**（写这一节时是 6/6；检查回合为 held-out 子树的漏洞加了一条） |
 | 门禁全量（迁移基线 **816 / 814 / 0 / 2**） | **822 / 820 pass / 0 fail / 2 skipped**（= 基线 + 新增 6） |
 | `npm run typecheck` | exit **0** |
 | `npm run test:installer` | Ran **141** tests / OK |

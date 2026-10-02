@@ -9,8 +9,8 @@
 | Role | Who | Evidence |
 |---|---|---|
 | **Owner of the loop** | **the Pi host**: it runs "call the model, run the tools, repeat", and owns the session, the TUI and the provider channel | the extension attaches handlers and nothing else: **18 `pi.on(...)` calls, no loop body** (`src/pi-adapter/extension.ts:2111`-`:3388`) |
-| **Contract** of the loop | `src/core/loop.ts` (263 lines, **all `interface` / `type`**: `ActionGate`, `GateInvocation`, `GateDecision`, `AgentLoop`) | `src/core/loop.ts:167`, `:173`, `:261`, `:262` |
-| **Reference implementation** (nothing reaches it today) | `src/core/loop-runner.ts` | registered in `tests/harness-reachability.test.ts` with the reason *"nothing reaches this module"* |
+| **Contract** of the loop | `src/core/loop.ts`: the contract's `interface` / `type` declarations - `ActionGate`, `GateInvocation`, `GateDecision`, `AgentLoop` - and **one function**, `normalizeGateDecision`, which is the only executable thing in the file | `src/core/loop.ts:135`, `:167`, `:173`, `:261`, `:262` |
+| **Reference implementation** (reachable, and not the loop the Pi host runs) | `src/core/loop-runner.ts` | reached by `src/commands/axi-turn.ts`, which `src/cli.ts` dispatches; the allow-list entry was removed when that wiring landed |
 
 **Why this comes first**: the whole safety story of a self-improving harness rests on the sentence "every action passes the gate". **Today that sentence is kept by the host calling our hook** (§3), not by a dispatch path we own.
 
@@ -44,9 +44,9 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 **Site**: inside the `pi.on("tool_call")` handler, `src/pi-adapter/extension.ts:2616`.
 
 1. **The mode check comes first, ahead of the lease check** - a mode that failed to load must stop the action even when the request bookkeeping is not set up (`:2617`-`:2620`).
-2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`:2624`-`:2628`). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.
-3. On `block` it records the refusal - `ledger.appendGateRefused({ taskId, stepId: "gate:<toolCallId>", mode, tool, action, ... })` - and then **`return { block: true, reason: "[Dove mode ...] ...\nDo this instead: ..." }`** (from `:2632`). The call is really blocked, and the refusal **carries a deterministic remedy**.
-4. **The half that reads arguments runs after the input is final** (`:2626`-`:2628`).
+2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`:2629`). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.
+3. On `block` it records the refusal - `ledger.appendGateRefused({ taskId, stepId: "gate:<toolCallId>", mode, tool, action, ... })` - and then **`return { block: true, reason: "[Dove mode ...] ...\nDo this instead: ..." }`** (from `:2648`). The call is really blocked, and the refusal **carries a deterministic remedy**.
+4. **The half that reads arguments runs after the input is final** (`:2745`).
 
 **The honest boundary**: this path is the **host** calling us at each tool call. "Every action passes the gate" is kept by the host's calling behaviour; the contract at `src/core/loop.ts:160` (that `ActionGate.evaluate` is invoked for **every** proposed action, including ones that will be blocked) is held up today by **tests and the host** together.
 
@@ -56,7 +56,7 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 |---|---|---|
 | the Pi host and the extension | **the main process** | the extension is a registration inside the host |
 | tools (shell, PowerShell, files) | **child processes**, started by the host | the host boundary is exactly the `tool_call` / `tool_result` pair of events |
-| subagents | **real child processes** (`spawn`) | `src/pi-adapter/subagent-provider.ts:1` (`import { spawn } from "node:child_process"`), `resolvePiChildCommand` (`:60`) |
+| subagents | **real child processes** (`spawn`) | `src/pi-adapter/subagent-provider.ts:1` (`import { spawn } from "node:child_process"`), `resolvePiChildCommand` (`:58`, defined at `:37`) |
 | workspace changes | **a transaction in the main process**: snapshot, patch, restore | `src/windows-runtime/workspace.ts` (`createWorkspaceSnapshot`, `applyWorkspacePatch`, `restoreWorkspaceSnapshot`, `verifyWorkspaceSnapshot`) |
 | cross-process mutation mutex | the project mutation lock, `withProjectMutationLock` | `src/project-provider/lock.ts` (50 lines over node built-ins). **Note**: this is the repository's only **upward** import (see `directory-structure.md`, "Layering and the allowed direction") |
 

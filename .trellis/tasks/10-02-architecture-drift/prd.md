@@ -30,7 +30,8 @@
 
 - [ ] **AC-1** 锚点门存在，且**在修完 R1 之前是红的**——红与绿各留一条读数。
 - [ ] **AC-2** `document-drift` 与 `spec-context-budget` 不受影响；`harness-surface` 两向仍绿。
-- [ ] **AC-3** 三个门禁不下降（写作时的 baseline：`typecheck` 0；`npm test` **847 / 845 pass / 0 fail / 2 skipped**；installer **141 OK**）。
+- [ ] **AC-3** 三个门禁不下降：`typecheck` **0**、`npm test` **0 fail**、installer **OK**。
+  **具体通过数刻意不写在这里**——它会动，写进散文就会烂掉，而"散文里的数字无人守"正是本任务要治的病。当前读数在 `readings.md` 与提交记录里。
 - [ ] **AC-4** 修掉的每一处都留下"改前读数 → 改后读数"，写进 `readings.md`。
 - [ ] **AC-5** R6 的门若判定值得做，它必须至少抓住一处**已经存在**的过期数字；抓不到就说明它是装饰，如实记下。
 

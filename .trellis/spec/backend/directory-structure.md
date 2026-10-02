@@ -45,7 +45,9 @@ The layer marker on each line is defined under [Layering and the allowed directi
 
 **A `core/` module importing anything above it is a defect, not a style choice.** The reason is the one in `personal-agent-framework-core.md`: the loop and the gate live at the bottom so that every action passes them *by construction*, not because a caller remembered to route it.
 
-**Measured on 2026-10-01**: 111 source files, 26 of which import across a layer; **22 point down** (allowed) and **one points up** — `src/core/workspace-policy.ts:4` takes `withProjectMutationLock` from `src/project-provider/lock.ts`. That lock is 50 lines over node built-ins and has nothing to do with the provider, so the repair is to move it down into `core/`; it is tracked as an architecture-refresh item.
+**Measured 2026-10-02**: 113 source files, 29 of which import across a layer; **95 point down** (allowed) and **one points up** — `src/core/workspace-policy.ts:4` takes `withProjectMutationLock` from `src/project-provider/lock.ts`. That lock is 50 lines over node built-ins and has nothing to do with the provider, so the repair is to move it down into `core/`; it is tracked as an architecture-refresh item.
+
+**The counts move, and this sentence has already rotted once** — a day earlier it read 111 files, 26 importing across a layer, 22 down. What is load-bearing is the **rule** above and the **one upward arrow**, which the same walk reports by name; a reader who needs current numbers should re-run the walk rather than trust a number written here.
 
 ## Module Organization
 
