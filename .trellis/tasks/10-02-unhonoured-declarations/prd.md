@@ -32,7 +32,7 @@
 | **R2** `grant_graph` | **拒绝** ✓ | 真正的绑定是文档里的 `targets[].requires_grants` ✓ → 它是同一控制的第二份副本 ✓（与 `expires` vs grant 的 `window` 同形 ✓） |
 | **R3a** `session.budget.turns` | **接线**（不是新增）✓ | 运行时有**真正的回合预算** ✓（`loop-runner.ts:75` 在用 `maxTurns` ✓；Pi 桥也声明了它 ✓）→ 模式里那个数字是第二份副本 ✗ → 把模式的数**喂给已有的界** ✓ |
 | **R3b** `stop.on` | **校验** ✓ | 它点名的 `budget-exhausted` / `window-closed` / `emergency-stop` **在 `src/` 里一个都不存在** ✗✓ → 改成"运行时的循环**真的会产生**的停止种类"这一份**唯一**的清单 ✓（不另立第二份 ✗） |
-| **R3c** `evidence` / `coordination` | **拒绝** ✓（损失如实记 ✓） | `retention: 365d` ✓ 与 `isolation: per-engagement` ✓ 是**承诺**不是记录 ✓，兑现意味着真实的保留/删除语义 ✗ —— 本次不做 ✓ |
+| **R3c** `evidence` / `coordination` / `session.memory_scope` | **拒绝** ✓（损失如实记 ✓） | `retention: 365d` ✓ 与 `isolation: per-engagement` ✓ 是**承诺**不是记录 ✓，兑现意味着真实的保留/删除语义 ✗ —— 本次不做 ✓。**`memory_scope` 是在本任务开始之后才量出来的同类** ✓：三个已发布模式都声明了它（`none` / `project` / `none` ✓）而 `src/` 里没有任何读者 ✗ → 经决定**并入本任务** ✓，走同一条拒绝 ✓（那三个文件本来就在迁移清单上 ✓） |
 | **R4** 两个解析不到的 grant 名 | **兑现** ✓ | 早退是**有意**的 ✓（注释自己写着"否则那个值会看起来像实现了、其实没有" ✗）→ 保留"不加载文档"的早退 ✓，但**名字本身必须可解析** ✓ → 两个模式随之要么补上真文档、要么删名 ✓ |
 | **门** | **扩展 + 让引用不再会烂** ✓ | `scripts/mode-behaviour-map.mts` 的引用早已烂掉 ✗ 而两道门都看不见它 ✓ → **注释里不再写行号** ✓（只点函数名 ✓ —— 行号注定会烂 ✗），并把引用检查扩到 `scripts/**` ✓ |
 

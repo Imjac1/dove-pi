@@ -12,6 +12,10 @@
 >
 > **恢复点：`git stash pop`** ✓ → 然后**只剩一件事**：那 29 条失败的测试是**断言着已移除声明**的旧期望 ✓（`pentest-mode` / `code-audit-mode` / `trading-mode` / `host-work-mode` / `gates` / `action-policy` / `axi-turn` ✓）—— 逐条把期望改成"现在的文件" ✓，而不是把声明加回去 ✗。
 >
+> **已经量出来的两条成因** ✓（其余在 pop 后那一次运行里看 ✓）：
+> 1. **模式版本纪律** ✓：`code-audit-mode.test.ts` 断言 `governance.version === "1.8.0"` ✓，理由是 *"an authority change increments the version, so a run can be attributed to one authority set"* ✓ → 本步就是一次授权变化 ✗ → **三个模式各自 bump 一格** ✓（`pentest 1.4.0 → 1.5.0` ✓、`code-audit 1.8.0 → 1.9.0` ✓、`trading 1.3.0 → 1.4.0` ✓）+ 测试里的字面值与理由一起改 ✓。
+> 2. **断言了被移除块的内容** ✗：同一条用例还断言 `governance.evidence.artifacts.includes("coverage.json")` ✓ → 按本仓的老规矩**反转**它 ✓（"这个模式不声明 `evidence`，因为运行时兑现不了" ✓），**不是把声明加回去** ✗。
+>
 > **再往后的三步**：② 规格补上新的拒绝（`personal-agent-mode-format.md` 的错误矩阵 ✓ + `personal-agent-framework-core.md` 的字段表 ✓）；③ 门的扩展（`scripts/**` 只查路径能解析 ✓ + `mode-behaviour-map.mts` 的注释去掉行号 ✓）；④ 收尾的全范围 `trellis-check` ✓。
 >
 > **一条新发现，留在这里**（同一缺陷类，本任务未决定 ✗）：三个模式的 `session.memory_scope` **也没有读者** ✗ —— 已在三个文件里就地标注 ✓，但它属于"控制还是记录"的取舍，没有在本任务的路线里定过 ✓。
@@ -35,9 +39,9 @@
    - [ ] 合法值来自 `LoopStopReason` 的**那一份**清单 ✓；
    - [ ] 红测试：`stop.on` 里有一个运行时不会产生的种类 → 加载被拒且点名 ✓；
    - [ ] `modes/pentest` 的 `stop.on` 改成真的种类 ✓（没有对应物就删 ✓）。
-5. [ ] **R3c `evidence` / `coordination`（拒绝）**
+5. [ ] **R3c `evidence` / `coordination` / `session.memory_scope`（拒绝）**
    - [ ] 红测试：声明它们 → 加载被拒且点名 ✓；
-   - [ ] `modes/pentest` 删掉这两块 ✓ + **原位写明损失** ✓（不再声明证据保留与协调节奏 ✓）。
+   - [ ] `modes/pentest` 删掉这两块 + `memory_scope` ✓ + **原位写明损失** ✓（不再声明证据保留、协调节奏与记忆范围 ✓）。
 6. [ ] **R4 grant 名（兑现）**
    - [ ] 红测试：`limit`/`none` 模式下名字不可解析 → 加载被拒且点名 ✓（今天它被静默忽略 ✗）；
    - [ ] 保留"不为非 conformance 加载文档"的早退 ✓（它自己的理由仍然成立 ✓），只加**名字必须可解析** ✓；
