@@ -38,9 +38,9 @@ const ENTRY_POINTS = [
  * task makes it reachable, stated rather than left blank.
  */
 // **Every entry is `wiredBy: null`, and that was measured rather than assumed.** The field exists to force a statement - its own words
-// are "stated rather than left blank" - and a non-null value is a promise attached to a task. Read across all ten entries, none of them
-// carries one: the task that made the claims this list was born with has finished, and each claim left the list as it was wired, which is
-// the six shrinks recorded below. **So there is no outstanding promise here** - only modules that are unreachable on purpose, or that
+// are "stated rather than left blank" - and a non-null value is a promise attached to a task. Read across every entry, none of them
+// carries one: the task that made the claims this list was born with has finished, and each claim left the list as it was wired, which are
+// the shrinks recorded below. **So there is no outstanding promise here** - only modules that are unreachable on purpose, or that
 // predate the framework work and are claimed by nothing. A future entry that names a milestone is making a promise, and this comment is
 // where the next reader learns that a promise from a finished task is the one thing the exactness assertion cannot see.
 const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
