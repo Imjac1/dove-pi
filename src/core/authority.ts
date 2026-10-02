@@ -90,6 +90,15 @@ export interface AuthorityRequest {
 	readonly phase?: string;
 	readonly intensity?: number;
 	/**
+	 * How many actions this session has already run in the second ending at `at`.
+	 *
+	 * **Counted by the caller, judged here**, which is the arrangement `intensity` already uses: only the caller holds
+	 * session state, and only this function decides whether a grant's constraints resolve. The cap it is compared
+	 * against - `constraints.max_requests_per_second` - sat in the schema with no reader at all, so a document could
+	 * advertise a rate limit that nothing limited.
+	 */
+	readonly requestsInLastSecond?: number;
+	/**
 	 * Actual digests for the evidence references the document names, keyed by `ref`. The framework does
 	 * not read files here; a reference with no supplied digest cannot be verified and is therefore a
 	 * block, not a pass.
@@ -420,6 +429,16 @@ export function evaluateAuthority(
 				return block(
 					`Phase '${request.phase}' intensity ${request.intensity} exceeds the ceiling ${ceiling} set by grant '${grant.id}'.`,
 					"Lower the intensity, or raise the ceiling through the authority document.",
+				);
+			}
+		}
+		if (grant.constraints?.max_requests_per_second !== undefined && request.requestsInLastSecond !== undefined) {
+			// This call is the next one, the way the intensity ceiling counts `used + 1`: a cap of five is five.
+			const cap = grant.constraints.max_requests_per_second;
+			if (request.requestsInLastSecond + 1 > cap) {
+				return block(
+					`Grant '${grant.id}' caps the rate at ${cap} request(s) per second, and this would be number ${request.requestsInLastSecond + 1} in this second.`,
+					"Wait for the second to pass, or raise the cap through the authority document deliberately rather than pacing the work around it.",
 				);
 			}
 		}

@@ -27,7 +27,7 @@ function workspace(): { root: string; permission: string; inventory: string } {
 	return { root, permission, inventory };
 }
 
-function document(permission: string, inventory: string): AuthorityDocument {
+function document(permission: string, inventory: string, maxRequestsPerSecond?: number): AuthorityDocument {
 	return {
 		version: 1,
 		engagement: "test-engagement",
@@ -43,6 +43,8 @@ function document(permission: string, inventory: string): AuthorityDocument {
 				authorizes: { actions: ["net.scan"] },
 				targets: ["t-web"],
 				evidence: [{ kind: "signed-permission", ref: "engagements/permission-to-test.pdf", sha256: permission }],
+				// Omitted for every caller that does not ask for one, so this helper keeps saying nothing about rates.
+				...(maxRequestsPerSecond === undefined ? {} : { constraints: { max_requests_per_second: maxRequestsPerSecond } }),
 			},
 		],
 		targets: [
@@ -107,6 +109,28 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		);
 		const decision = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
 		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
+	});
+
+	it("counts the calls the session has made, and refuses the one that crosses the grant's rate cap", () => {
+		// The cap sat in the schema with no reader at all, so a document could advertise a rate limit that nothing
+		// limited. **The pair is the point**: the count is the policy's, because session state is the policy's, and
+		// the judgement is the authority's, because a grant's constraints are the authority's to decide - the
+		// arrangement the intensity ceiling already uses. With the counting end missing, every call below is allowed.
+		const files = workspace();
+		const policy = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory, 5), workspaceRoot: files.root });
+		const at = (offsetMs: number): string => new Date(Date.parse(AT) + offsetMs).toISOString();
+		const outcomes: string[] = [];
+		for (let index = 0; index < 6; index += 1) {
+			const call = { ...invocation("net.scan", { target: "t-web" }), at: at(index * 10) };
+			outcomes.push(policy.evaluate(call, asCapability).outcome);
+			policy.recordRun(call);
+		}
+		assert.deepEqual(outcomes, ["allow", "allow", "allow", "allow", "allow", "block"], "five inside a cap of five, the sixth refused");
+
+		// **A rate, not a total.** The same count one second later starts again, which is what separates this from
+		// the session-cumulative ceilings the mode declares.
+		const after = { ...invocation("net.scan", { target: "t-web" }), at: at(1_100) };
+		assert.equal(policy.evaluate(after, asCapability).outcome, "allow", "a call after the window has passed is inside the cap again");
 	});
 
 	it("builds neither a threshold nor a contract gate for a mode that declares no gate", () => {

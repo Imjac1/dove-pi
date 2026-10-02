@@ -367,6 +367,13 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			target,
 			at: invocation.at,
 			evidenceDigests: evidenceDigests(),
+			// How many calls this session has already made in the second ending at this invocation's instant. The window
+			// uses the invocation's own `at` rather than the wall clock, which is what makes the cap reproducible and
+			// testable - the same reason the intensity count is carried rather than looked up somewhere.
+			requestsInLastSecond: runInstants.filter((instant) => {
+				const delta = Date.parse(invocation.at) - Date.parse(instant);
+				return Number.isFinite(delta) && delta >= 0 && delta <= RATE_WINDOW_MS;
+			}).length,
 			...(technique === undefined ? {} : { technique }),
 			...(phase === undefined ? {} : { phase }),
 			...(intensity === undefined ? {} : { intensity: intensity.used + 1 }),
@@ -409,6 +416,12 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	// state lives, apart from the message history that a retry can outlive.
 	const declaredLimits = mode.limits ?? [];
 	const limitSums: Record<string, number> = {};
+	// **The third accumulator: when each permitted action ran.** A rate is a count over a *window*, so it needs the
+	// instants rather than a total - which is why this is not another number. Kept short on purpose: a window is one
+	// second, and a buffer that grew with the session would be a leak with no reading behind it.
+	const runInstants: string[] = [];
+	const RATE_WINDOW_MS = 1_000;
+	const RATE_BUFFER = 64;
 	const limitScopes = new Map(declaredLimits.map((limit) => [limit.id, limit.tools === undefined ? undefined : new Set(limit.tools)]));
 	/**
 	 * Whether a declared limit governs this tool. One predicate, because the check and the recording have to agree
@@ -697,8 +710,15 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 				if (!Number.isFinite(value)) continue;
 				limitSums[limit.id] = (limitSums[limit.id] ?? 0) + value;
 			}
+			// **Before the phase check.** A rate cap has nothing to do with phases, and the check below returns early
+			// for a call that names no phase, or one the mode does not meter - so a rate recorded after it would miss
+			// exactly the calls that make a rate.
+			runInstants.push(invocation.at);
+			if (runInstants.length > RATE_BUFFER) runInstants.splice(0, runInstants.length - RATE_BUFFER);
 			const phase = readArgumentPath(invocation.arguments, "phase");
 			if (typeof phase !== "string" || phase.trim() === "" || mode.intensityCeilings === undefined || !(phase in mode.intensityCeilings)) return;
+			// Recorded before the phase check, like the limit sums: a rate cap has nothing to do with phases, and a
+			// call without one would otherwise be invisible to it.
 			phaseCounts[phase] = (phaseCounts[phase] ?? 0) + 1;
 		},
 
