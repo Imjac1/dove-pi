@@ -9,7 +9,7 @@ scope:
 authority:
   grant: local-paper-trading
   capabilities: [market.read, order.submit]
-  expires: "2026-12-31T00:00:00.000Z"
+  # No `expires`: the runtime refuses it as unenforceable - see the note in `modes/pentest/governance.yaml`.
 
 gate:
   semantics: limit

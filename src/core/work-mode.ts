@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { WITNESSED_TECHNIQUES } from "./argument-syntax.ts";
 import { parseAuthorityDocument, type AuthorityDocument } from "./authority.ts";
 import type { EffectClass } from "./effect-ledger.ts";
 import type { LimitSpec } from "./gate-limit.ts";
@@ -460,6 +461,17 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 
 	const authority = requireRecord("governance.authority", governance.authority);
 	rejectUnknown("governance.authority", authority, AUTHORITY_FIELDS);
+	// **`expires` is refused, for the reason `gate.windows` is**: a calendar claim outlives a session and belongs to
+	// the engagement document's grant, whose `window` the pre-flight and every action check. Keeping the key in the
+	// field set means a mode that writes one is told precisely this rather than that the key is unknown - which is
+	// the point of refusing it here instead of deleting it from the schema, and the reason this is a missed
+	// application of a decision rather than a new one.
+	if (authority.expires !== undefined) {
+		throw new WorkModeError(
+			"invalid-type",
+			"governance.authority.expires is not enforceable by the runtime: an expiry outlives a session and is a property of the engagement document's grant, whose 'window' the pre-flight and every action check. Declare the window on the grant instead, or drop the field.",
+		);
+	}
 	if (authority.capabilities === undefined) {
 		throw new WorkModeError("missing-field", "governance.authority.capabilities is required: a mode that cannot declare its authority cannot be reviewed before it runs.");
 	}
@@ -525,6 +537,18 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 			}
 			excludedTechniques.push(technique);
 		}
+	}
+	// **A prohibition the runtime cannot witness prohibits nothing.** The witness table reads a technique's *shape*,
+	// because a name match is defeated by spelling the name differently; a name with no entry there would sit in the
+	// mode looking like a control while the boundary has nothing to look for. Refusing it by name is the same cure as
+	// the expiry above, and it keeps the two halves honest: either the technique has a shape this repository can
+	// check, or the mode does not get to claim it forbids it.
+	for (const technique of excludedTechniques) {
+		if (WITNESSED_TECHNIQUES.has(technique)) continue;
+		throw new WorkModeError(
+			"invalid-type",
+			`governance.gate.excluded_techniques names '${technique}', which this runtime cannot witness: a technique is only prohibitable when it has a shape the boundary can read, and this name has none. Drop it, or add a witness for it.`,
+		);
 	}
 	// `gate.windows` is refused outright, and the reason is not "unimplemented" but "unenforceable here": the
 	// runtime has no clock over a calendar that outlives a session, while the **authority document** - the thing a

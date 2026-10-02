@@ -31,7 +31,10 @@ grants:
       intensity:
         discovery: 2
         exploitation: 1
-      excluded_techniques: [dos, social-engineering]
+      # `social-engineering` was dropped here and from the mode, because the runtime can only prohibit a technique it
+      # can witness by shape. That is a real loss in what this grant says it forbids, and it is written down rather
+      # than hidden: see the note in `modes/pentest/governance.yaml`.
+      excluded_techniques: [dos]
       max_requests_per_second: 5
     risk_acceptance:
       - risk: service-disruption

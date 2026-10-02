@@ -164,7 +164,9 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			"authority:",
 			"  grant: " + (conformance === undefined ? "local-fixture" : conformance.document),
 			"  capabilities: [" + spec.capability + "]",
-			'  expires: "' + (spec.expires ?? "2027-01-01T00:00:00.000Z") + '"',
+			// **Only when the case asks for one.** The loader refuses `expires` outright - a calendar window belongs to
+			// the grant - so a fixture that wrote one by default would put every case in this file behind a refusal.
+			...(spec.expires === undefined ? [] : ['  expires: "' + spec.expires + '"']),
 			...(spec.fence === undefined ? [] : ["fence:", "  paths: [" + spec.fence.paths.join(", ") + "]", "  shell: " + spec.fence.shell]),
 			"gate:",
 			// `none` when the fixture declares neither control: a fixture that wrote `limit` with no limits would be refused
@@ -824,13 +826,14 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			host.restoreCwd();
 		}
 	});
-	it("loads a mode whose declared expiry is in the past  [KNOWN GAP]", async () => {
-		// All three shipped modes declare `authority.expires` (`2026-10-01`, `2026-12-31`, `2027-01-01`) and nothing
-		// compares it to now - a field-level reader scan over `src/` finds no reader. An authorization with a date on it
-		// that is never read is a time-bounded grant with no bound. The *document's* grant `window` **is** checked by
-		// the pre-flight, which is what makes the omission easy to miss.
+	it("refuses a mode that declares an expiry the runtime cannot honour  [D4]", async () => {
+		// **This case was inverted, as its own instruction said to.** It used to assert the defect: all three shipped
+		// modes declared `authority.expires` and nothing compared it to now, so a time-bounded grant had no bound.
 		//
-		// Invert this test when the expiry is enforced; do not delete it.
+		// The cure is refusal rather than enforcement, and this repository had already decided that shape for the same
+		// concept: `governance.gate.windows` is refused outright, "not because it is unimplemented but because it is
+		// unenforceable here" - the engagement document's grant carries the window and the pre-flight checks it. An
+		// expiry is that same calendar idea, so a mode repeating it is a second and less verifiable copy.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		writeFixtureMode(root, "expired", { capability: "workspace.inspect", expires: "2020-01-01T00:00:00.000Z" });
@@ -838,10 +841,31 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		const host = startHost(root);
 		try {
 			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
-			assert.ok(
-				host.notifications.some((message) => /expired loaded from modes\/expired/.test(message)),
-				"KNOWN GAP: an expired mode loads, because nothing reads its expiry: " + host.notifications.join(" | "),
+			const message = host.notifications.join(" | ");
+			assert.equal(
+				/expires/.test(message) && /not enforceable/u.test(message),
+				true,
+				"a mode declaring an expiry must be told by name that the runtime cannot honour it: " + message,
 			);
+			assert.equal(/expired loaded from modes\/expired/.test(message), false, "and it must not load as if the field meant something");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("refuses a mode whose forbidden technique this runtime cannot witness  [D4]", async () => {
+		// The witness table in `argument-syntax.ts` reads a technique's *shape*; a name with no shape is a prohibition
+		// prohibiting nothing - the same defect as the expiry above, and the same cure: say so, by name.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "unwitnessed", { capability: "workspace.inspect", excludedTechniques: ["dos", "social-engineering"] });
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "unwitnessed" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const message = host.notifications.join(" | ");
+			assert.equal(/social-engineering/.test(message), true, "the name the runtime cannot witness is named back: " + message);
+			assert.equal(/cannot witness|no witness/u.test(message), true, "and the reason given is that it has no shape to check: " + message);
 		} finally {
 			host.restoreCwd();
 		}
