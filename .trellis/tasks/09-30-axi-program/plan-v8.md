@@ -5,6 +5,18 @@
 **本文替掉那一版。** 拼接版保证的是"没丢字"，代价是没有条理：它是三份文档，不是一份设计。本文按设计的因果顺序重写：**为什么做（§1–§2）→ 做成什么（§3）→ 每块怎么做（§4）→ 凭什么信（§5）→ 什么时候做（§6–§7）→ 什么会否掉它（§8–§10）**。
 底层记录不动，仍在原处：`plan.md`（第七版决策记录）、`09-30-axi-a0-base/readings.md`（实测读数）、`amendments.md`（修订件）。**本文是设计的入口，那三份是证据与沿革。**
 
+**重基（2026-10-02）**：本文原先按**两个仓**写（一个新施工仓 + dove-pi）。形状决定为**一个仓**之后，§5.1 / §5.2 / §5.4 的目录树与迁移整节**作废**——正文保留它们（它们记录了当时的推演），而**当前形状以 §5.3 的切片顺序与本节的更正为准**。同一次重基改掉的过期声明：
+
+| 曾写 | 现在 |
+|---|---|
+| `test` 基线 **816 / 814**、**128 个测试文件** | 测试文件 **94**（`tests/**/*.test.ts`）、用例 **850**（2026-10-02 读数）。**这行数字会动**：判据是 `0 fail`，计数以 `npm test` 的输出为准 |
+| middleware 面 = `action-policy.ts` + `extension.ts` + 2 个测试；**3 个套件** | 再加 `src/core/argument-syntax.ts`；`verifiedBy.middleware` 现为 **7 个套件**（`.trellis/harness-surface.yaml` 是唯一名字来源） |
+| A1 **未开始** | **已完成**：`src/cli.ts` 的 `axi-turn` 子命令跑通一个回合，配对闸门测试 3/3，keep/revert 各一次（`bf90771`） |
+| A2 **未开始** | **大部分完成**：隔离（ACL + 受限令牌）/ 语法感知 / 跨调用累积 / 历史无关（证明片）已落；**余**：保持性传感器、7-mutation 故障注入。`398025c` 另修两条阻断缺陷 |
+| 登记表条目计数（审计记为 10 vs 14） | **在本文里没有找到对应句子**——它指的是 `tests/harness-reachability.test.ts` 注释里的计数，那处由该文件自己修正。记在这里，免得下次又被当成未处理 |
+
+**这次重基的来源**：全仓偏差审计（8 个角度 × 对抗性复验），清单与证据在 `.trellis/tasks/10-02-architecture-drift/readings.md`。本表只保留**关于本文**的更正。
+
 ---
 
 ## 怎么读本文：四种标记
@@ -299,7 +311,7 @@ AHE 把可编辑的 harness 组件枚举为**七个固定挂载点**（`2604.258
 | system-prompt | `AGENTS.md`、`modes` | A | 5 个 mode 测试 |
 | tool-description | `src/pi-adapter/extension.ts` | A | `tests/pi-adapter.test.ts` |
 | tool-implementation | `src`、`tests` | A | 8 个套件 |
-| middleware | `src/core/action-policy.ts`、`src/pi-adapter/extension.ts`、2 个测试 | A | 3 个套件 |
+| middleware | `src/core/action-policy.ts`、`src/core/argument-syntax.ts`、`src/pi-adapter/extension.ts`、2 个测试 | A | **7 个套件**（以 `harness-surface.yaml` 的 `verifiedBy.middleware` 为准） |
 | skill | `.agents/skills` | A | **未声明**（"没人说过什么验证它"，与"没有任何东西验证它"是两件事） |
 | subagent-config | `src/pi-adapter/subagent-provider.ts`、`.codex/agents` | A | **未声明**（同上） |
 | long-term-memory | `.trellis/spec`、`.trellis/workspace`、`.trellis/tasks` | A | `tests/spec-context-budget.test.ts` |
@@ -637,7 +649,7 @@ axi/
 | 69 个基座无关模块 | **复制 + 重设基线**，不用 subtree / submodule | 每个复用模块**至少一条自己的测试通过**（AC-10） |
 | 为什么不 subtree | 它会把"待处置"固化成"已搬完"——而 §3.12 要求**逐条**给出复用/重写/删 | 可达性登记册 10 条各有处置与理由 |
 | 重写三项（loop 提升、闸门参数层、trace 通道） | 不搬旧实现，但**保留旧闸门作对照臂** | 对照臂能复现 88/120 那一档的读数 |
-| 128 个测试文件 | 与基座无关的跟着搬；与 Pi 宿主强耦合的（`pi-adapter/*`）留在适配器层 | 迁移后 `test` 基线不低于 816 |
+| 测试文件与用例数（计数见文首重基表） | 与基座无关的跟着搬；与 Pi 宿主强耦合的（`pi-adapter/*`）留在适配器层 | `test` **0 fail**（计数不写死：它会动） |
 | 本仓（dove-pi） | **不因 axi 改产品代码** | `git status` 只多任务记录文件 |
 
 ### 5.5 开发约定
@@ -655,7 +667,7 @@ axi/
 |---|---|
 | 运行时 | **Node ≥ 22.19.0**（`engines`），ESM（`"type": "module"`） |
 | 语言与检查 | TypeScript **5.9.3**，`strict`，`module/moduleResolution: NodeNext`，`allowImportingTsExtensions`，`noEmit` |
-| 测试 | `node --import tsx --test tests/**/*.test.ts`（128 个测试文件 / 816 个用例）；installer 走 `python -m unittest` |
+| 测试 | `node --import tsx --test tests/**/*.test.ts`（计数见文首重基表）；installer 走 `python -m unittest` |
 | 直接依赖 | `@earendil-works/pi-agent-core`（**适配器层唯一必需的 pi 包**）、`@modelcontextprotocol/sdk`、`typebox`、`zod`、`yaml`；`pi-coding-agent` / `pi-tui` 只出现在 Pi 宿主适配器里 |
 | CI | 现在只有 `compatibility.yml` 与 `release.yml` 两个 workflow；`tsconfig.json` 的注释记录 CI 跑 `npm run pi:smoke`——**三条门禁目前靠人跑**，axi 的第一件事是让 CI 跑满它们 |
 | 本机事实（本轮已记） | **PATH 上没有 `pwsh`**（起子进程要用 `cmd.exe`）；`%TEMP%` 常被算进"可写"集合，所以越界测试不能用它 |
@@ -707,8 +719,8 @@ axi/
 | 阶段 | 产出 | 判据 | 现状（2026-09-30） |
 |---|---|---|---|
 | **A0** 把底座钉死 | 四个实验的读数 + 追加的 A0.5 | 越界写能否被拦、Windows 隔离原语、无机制级先例、loop 可拦 | **A0.2/A0.3/A0.4/A0.5 已得**；A0.2 后半三过；**A0.1 待跑（需你起一个 `workspace-write` 会话，非阻塞）** |
-| **A1** axi 最小骨架 | 把既有 `src/core/loop.ts` 与 `src/adapters/*` **提升为生产 loop**（不是"定义接口"）+ 七组件挂载点 | 能跑通一个回合；一个改动能 keep，也能 revert | 未开始。A0.4 已把 A1 的措辞改对：接口**已存在**，两个实现被刻意挡在生产之外 |
-| **A2** 安全子系统五部件 | 语法感知策略 / 跨调用累积 / 历史无关 / 保持性传感器 / **隔离（jailer）**；每条配确定性补救 | 三种手法各一测试；保持性测试；**故障注入**；拦住了还能把活干完；**边界不变量有回归**（Plane B 无 `Everyone` 授予 / Plane A 有 / 摘不掉限制） | 未开始。**依赖 A0.2 的结论已到**：机制是 ACL + 受限令牌，不是 Job Objects |
+| **A1** axi 最小骨架 | 把既有 `src/core/loop.ts` 与 `src/adapters/*` **提升为生产 loop**（不是"定义接口"）+ 七组件挂载点 | 能跑通一个回合；一个改动能 keep，也能 revert | **已完成**（`2026-10-01`/`bf90771`）：`dove-pi axi-turn` 打印一个真实回合，配对闸门测试 `executedActions 1 → 0`，keep/revert 各一次；七组件面由 `harness-surface.yaml` 守 |
+| **A2** 安全子系统五部件 | 语法感知策略 / 跨调用累积 / 历史无关 / 保持性传感器 / **隔离（jailer）**；每条配确定性补救 | 三种手法各一测试；保持性测试；**故障注入**；拦住了还能把活干完；**边界不变量有回归**（Plane B 无 `Everyone` 授予 / Plane A 有 / 摘不掉限制） | **大部分完成**（`2026-10-02`）：隔离（ACL + 受限令牌，非 Job Objects）✓、语法感知 ✓、跨调用累积 ✓、历史无关 ✓（证明片）；**余**：保持性传感器、7-mutation 故障注入。`398025c` 另修两条阻断缺陷（held-out 子树的显式授予、受限范围的 `max` 被每个工具花掉） |
 | **A3** 配置保护 + trace 通道 | ① 配置变更需独立批准 ② trace 经宿主之外的独立拦截写出、落在 workspace 之外 ③ 完整性 / 保真度 / 捕获三性质 | agent 无法无批准改安全参数；无法删自己的 trace；**无法伪造一条没有真实执行的工具调用**（用 7% 那个失败模式测）；无法借压缩路径改写；被拒后回合仍能完成 | 未开始。**与 A2 同期，不后置** |
 | **A4** Plane B 与回路 | 外部闸门 + held-out 切分 + manifest + 下一轮归因与回滚 | 权限边界类改动必须 HITL；一个改动能走完"预测 → 裁决 → keep/revert" | 未开始 |
 | **A5** 评测 | 最小 held-out 切分 + 晋升门 + 一次带样本量的 P/R 读数 | 采用已有仪器；九条方法论（含 McNemar、一对失败指标、两个评测集、声明测量边界） | 未开始 |
