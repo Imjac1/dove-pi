@@ -20,28 +20,28 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 
 | Event | Line | What it does at that moment |
 |---|---|---|
-| `session_start` | `:2148` | **assemble a session**: arm the keepalive timer (`SessionKeepaliveTimer`, `:29`), open the ledger (`:898`, `new ExecutionLedger(join(stateDir, "execution.jsonl"))`), resolve the mode and the authority document (`loadWorkModeFromDirectory`, `preflightAuthority`, `:66`-`:67`), and **compose the action policy** with `createActionPolicy` (`:2265`; cleared at the session boundary, `:2262`) |
-| `input` | `:2111` | the user's text enters the request lifecycle first (`requestLifecycle.acceptSubmission`), which decides whether it is accepted |
-| `before_agent_start` | `:3151` | open a request lease (`requestLifecycle.beginRequest`) and fix this round's request plan |
-| `agent_start` | `:2325` | start one **attempt** (`startAttempt`) with its trigger: initial, retry, or retry after compaction |
-| `turn_start` | `:2612` | open a tool batch (`progressGuard.beginToolBatch()`) |
-| `tool_call` | `:2616` | **the gate** - see §3 |
-| `tool_result` | `:2864` | record that the effect actually happened (`pendingEffects` into the effect boundary) |
-| `message_end` | `:2949` | assistant messages only: stop reason and usage |
-| `before_provider_headers` | `:3028` | session affinity (`DOVE_PI_DISABLE_SESSION_AFFINITY=1` turns it off) |
-| `before_provider_request` | `:3040` | keepalive observation (every provider call counts), provider budgeting against the model window (`model-gateway`), and the request plan when one is due |
-| `after_provider_response` | `:3142` | record the HTTP status; at 400 and above classify the failure (`classifyProviderFailure`) |
-| `thinking_level_select` | `:3009` | **only when the policy is `off`** (fully manual) is the user's choice written back to the default baseline |
-| `context` | `:3388` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
-| `session_before_compact` | `:2546` | **the one replay still refused**: compaction replaces the surrounding context with a summary, so the model's record that the tool already ran is weaker |
-| `session_compact` | `:2560` | if the compaction will retry, mark the trigger `compaction-retry` |
-| `agent_end` | `:2344` | close the progress guard (`progressGuard.end()`), project cancellation into the request state, take the last assistant message |
-| `agent_settled` | `:2511` | **state snapshot only, never the callback's ctx** - `agent_end` may abort and reload the session, and reading ctx there raises Pi's "stale ctx" and masks the real terminal record |
-| `session_shutdown` | `:2564` | disarm the keepalive timer (a **caller obligation**: a timer that outlives its session reports into the next one, which is worse than a cold cache) |
+| `session_start` | `:2149` | **assemble a session**: arm the keepalive timer (`SessionKeepaliveTimer`, `:29`), open the ledger (`:899`, `new ExecutionLedger(join(stateDir, "execution.jsonl"))`), resolve the mode and the authority document (`loadWorkModeFromDirectory`, `preflightAuthority`, `:67`-`:68`), and **compose the action policy** with `createActionPolicy` (`:2266`; cleared at the session boundary, `:2263`) |
+| `input` | `:2112` | the user's text enters the request lifecycle first (`requestLifecycle.acceptSubmission`), which decides whether it is accepted |
+| `before_agent_start` | `:3152` | open a request lease (`requestLifecycle.beginRequest`) and fix this round's request plan |
+| `agent_start` | `:2326` | start one **attempt** (`startAttempt`) with its trigger: initial, retry, or retry after compaction |
+| `turn_start` | `:2613` | open a tool batch (`progressGuard.beginToolBatch()`) |
+| `tool_call` | `:2617` | **the gate** - see §3 |
+| `tool_result` | `:2865` | record that the effect actually happened (`pendingEffects` into the effect boundary) |
+| `message_end` | `:2950` | assistant messages only: stop reason and usage |
+| `before_provider_headers` | `:3029` | session affinity (`DOVE_PI_DISABLE_SESSION_AFFINITY=1` turns it off) |
+| `before_provider_request` | `:3041` | keepalive observation (every provider call counts), provider budgeting against the model window (`model-gateway`), and the request plan when one is due |
+| `after_provider_response` | `:3143` | record the HTTP status; at 400 and above classify the failure (`classifyProviderFailure`) |
+| `thinking_level_select` | `:3010` | **only when the policy is `off`** (fully manual) is the user's choice written back to the default baseline |
+| `context` | `:3389` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
+| `session_before_compact` | `:2547` | **the one replay still refused**: compaction replaces the surrounding context with a summary, so the model's record that the tool already ran is weaker |
+| `session_compact` | `:2561` | if the compaction will retry, mark the trigger `compaction-retry` |
+| `agent_end` | `:2345` | close the progress guard (`progressGuard.end()`), project cancellation into the request state, take the last assistant message |
+| `agent_settled` | `:2512` | **state snapshot only, never the callback's ctx** - `agent_end` may abort and reload the session, and reading ctx there raises Pi's "stale ctx" and masks the real terminal record |
+| `session_shutdown` | `:2565` | disarm the keepalive timer (a **caller obligation**: a timer that outlives its session reports into the next one, which is worse than a cold cache) |
 
 ## 3. Where the gate is enforced (today)
 
-**Site**: inside the `pi.on("tool_call")` handler, `src/pi-adapter/extension.ts:2616`.
+**Site**: inside the `pi.on("tool_call")` handler, `src/pi-adapter/extension.ts:2617`.
 
 1. **The mode check comes first, ahead of the lease check** - a mode that failed to load must stop the action even when the request bookkeeping is not set up (`:2617`-`:2620`).
 2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`:2629`). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.

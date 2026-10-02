@@ -194,4 +194,26 @@ describe("the specification pages cite positions a reader can follow", () => {
 			rmSync(scratch, { recursive: true, force: true });
 		}
 	});
+
+	it("cites the declaration each mount-point row names, as that page says it does", () => {
+		// The page states its own convention: in this table, the line cited is the `pi.on(...)` declaration. Saying so
+		// is what makes it checkable, and it needed checking - a one-line import at the top of the extension moved
+		// every anchor in the table by one, and the anchor check above cannot see that: it asks whether a line exists,
+		// not whether it still holds what the row claims.
+		const page = join(REPO, ".trellis", "spec", "backend", "personal-agent-use-time-architecture.md");
+		const extension = readFileSync(join(REPO, "src", "pi-adapter", "extension.ts"), "utf8").split(/\r?\n/u);
+		const rows = readFileSync(page, "utf8").split(/\r?\n/u).filter((line) => /^\| `[a-z_]+` \| `:\d+` \|/u.test(line));
+		assert.equal(rows.length, 18, `the mount table names ${String(rows.length)} rows, and this check only knows how to read that shape`);
+
+		const wrong: string[] = [];
+		for (const row of rows) {
+			const parsed = /^\| `([a-z_]+)` \| `:(\d+)`/u.exec(row);
+			if (parsed === null) continue;
+			const name = parsed[1] ?? "";
+			const cited = Number(parsed[2] ?? "0");
+			const line = extension[cited - 1] ?? "";
+			if (!line.includes(`pi.on("${name}"`)) wrong.push(`'${name}' is cited at ${String(cited)}, which holds: ${line.trim() === "" ? "(a blank line)" : line.trim().slice(0, 72)}`);
+		}
+		assert.equal(wrong.length, 0, `${String(wrong.length)} of 18 mount points cite a line that is not their declaration:\n${wrong.join("\n")}`);
+	});
 });
