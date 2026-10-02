@@ -41,11 +41,18 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   The host asks through its dialog and records both answers; a host with no dialog refuses.
 - **The gate reads every field a mode declares.** `excluded_techniques` is checked against the call's
   `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
-  simply outside both. `toRequest` forwards `technique`/`phase`/`intensity`/`requestsInLastSecond` so a grant's
+  simply outside both. `scope.exclusions` is checked against the target the call names, through the same
+  `target_argument` the contract gate uses: a mode that states what it must not touch is not allowed to
+  touch it. `toRequest` forwards `technique`/`phase`/`intensity`/`requestsInLastSecond` so a grant's
   `constraints` fire too.
-- **A prohibition is only declarable when the runtime can witness it.** `excluded_techniques` is checked
-  against the witness table in `src/core/argument-syntax.ts`, on the mode **and** on the grant; a name with no
-  entry there is refused at load rather than kept as a prohibition the boundary has nothing to look for.
+- **A declaration the runtime cannot honour is refused, by name.** That covers the blocks listed in the
+  matrix below - a mode-level `expires`, `grant_graph`, `evidence`, `coordination`, `session.memory_scope`,
+  the budget fields beside `turns`, and a `stop.on` reason the loop never produces. The point is not that
+  they are unimplemented but that they are **unenforceable where they sit**: each message says which field
+  and why, because the reason it is refused is the design point. **One limitation is recorded rather than
+  fixed** ✗: the mode's `session.budget.turns` is carried, and the only loop this runtime owns that reads a
+  turn bound is the reference one under `axi-turn`; the Pi host's loop is the host's, so a mode's turn
+  budget does not bound it yet.
 - **`sandbox` and `fence` are honoured or refused, never ignored.** `network: none` and `filesystem:
   read-only-source` are enforced at the boundary; `isolation: container`/`worktree` and `network:
   allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
@@ -70,6 +77,12 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `gate.excluded_techniques` naming a technique the runtime cannot witness | Refused at load, naming the technique |
 | `gate.windows` declared | Refused: the grant carries the window |
 | `authority.expires` declared | Refused: the grant carries the window the expiry would repeat |
+| `authority.grant_graph` declared | Refused: the document's `targets[].requires_grants` is the binding, checked per action |
+| `evidence` / `coordination` declared | Refused: retention, isolation and a coordination cadence are machinery this runtime does not have |
+| `session.memory_scope` declared | Refused: nothing here scopes memory by mode |
+| `session.budget` naming anything but `turns` | Refused, naming the field: `turns` is carried to the turn bound, and a budget metering one of four things is not a budget |
+| `stop.on` naming a reason the loop never produces | Refused, naming the value and the loop's own set (`completed`, `maxTurns`, `stopped`, `providerError`) |
+| `authority.grant` naming no document | Refused under **every** semantics, naming the field and the name - the early return for `limit`/`none` skips loading a document, not resolving a name |
 | `sandbox` axis unrecognised, or `isolation: none` with `filesystem: ephemeral` | Refused, naming the axis or the contradiction |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |

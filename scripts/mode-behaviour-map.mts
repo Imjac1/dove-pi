@@ -14,9 +14,12 @@ import { join } from "node:path";
  * and then measured, and the measurement is the reason it moved here:
  *
  *   - It reported two orphans and **both were false**. `permissions.unlisted`'s consumer is
- *     `src/core/work-mode.ts:704` (`evaluatePermission`) and `authority.grant`'s is `:847` - both inside the one
- *     file the scan excludes, because that file both fills and consumes. Dropping the exclusion makes every row
- *     match trivially, so the file cannot simply be included either.
+ *     `evaluatePermission` in `src/core/work-mode.ts` and `authority.grant`'s is the grant resolution in
+ *     the same file - both inside the one file the scan excludes, because that file both fills and consumes.
+ *     Dropping the exclusion makes every row match trivially, so the file cannot simply be included either.
+ *     **No line numbers here on purpose**: this file is watched by no door, and the numbers rotted twice
+ *     before someone measured them - a spec page carries line numbers because a check reads it, a comment
+ *     carries none because nothing does.
  *   - Three rows are **vacuous**: `sandbox`, `limits` and `capabilities` match unrelated code
  *     (`src/core/model-gateway.ts:166` for `limits`, `src/runtime.ts:15` for `capabilities`), so deleting the real
  *     consumer would leave them green.
@@ -91,4 +94,4 @@ console.log(
 		? "No orphan found by this heuristic - which is not the same as no orphan: see the vacuous rows above."
 		: `${orphans} declared behaviour(s) with no reader. Check by hand before believing it: \`permissions.unlisted\` and \`authority.grant\` are the two this scan reports as false orphans.`,
 );
-console.log("Known false orphans: permissions.unlisted (src/core/work-mode.ts:704), authority.grant (src/core/work-mode.ts:847).");
+console.log("Known false orphans: permissions.unlisted (evaluatePermission in src/core/work-mode.ts), authority.grant (the grant resolution in the same file).");
