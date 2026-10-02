@@ -804,4 +804,32 @@ one is in this repository's lessons already, and this session was the fourth tim
 
 ### Status
 
-[OK] **Completed** — archived at `.trellis/tasks/archive/2026-10/10-02-enforceable-declarations/`. Gates at the end: `typecheck` 0, `npm test` 859 / 857 pass / 0 fail / 2 skipped, installer 141 OK. The same defect class beyond this task's three - `scope.exclusions` in two shipped modes, `authority.grant_graph`, the `session`/`stop` blocks, two unresolvable grant names, and a door gap over `scripts/` - is seeded as `.trellis/tasks/10-02-unhonoured-declarations/`.
+[OK] **Completed** — archived at `.trellis/tasks/archive/2026-10/10-02-enforceable-declarations/`. Gates at the end: `typecheck` 0, `npm test` 859 / 857 pass / 0 fail / 2 skipped, installer 141 OK. The same defect class beyond this task's three - `scope.exclusions` in two shipped modes, `authority.grant_graph`, the `session`/`stop` blocks, two unresolvable grant names, and a door gap over `scripts/` - was seeded as `10-02-unhonoured-declarations`, and **that path was repointed here when the task was archived** (archiving moves the directory and rewrites nothing that points into it, which AGENTS.md warns about and this repository has now hit twice).
+
+## Session 234: Five declarations refused, and a check that kept finding my own claims
+
+**What it was**: the same class one task further - declarations that claim to stop something and stop nothing. Four blocks plus a grant name are refused by name now, the three shipped modes lost them with each loss written where a reader meets it, and the turn budget became the one field of the session block the runtime can honour, carried and passed to the only loop this runtime owns.
+
+**What the checks kept finding**: the scope check asked across the repository twice, and both times the most serious finding was mine. First a published mode whose exclusion list could never fire, about which the task's own acceptance criterion claimed otherwise. Then, after that was repaired, two more: the refusal guarding it coerced its input, so the likeliest spelling of the field became no field at all, and the guard passed modes whose document is never parsed, leaving the same hole open under other semantics. It also falsified two claims written with more confidence than measurement - that the budget wiring had no observable seam, and a red count that belonged to a different stage of the work.
+
+**The count worth keeping**: eight claims of mine were falsified this session, every one of them by an instrument outside my own reasoning - a whole-scope check, the typechecker, a YAML parser, a test. That is this project's own principle, the verifier standing outside the loop, demonstrated on the person doing the work: self-review caught none of them.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `886413b` | docs(task): plan the four unhonoured declarations, with each route decided |
+| `50008d4` | feat(scope): read the exclusions the loader was checking the shape of and dropping |
+| `0fc7050` | feat(mode): refuse the five declarations the runtime cannot honour |
+| `130d98a` | docs(spec): enumerate the refusals, and stop citing line numbers in a comment |
+| `52ef54f` | docs(task): record the check's findings, and correct the two claims it falsified |
+| `3af0f51` | fix(mode): refuse an exclusion list the gate cannot enforce |
+| `00527f0` | fix(mode): check the shapes the block checks could be walked around, and carry the turn budget |
+| `dd2f558` | fix(policy): resolve an excluded target through the document, not by matching strings |
+| `e63587e` | docs(scripts,spec,test): finish the sweep the check asked for |
+| `33ed4bb` | fix(mode,policy): close the two holes the last check found, and test the wiring it proved observable |
+| `963f1a0` | docs(spec,task): finish the matrix and stop citing lines in a document nothing guards |
+
+### Status
+
+[OK] **Completed** — archived at `.trellis/tasks/archive/2026-10/10-02-unhonoured-declarations/`. Gates at the end: `typecheck` 0, `npm test` 873 / 871 pass / 0 fail / 2 skipped, installer 141 OK. Still open from the last check, recorded in its readings rather than fixed: whether `scope.targets`, `environment` and `ownership_evidence` are controls or records - a decision, not a repair - and the surfaces no door reads, `.trellis/tasks/**` among them.
