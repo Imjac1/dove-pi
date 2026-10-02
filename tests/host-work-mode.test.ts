@@ -180,7 +180,7 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			...(spec.limit === undefined
 				? []
 				: ["  limits:", "    payload:", "      argument: " + spec.limit.argument, "      max: " + spec.limit.max, "      tools: [" + spec.capability + "]"]),
-			"  approval: none",
+			// No `approval`: nothing read it, so the loader refuses it (a mode's consent stance is its permissions block).
 			"",
 		].join("\n"),
 	);

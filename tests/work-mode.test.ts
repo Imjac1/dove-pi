@@ -109,6 +109,36 @@ describe("work-mode loader", () => {
 		assert.match(error.message, /budget-exhausted/u, "and one the loop never produces is named back");
 	});
 
+	it("refuses the shapes of an exclusion list that would silently become no exclusion list  [D4]", () => {
+		// The check found this one on the refusal it had just been written to make: a scalar, a mapping or a list of
+		// junk was coerced to `undefined` before the guard ran, so a mode could write the likeliest mistake -
+		// `exclusions: production-venue`, singular - and load with the list quietly gone and no loss recorded.
+		for (const wrong of ["  exclusions: production-venue", "  exclusions:\n    venue: production-venue", "  exclusions: [\"\"]", "  exclusions: [42]"]) {
+			const governance = files().governance.replace("  targets: [repo]", "  targets: [repo]\n" + wrong);
+			const error = expectError(() => loadWorkMode(files({ governance }), { frameworkVersion: FRAMEWORK }), "invalid-type");
+			assert.match(error.message, /exclusions/u, "the field is named, whatever shape it took: " + error.message);
+		}
+	});
+
+	it("refuses an exclusion list on a mode whose semantics never resolve the document it would check against  [D4]", () => {
+		// The guard used to ask only for `target_argument`. A `limit` or `none` mode never has its document parsed, so
+		// the id-to-address resolution gets an empty table and the list fires only on the exact spelling - which is the
+		// hole this task closed once already, kept open under the other semantics.
+		const governance = files().governance
+			.replace("  semantics: conformance", "  semantics: none")
+			.replace("  targets: [repo]", "  targets: [repo]\n  exclusions: [some-venue]");
+		const error = expectError(() => loadWorkMode(files({ governance }), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.message, /semantics/u, "the reason names what is missing: " + error.message);
+	});
+
+	it("refuses `gate.approval`, which states a stance nothing reads  [D4]", () => {
+		// Inside the gate block, where the field belongs: a top-level `approval` is an unknown key, which is a different
+		// refusal answering a different question.
+		const governance = files().governance.replace("  semantics: conformance", "  semantics: conformance\n  approval: none");
+		const error = expectError(() => loadWorkMode(files({ governance }), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.message, /approval/u, "the field is named: " + error.message);
+	});
+
 	it("refuses an exclusion list the gate cannot enforce  [D4]", () => {
 		// `scope.exclusions` is checked against the target a call names, and a mode that declares no `target_argument`
 		// gives that check nothing to read - so the list is inert. `modes/trading` shipped exactly that shape:

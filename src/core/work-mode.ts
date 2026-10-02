@@ -463,6 +463,16 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 
 	const governance = parseGovernance(files.governance);
 	rejectUnknown("governance.yaml", governance, GOVERNANCE_FIELDS);
+	// **`gate.approval` is refused with the rest.** It sat in the gate block of all three shipped modes, was never
+	// validated, and was read by nothing: the mode's consent stance is its `permissions` block, and a second place to
+	// state it read as a control the loader would honour. The mode-format page's own sentence - that the gate reads
+	// every field a mode declares - is what made this one worth refusing rather than leaving.
+	if ((governance.gate as { readonly approval?: unknown } | undefined)?.approval !== undefined) {
+		throw new WorkModeError(
+			"invalid-type",
+			"governance.gate.approval is not enforceable by the runtime: a mode's consent stance is its permissions block, and nothing here reads a second statement of it. Remove the field.",
+		);
+	}
 	// **Blocks that read as controls and control nothing are refused, by name** - but the loop lives below, beside the
 	// `authority` declaration it reads from: `grant_graph` is a key *inside* that block, and a version of this check that
 	// ran before the block was parsed looked for it on the governance object and never saw it.
@@ -551,16 +561,32 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	// mode could state what it must not touch and touch it anyway. The list is read into a typed field **because
 	// trusted input read before untrusted content is the whole point** (design 4.3): a scope assembled after the agent
 	// has read a repository has been influenced by it.
-	const scopeExclusions = Array.isArray(scope.exclusions)
-		? scope.exclusions.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "").map((entry) => entry.trim())
-		: undefined;
-	if (scopeExclusions !== undefined && scopeExclusions.length > 0 && (governance.gate as { readonly target_argument?: unknown } | undefined)?.target_argument === undefined) {
+	// **Checked as a value, not coerced into one.** The first version read the field with `Array.isArray(...) ? … :
+	// undefined`, which quietly turned a scalar, a mapping or a list of junk into *no exclusions at all* - so a mode
+	// could write `exclusions: production-venue` (the singular, the likeliest mistake) and load with the list silently
+	// gone, and the refusal below never fired because there was nothing left to refuse. A shape that is dropped is a
+	// shape that hides, which is the class this task exists to remove.
+	if (scope.exclusions !== undefined && !Array.isArray(scope.exclusions)) {
+		throw new WorkModeError("invalid-type", "governance.scope.exclusions must be a list of target ids or addresses - a scalar or a mapping is silently no exclusions at all.");
+	}
+	const badExclusion = Array.isArray(scope.exclusions) ? scope.exclusions.find((entry) => typeof entry !== "string" || entry.trim() === "") : undefined;
+	if (badExclusion !== undefined) {
+		throw new WorkModeError("invalid-type", `governance.scope.exclusions entries must be non-empty strings, and this list contains ${JSON.stringify(badExclusion)}.`);
+	}
+	const scopeExclusions = Array.isArray(scope.exclusions) ? (scope.exclusions as readonly string[]).map((entry) => entry.trim()) : undefined;
+	// The check asked what happens when the semantics make the exclusion useless, and the answer was: nothing. A
+	// `limit` or `none` mode never has its document parsed (`loadWorkModeFromDirectory` returns before that), so the
+	// check that resolves a target's id against its address gets an empty table - and the list fires only on the exact
+	// spelling again. The guard therefore asks for **both** halves of what makes the list enforceable.
+	const declaredGate = governance.gate as { readonly semantics?: unknown; readonly target_argument?: unknown } | undefined;
+	const resolvesDocument = declaredGate?.semantics === "conformance" || declaredGate?.semantics === "both";
+	if (scopeExclusions !== undefined && scopeExclusions.length > 0 && (!resolvesDocument || declaredGate?.target_argument === undefined)) {
 		// **An exclusion list that cannot fire is refused.** It is checked against the target a call names, and that
 		// target comes from `gate.target_argument`; a mode that declares none gives the check nothing to read, so the
 		// list would sit there reading as a boundary while nothing was bounded. `modes/trading` shipped exactly that.
 		throw new WorkModeError(
 			"invalid-type",
-			"governance.scope.exclusions names targets, and this mode declares no 'gate.target_argument' - so nothing can tell the boundary which target a call acts on, and the list cannot refuse anything. Declare the argument that names it, or remove the exclusions.",
+			"governance.scope.exclusions names targets, and this mode cannot check one: it needs a 'gate.target_argument' to say which argument names a call's target, and a 'gate.semantics' that resolves the engagement document - without both, the list can only match a spelling. Declare both, or remove the exclusions.",
 		);
 	}
 

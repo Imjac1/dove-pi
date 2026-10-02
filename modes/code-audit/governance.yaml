@@ -32,7 +32,7 @@ gate:
   # reading as a control that did not exist. What contains this mode is the permission list and the scope block
   # above, and MODE.md says so rather than leaving it to be inferred from `gates`.
   semantics: none
-  approval: none
+  # No `approval`: nothing read it (see the note in pentest).
 
 # Which effects a retry may repeat. An undeclared tool is non-idempotent, so this map grants rather than
 # denies: it names only what a second run genuinely cannot duplicate. The claim at the dispatch line reads

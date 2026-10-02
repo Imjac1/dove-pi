@@ -32,7 +32,7 @@ gate:
       min: 1
       max: 10000
       tools: [order.submit]
-  approval: none
+  # No `approval`: nothing read it (see the note in pentest).
 
 sandbox:
   # Only what this runtime can honour. Paper trading needs the market feed, so the network stays

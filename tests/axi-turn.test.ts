@@ -22,7 +22,7 @@ import { runAxiTurn } from "../src/commands/axi-turn.ts";
 const root = join(tmpdir(), `axi-turn-${String(process.pid)}`);
 
 /** A workspace with one readable file, and a mode whose `never_allow` is the only thing that changes. */
-function writeFixture(directory: string, neverAllow: readonly string[]): string {
+function writeFixture(directory: string, neverAllow: readonly string[], turns?: number): string {
 	const workspace = join(directory, "workspace");
 	mkdirSync(join(workspace, "notes"), { recursive: true });
 	writeFileSync(join(workspace, "notes", "reading.txt"), "the turn read this file\n", "utf8");
@@ -50,9 +50,13 @@ function writeFixture(directory: string, neverAllow: readonly string[]): string 
 			// No `expires`: the loader refuses a mode-level expiry, because a calendar window is a property of the
 			// engagement document's grant and this runtime cannot honour it in the mode. This fixture declared one
 			// from the day it was written, when the field did nothing.
+			// **The mode's own turn budget, when a case asks for one.** The reference loop reads it, and a bound *smaller
+			// than the default* is what makes the wiring observable: with the default four the scripted run completes,
+			// with one it stops first.
+			...(turns === undefined ? [] : ["session:", "  budget:", "    turns: " + String(turns)]),
 			"gate:",
 			"  semantics: none",
-			"  approval: none",
+			// No `approval`: nothing read it, and the loader refuses it now - a mode's consent stance is its permissions.
 			"",
 		].join("\n"),
 	);
@@ -71,6 +75,32 @@ describe("the narrowest end-to-end turn", () => {
 
 	after(() => {
 		rmSync(root, { recursive: true, force: true });
+	});
+
+	it("stops at the mode's own turn budget, which is the one loop this runtime owns", async () => {
+		// **My claim that this had no observable seam was false**, and the check proved it with a probe rather than an
+		// argument: the scripted fixture takes two provider steps, so a budget smaller than the default is visible in the
+		// stop reason. This case is what replaced the claim.
+		const boundedWorkspace = writeFixture(join(root, "bounded"), [], 1);
+		const bounded = await runAxiTurn({
+			workspaceRoot: boundedWorkspace,
+			modeName: "reading",
+			ledgerPath: join(root, "bounded.jsonl"),
+			prompt: "read the reading",
+		});
+		assert.equal(bounded.outcome.stopReason.kind, "maxTurns", "a mode asking for one turn is stopped by a bound of one");
+
+		// The pair, in the same case: same fixture, same prompt, no budget declared - so the default bound applies and the
+		// run completes. Only the mode's own number differs, which is what makes this a reading rather than an assertion
+		// about the fixture.
+		const defaultWorkspace = writeFixture(join(root, "default"), []);
+		const unbounded = await runAxiTurn({
+			workspaceRoot: defaultWorkspace,
+			modeName: "reading",
+			ledgerPath: join(root, "default.jsonl"),
+			prompt: "read the reading",
+		});
+		assert.equal(unbounded.outcome.stopReason.kind, "completed", "without a declared budget the default bound lets the run finish");
 	});
 
 	it("runs the action when the mode allows it, and none when the name layer refuses it", async () => {

@@ -456,7 +456,7 @@ describe("the real-user scenarios", () => {
 		await writeFile(join(mode, "governance.yaml"), [
 			"version: 1.0.0", 'framework: ">=0.2.0 <0.3.0"', "scope:", "  targets: [workspace]", "  environment: non-production", "  exclusions: []",
 			"authority:", "  capabilities: [workspace.inspect]",
-			"gate:", "  semantics: none", "  approval: none", "",
+			"gate:", "  semantics: none", "",
 		].join("\n"), "utf8");
 		await writeFile(join(mode, "permissions.yaml"), ["unlisted: allow", "always_allow: []", "ask_before: [write]", "never_allow: []", ""].join("\n"), "utf8");
 		return project;
