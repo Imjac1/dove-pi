@@ -116,8 +116,8 @@ function evaluateAuthority(d: AuthorityDocument, r: AuthorityRequest, o?: Author
 
 - The document is `{ version, engagement, principals, grants, targets }`. A grant carries `from`
   (never the operator), `authorizes` (`actions` **and** `outcomes`), `targets`, `window`,
-  `evidence`, `constraints` (`intensity` per phase, `excluded_techniques`), `external_state`, and
-  `risk_acceptance`.
+  `evidence`, `constraints` (`intensity` per phase, `excluded_techniques`, `max_requests_per_second`),
+  `external_state`, and `risk_acceptance`.
 - A target carries `ownership_evidence` and `requires_grants`; **every** required grant must resolve.
 - A grant is evidenced by a signed document **or** an approved external authorization; neither means an
   unauthorized grant. Unknown keys are rejected at the document, grant, and `authorizes` levels - a
@@ -137,9 +137,10 @@ function evaluateAuthority(d: AuthorityDocument, r: AuthorityRequest, o?: Author
 | Required grant missing from the document | Block |
 | Grant issued by the operator | Block |
 | Action not authorized, or target not covered | Block |
-| Outside the window; excluded technique; over-ceiling intensity | Block |
+| Outside the window; excluded technique; over-ceiling intensity; over-cap rate | Block |
 | `external_state` not `approved`, or `checked_at` stale | Block |
 | Unknown key anywhere in the document | Block, naming the key |
+| A grant constraint the runtime cannot honour: an unwitnessed `excluded_techniques` name, a `max_requests_per_second` that is not a positive whole number or is above what the counter can hold | Block, naming the grant and the value |
 
 ### 5. Tests Required
 

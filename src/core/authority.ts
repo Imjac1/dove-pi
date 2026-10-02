@@ -14,6 +14,7 @@
  */
 
 import { parse as parseYaml } from "yaml";
+import { WITNESSED_TECHNIQUES } from "./argument-syntax.ts";
 
 export interface Principal {
 	readonly id: string;
@@ -90,12 +91,17 @@ export interface AuthorityRequest {
 	readonly phase?: string;
 	readonly intensity?: number;
 	/**
-	 * How many actions this session has already run in the second ending at `at`.
+	 * How many calls this session has already been *permitted* in the second ending at `at`.
 	 *
 	 * **Counted by the caller, judged here**, which is the arrangement `intensity` already uses: only the caller holds
 	 * session state, and only this function decides whether a grant's constraints resolve. The cap it is compared
 	 * against - `constraints.max_requests_per_second` - sat in the schema with no reader at all, so a document could
 	 * advertise a rate limit that nothing limited.
+	 *
+	 * **Permitted, not necessarily run**: the host records a call before two later refusals can still stop it, so this
+	 * count can exceed what actually ran. The direction is the safe one - over-counting can refuse a call that would
+	 * have fitted, never admit one that would not - and moving the record past those refusals would make the count
+	 * depend on the host's control flow rather than on the call itself.
 	 */
 	readonly requestsInLastSecond?: number;
 	/**
@@ -147,6 +153,17 @@ function evidenceProblem(
  * It is deliberately generic - it applies to any conformance-gated mode, not to one vertical.
  */
 const DOCUMENT_FIELDS = new Set(["version", "engagement", "principals", "grants", "targets"]);
+const CONSTRAINT_FIELDS = new Set(["intensity", "excluded_techniques", "max_requests_per_second"]);
+/**
+ * The largest rate a grant may declare.
+ *
+ * **Not a policy about how fast anything should go**: it is the largest number this runtime can *count*. A cap is
+ * enforced from a per-session ring of the instants calls ran at, and a ring can only hold what it is sized for - so a
+ * cap above this would be a promise the counter cannot keep, reading low in a burst and letting it through. The ring
+ * is sized from this same constant, which is why it lives here: the authority is what decides whether a grant
+ * resolves, and a cap it cannot count is part of that decision.
+ */
+export const MAX_COUNTABLE_RATE = 4096;
 const GRANT_FIELDS = new Set(["id", "from", "to", "authorizes", "targets", "window", "evidence", "constraints", "external_state", "risk_acceptance"]);
 const AUTHORIZES_FIELDS = new Set(["actions", "outcomes"]);
 const TARGET_FIELDS = ["id", "address", "owner", "ownership_evidence", "requires_grants"] as const;
@@ -172,6 +189,26 @@ export function validateAuthorityDocument(document: AuthorityDocument): string |
 		if (grantProblem !== undefined) return grantProblem;
 		const authorizesProblem = unknown(`grant '${grant.id}'.authorizes`, grant.authorizes, AUTHORIZES_FIELDS);
 		if (authorizesProblem !== undefined) return authorizesProblem;
+		// **The constraints are the part of a grant that is *enforced*, so the same silent-typo argument applies inside
+		// them**: a misspelled `max_requests_per_seconds` would leave the document looking capped and enforce nothing.
+		const constraints = grant.constraints;
+		if (constraints !== undefined) {
+			const constraintsProblem = unknown(`grant '${grant.id}'.constraints`, constraints, CONSTRAINT_FIELDS);
+			if (constraintsProblem !== undefined) return constraintsProblem;
+			for (const name of constraints.excluded_techniques ?? []) {
+				if (WITNESSED_TECHNIQUES.has(name)) continue;
+				return `grant '${grant.id}'.constraints.excluded_techniques names '${name}', which this runtime cannot witness: a prohibition is only enforceable when the technique has a shape the boundary can read. Drop the name, or add a witness for it.`;
+			}
+			const cap = constraints.max_requests_per_second;
+			// A cap that cannot be compared never fires: `count + 1 > NaN` is false, so a malformed value would have
+			// read as a cap while behaving as no cap at all.
+			if (cap !== undefined && (typeof cap !== "number" || !Number.isInteger(cap) || cap < 1)) {
+				return `grant '${grant.id}'.constraints.max_requests_per_second must be a positive whole number, and this is ${JSON.stringify(cap)}.`;
+			}
+			if (cap !== undefined && cap > MAX_COUNTABLE_RATE) {
+				return `grant '${grant.id}'.constraints.max_requests_per_second is ${cap}, above the ${MAX_COUNTABLE_RATE} this runtime can count. Raise the ring, or declare a rate the runtime can keep.`;
+			}
+		}
 	}
 	return undefined;
 }

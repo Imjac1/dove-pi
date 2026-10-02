@@ -80,3 +80,69 @@ describe("the grant's rate cap is decided where the grant's other constraints ar
 		assert.equal(evaluateAuthority(document, request({ requestsInLastSecond: 500 })).outcome, "allow");
 	});
 });
+
+/**
+ * A cap the runtime cannot count is worse than no cap: it reads as a limit and enforces nothing. These cases all
+ * failed before the document validator was taught to look inside `constraints` - a string cap loaded and then
+ * `count + 1 > "abc"` was never true, which is the same "declared and inert" shape this task exists to remove.
+ */
+describe("a grant whose constraints cannot be enforced is refused rather than half-enforced", () => {
+	const source = (constraints: unknown): string =>
+		JSON.stringify({
+			version: 1,
+			engagement: "checks",
+			principals: [
+				{ id: "client", kind: "grantor" },
+				{ id: "operator", kind: "operator" },
+			],
+			grants: [
+				{
+					id: "g",
+					from: "client",
+					to: "operator",
+					authorizes: { actions: ["net.scan"] },
+					targets: ["t-web"],
+					evidence: [{ kind: "signed-permission", ref: "engagements/rate-cap/permission.pdf", sha256: "p" }],
+					constraints,
+				},
+			],
+			targets: [
+				{
+					id: "t-web",
+					address: "10.0.0.5",
+					owner: "client",
+					ownership_evidence: { kind: "asset-inventory-attestation", ref: "engagements/rate-cap/inventory.csv", sha256: "i" },
+					requires_grants: ["g"],
+				},
+			],
+		});
+	const refuses = (constraints: unknown): string => {
+		try {
+			parseAuthorityDocument(source(constraints), "tests/rate-cap.test.ts");
+			return "";
+		} catch (error) {
+			return error instanceof Error ? error.message : String(error);
+		}
+	};
+
+	it("refuses a cap that is not a positive whole number, because an uncomparable cap never fires", () => {
+		assert.match(refuses({ max_requests_per_second: "abc" }), /positive whole number/u, "a string cap used to load and then behave as no cap at all");
+		assert.match(refuses({ max_requests_per_second: 0 }), /positive whole number/u);
+		assert.equal(refuses({ max_requests_per_second: 5 }), "", "and a cap the runtime can keep is accepted");
+	});
+
+	it("refuses a misspelled constraint key instead of ignoring it", () => {
+		assert.match(refuses({ max_requests_per_seconds: 5 }), /unknown field 'max_requests_per_seconds'/u, "the field this task made live is the one a typo would have silently disabled");
+	});
+
+	it("refuses a cap above what the runtime can count", () => {
+		assert.match(refuses({ max_requests_per_second: 5000 }), /above the 4096 this runtime can count/u);
+	});
+
+	it("refuses a forbidden technique this runtime cannot witness, on the grant side too", () => {
+		// The mode side refuses the same name. If only one of the two did, dropping it from a mode would leave the
+		// grant half, and the name would still read as a prohibition with nothing behind it.
+		assert.match(refuses({ excluded_techniques: ["social-engineering"] }), /cannot witness/u);
+		assert.equal(refuses({ excluded_techniques: ["dos"] }), "", "a name with a witness is what the check is for");
+	});
+});

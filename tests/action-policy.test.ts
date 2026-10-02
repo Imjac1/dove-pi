@@ -131,6 +131,19 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		// the session-cumulative ceilings the mode declares.
 		const after = { ...invocation("net.scan", { target: "t-web" }), at: at(1_100) };
 		assert.equal(policy.evaluate(after, asCapability).outcome, "allow", "a call after the window has passed is inside the cap again");
+
+		// **A cap above the ring's old fixed size.** Sixty-four was the boundary at which counting stopped working: the
+		// ring held 64 instants whatever the window, so every cap at or above it read low and let a burst through. The
+		// size now comes from the document, and the case exists to keep it that way.
+		const large = createPolicy({ mode: mode(), authorityDocument: document(files.permission, files.inventory, 65), workspaceRoot: files.root });
+		const outcomesLarge: string[] = [];
+		for (let index = 0; index < 66; index += 1) {
+			const call = { ...invocation("net.scan", { target: "t-web" }), at: at(index * 10) };
+			outcomesLarge.push(large.evaluate(call, asCapability).outcome);
+			large.recordRun(call);
+		}
+		assert.equal(outcomesLarge.slice(0, 65).every((outcome) => outcome === "allow"), true, "sixty-five calls are inside a cap of sixty-five");
+		assert.equal(outcomesLarge[65], "block", "and the sixty-sixth is not: the cap fires above the old ring size too");
 	});
 
 	it("builds neither a threshold nor a contract gate for a mode that declares no gate", () => {

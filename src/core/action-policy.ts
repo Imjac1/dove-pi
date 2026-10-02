@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { SHELL_TOOLS, TECHNIQUE_WITNESSES } from "./argument-syntax.ts";
-import type { AuthorityDocument, AuthorityRequest } from "./authority.ts";
+import { MAX_COUNTABLE_RATE, type AuthorityDocument, type AuthorityRequest } from "./authority.ts";
 import { createCapabilityScope } from "./capability-scope.ts";
 import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath, type LimitSpec } from "./gate-limit.ts";
@@ -421,7 +421,14 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 	// second, and a buffer that grew with the session would be a leak with no reading behind it.
 	const runInstants: string[] = [];
 	const RATE_WINDOW_MS = 1_000;
-	const RATE_BUFFER = 64;
+	// **Sized from the largest cap the document declares, not from a constant.** A rate can only be counted exactly up
+	// to what the ring holds, and refused calls are never recorded - so a window can never hold more than the cap
+	// itself, which makes a ring of that size exact. A fixed 64 was not: every cap at or above it read low in a burst
+	// and passed, which is the defect this very control exists to remove, one line inside it.
+	const RATE_BUFFER = Math.max(
+		64,
+		...((options.authorityDocument?.grants ?? []).map((grant) => grant.constraints?.max_requests_per_second ?? 0)),
+	);
 	const limitScopes = new Map(declaredLimits.map((limit) => [limit.id, limit.tools === undefined ? undefined : new Set(limit.tools)]));
 	/**
 	 * Whether a declared limit governs this tool. One predicate, because the check and the recording have to agree
@@ -665,7 +672,8 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			// **Counted here and only here**: every gate above has passed and the action is about to be permitted, so
 			// this is the first point at which "ran in this phase" is true. An `ask` returns below without counting,
 			// because the operator has not consented yet; a consented re-entry counts then.
-			const counted = intensityOf(invocation);
+			// `intensityOf(invocation)` used to be called here and its result never read: dead in the same sense as the
+			// fields this task went after, though nothing was claimed by it.
 			const permission = evaluatePermission(mode.permissions, invocation.tool);
 			// Both causes of "ask" are the mode's own: `ask_before` names an action it wants to be asked about, and
 			// `unlisted: ask` says the same for everything it did not name. They differ only in what the reason should

@@ -41,8 +41,11 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   The host asks through its dialog and records both answers; a host with no dialog refuses.
 - **The gate reads every field a mode declares.** `excluded_techniques` is checked against the call's
   `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
-  simply outside both. `toRequest` forwards `technique`/`phase`/`intensity` so a grant's `constraints`
-  fire too.
+  simply outside both. `toRequest` forwards `technique`/`phase`/`intensity`/`requestsInLastSecond` so a grant's
+  `constraints` fire too.
+- **A prohibition is only declarable when the runtime can witness it.** `excluded_techniques` is checked
+  against the witness table in `src/core/argument-syntax.ts`, on the mode **and** on the grant; a name with no
+  entry there is refused at load rather than kept as a prohibition the boundary has nothing to look for.
 - **`sandbox` and `fence` are honoured or refused, never ignored.** `network: none` and `filesystem:
   read-only-source` are enforced at the boundary; `isolation: container`/`worktree` and `network:
   allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
@@ -64,7 +67,9 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `unlisted: allow` with a non-empty `always_allow` | Refused, naming both ways out |
 | `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
 | `gate.excluded_techniques` not a string list | Refused at load |
+| `gate.excluded_techniques` naming a technique the runtime cannot witness | Refused at load, naming the technique |
 | `gate.windows` declared | Refused: the grant carries the window |
+| `authority.expires` declared | Refused: the grant carries the window the expiry would repeat |
 | `sandbox` axis unrecognised, or `isolation: none` with `filesystem: ephemeral` | Refused, naming the axis or the contradiction |
 | `framework` excludes the running version | Refused, naming the version |
 | Unparseable `framework` clause | Refused |

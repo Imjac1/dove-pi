@@ -82,7 +82,7 @@ describe("a forbidden technique is read off the command, not only off a field", 
 
 	it("says which names the table can witness, so a declaration cannot be silently inert", () => {
 		assert.equal(WITNESSED_TECHNIQUES.has("dos"), true);
-		assert.equal(WITNESSED_TECHNIQUES.has("social-engineering"), false, "the shipped pentest mode declares this name and nothing witnesses it yet");
+		assert.equal(WITNESSED_TECHNIQUES.has("social-engineering"), false, "this name has no shape, so nothing witnesses it - and both the mode and the grant now refuse it rather than keep it as a prohibition with nothing behind it");
 	});
 
 	it("splits a command line the way a shell would, and knows what was quoted", () => {

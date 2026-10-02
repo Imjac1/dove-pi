@@ -14,7 +14,7 @@ import { join } from "node:path";
  * and then measured, and the measurement is the reason it moved here:
  *
  *   - It reported two orphans and **both were false**. `permissions.unlisted`'s consumer is
- *     `src/core/work-mode.ts:588` (`evaluatePermission`) and `authority.grant`'s is `:727` - both inside the one
+ *     `src/core/work-mode.ts:704` (`evaluatePermission`) and `authority.grant`'s is `:847` - both inside the one
  *     file the scan excludes, because that file both fills and consumes. Dropping the exclusion makes every row
  *     match trivially, so the file cannot simply be included either.
  *   - Three rows are **vacuous**: `sandbox`, `limits` and `capabilities` match unrelated code
@@ -91,4 +91,4 @@ console.log(
 		? "No orphan found by this heuristic - which is not the same as no orphan: see the vacuous rows above."
 		: `${orphans} declared behaviour(s) with no reader. Check by hand before believing it: \`permissions.unlisted\` and \`authority.grant\` are the two this scan reports as false orphans.`,
 );
-console.log("Known false orphans: permissions.unlisted (src/core/work-mode.ts:588), authority.grant (src/core/work-mode.ts:727).");
+console.log("Known false orphans: permissions.unlisted (src/core/work-mode.ts:704), authority.grant (src/core/work-mode.ts:847).");
