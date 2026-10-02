@@ -45,7 +45,9 @@ function writeFixture(directory: string, neverAllow: readonly string[]): string 
 			"authority:",
 			"  grant: local-fixture",
 			"  capabilities: []",
-			'  expires: "2027-01-01T00:00:00.000Z"',
+			// No `expires`: the loader refuses a mode-level expiry, because a calendar window is a property of the
+			// engagement document's grant and this runtime cannot honour it in the mode. This fixture declared one
+			// from the day it was written, when the field did nothing.
 			"gate:",
 			"  semantics: none",
 			"  approval: none",
