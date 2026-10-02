@@ -454,6 +454,45 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 
 	const governance = parseGovernance(files.governance);
 	rejectUnknown("governance.yaml", governance, GOVERNANCE_FIELDS);
+	// **Blocks that read as controls and control nothing are refused, by name** - but the loop lives below, beside the
+	// `authority` declaration it reads from: `grant_graph` is a key *inside* that block, and a version of this check that
+	// ran before the block was parsed looked for it on the governance object and never saw it.
+	// `session.budget.turns` is the one budget field the runtime can honour - it has a real turn bound, and the mode's
+	// number is carried to it. Its siblings are refused with it, because a budget that meters one of four things
+	// meters nothing, and a reader cannot tell from the file which of the four would have stopped the run.
+	const budget = (governance.session as { readonly budget?: unknown } | undefined)?.budget;
+	// `memory_scope` reads as a control - "this mode's memory is project-scoped" - and nothing in this runtime scopes
+	// memory by mode at all, so it is refused with the blocks above rather than left looking like one.
+	if ((governance.session as { readonly memory_scope?: unknown } | undefined)?.memory_scope !== undefined) {
+		throw new WorkModeError(
+			"invalid-type",
+			"governance.session.memory_scope is not enforceable by the runtime: nothing here scopes memory by mode, so a value reads as a control that does not exist. Remove the field.",
+		);
+	}
+	if (budget !== undefined && typeof budget === "object" && budget !== null) {
+		const sibling = Object.keys(budget).find((key) => key !== "turns");
+		if (sibling !== undefined) {
+			throw new WorkModeError(
+				"invalid-type",
+				`governance.session.budget.${sibling} is not enforceable by the runtime: this runtime has a turn bound and no token, cost or exploration accounting. Keep 'turns' and remove the rest.`,
+			);
+		}
+	}
+	const stop = governance.stop;
+	if (stop !== undefined) {
+		const declared = Array.isArray(stop) ? stop : (stop as { readonly on?: unknown }).on;
+		const asked = Array.isArray(declared) ? declared.filter((entry): entry is string => typeof entry === "string") : [];
+		// The legal set is the loop's own union, not a second list: a stop condition nothing can raise is a promise
+		// about the end of a run, and the shipped pentest mode named three of them.
+		const produced = new Set<string>(["completed", "maxTurns", "stopped", "providerError"]);
+		const never = asked.find((entry) => !produced.has(entry));
+		if (never !== undefined) {
+			throw new WorkModeError(
+				"invalid-type",
+				`governance.stop names '${never}', which this runtime never produces: the loop stops with ${[...produced].join(", ")}. Name one of those, or remove the block.`,
+			);
+		}
+	}
 
 	if (typeof governance.version !== "string") throw new WorkModeError("missing-field", "governance.version is required and must be a string.");
 	if (typeof governance.framework !== "string") throw new WorkModeError("missing-field", "governance.framework is required and must be a version range string.");
@@ -476,6 +515,20 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 
 	const authority = requireRecord("governance.authority", governance.authority);
 	rejectUnknown("governance.authority", authority, AUTHORITY_FIELDS);
+	// **Blocks that read as controls and control nothing are refused, by name**, for the reason a gate-level `windows`
+	// block is: the runtime has no machinery behind them, so a mode declaring one claims a bound nobody can reach. Each
+	// message says which field and why, because the reason it is refused is the design point. **Where a block lives
+	// matters**: `grant_graph` is a key *inside* `authority`, and the first version of this loop looked for every field
+	// on the governance object - so it never saw that one, which is how the field survived the check written to catch it.
+	const UNHONOURED_BLOCKS: readonly (readonly [Record<string, unknown>, string, string, string])[] = [
+		[authority, "grant_graph", "governance.authority.grant_graph", "the binding it names lives in the engagement document's targets[].requires_grants, which is checked per action - a second list here would be a less verifiable copy"],
+		[governance, "evidence", "governance.evidence", "retention and isolation are promises this runtime cannot keep: nothing deletes by age or isolates per engagement"],
+		[governance, "coordination", "governance.coordination", "there is no second agent to coordinate with, so a cadence here describes machinery that is not present"],
+	];
+	for (const [source, field, where, why] of UNHONOURED_BLOCKS) {
+		if (source[field] === undefined) continue;
+		throw new WorkModeError("invalid-type", `${where} is not enforceable by the runtime: ${why}. Remove the block, or build it.`);
+	}
 	// **`expires` is refused, for the reason `gate.windows` is**: a calendar claim outlives a session and belongs to
 	// the engagement document's grant, whose `window` the pre-flight and every action check. Keeping the key in the
 	// field set means a mode that writes one is told precisely this rather than that the key is unknown - which is
@@ -860,6 +913,20 @@ export function loadWorkModeFromDirectory(root: string, name: string, options: L
 	// **Both no-contract values return here, and this line is why `none` had to extend it.** A value that fell through
 	// would be sent to the conformance path and refused with a message about grant documents - the value would look
 	// implemented and not be.
+	// **The name is resolved whatever the semantics; only the *document* is skipped for the values that have no
+	// contract.** The early return below exists so a `limit`/`none` mode is not refused with a message about grant
+	// documents - its own comment says the value would then look implemented and not be. A name that resolves to
+	// nothing is a different fact: it reads like authority nobody granted, and two shipped modes carried one.
+	const declaredGrant = mode.authorityGrant;
+	if (declaredGrant !== undefined) {
+		const declaredPath = resolve(workspaceRoot, declaredGrant);
+		if (!existsSync(declaredPath)) {
+			throw new WorkModeError(
+				"authority-unresolved",
+				`Mode '${mode.id}' declares 'authority.grant: ${declaredGrant}', and there is no document at ${declaredPath}. A name that resolves to nothing reads as authority nobody granted. Point it at a document, or drop the field - a mode bounded by its own permissions and scope does not need to name an engagement.`,
+			);
+		}
+	}
 	if (mode.gateSemantics === "limit" || mode.gateSemantics === "none") return { mode };
 
 	const grant = mode.authorityGrant;

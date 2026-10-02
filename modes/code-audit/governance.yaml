@@ -1,4 +1,4 @@
-version: 1.8.0
+version: 1.9.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -7,7 +7,10 @@ scope:
   exclusions: []
 
 authority:
-  grant: local-review
+  # **No `grant` name.** This mode declared `local-review`, and there is no such document anywhere in the repository -
+  # a name that resolves to nothing reads as authority nobody granted, so the loader refuses one now. An internal
+  # review has no external grantor to write a document, which is why this mode's gate is `none`: the two facts are the
+  # same fact, and the second is now stated instead of implied by a dangling name.
   # **Two namespaces, and this list holds both on purpose.** `code-audit.seed`, `code-audit.disposition` and `code-audit.diff` are
   # capability names: they are in the registry `dove-pi capability list` prints. `repo.read` and `report.write` are this mode own
   # action names, declared in permissions.yaml and given an idempotency class below. A grant covers what the mode may do, which is both
@@ -63,27 +66,17 @@ sandbox:
   filesystem: read-only-source
 
 session:
-  memory_scope: project
+  # `turns` is honoured, and the budget's other three fields are gone because nothing meters them. `memory_scope` is
+  # gone too: nothing in this runtime scopes memory by mode, and the loader refuses the field by name now.
   budget:
     turns: 40
-    tokens: 400000
-    cost_multiplier: 1.0
-    exploration: 0
 
-evidence:
-  format: sarif
-  artifacts: [report.sarif, coverage.json]
-  retention: 90d
-  isolation: per-engagement
+# **`evidence` and `coordination` dropped, with the loss written down**: this mode no longer states how long the
+# report and coverage are kept, or who owns the repository when something needs saying. The loader refuses either
+# block by name rather than let them read as promises.
 
-coordination:
-  aware_contact: repo-owner
-  incident_reporting: none
-  cadence:
-    plans: true
-    progress: true
-    problems: true
-
+# The loop's own reasons: an exhausted turn budget is `maxTurns`, and an audit that stops finding new things is a run
+# that `completed`. `findings-stable` was this mode's own name for the second one.
 stop:
-  on: [budget-exhausted, findings-stable]
+  on: [maxTurns, completed]
   emergency_stop: operator

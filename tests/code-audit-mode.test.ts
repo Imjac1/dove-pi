@@ -380,8 +380,15 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 		// occur, and the mode now states its approval stance - which is a change to what the mode authorizes, the same
 		// reason 1.2.0 through 1.7.0 were bumped. A version that does not move when the authority set does cannot
 		// attribute a run to one authority set.
-		assert.equal(governance.version, "1.8.0", "an authority change increments the version, so a run can be attributed to one");
-		assert.ok(governance.evidence.artifacts.includes("coverage.json"), "the receipt is an artifact of the run, not an aside");
+		// 1.9.0 because the mode's authority set changed again: `grant_graph` and the `evidence`/`coordination` blocks are
+		// refused by the loader now, so they are gone, and the grant name went with them. That is a change to what the
+		// mode authorizes, which is what the version counts - the same reason 1.2.0 through 1.8.0 were bumped.
+		assert.equal(governance.version, "1.9.0", "an authority change increments the version, so a run can be attributed to one");
+		// **Inverted.** The mode declared an `evidence` block with `retention: 90d` and an artifact list, and the loader
+		// refuses that block by name now: a retention promise this runtime cannot keep is worse than none, because a
+		// reader cannot tell from the file which of its declarations would have stopped anything. The loss is written
+		// into the mode's own file rather than only here.
+		assert.equal("evidence" in (mode.governance as Record<string, unknown>), false, "the mode declares no evidence block, because the runtime cannot keep what it promised");
 	});
 
 	it("declares no gate, states its approval stance, and names only actions that can occur", async () => {
@@ -392,7 +399,10 @@ describe("code-audit vertical (first vertical, lowest blast radius)", () => {
 		// produces, so "no shell" was a claim nothing enforced.
 		assert.equal(mode.gateSemantics, "none", "a mode with no document and no thresholds has no gate to declare");
 		assert.deepEqual(mode.limits, [], "and it declares no thresholds, which is why the containment is the permission list");
-		assert.equal(mode.authorityGrant, "local-review", "the grant stays as the name of the review that authorizes it, as trading's does");
+		// **Inverted.** It used to assert `authorityGrant === "local-review"` - a name no document ever resolved, which is
+		// exactly what the whole-scope check found and what the loader refuses now. An internal review has no external
+		// grantor to write a document, so the honest declaration is none at all, and the same is true of trading.
+		assert.equal(mode.authorityGrant, undefined, "the mode names no grant, because no document ever backed the name it used to carry");
 		assert.equal(mode.permissions.unlisted, "allow", "the mode states what an action on no list gets, rather than inheriting a constant");
 		assert.equal(evaluatePermission(mode.permissions, "bash"), "deny", "and its one hard prohibition is enforceable, because it names the host's shell tool");
 		assert.equal(evaluatePermission(mode.permissions, "write"), "ask", "while writing the report still needs the operator's consent");

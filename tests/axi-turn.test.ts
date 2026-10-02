@@ -43,7 +43,9 @@ function writeFixture(directory: string, neverAllow: readonly string[]): string 
 			"  environment: non-production",
 			"  exclusions: []",
 			"authority:",
-			"  grant: local-fixture",
+			// No `grant`: this mode names no engagement and has no capabilities to check against one, and a name that
+			// resolves to nothing reads as authority nobody granted - the loader refuses one now. `local-fixture` was
+			// decoration here from the day it was written.
 			"  capabilities: []",
 			// No `expires`: the loader refuses a mode-level expiry, because a calendar window is a property of the
 			// engagement document's grant and this runtime cannot honour it in the mode. This fixture declared one

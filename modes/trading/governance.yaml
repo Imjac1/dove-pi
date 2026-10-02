@@ -1,4 +1,4 @@
-version: 1.3.0
+version: 1.4.0
 framework: ">=0.2.0 <0.3.0"
 
 scope:
@@ -7,7 +7,9 @@ scope:
   exclusions: [production-venue]
 
 authority:
-  grant: local-paper-trading
+  # **No `grant` name.** This mode declared `local-paper-trading`, and no such document exists: paper trading is
+  # bounded by this file's thresholds and by the scope block's `exclusions: [production-venue]`, not by an engagement
+  # document. A name that resolves to nothing reads as authority nobody granted, so the loader refuses one now.
   capabilities: [market.read, order.submit]
   # No `expires`: the runtime refuses it as unenforceable - see the note in `modes/pentest/governance.yaml`.
 
@@ -39,27 +41,14 @@ sandbox:
   filesystem: unrestricted
 
 session:
-  memory_scope: none
+  # `turns` is honoured; the other three budget fields are gone because nothing meters them, and `memory_scope` is gone
+  # with them: nothing in this runtime scopes memory by mode, and the loader refuses the field by name now.
   budget:
     turns: 20
-    tokens: 200000
-    cost_multiplier: 1.0
-    exploration: 0
 
-evidence:
-  format: native
-  artifacts: [orders.jsonl]
-  retention: 2555d
-  isolation: per-engagement
-
-coordination:
-  aware_contact: trading-desk
-  incident_reporting: risk-desk
-  cadence:
-    plans: true
-    progress: true
-    problems: true
-
+# **`evidence` and `coordination` dropped, with the loss written down.** `retention: 2555d` is the one that mattered
+# most, and it is exactly the promise this runtime cannot keep: nothing deletes an order log by age. The desk's
+# contacts are gone with it.
 stop:
-  on: [budget-exhausted, ambiguous-submission, emergency-stop]
-  emergency_stop: risk-desk
+  on: [maxTurns, stopped]
+  emergency_stop: operator

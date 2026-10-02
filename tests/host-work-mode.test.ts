@@ -162,7 +162,10 @@ function writeFixtureMode(root: string, name: string, spec: FixtureSpec): void {
 			"  environment: non-production",
 			"  exclusions: [" + (spec.exclusions ?? []).join(", ") + "]",
 			"authority:",
-			"  grant: " + (conformance === undefined ? "local-fixture" : conformance.document),
+			// **Only when there is a document to point at.** The loader resolves the name whatever the semantics, because a
+			// name that resolves to nothing reads as authority nobody granted - and `local-fixture` was a placeholder
+			// nothing ever resolved, which is the same fact the check found in two shipped modes.
+			...(conformance === undefined ? [] : ["  grant: " + conformance.document]),
 			"  capabilities: [" + spec.capability + "]",
 			// **Only when the case asks for one.** The loader refuses `expires` outright - a calendar window belongs to
 			// the grant - so a fixture that wrote one by default would put every case in this file behind a refusal.
@@ -404,6 +407,12 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		copyMode(root, "code-audit");
 		forceSemantics(root, "code-audit", "conformance");
+		// **The name is supplied here, because the shipped mode no longer carries one.** A `conformance` mode must be able
+		// to point at a document, and this case is about the mode that cannot - so it forces back both halves of that
+		// shape rather than only the semantics. Without the name the refusal would be a different one, and the case would
+		// pass while testing something else.
+		const governancePath = join(root, "modes", "code-audit", "governance.yaml");
+		writeFileSync(governancePath, readFileSync(governancePath, "utf8").replace("authority:", "authority:\n  grant: local-review"));
 		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
 		const host = startHost(root);
 		try {
@@ -411,8 +420,8 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			const refusal = host.notifications.find((message) => /local-review/.test(message));
 			assert.ok(refusal !== undefined, "the refusal names the grant that could not be resolved: " + host.notifications.join(" | "));
 			assert.match(refusal, /authority\.grant/, "and the field to fix");
-			assert.match(refusal, /gate\.semantics: limit/, "and the alternative, so the operator is not left guessing");
-			assert.match(refusal, /none if it has no gate at all/, "including the one for a mode with neither a grantor nor thresholds");
+			assert.match(refusal, /Point it at a document, or drop the field/, "and the two ways out, so the operator is not left guessing");
+			assert.match(refusal, /does not need to name an engagement/, "including the one for a mode that is bounded by its own permissions and scope");
 			const decision = await callTool(host, "bash", { command: "ls" });
 			assert.equal(decision?.block, true, "and no action runs while the mode is unresolved");
 		} finally {

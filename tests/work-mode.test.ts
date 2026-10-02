@@ -66,6 +66,66 @@ function expectError(run: () => unknown, code: WorkModeError["code"]): WorkModeE
 }
 
 describe("work-mode loader", () => {
+	// **A declaration the runtime cannot honour is refused, by name.** These four came out of a whole-scope check that
+	// asked the field-level question across the repository: every one of them was accepted, read as a control, and
+	// read by nothing. The cure is the one this repository already uses for a gate-level `windows` block - the key
+	// stays in the allowed set so the message is precise, and the message says which field, and why.
+	const withGovernance = (line: string): WorkModeFiles => files({ governance: files().governance + line.replace(/^\s+/u, "") + "\n" });
+
+	it("refuses `authority.grant_graph`, which duplicates what the document binds  [D4]", () => {
+		// Inside the `authority` block, where the field belongs: appended at the top level it would be an unknown-key
+		// refusal instead, which is a different check answering a different question.
+		const governance = files().governance.replace("  capabilities: [read_repo, write_report]", "  capabilities: [read_repo, write_report]\n  grant_graph: [g-client-scope]");
+		const error = expectError(() => loadWorkMode(files({ governance }), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.message, /grant_graph/u, "the field is named");
+		assert.match(error.message, /requires_grants/u, "and the reader is sent to where the binding actually lives");
+	});
+
+	it("refuses a `stop.on` reason the runtime never produces  [D4]", () => {
+		// The shipped pentest mode names three (`budget-exhausted`, `window-closed`, `emergency-stop`) and none of them
+		// exists anywhere in the runtime: a stop condition nothing can raise is a promise about the end of a run.
+		const error = expectError(
+			() => loadWorkMode(withGovernance("  stop: [budget-exhausted]"), { frameworkVersion: FRAMEWORK }),
+			"invalid-type",
+		);
+		assert.match(error.message, /budget-exhausted/u, "the value is named");
+		assert.match(error.message, /maxTurns|completed|never produces|does not produce/u, "and the legal set is described");
+	});
+
+	it("refuses `evidence` and `coordination`, whose promises this runtime cannot keep  [D4]", () => {
+		for (const [line, field] of [["  evidence:", "evidence"], ["  coordination:", "coordination"]] as const) {
+			const error = expectError(() => loadWorkMode(withGovernance(line), { frameworkVersion: FRAMEWORK }), "invalid-type");
+			assert.match(error.message, new RegExp(field, "u"), `the field is named: ${field}`);
+		}
+	});
+
+	it("carries `session.budget.turns` and refuses the siblings it cannot honour  [D4]", () => {
+		// `turns` is honoured - the runtime has a real turn bound and the mode's number is fed to it. `tokens`,
+		// `cost_multiplier` and `exploration` are not, and a budget that meters two of four things meters nothing.
+		const error = expectError(
+			() => loadWorkMode(withGovernance("  session:\n    budget:\n      turns: 60\n      tokens: 600000"), { frameworkVersion: FRAMEWORK }),
+			"invalid-type",
+		);
+		assert.match(error.message, /tokens/u, "the field it cannot honour is named");
+	});
+
+	it("refuses a `grant` name that resolves to nothing, whatever the semantics  [D4]", () => {
+		// The loader returns early for `limit`/`none` because it must not load a document those modes do not use - its
+		// own comment says why. But a name that resolves to nothing is a different fact: it reads like authority nobody
+		// granted. Two shipped modes carry one each.
+		const root = freshRoot();
+		const directory = join(root, "modes", "unresolvable");
+		mkdirSync(directory, { recursive: true });
+		writeFileSync(join(directory, "MODE.md"), ["---", "name: unresolvable", "description: A mode whose grant is not there", "license: MIT", "---", "", "Body.", ""].join("\n"));
+		writeFileSync(
+			join(directory, "governance.yaml"),
+			["version: 1.0.0", 'framework: ">=0.1.0 <1.0.0"', "scope:", "  targets: [repo]", "  environment: non-production", "authority:", "  grant: local-nothing", "  capabilities: [read_repo]", "gate:", "  semantics: none", ""].join("\n"),
+		);
+		writeFileSync(join(directory, "permissions.yaml"), ["unlisted: ask", "always_allow: []", "ask_before: []", "never_allow: []", ""].join("\n"));
+		const error = expectError(() => loadWorkModeFromDirectory(root, "unresolvable", { frameworkVersion: FRAMEWORK }), "authority-unresolved");
+		assert.match(error.message, /local-nothing/u, "the name is named");
+	});
+
 	it("loads a well-formed three-file mode", () => {
 		const mode = loadWorkMode(files(), { frameworkVersion: FRAMEWORK });
 		assert.equal(mode.id, "code-audit");
