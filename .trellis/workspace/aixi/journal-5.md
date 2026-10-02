@@ -722,3 +722,43 @@ Step 0 of the architecture refresh: added .trellis/spec/backend/personal-agent-u
 ### Status
 
 [OK] **Completed**
+
+## Session 232: A whole-repo audit, two doors against rot, and the plan rebased
+
+**What started it**: a review of the whole tree against its recorded architecture. Eight angles,
+each re-checked by an adversarial verifier; one angle was falsified, two or three findings were
+overstated, and my own synthesis step threw the findings away, so the report was put together by
+re-running every cited check.
+
+**What it found**: the repository guards its structure mechanically - surface paths, reachability
+in both directions, labels by the typechecker - while **numbers in prose and `file:line` anchors
+in specs were guarded by nothing**. This session produced six instances of that rot itself, one
+of them inside a day of being written.
+
+**What it built**: `tests/spec-anchors.test.ts`, a door with three checks, and a rule for numbers
+- computable ones are checked, moving ones are not written down. Both doors were narrowed by
+measurement: a symbol-per-line rule was written, run, and **withdrawn**, because these pages make
+group claims and it reported three citations that were correct.
+
+**What it kept correcting**: a citation I "fixed" that was already right; a count I "falsified"
+that was right (the comments use two wordings and I counted one); a review pointer that archiving
+silently broke; and the report itself, which the round log had replaced while the acceptance
+criterion still pointed at it.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85b38dd` | fix(cli): make the axi turn a command a user can actually reach |
+| `71e5c23` | fix(gate): record a refusal's class, and stop recording a gate's name |
+| `7e60090` | feat(spec): a door over the specification pages' citations, and the ones it caught |
+| `78fb91d` | fix(spec,task): the citations and numbers the audit measured as rotted |
+| `d684cef` | feat(spec): check the claim a mount-point row makes, not only that its line exists |
+| `41d8565` | docs(plan): rebase the plan of record onto one repository, and correct what it claimed |
+| `4ef00da` | fix(spec,plan): the citations the final check pass found dead |
+| `98693a7` | chore(task): restore the audit report the round log had replaced, and tick the plan |
+| `c5bc234` | fix(plan): repoint the audit pointer after archiving its task |
+
+### Status
+
+[OK] **Completed** — the audit task is archived at `.trellis/tasks/archive/2026-10/10-02-architecture-drift/`; its report and four rounds of readings are in its `readings.md`. Gates at the end: `typecheck` 0, `npm test` 850 / 848 pass / 0 fail / 2 skipped, installer 141 OK.
