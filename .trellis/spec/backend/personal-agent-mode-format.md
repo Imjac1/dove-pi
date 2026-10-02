@@ -43,8 +43,9 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   `technique`, `intensity` ceilings against the actions a phase has run, and a call that carries neither is
   simply outside both. `scope.exclusions` is checked against the target the call names, through the same
   `target_argument` the contract gate uses: a mode that states what it must not touch is not allowed to
-  touch it. `toRequest` forwards `technique`/`phase`/`intensity`/`requestsInLastSecond` so a grant's
-  `constraints` fire too.
+  touch it - **and a mode that cannot say which target a call names is refused that list at load**, because
+  a statement nothing can evaluate is not a boundary. `toRequest` forwards
+  `technique`/`phase`/`intensity`/`requestsInLastSecond` so a grant's `constraints` fire too.
 - **A declaration the runtime cannot honour is refused, by name.** That covers the blocks listed in the
   matrix below - a mode-level `expires`, `grant_graph`, `evidence`, `coordination`, `session.memory_scope`,
   the budget fields beside `turns`, and a `stop.on` reason the loop never produces. The point is not that
@@ -75,6 +76,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
 | `gate.excluded_techniques` not a string list | Refused at load |
 | `gate.excluded_techniques` naming a technique the runtime cannot witness | Refused at load, naming the technique |
+| `scope.exclusions` on a mode with no `gate.target_argument` | Refused: the list is checked against the target a call names, and this mode gives it nothing to read - so it could not refuse anything |
 | `gate.windows` declared | Refused: the grant carries the window |
 | `authority.expires` declared | Refused: the grant carries the window the expiry would repeat |
 | `authority.grant_graph` declared | Refused: the document's `targets[].requires_grants` is the binding, checked per action |

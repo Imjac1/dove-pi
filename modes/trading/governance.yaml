@@ -4,7 +4,10 @@ framework: ">=0.2.0 <0.3.0"
 scope:
   targets: [sandbox-venue]
   environment: non-production
-  exclusions: [production-venue]
+  # **No `exclusions`.** It named `production-venue`, and this mode's gate carries no `target_argument` - so the
+  # exclusion could never refuse anything, and the loader refuses a list it cannot enforce now, for the same reason it
+  # refuses a mode-level expiry. **That is a real loss**: one line used to say production venues were out of reach.
+  # What remains is the paper-only target scope below and the permission list.
 
 authority:
   # **No `grant` name.** This mode declared `local-paper-trading`, and no such document exists: paper trading is
@@ -34,7 +37,7 @@ gate:
 sandbox:
   # Only what this runtime can honour. Paper trading needs the market feed, so the network stays
   # unrestricted; the containment that matters is that nothing here touches a production venue, which is
-  # the scope block's job (targets: [sandbox-venue], exclusions: [production-venue]), not an OS sandbox
+  # the scope block's job (targets: [sandbox-venue]), not an OS sandbox
   # this runtime does not have. `container`/`allowlist`/`ephemeral` would refuse to load.
   isolation: none
   network: unrestricted

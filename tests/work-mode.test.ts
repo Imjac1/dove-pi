@@ -72,6 +72,18 @@ describe("work-mode loader", () => {
 	// stays in the allowed set so the message is precise, and the message says which field, and why.
 	const withGovernance = (line: string): WorkModeFiles => files({ governance: files().governance + line.replace(/^\s+/u, "") + "\n" });
 
+	it("refuses an exclusion list the gate cannot enforce  [D4]", () => {
+		// `scope.exclusions` is checked against the target a call names, and a mode that declares no `target_argument`
+		// gives that check nothing to read - so the list is inert. `modes/trading` shipped exactly that shape:
+		// `exclusions: [production-venue]` under a gate that carries no target, and a case titled "keeps production out
+		// of reach" that asserted the raw value rather than an enforcement. A statement that cannot fire is this task's
+		// defect, so it is refused rather than kept for its good intentions.
+		const governance = files().governance.replace("  targets: [repo]", "  targets: [repo]\n  exclusions: [some-venue]");
+		const error = expectError(() => loadWorkMode(files({ governance }), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.message, /exclusions/u, "the field is named");
+		assert.match(error.message, /target_argument/u, "and the way to make it enforceable");
+	});
+
 	it("refuses `authority.grant_graph`, which duplicates what the document binds  [D4]", () => {
 		// Inside the `authority` block, where the field belongs: appended at the top level it would be an unknown-key
 		// refusal instead, which is a different check answering a different question.

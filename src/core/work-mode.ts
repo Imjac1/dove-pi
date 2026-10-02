@@ -512,6 +512,16 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	const scopeExclusions = Array.isArray(scope.exclusions)
 		? scope.exclusions.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "").map((entry) => entry.trim())
 		: undefined;
+	if (scopeExclusions !== undefined && scopeExclusions.length > 0 && (governance.gate as { readonly target_argument?: unknown } | undefined)?.target_argument === undefined) {
+		// **An exclusion list that cannot fire is refused.** It is checked against the target a call names, and that
+		// target comes from `gate.target_argument`; a mode that declares none gives the check nothing to read, so the
+		// list would sit there reading as a boundary while nothing was bounded. `modes/trading` shipped exactly that.
+		throw new WorkModeError(
+			"invalid-type",
+			"governance.scope.exclusions names targets, and this mode declares no 'gate.target_argument' - so nothing can tell the boundary which target a call acts on, and the list cannot refuse anything. Declare the argument that names it, or remove the exclusions.",
+		);
+	}
+
 
 	const authority = requireRecord("governance.authority", governance.authority);
 	rejectUnknown("governance.authority", authority, AUTHORITY_FIELDS);

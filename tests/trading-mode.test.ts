@@ -43,12 +43,16 @@ function createSandboxVenue() {
 }
 
 describe("trading vertical (limit gate + venue-level idempotency)", () => {
-	it("loads from disk and keeps production out of reach", async () => {
+	it("loads from disk, with production out of reach by permission rather than by a list it cannot enforce", async () => {
 		const mode = await loadMode();
 		assert.equal(mode.id, "trading");
-		const governance = mode.governance as { scope: { environment: string; exclusions: readonly string[] } };
+		const governance = mode.governance as { scope: { environment: string; exclusions?: readonly string[] } };
 		assert.equal(governance.scope.environment, "non-production");
-		assert.ok(governance.scope.exclusions.includes("production-venue"));
+		// **Inverted.** The mode declared `exclusions: [production-venue]`, and its gate carries no `target_argument` - so
+		// the list could never refuse anything: nothing could tell the boundary which target a call acts on, and this
+		// case asserted the raw value rather than an enforcement. The loader refuses a list it cannot enforce now. What
+		// actually keeps production out of reach is the permission list below.
+		assert.equal(governance.scope.exclusions, undefined, "no exclusions list, because this gate cannot enforce one");
 		assert.equal(evaluatePermission(mode.permissions, "order.submit"), "ask");
 		assert.equal(evaluatePermission(mode.permissions, "production.submit"), "deny");
 		assert.equal(evaluatePermission(mode.permissions, "order.withdraw_funds"), "deny");
