@@ -390,6 +390,34 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			? createConformanceGate({ document: options.authorityDocument, toRequest })
 			: undefined;
 
+	/**
+	 * A target the mode excludes, refused before anything else can allow it.
+	 *
+	 * The target is resolved the way the conformance request resolves it - `target_argument`, the one declaration of
+	 * what an action acts *on* - and matched as written. A mode that names no exclusions, or a call whose target cannot
+	 * be established, is left to the checks that own those questions; this one answers only "is this target on the
+	 * list the mode gave", and a list entry that matches nothing refuses nothing, which is what it did before.
+	 */
+	const excludedTargetDecision = (invocation: GateInvocation): GateDecision => {
+		const exclusions = mode.scopeExclusions;
+		const declared = mode.targetArgument;
+		if (exclusions === undefined || exclusions.length === 0 || declared === undefined) return { outcome: "allow" };
+		// **Two sources, because either can carry the id.** The host resolves the resource an action acts on and puts it
+		// on the invocation; `target_argument` is how the mode says which argument names it for a capability call, where
+		// the arguments are nested. Both are trusted fields, and a match on either refuses - the conservative direction,
+		// since missing one would let an excluded target through.
+		const resolved = invocation.target;
+		const named = readArgumentPath(invocation.arguments, declared);
+		const candidates = [resolved, named].filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim());
+		const target = candidates.find((candidate) => exclusions.includes(candidate));
+		if (target === undefined) return { outcome: "allow" };
+		return {
+			outcome: "block",
+			reason: `Target '${target}' is on mode '${mode.id}'s exclusions list.`,
+			remediation: "Choose a target the mode does not exclude, or change the mode's scope deliberately rather than around it.",
+		};
+	};
+
 	const denyDecision = (action: string): GateDecision => {
 		if (evaluatePermission(mode.permissions, action) !== "deny") return { outcome: "allow" };
 		return {
@@ -460,6 +488,10 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			// as a second control that must be remembered.
 			const denial = denyDecision(invocation.tool);
 			if (denial.outcome === "block") return labelled(denial, "deny");
+			// Checked here rather than earlier: `deny` is the first decision a mode makes about an action, so an action
+			// its permissions deny is reported as denied, not as an excluded target.
+			const exclusion = excludedTargetDecision(invocation);
+			if (exclusion.outcome === "block") return labelled(exclusion, "scope");
 			// **The fence, and it is checked before every control whose configuration this run could have
 			// influenced.** Its subject is the harness itself - the policy, the verifier and the ledger are what it
 			// protects - so it cannot run after something that this run may have softened. It is also the only

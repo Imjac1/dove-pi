@@ -871,12 +871,11 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 
-	it("allows a target the mode excludes, because nothing checks the exclusion  [KNOWN GAP]", async () => {
-		// `scope.exclusions` is declared by all three shipped modes (`[t-payments]`, `[production-venue]`, `[]`) and
-		// nothing reads it. This fixture excludes **the very target its own authority document authorizes**, which is
-		// the strongest form of the claim: an exclusion that cannot refuse the thing it names.
-		//
-		// Invert this test when exclusions are enforced; do not delete it.
+	it("refuses a target the mode excludes, at the boundary  [D4]", async () => {
+		// `scope.exclusions` used to be declared and unread: all three shipped modes carry one (`[t-payments]`,
+		// `[production-venue]`, `[]`), so a mode could exclude **the very target its own authority document
+		// authorizes** and reach it anyway - the strongest form of the claim, an exclusion that cannot refuse the
+		// thing it names. This is the case the repository left with the instruction to invert when that changed.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		const engagement = writeFixtureEngagement(root);
@@ -893,7 +892,11 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 			await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "inspect the workspace", systemPrompt: "" }, host.context);
 
 			const excluded = await callTool(host, "agent_run_capability", { name: "workspace.inspect", args: { target: engagement.target } }, "c-excluded");
-			assert.notEqual(excluded?.block, true, "KNOWN GAP: a target the mode excludes is allowed: " + (excluded?.reason ?? "(no reason)"));
+			// **Inverted, as this case's own instruction said to.** It used to assert the defect - a mode excluded a target
+			// and the call ran anyway - which was the strongest form of the claim: an exclusion that cannot refuse the
+			// thing it names. The case and the instruction stay; the enforcement is what changed.
+			assert.equal(excluded?.block, true, "a target the mode excludes must be refused at the boundary: " + (excluded?.reason ?? "(no reason)"));
+			assert.match(excluded?.reason ?? "", /exclude/iu, "and the refusal says the mode excludes it: " + (excluded?.reason ?? "(no reason)"));
 		} finally {
 			host.restoreCwd();
 		}

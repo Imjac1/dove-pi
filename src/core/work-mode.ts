@@ -100,6 +100,14 @@ export interface WorkMode {
 	/** The `authority.grant` this mode names: a document path relative to the workspace, or a bare name. */
 	readonly authorityGrant?: string;
 	/**
+	 * Targets this mode must not touch, from `scope.exclusions`.
+	 *
+	 * A mode that names something it excludes is making a claim about what it will not do, so the claim is read and
+	 * enforced at the boundary rather than validated for shape and forgotten: an exclusion that cannot refuse the
+	 * thing it names is the defect this field was carrying.
+	 */
+	readonly scopeExclusions?: readonly string[];
+	/**
 	 * The capabilities this mode grants the agent, from `authority.capabilities`.
 	 *
 	 * Typed and exposed rather than left in `governance`, because a capability scoping check is only worth having if
@@ -458,6 +466,13 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 
 	const scope = requireRecord("governance.scope", governance.scope);
 	rejectUnknown("governance.scope", scope, SCOPE_FIELDS);
+	// **Carried, not just checked.** The shape of `exclusions` was validated here and the value then dropped, so a
+	// mode could state what it must not touch and touch it anyway. The list is read into a typed field **because
+	// trusted input read before untrusted content is the whole point** (design 4.3): a scope assembled after the agent
+	// has read a repository has been influenced by it.
+	const scopeExclusions = Array.isArray(scope.exclusions)
+		? scope.exclusions.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "").map((entry) => entry.trim())
+		: undefined;
 
 	const authority = requireRecord("governance.authority", governance.authority);
 	rejectUnknown("governance.authority", authority, AUTHORITY_FIELDS);
@@ -669,6 +684,9 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 		gateSemantics: gate.semantics as "none" | "limit" | "conformance" | "both",
 		...(targetArgument === undefined ? {} : { targetArgument: targetArgument as string }),
 		...(grant === undefined ? {} : { authorityGrant: grant as string }),
+			// **Attached, or the extraction above is just a local variable.** This is the step that was missing when the
+			// exclusion check first ran: the list was read, typed, and then dropped on the floor a second time.
+			...(scopeExclusions === undefined ? {} : { scopeExclusions }),
 		...(excludedTechniques.length === 0 ? {} : { excludedTechniques }),
 		...(sandbox === undefined ? {} : { sandbox }),
 		...(fence === undefined ? {} : { fence }),
