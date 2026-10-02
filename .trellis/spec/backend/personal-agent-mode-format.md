@@ -68,6 +68,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 |---|---|
 | Unknown field, any level | Rejected with a named error; never ignored |
 | Missing fence, `name`, or `description` | Rejected |
+| `fence` without a `shell` stance | Refused at load: the fence cannot see through the shell, so it cannot judge a write that goes through it |
 | Missing `scope`, `authority.capabilities`, or `gate.semantics` | Rejected |
 | Unrecognised `gate.semantics` | Rejected, naming the four values |
 | `limit`/`both` with no limits, or `none` with any | Refused at load, naming both ways out |

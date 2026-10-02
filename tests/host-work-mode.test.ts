@@ -925,7 +925,7 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		// instruction to **invert it rather than delete it** once either half was wired. The inversion happened and
 		// the assertions below are the inverted ones; this paragraph is what the inversion left behind, corrected
 		// once somebody read it and found it describing a state that no longer exists. The neighbouring case - an
-		// excluded *target* - still asserts its own gap, and that assertion is deliberate.
+		// excluded *target* - was inverted with it, so neither of the two gaps this file used to carry is asserted as one.
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
 		const engagement = writeFixtureEngagement(root);

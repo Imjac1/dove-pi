@@ -21,7 +21,7 @@ import { join } from "node:path";
  *     before someone measured them - a spec page carries line numbers because a check reads it, a comment
  *     carries none because nothing does.
  *   - Three rows are **vacuous**: `sandbox`, `limits` and `capabilities` match unrelated code
- *     (`src/core/model-gateway.ts:166` for `limits`, `src/runtime.ts:15` for `capabilities`), so deleting the real
+ *     (`model-gateway` for `limits`, `runtime` for `capabilities`), so deleting the real
  *     consumer would leave them green.
  *
  * A gate that reports coverage it does not have is worse than no gate, so this prints and never asserts. Exit status
@@ -71,10 +71,10 @@ const DECLARED: readonly { readonly label: string; readonly member: string }[] =
  * the honest fix is scope-aware resolution, which needs a parser rather than a grep.
  */
 const VACUOUS: Readonly<Record<string, string>> = {
-	"authority.capabilities": "matches src/runtime.ts:15 (CapabilityRegistry), not the mode's own list",
+	"authority.capabilities": "matches the registry in src/runtime.ts, not the mode's own list",
 	"sandbox.network": "matches the refusal strings in src/core/action-policy.ts, not mode.sandbox",
 	"sandbox.filesystem": "same row as sandbox.network - one member covers both axes",
-	"gate.limits": "matches src/core/model-gateway.ts:166 (provider token limits), not mode.limits",
+	"gate.limits": "matches the provider token limits in src/core/model-gateway.ts, not mode.limits",
 };
 
 console.log("mode behaviour map - declared behaviour to reader, outside the parser that fills it\n");
