@@ -111,6 +111,24 @@ describe("action policy: one policy, and the order it evaluates in", () => {
 		assert.equal(decision.outcome, "allow", JSON.stringify(decision));
 	});
 
+	it("refuses an excluded target named by its other name, because the document says they are one thing", () => {
+		// The first version of the exclusion check compared strings literally: a mode excluding the *address* refused a
+		// call that named the address and passed one that named the same target's id, which is the same target under the
+		// other name. The engagement document is where the two are one thing, so the match is resolved through it.
+		const files = workspace();
+		const policy = createPolicy({
+			mode: mode({ scopeExclusions: ["10.0.0.5"] }),
+			authorityDocument: document(files.permission, files.inventory),
+			workspaceRoot: files.root,
+		});
+		const byAddress = policy.evaluate(invocation("net.scan", { target: "10.0.0.5" }), asCapability);
+		assert.equal(byAddress.outcome, "block", "the address is excluded, and it is named directly: " + JSON.stringify(byAddress));
+		const byId = policy.evaluate(invocation("net.scan", { target: "t-web" }), asCapability);
+		assert.equal(byId.outcome, "block", "and the same target's id resolves to the same excluded target: " + JSON.stringify(byId));
+		const other = policy.evaluate(invocation("net.scan", { target: "t-api" }), asCapability);
+		assert.notEqual(other.outcome === "block" ? other.reason : "", /exclusions list/u, "a different target is not the excluded one");
+	});
+
 	it("counts the calls the session has made, and refuses the one that crosses the grant's rate cap", () => {
 		// The cap sat in the schema with no reader at all, so a document could advertise a rate limit that nothing
 		// limited. **The pair is the point**: the count is the policy's, because session state is the policy's, and

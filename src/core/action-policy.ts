@@ -402,14 +402,19 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 		const exclusions = mode.scopeExclusions;
 		const declared = mode.targetArgument;
 		if (exclusions === undefined || exclusions.length === 0 || declared === undefined) return { outcome: "allow" };
-		// **Two sources, because either can carry the id.** The host resolves the resource an action acts on and puts it
-		// on the invocation; `target_argument` is how the mode says which argument names it for a capability call, where
-		// the arguments are nested. Both are trusted fields, and a match on either refuses - the conservative direction,
-		// since missing one would let an excluded target through.
+		// **The names belong to the document, not only to the call.** A mode excludes a target *id*; a call may name the
+		// same target by id or by address, and the engagement document is where those two are one thing. Comparing the
+		// strings literally was the first version, and it let `exclusions: [local]` refuse `local` while passing the
+		// identical target under its id - a match that only held when the caller happened to spell it the same way.
 		const resolved = invocation.target;
 		const named = readArgumentPath(invocation.arguments, declared);
 		const candidates = [resolved, named].filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim());
-		const target = candidates.find((candidate) => exclusions.includes(candidate));
+		const targets = options.authorityDocument?.targets ?? [];
+		const target = candidates.find(
+			(candidate) =>
+				exclusions.includes(candidate) ||
+				targets.some((entry) => (entry.id === candidate || entry.address === candidate) && (exclusions.includes(entry.id) || exclusions.includes(entry.address))),
+		);
 		if (target === undefined) return { outcome: "allow" };
 		return {
 			outcome: "block",
