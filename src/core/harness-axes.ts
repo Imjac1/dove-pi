@@ -209,7 +209,7 @@ export const UNCOMPUTABLE_AXES: readonly UncomputableAxis[] = [
 		axis: "Safety & Stability (SSM)",
 		metric: "Pareto preservation",
 		reason: "it asks whether a run that is stable but hits isolation refusals is better or worse than one that is safe but crashes, and no reading answers that. The two objectives are reported by this module - crashFreeRatio and isolationRefusalsPerRequest, from the same records and correlated per request - and what is missing is a frontier: a decision about which trade-off is acceptable.",
-		evidence: "no ledger record carries a second measured objective; the fields a request terminal does carry are its reason and its terminal envelope (src/core/execution-ledger.ts:244-245).",
+		evidence: "no ledger record carries a second measured objective; the fields a request terminal does carry are its reason and its terminal envelope, in the ledger's own record types.",
 		wouldNeed: "a decision about the frontier - which trade-off between stability and safety is acceptable - with its own evidence. It is not a measurement this harness is missing.",
 	},
 ];

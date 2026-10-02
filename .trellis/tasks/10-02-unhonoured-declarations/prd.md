@@ -11,7 +11,7 @@
 | # | 声明 | 在哪 | 证据 |
 |---|---|---|---|
 | **R1** | `scope.exclusions` | `modes/pentest/governance.yaml:7`（`exclusions: [t-payments]`）· `modes/trading/governance.yaml:7`（`exclusions: [production-venue]`） | **`src/` 里没有读者** ✗，而仓里留着自己写的指令：`tests/host-work-mode.test.ts:883-896` 是一条 `[KNOWN GAP]` 用例 ✓，注释写着 *"**Invert this test when exclusions are enforced; do not delete it.**"* ✓ —— 与 `expires` 那条同形 ✓。**这一处最该先修** ✓（两个已发布模式在声称它们不碰某些东西 ✓） |
-| **R2** | `authority.grant_graph` | `modes/pentest/governance.yaml:12` | 全仓只有两处 ✓（`src/core/work-mode.ts:176` 的允许键集合 ✓ + 上面那个声明 ✓）→ 读起来像"本模式受这些 grant 约束" ✓，而真正的绑定是文档里的 `targets[].requires_grants` ✓ —— 与 `expires` 完全同一个"重复声明"论证 ✓ |
+| **R2** | `authority.grant_graph` | `modes/pentest/governance.yaml:12` | 全仓只有两处 ✓（`src/core/work-mode.ts` 的 `AUTHORITY_FIELDS` 允许键集合 ✓ + 上面那个声明 ✓）→ 读起来像"本模式受这些 grant 约束" ✓，而真正的绑定是文档里的 `targets[].requires_grants` ✓ —— 与 `expires` 完全同一个"重复声明"论证 ✓ |
 | **R3** | `session` / `evidence` / `coordination` / `stop`（以及 `scope` 的内部字段） | `modes/pentest/governance.yaml:49-73` | 加载器只在 `GOVERNANCE_FIELDS` 里**接受**它们 ✓、内部**完全不校验** ✓、且 `WorkMode.governance` **没有任何运行时读者** ✓。其中 `session.budget.turns: 60` ✓ 与 `stop.on: [budget-exhausted]` ✓ **读起来是有界的** ✓ → 按上一任务的判据（"它是否声称阻止某件事"）它们是**控制** ✓，不是记录 ✓ |
 | **R4** | 两个解析不到的 grant 名 | `modes/code-audit/governance.yaml:10`（`local-review`）· `modes/trading/governance.yaml:10`（`local-paper-trading`） | 两个名字**在仓里无处可解析** ✗（`engagements/` 只有 `example-engagement` ✓），而两个模式都能加载 ✓ —— 因为 `src/core/work-mode.ts` 对 `limit`/`none` 语义**提前返回、不去解析** ✓。加载器自己的拒绝语只对这种情形说"声明了自己被闸门约束、却没有东西约束它" ✓，且**只对 conformance** ✓ |
 
