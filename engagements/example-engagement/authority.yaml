@@ -15,8 +15,13 @@ grants:
       outcomes: [findings-report, remediation-advice]
     targets: [t-web, t-api]
     window:
-      from: "2026-09-01T00:00:00.000Z"
-      to: "2026-10-01T00:00:00.000Z"
+      # **A scope, not a freshness stamp.** This window is when the example engagement is meant to be usable, so it
+      # has to cover the present; `tests/pentest-mode.test.ts` fails when it stops doing that, and moving the two
+      # dates is the whole repair. **The example's `checked_at` further down is a different thing**: 24 hours of
+      # freshness is the mechanism working, and a shipped file cannot stay inside it, so a first run refuses the
+      # stale approval by name and the operator re-dates it. Making that date fresh would be the example lying.
+      from: "2025-01-01T00:00:00.000Z"
+      to: "2027-01-01T00:00:00.000Z"
     evidence:
       - kind: signed-permission
         ref: engagements/example-engagement/permission-to-test.pdf
