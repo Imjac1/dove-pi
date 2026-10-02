@@ -1,6 +1,20 @@
 # 执行清单
 
-**先红后绿 + 先证明可达** ✓。每一处都要有一条"改前会红"的断言 ✓；R3a 的接线在动手前先证明目标在真实运行路径上 ✓。
+> ## 进度与恢复点（2026-10-02，会话中断于此）
+>
+> **R1 ✅ 已落地并提交**（`50008d4` ✓）：红 **34/35** → 绿 **35/35** ✓；`scope.exclusions` 现在被带上模式 ✓ 并在边界拦 ✓，目标从**宿主已解析的 `target`** 与 `target_argument` **两处**取 ✓。
+> **我自己的一个错，记在这里** ✓：提取、接口字段、检查三样都写好了 ✓，却**从没把字段挂到返回的 mode 对象上** ✗ —— 三行探针（而不是又一次猜 ✗）找到的 ✓。**同一个缺陷类，出现在修它的补丁里** ✓。
+>
+> **R2 / R3 / R4 / 门：已写好、已证明红、未落地** ✅→ 全部在 `stash@{0}` 里 ✓（`git stash list` 第一条 ✓，消息自述内容 ✓）。里面有：
+> - `src/core/work-mode.ts`：`grant_graph` / `evidence` / `coordination` 四条点名拒绝 ✓、`session.budget` 的兄弟字段拒绝 ✓、`stop.on` 校验（合法值取自 `LoopStopReason` 的 `completed|maxTurns|stopped|providerError` ✓，**不另立第二份清单** ✓）、`grant` 名在任何语义下都必须可解析 ✓；
+> - 三个模式的迁移 ✓（`session` 只留 `turns` ✓、`evidence`/`coordination` 删掉并**在原位写明损失** ✓、`stop.on` 映射到真的种类 ✓、`code-audit`/`trading` 的悬空 `grant` 名去掉 ✓）；
+> - `tests/work-mode.test.ts` 的 **5 条用例**（已红 ✓，50/55 ✓）。
+>
+> **恢复点：`git stash pop`** ✓ → 然后**只剩一件事**：那 29 条失败的测试是**断言着已移除声明**的旧期望 ✓（`pentest-mode` / `code-audit-mode` / `trading-mode` / `host-work-mode` / `gates` / `action-policy` / `axi-turn` ✓）—— 逐条把期望改成"现在的文件" ✓，而不是把声明加回去 ✗。
+>
+> **再往后的三步**：② 规格补上新的拒绝（`personal-agent-mode-format.md` 的错误矩阵 ✓ + `personal-agent-framework-core.md` 的字段表 ✓）；③ 门的扩展（`scripts/**` 只查路径能解析 ✓ + `mode-behaviour-map.mts` 的注释去掉行号 ✓）；④ 收尾的全范围 `trellis-check` ✓。
+>
+> **一条新发现，留在这里**（同一缺陷类，本任务未决定 ✗）：三个模式的 `session.memory_scope` **也没有读者** ✗ —— 已在三个文件里就地标注 ✓，但它属于"控制还是记录"的取舍，没有在本任务的路线里定过 ✓。
 
 ## 顺序（从最便宜、最该先修的 R1 开始）
 
