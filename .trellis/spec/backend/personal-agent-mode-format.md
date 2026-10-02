@@ -77,7 +77,9 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 | `gate.intensity` not a map of finite ≥1 | Refused at load, naming the phase |
 | `gate.excluded_techniques` not a string list | Refused at load |
 | `gate.excluded_techniques` naming a technique the runtime cannot witness | Refused at load, naming the technique |
-| `scope.exclusions` on a mode with no `gate.target_argument` | Refused: the list is checked against the target a call names, and this mode gives it nothing to read - so it could not refuse anything |
+| `scope.exclusions` on a mode that cannot check one (no `gate.target_argument`, or a `semantics` that never resolves the document) | Refused: the list could only match a spelling |
+| `scope.exclusions` that is not a list of non-empty strings | Refused by name: a scalar or a mapping would otherwise become no exclusions at all, silently |
+| `stop` naming a key other than `on` | Refused, naming the key: what the loop has is the reasons it stops, and `on` names them |
 | `gate.windows` declared | Refused: the grant carries the window |
 | `authority.expires` declared | Refused: the grant carries the window the expiry would repeat |
 | `authority.grant_graph` declared | Refused: the document's `targets[].requires_grants` is the binding, checked per action |
