@@ -762,3 +762,46 @@ criterion still pointed at it.
 ### Status
 
 [OK] **Completed** — the audit task is archived at `.trellis/tasks/archive/2026-10/10-02-architecture-drift/`; its report and four rounds of readings are in its `readings.md`. Gates at the end: `typecheck` 0, `npm test` 850 / 848 pass / 0 fail / 2 skipped, installer 141 OK.
+
+## Session 233: Three declarations that stopped nothing, and a check that found four of my mistakes
+
+**What it was about**: three things a mode or a grant could declare that the runtime accepted and never
+honoured - a mode-level `expires`, a forbidden technique with no shape to witness, and a rate cap that
+existed only as a type. The repository had already decided the shape for the first of these: a gate-level
+`windows` block is refused outright, not because it is unimplemented but because it is unenforceable
+where it sits. An expiry is the same calendar idea, so it was a missed application rather than a new
+decision.
+
+**What it produced**: both unhonourable declarations are now refused by name at load, on the mode side
+*and* the grant side, and the rate cap is enforced - judgement in the authority beside the grant's other
+constraints, counting in the policy, the window taken from the invocation rather than the wall clock.
+The three shipped modes and the example engagement lost the declarations they could not keep, and each
+loss is written where a reader meets it rather than only in a report.
+
+**What the whole-scope check found, which is the part worth remembering**: thirteen findings, every one
+of them holding. Four were mine. The grant-side refusal I had written into the design and then not
+implemented, so the file I claimed to cover was the one that refused the name. A rate cap that went
+inert at 65 and above, because a fixed 64-entry ring saturated the count - the defect the task exists to
+remove, one line inside its own fix, in the allow direction. A cap with no validation at all: a string
+loaded and then never fired. And a commit message reporting a green full run for a tree with five
+failures, because the message was written before the run it described.
+
+**Two habits, both old ones**: measure rather than trust - the check reported a rotted citation at 708,
+measurement said 704, and the measured value is what shipped - and never push long text or quotes
+through PowerShell; a commit message with a backtick in it split apart and took the commit with it. That
+one is in this repository's lessons already, and this session was the fourth time.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `deb2cd0` | fix(mode): refuse the two declarations the runtime cannot honour |
+| `ff61abd` | fix(test): stop two fixtures declaring a field the loader now refuses |
+| `b992844` | feat(gate): read the rate cap the schema has been carrying all along |
+| `b499bdf` | chore(task): tick the three requirements and say why the fourth needs no new case |
+| `97fcb30` | fix(auth,spec): the things the whole-scope check found, four of them mine |
+| `57cd6b6` | docs(task): seed the follow-up task for the same class the check found beyond this one |
+
+### Status
+
+[OK] **Completed** — archived at `.trellis/tasks/archive/2026-10/10-02-enforceable-declarations/`. Gates at the end: `typecheck` 0, `npm test` 859 / 857 pass / 0 fail / 2 skipped, installer 141 OK. The same defect class beyond this task's three - `scope.exclusions` in two shipped modes, `authority.grant_graph`, the `session`/`stop` blocks, two unresolvable grant names, and a door gap over `scripts/` - is seeded as `.trellis/tasks/10-02-unhonoured-declarations/`.
