@@ -132,7 +132,11 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 		tools: [READ_FILE_TOOL],
 		gate,
 		executeTool,
-		maxTurns: options.maxTurns ?? 4,
+		// **The mode's own turn budget, when it declares one.** This is the loop the runtime owns, so it is the one a
+		// mode's `session.budget.turns` can actually bound; the Pi host's loop belongs to the host, which is recorded
+		// as a limitation rather than papered over. `options.maxTurns` still wins, because a caller that asked for a
+		// specific bound is asking about this run rather than about the mode.
+		maxTurns: options.maxTurns ?? mode.sessionTurns ?? 4,
 		onGateInvoked: (invocation: GateInvocation, decision: GateDecision): void => {
 			decisions.push({ tool: invocation.tool, decision });
 		},

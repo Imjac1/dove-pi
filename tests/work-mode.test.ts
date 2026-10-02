@@ -16,6 +16,7 @@ import {
 	type WorkModeSelection,
 } from "../src/core/work-mode.ts";
 import { effectClassOf } from "../src/core/effect-ledger.ts";
+import { LOOP_STOP_KINDS } from "../src/core/loop.ts";
 
 const FRAMEWORK = "0.1.0";
 
@@ -72,6 +73,42 @@ describe("work-mode loader", () => {
 	// stays in the allowed set so the message is precise, and the message says which field, and why.
 	const withGovernance = (line: string): WorkModeFiles => files({ governance: files().governance + line.replace(/^\s+/u, "") + "\n" });
 
+	it("carries the turn budget it validated, instead of dropping it after checking it  [D4]", () => {
+		// **The failure this case exists for**: the first version of this check validated `turns` and then dropped it -
+		// checked and inert, which is the defect the task is about, reproduced inside its own fix. A validated value
+		// nobody carries is exactly as useful as an unvalidated one.
+		const mode = loadWorkMode(withGovernance("  session:\n    budget:\n      turns: 7"), { frameworkVersion: FRAMEWORK });
+		assert.equal(mode.sessionTurns, 7, "the number the mode declares is on the mode");
+		assert.equal(loadWorkMode(files(), { frameworkVersion: FRAMEWORK }).sessionTurns, undefined, "and a mode that declares none carries none");
+	});
+
+	it("refuses a non-numeric turn budget, and the shapes that walk around the check  [D4]", () => {
+		// A budget that cannot be compared is one that stops nothing, and the first version of this check only looked for
+		// sibling *keys*: a string count, a scalar budget and a nested `session: {turns}` all loaded, which is how a
+		// check written to catch this class came to be walkable around.
+		const cases: readonly (readonly [string, string])[] = [
+			["a string turn count", "  session:\n    budget:\n      turns: sixty"],
+			["a budget that is not a mapping", "  session:\n    budget: 60"],
+			["a budget beside turns", "  session:\n    turns: 60"],
+			["a stop reason that is not a list", "  stop:\n    on: budget-exhausted"],
+		];
+		for (const [what, line] of cases) {
+			const error = expectError(() => loadWorkMode(withGovernance(line), { frameworkVersion: FRAMEWORK }), "invalid-type");
+			assert.match(error.message, /session|stop|budget|turns/u, `${what} is refused: ${error.message}`);
+		}
+	});
+
+	it("accepts exactly the stop reasons the loop itself produces  [D4]", () => {
+		// **The vocabulary is the loop's, not a copy of it.** A stop condition nothing can raise is a promise about the
+		// end of a run, and the shipped modes named three that exist nowhere; the loader held its own hand-written list,
+		// so the two could drift apart silently. This case binds them.
+		for (const kind of LOOP_STOP_KINDS) {
+			assert.doesNotThrow(() => loadWorkMode(withGovernance(`  stop:\n    on: [${kind}]`), { frameworkVersion: FRAMEWORK }), `${kind} is a reason the loop produces`);
+		}
+		const error = expectError(() => loadWorkMode(withGovernance("  stop:\n    on: [budget-exhausted]"), { frameworkVersion: FRAMEWORK }), "invalid-type");
+		assert.match(error.message, /budget-exhausted/u, "and one the loop never produces is named back");
+	});
+
 	it("refuses an exclusion list the gate cannot enforce  [D4]", () => {
 		// `scope.exclusions` is checked against the target a call names, and a mode that declares no `target_argument`
 		// gives that check nothing to read - so the list is inert. `modes/trading` shipped exactly that shape:
@@ -97,7 +134,7 @@ describe("work-mode loader", () => {
 		// The shipped pentest mode names three (`budget-exhausted`, `window-closed`, `emergency-stop`) and none of them
 		// exists anywhere in the runtime: a stop condition nothing can raise is a promise about the end of a run.
 		const error = expectError(
-			() => loadWorkMode(withGovernance("  stop: [budget-exhausted]"), { frameworkVersion: FRAMEWORK }),
+			() => loadWorkMode(withGovernance("  stop:\n    on: [budget-exhausted]"), { frameworkVersion: FRAMEWORK }),
 			"invalid-type",
 		);
 		assert.match(error.message, /budget-exhausted/u, "the value is named");

@@ -54,4 +54,4 @@ session:
 # contacts are gone with it.
 stop:
   on: [maxTurns, stopped]
-  emergency_stop: operator
+  # `emergency_stop: operator` is gone: nothing read it, so the loader refuses it (see the note in pentest).

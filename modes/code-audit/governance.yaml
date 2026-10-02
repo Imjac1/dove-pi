@@ -79,4 +79,4 @@ session:
 # that `completed`. `findings-stable` was this mode's own name for the second one.
 stop:
   on: [maxTurns, completed]
-  emergency_stop: operator
+  # `emergency_stop: operator` is gone: nothing read it, so the loader refuses it (see the note in pentest).

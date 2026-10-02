@@ -258,6 +258,16 @@ export interface LoopState {
 	readonly mode: { readonly id: string; readonly version: string; readonly governanceVersion: string };
 }
 
+/**
+ * The reasons the loop stops, as a **runtime value**.
+ *
+ * The union below is what the code sees; this array is what anything *outside* the loop can check a declaration
+ * against. The mode loader kept its own hand-written copy of these four, so a mode could name a stop condition the
+ * loop can never raise and nothing would notice - the copy and the union could drift apart silently, which is the
+ * shape of defect this repository keeps finding. One source, one array, and a test that walks it.
+ */
+export const LOOP_STOP_KINDS = ["completed", "maxTurns", "stopped", "providerError"] as const;
+
 export type LoopStopReason =
 	| { readonly kind: "completed" }
 	| { readonly kind: "maxTurns" }

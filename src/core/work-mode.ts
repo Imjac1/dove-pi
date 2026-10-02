@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WITNESSED_TECHNIQUES } from "./argument-syntax.ts";
+import { LOOP_STOP_KINDS } from "./loop.ts";
 import { parseAuthorityDocument, type AuthorityDocument } from "./authority.ts";
 import type { EffectClass } from "./effect-ledger.ts";
 import type { LimitSpec } from "./gate-limit.ts";
@@ -107,6 +108,14 @@ export interface WorkMode {
 	 * thing it names is the defect this field was carrying.
 	 */
 	readonly scopeExclusions?: readonly string[];
+	/**
+	 * The turn budget this mode declares, from `session.budget.turns`.
+	 *
+	 * Carried because it is the **one** field of that block the runtime can honour: there is a turn bound in the
+	 * reference loop, and the host passes this number to it. The rest of the block is refused, and `turns` was refused
+	 * with it until this field existed - a number nothing reads is not a budget.
+	 */
+	readonly sessionTurns?: number;
 	/**
 	 * The capabilities this mode grants the agent, from `authority.capabilities`.
 	 *
@@ -460,36 +469,69 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 	// `session.budget.turns` is the one budget field the runtime can honour - it has a real turn bound, and the mode's
 	// number is carried to it. Its siblings are refused with it, because a budget that meters one of four things
 	// meters nothing, and a reader cannot tell from the file which of the four would have stopped the run.
-	const budget = (governance.session as { readonly budget?: unknown } | undefined)?.budget;
-	// `memory_scope` reads as a control - "this mode's memory is project-scoped" - and nothing in this runtime scopes
-	// memory by mode at all, so it is refused with the blocks above rather than left looking like one.
-	if ((governance.session as { readonly memory_scope?: unknown } | undefined)?.memory_scope !== undefined) {
+	// Read once here so the validated value can be carried on the mode: the check below refuses it unless it is a
+	// positive whole number, and the return spreads it. Reading it twice would let the two disagree.
+	const declaredTurns: unknown = (governance.session as { readonly budget?: { readonly turns?: unknown } } | undefined)?.budget?.turns;
+	const session = governance.session;
+	if (session !== undefined && (typeof session !== "object" || session === null || Array.isArray(session))) {
+		throw new WorkModeError("invalid-type", "governance.session must be a mapping whose one enforceable key is 'budget'.");
+	}
+	const unknownSessionKey = typeof session === "object" && session !== null && !Array.isArray(session) ? Object.keys(session).find((key) => key !== "budget") : undefined;
+	if (unknownSessionKey !== undefined) {
 		throw new WorkModeError(
 			"invalid-type",
-			"governance.session.memory_scope is not enforceable by the runtime: nothing here scopes memory by mode, so a value reads as a control that does not exist. Remove the field.",
+			`governance.session.${unknownSessionKey} is not enforceable by the runtime: this runtime has a turn bound and nothing else behind this block. Keep 'budget', or remove the block.`,
 		);
 	}
+	const budget = (session as { readonly budget?: unknown } | undefined)?.budget;
+	if (budget !== undefined && (typeof budget !== "object" || budget === null || Array.isArray(budget))) {
+		throw new WorkModeError("invalid-type", "governance.session.budget must be a mapping of 'turns' - a scalar budget has no field anything can read.");
+	}
 	if (budget !== undefined && typeof budget === "object" && budget !== null) {
-		const sibling = Object.keys(budget).find((key) => key !== "turns");
-		if (sibling !== undefined) {
+		const unknownBudgetKey = Object.keys(budget).find((key) => key !== "turns");
+		if (unknownBudgetKey !== undefined) {
 			throw new WorkModeError(
 				"invalid-type",
-				`governance.session.budget.${sibling} is not enforceable by the runtime: this runtime has a turn bound and no token, cost or exploration accounting. Keep 'turns' and remove the rest.`,
+				`governance.session.budget.${unknownBudgetKey} is not enforceable by the runtime: this runtime has a turn bound and no token, cost or exploration accounting. Keep 'turns' and remove the rest.`,
+			);
+		}
+		// **A turn count that cannot be compared stops nothing**, so the value is checked and not only its key. A string
+		// count, a scalar budget and a nested `session: {turns}` all loaded once, which is how a check written to catch
+		// this class came to be walkable around.
+		const turns = declaredTurns;
+		if (turns !== undefined && (typeof turns !== "number" || !Number.isInteger(turns) || turns < 1)) {
+			throw new WorkModeError(
+				"invalid-type",
+				`governance.session.budget.turns must be a positive whole number, and this is ${JSON.stringify(turns)} - a budget that cannot be compared stops nothing.`,
 			);
 		}
 	}
 	const stop = governance.stop;
 	if (stop !== undefined) {
-		const declared = Array.isArray(stop) ? stop : (stop as { readonly on?: unknown }).on;
-		const asked = Array.isArray(declared) ? declared.filter((entry): entry is string => typeof entry === "string") : [];
-		// The legal set is the loop's own union, not a second list: a stop condition nothing can raise is a promise
-		// about the end of a run, and the shipped pentest mode named three of them.
-		const produced = new Set<string>(["completed", "maxTurns", "stopped", "providerError"]);
-		const never = asked.find((entry) => !produced.has(entry));
+		// **The block's shape is checked before its contents**, because a shape nothing reads is a stop block that stops
+		// nothing: `stop: {on: budget-exhausted}` as a scalar loaded fine, and so did a key nobody has ever read.
+		if (typeof stop !== "object" || stop === null || Array.isArray(stop)) {
+			throw new WorkModeError("invalid-type", "governance.stop must be a mapping of 'on' and nothing else - a scalar stop block is one no reader can match against.");
+		}
+		const unknownStopKey = Object.keys(stop).find((key) => key !== "on");
+		if (unknownStopKey !== undefined) {
+			throw new WorkModeError(
+				"invalid-type",
+				`governance.stop.${unknownStopKey} is not enforceable by the runtime: what this loop has is the reasons it stops, which 'on' names. Keep 'on', or remove the block.`,
+			);
+		}
+		const declared = (stop as { readonly on?: unknown }).on;
+		if (declared !== undefined && (!Array.isArray(declared) || declared.some((entry) => typeof entry !== "string"))) {
+			throw new WorkModeError("invalid-type", "governance.stop.on must be a list of stop reasons - a bare name cannot be matched against what the loop raises.");
+		}
+		// The legal set is the loop's own, imported rather than copied: a second hand-written list can drift from the
+		// union it describes, and this one did.
+		const asked = Array.isArray(declared) ? (declared as readonly string[]) : [];
+		const never = asked.find((entry) => !(LOOP_STOP_KINDS as readonly string[]).includes(entry));
 		if (never !== undefined) {
 			throw new WorkModeError(
 				"invalid-type",
-				`governance.stop names '${never}', which this runtime never produces: the loop stops with ${[...produced].join(", ")}. Name one of those, or remove the block.`,
+				`governance.stop names '${never}', which this runtime never produces: the loop stops with ${LOOP_STOP_KINDS.join(", ")}. Name one of those, or remove the block.`,
 			);
 		}
 	}
@@ -750,6 +792,10 @@ export function loadWorkMode(files: WorkModeFiles, options: LoadWorkModeOptions)
 			// **Attached, or the extraction above is just a local variable.** This is the step that was missing when the
 			// exclusion check first ran: the list was read, typed, and then dropped on the floor a second time.
 			...(scopeExclusions === undefined ? {} : { scopeExclusions }),
+			// **The one budget field the runtime can honour**, carried so the loop that reads a turn bound can be given
+			// it. Without this line the number would be validated and then dropped - which is the defect this task
+			// exists to remove, and it was the defect in the first version of this very fix.
+			...(typeof declaredTurns === "number" ? { sessionTurns: declaredTurns } : {}),
 		...(excludedTechniques.length === 0 ? {} : { excludedTechniques }),
 		...(sandbox === undefined ? {} : { sandbox }),
 		...(fence === undefined ? {} : { fence }),
