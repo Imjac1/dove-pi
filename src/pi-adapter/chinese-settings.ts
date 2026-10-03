@@ -6,7 +6,7 @@ type UiTheme = Pick<Theme, "fg" | "bold">;
 
 const BOOL_VALUES = ["开启", "关闭"];
 
-const boolText = (value: boolean): string => (value ? "开启" : "关闭");
+const boolText = (value: boolean | string): string => (typeof value === "string" ? value : value ? "开启" : "关闭");
 const boolValue = (value: string): boolean => value === "开启";
 
 function cycleMap<T extends string>(entries: readonly (readonly [T, string])[], value: T): { current: string; values: string[]; read: (label: string) => T } {
