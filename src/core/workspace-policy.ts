@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { readDeclaration } from "./declaration-read.ts";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { withProjectMutationLock } from "../project-provider/lock.ts";
@@ -45,7 +46,7 @@ export function readWorkspacePolicy(startPath = process.cwd(), override?: unknow
 	}
 	if (!existsSync(path)) return { workspaceRoot, path, policy: { schemaVersion: 1, mode: "development" }, source: "default", malformed: false };
 	try {
-		const value = JSON.parse(readFileSync(path, "utf8")) as { schemaVersion?: unknown; mode?: unknown };
+		const value = JSON.parse(readDeclaration(path)) as { schemaVersion?: unknown; mode?: unknown };
 		const mode = normalizeWorkspaceMode(value.mode);
 		if (value.schemaVersion !== 1 || !mode) return { workspaceRoot, path, policy: { schemaVersion: 1, mode: "development" }, source: "default", malformed: true };
 		return { workspaceRoot, path, policy: { schemaVersion: 1, mode }, source: "workspace", malformed: false };

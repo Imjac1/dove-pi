@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -137,6 +137,25 @@ describe("work-mode loader", () => {
 		const governance = files().governance.replace("  semantics: conformance", "  semantics: conformance\n  approval: none");
 		const error = expectError(() => loadWorkMode(files({ governance }), { frameworkVersion: FRAMEWORK }), "invalid-type");
 		assert.match(error.message, /approval/u, "the field is named: " + error.message);
+	});
+
+	it("loads a declaration that a Windows editor wrote with a byte order mark  [D4]", () => {
+		// **Measured first contact, and it cost a whole walk.** PowerShell 5.1's `Set-Content -Encoding UTF8` writes a
+		// BOM; JSON.parse rejects it; the declaration the user just wrote is read as exists-but-unreadable, which is a
+		// distinct fact from "nothing declared" and therefore a distinct refusal. The schema was right the whole time.
+		// A file a person wrote with the tools this platform gives them is still a declaration.
+		const root = mkdtempSync(join(tmpdir(), "dove-bom-declaration-"));
+			mkdirSync(join(root, ".dove"), { recursive: true });
+		try {
+			const bytes = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"schemaVersion":1,"mode":"code-audit"}', "utf8")]);
+			writeFileSync(join(root, ".dove", "mode.json"), bytes);
+			const selection = resolveWorkModeSelection({ workspaceRoot: root });
+			assert.equal(selection.malformed, false, "a BOM is not a corrupt declaration");
+			assert.equal(selection.name, "code-audit", "and the mode it names is the mode selected");
+			assert.equal(selection.source, "declared");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("refuses an exclusion list the gate cannot enforce  [D4]", () => {

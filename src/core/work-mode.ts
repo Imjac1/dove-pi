@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WITNESSED_TECHNIQUES } from "./argument-syntax.ts";
+import { readDeclaration } from "./declaration-read.ts";
 import { LOOP_STOP_KINDS } from "./loop.ts";
 import { parseAuthorityDocument, type AuthorityDocument } from "./authority.ts";
 import type { EffectClass } from "./effect-ledger.ts";
@@ -915,7 +916,7 @@ export function resolveWorkModeSelection(options: { readonly workspaceRoot: stri
 
 	if (existsSync(path)) {
 		try {
-			const value = JSON.parse(readFileSync(path, "utf8")) as { schemaVersion?: unknown; mode?: unknown };
+			const value = JSON.parse(readDeclaration(path)) as { schemaVersion?: unknown; mode?: unknown };
 			if (value.schemaVersion === 1 && typeof value.mode === "string" && WORK_MODE_NAME.test(value.mode)) {
 				return { workspaceRoot, path, name: value.mode, source: "declared", malformed: false };
 			}
