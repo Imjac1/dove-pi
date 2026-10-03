@@ -29,7 +29,13 @@
 
 **这不是放宽保护** ✓✓：它让旗标**符合它自己的定义** ✓✓（第一次尝试从来不是重放 ✓）。
 
-**下一步** ✓：写**忠于复现的红**（`attemptCount === 1` 的回合里，首次被认领的未声明非幂等工具**不应被拒** ✓；而 `attemptCount === 2` 时**应被拒** ✓——属性用例 ✓）→ 改那一处比较 ✓ → 跑三条安全属性用例 ✓。
+**下一步（切片已精确 ✓✓，可直接照做 ✓）**：
+
+1. [ ] **红·单元** ✓：`tests/effect-boundary.test.ts` **已存在** ✓（`createEffectBoundary` ✓ + **`createInMemoryEffectStore()`** ✓ `effect-ledger.ts:159` ✓）→ **新增一条断言点** ✓：把"这次 dispatch 是不是重放"的规则变成**可调用、有名的**东西 ✓，断言 **`attemptCount === 0` / `1` ⇒ 不是重放** ✓、**`>= 2` ⇒ 是** ✓（今天必红 ✓）。
+2. [ ] **绿·一处** ✓：把 `extension.ts:2818` 的内联推导**挪到计数器旁边并命名** ✓（`request-lifecycle.ts` ✓，规则与它所读的计数器同处 ✓），比较改为 **`> 1`** ✓ —— **守卫（`effect-boundary.ts:111`）不动** ✗、**效果键不动** ✗。
+3. [ ] **红→绿·集成** ✓：用**那对复现**（turn A 真派发 → turn B `--continue` 用 `agent_project_status` ✓✓）验证：修复前**拒** ✓、修复后**不拒** ✓。
+4. [ ] **三条安全属性：重跑 + 确认** ✓✓（`tests/effect-boundary.test.ts:58-79` **已覆盖** ✓）：真实重放的**非幂等未声明**仍被拒 ✓ · 幂等/键幂等类在重放中仍放行 ✓ · **账本不可读时任何情况都拒** ✓ —— 它们是"别改坏"的判据 ✓，不是新写的 ✓。
+5. [ ] **顺带（原 B 片）** ✓：`code-development` 的 `effects.classes` 补**只读**四工具 ✓（`agent_project_status` ✓ `agent_project_context` ✓ `agent_list_capabilities` ✓ `agent_doctor` ✓）—— **`agent_task_convergence` 是写 → 不补** ✗、**`bash` 不补** ✗；并查 `pentest`/`trading` 的 `effects.classes` **为空** ✓ 是否同因 ✓。（根因修好后它**不再必须** ✓，但**补它无害且能缩短暴露窗口** ✓✓。）
 
 **仍站得住 / 被推翻的** ✓✗（都留档 ✓）：站得住——拒绝只在 `replayed` 为真时出现 ✓；被推翻——`beginRequest` 连调可复现 ✗ · 缺陷在 `:200-202` ✗ · 任何 `--continue` 都拒 ✗ · 效果记录带 `stepId` ✗ · **账本显示的"租约复用"** ✗（两回合租约不同 ✓）。
 2. [ ] **红** ✓：一条用例——"**新请求 + 延续会话**"下，只读工具与 `bash` **不被拒** ✓（今天必红 ✓）。

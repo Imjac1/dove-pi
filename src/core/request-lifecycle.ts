@@ -220,6 +220,27 @@ export class RequestLifecycleController {
 		return this.#active?.state === "active" ? snapshotLease(this.#active) : undefined;
 	}
 
+	/**
+	 * Whether the dispatch being prepared is a **replay** of work an earlier attempt may already have done.
+	 *
+	 * This is the effect boundary's own definition, kept next to the counter it reads: *"a dispatch on our own
+	 * resumption path, where **an attempt after the first** re-issues work an earlier attempt may already have
+	 * performed"* - and the boundary takes that as the `replayed` flag, refusing a non-idempotent undeclared
+	 * effect only when it is true.
+	 *
+	 * **The rule lives here rather than inline at the call site** because a comparison that decides whether work
+	 * is refused is a rule, and a rule needs a name to be testable. It was inline in the extension adapter, where
+	 * nothing could hold it to the definition above.
+	 */
+	public isReplay(): boolean {
+		// **"An attempt after the first" is the second attempt, not the first.** This read `> 0` - which is the
+		// request's *first* attempt, the one the boundary dispatches on by construction - and because a turn's
+		// provider call always precedes its tool calls, every undeclared non-idempotent effect in a turn was read
+		// as a replay and refused. Seven of twelve real sessions recorded that refusal, on the first claim of
+		// `agent_project_status`, `agent_project_context`, `agent_task_convergence` or a newly-written `bash`.
+		return (this.activeLease()?.attemptCount ?? 0) > 1;
+	}
+
 	public startAttempt(trigger: RequestAttemptTrigger): RequestAttempt {
 		const lease = this.#requireActive();
 		if (lease.currentAttempt && !lease.currentAttempt.completedAt) this.#finishAttempt(lease.currentAttempt, "superseded");

@@ -49,6 +49,36 @@ test("a retry of the same request still counts as an attempt, which is what the 
 	assert.equal(again.number, 2, "a second attempt of the same request is a later attempt, and the boundary refuses a non-idempotent effect on one");
 });
 
+/**
+ * The rule the effect boundary reads, held to the boundary's own definition.
+ *
+ * `replayed` decides whether a non-idempotent undeclared effect is refused, and the boundary documents what it
+ * means: "a dispatch on our own resumption path, where **an attempt after the first** re-issues work an earlier
+ * attempt may already have performed". So the **first** attempt of a request is not a replay - and in a real
+ * session the first attempt happens before every tool call, because the provider call comes first. Reading
+ * `attemptCount > 0` as a replay therefore refused the first claim of every undeclared non-idempotent effect in
+ * every turn, which is what seven of twelve sessions recorded.
+ */
+test("the first attempt of a request is not a replay; the second one is", () => {
+	const lifecycle = new RequestLifecycleController();
+	lifecycle.beginRequest({ prompt: "one prompt" });
+	assert.equal(lifecycle.isReplay(), false, "no attempt has run yet, so nothing has been re-issued");
+
+	lifecycle.startAttempt("initial");
+	assert.equal(
+		lifecycle.isReplay(),
+		false,
+		"the first attempt of a request is not a replay: the boundary dispatches on it by its own definition, and a tool call in a real turn always comes after that first attempt",
+	);
+
+	lifecycle.startAttempt("provider-retry");
+	assert.equal(
+		lifecycle.isReplay(),
+		true,
+		"an attempt after the first is the replay the boundary refuses a non-idempotent undeclared effect on",
+	);
+});
+
 test("the lease a new request returns is the one the boundary will read", () => {
 	const lifecycle = new RequestLifecycleController();
 	lifecycle.beginRequest({ prompt: "first" });

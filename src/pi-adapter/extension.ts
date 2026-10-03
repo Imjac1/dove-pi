@@ -2815,7 +2815,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const identity = resolveActionIdentity(event.toolName, event.input);
 			// A dispatch on a later attempt of the same request is the case the claim guards: an earlier attempt may
 			// already have performed this work. A first attempt cannot duplicate one, so it never refuses.
-			const replayed = (requestLifecycle.activeLease()?.attemptCount ?? 0) > 0;
+			const replayed = requestLifecycle.isReplay();
 			const effect = await activeEffectBoundary.prepare({ action: identity.action, arguments: identity.arguments, replayed });
 			if (!effect.dispatch) {
 				await ledger.appendGateRefused({
