@@ -69,6 +69,8 @@ CLI integration fixtures that spawn child processes must pass temporary environm
 
 **A red on the way to green is a step, not a commit.** Either make it green in the same change, or record it as a skipped case with the reason travelling with it - and when the red is produced by reverting a change rather than by the current tree, say so in the reading, because a rebuilt red proves the change rather than the state.
 
+**Do not read a claim about every member off a ranked, truncated view.** A table sorted by density and printed to the first twenty rows said every spec page had zero anchors; the page holding eighteen had sorted past the cut, and the sentence went into a commit message about the corpus. Count the population first, then say what is true of it - and when the answer is "none of them", check that the rows you did not print could not contain one.
+
 ## Code Review Checklist
 
 - Does the change preserve the Pi/core/Trellis boundary?
