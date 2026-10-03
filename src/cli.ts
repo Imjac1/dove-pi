@@ -76,7 +76,24 @@ if (args[0] === "doctor") {
 	const subagentHealth = configuredSubagent
 		? await configuredSubagent.inspect()
 		: { available: false, provider: "pi-child", reason: subagentConfiguration ? "invalid child configuration" : "DOVE_PI_SUBAGENT_EXECUTABLE is not configured" };
-	console.log(
+	// **A person runs `doctor` first, and until now it answered in a wall of JSON.** The machine form is still one flag
+	// away and it is the same payload; what changed is which of the two is the default.
+	if (!args.includes("--json")) {
+		const shellConfig = inspectShellConfig(process.cwd());
+		const policy = readWorkspacePolicy(process.cwd());
+		const missingTools = Object.entries(powershell.tools).filter(([, path]) => path === null).map(([name]) => name);
+		console.log([
+			`Dove Pi ${getPiVersion()} on node ${process.version}`,
+			`  shell           ${shellConfig.effectivePath} (${shellConfig.scope}, source ${shellConfig.source})`,
+			`  workspace       ${policy.workspaceRoot} (mode ${policy.policy.mode}, source ${policy.source})`,
+			`  powershell      ${powershell.version ?? "unavailable"}${powershell.isAdministrator ? " (administrator)" : ""}`,
+			`  managed install ${managedInstall.installed ? `installed at ${managedInstall.root}` : `not installed (${managedInstall.root}) - update, repair and rollback apply after an install`}`,
+			`  missing tools   ${missingTools.length === 0 ? "none" : missingTools.join(", ")}`,
+			`  extensions      ${managedInstall.extensions.length === 0 ? "none" : managedInstall.extensions.join(", ")}`,
+			"Run `dove-pi doctor --json` for the machine-readable form.",
+		].join("\n"));
+	}
+	if (args.includes("--json")) console.log(
 		JSON.stringify(
 			{
 				node: process.version,

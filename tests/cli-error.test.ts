@@ -55,13 +55,31 @@ describe("CLI error boundary", () => {
 				},
 			})}\n`, "utf8");
 			const beforeLedger = await readFile(ledgerPath, "utf8");
-			const result = await execFileAsync(process.execPath, ["--import", tsxLoader, cliPath, "doctor"], {
+			const result = await execFileAsync(process.execPath, ["--import", tsxLoader, cliPath, "doctor", "--json"], {
 				cwd: root,
 				env: { ...process.env, DOVE_PI_STATE_DIR: stateDir },
 			});
 			const payload = JSON.parse(result.stdout) as { requestDiagnostics?: { lastTerminal?: { terminal?: { code?: string } } } };
 			assert.equal(payload.requestDiagnostics?.lastTerminal?.terminal?.code, "provider-authorization-denied");
 			assert.equal(await readFile(ledgerPath, "utf8"), beforeLedger);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("answers a person by default, and keeps the machine form behind a flag", async () => {
+		// Measured first contact: doctor printed a wall of JSON, and said nothing human about a managed install it was
+		// reporting as absent while help promised update, repair and rollback. The default is now the summary; --json is
+		// the same payload it always was, which is why the case above only gained a flag.
+		const root = await mkdtemp(join(tmpdir(), "dove-cli-doctor-human-"));
+		try {
+			const result = await execFileAsync(process.execPath, ["--import", tsxLoader, cliPath, "doctor"], {
+				cwd: root,
+				env: { ...process.env, DOVE_PI_STATE_DIR: join(root, "state") },
+			});
+			assert.ok(!result.stdout.trimStart().startsWith("{"), "the default output is not JSON");
+			assert.match(result.stdout, /managed install/u, "and it says what a person needs to know about one");
+			assert.match(result.stdout, /--json/u, "and how to ask for the machine form");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
