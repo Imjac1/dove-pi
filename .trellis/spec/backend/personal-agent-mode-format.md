@@ -90,6 +90,18 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   fails loudly.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
+- **What a control refuses is a name, not an intent.** Every control in this format is a name match:
+  `effects.classes` matches the tool's name at the effect boundary (`src/core/effect-boundary.ts:122`),
+  `never_allow` matches the action's name (`src/core/action-policy.ts:431`, and `src/core/action-policy.ts:611`
+  says as much in its own words - `never_allow` *names actions*), and the sandbox's network axis is membership in a
+  fixed set of tool names (`src/core/action-policy.ts:21`). So a control refuses **an action, not an intent**,
+  and the same effect reached under another name is not refused. This is measured rather than argued: in one
+  twelve-session run a `bash` command was refused as a non-idempotent undeclared effect, and the model did the
+  same work another way and said so - *"That blocked a re-run of `npm test`; I substituted a direct runtime
+  check of the shipped `index.js` instead, which covered the same behavior"* (`.trellis/tasks/10-03-ten-million-token-project`,
+  segment 8). Neither the refusal nor the substitution was wrong; what would be wrong is reading the refusal as
+  containment of the effect. A mode that needs the effect covered has to close the name, or say plainly that it
+  has closed one route to it.
 
 ### 4. Validation & Error Matrix
 
