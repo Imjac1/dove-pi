@@ -63,6 +63,12 @@ npm run pi:smoke
 Prefer deterministic fixtures and one representative integration smoke over duplicating full end-to-end tests for every capability.
 CLI integration fixtures that spawn child processes must pass temporary environment overrides through the child `env` option; do not mutate the test runner's `process.env` when parallel files may observe it.
 
+**Read a failing case's own words before building on it.** A red that fails for a reason other than the one it was written to test is worse than no red: it reports a breach that is not there and hides the one that is. Filtering the output for the reason you expect is how that happens - in one run a case was red because a fixture's YAML had a Windows path inside a double-quoted scalar, and two such greps hid it until the raw output was read.
+
+**State the encoding when the answer depends on text.** Reading a UTF-8 file with the platform default turned its non-ASCII content into mojibake and reported a section absent that was present. The command succeeded, exit code zero, and the reading was false; that is what makes it worth a rule rather than a note.
+
+**A red on the way to green is a step, not a commit.** Either make it green in the same change, or record it as a skipped case with the reason travelling with it - and when the red is produced by reverting a change rather than by the current tree, say so in the reading, because a rebuilt red proves the change rather than the state.
+
 ## Code Review Checklist
 
 - Does the change preserve the Pi/core/Trellis boundary?

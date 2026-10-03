@@ -59,6 +59,28 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
   no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
+- **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
+  and compared as locations: inside the workspace the relative form is produced first and wins, and a
+  target with no relative form falls back to the canonical absolute one. So an entry may name a path
+  outside the workspace (verified by a controlled revert: reverting only that fallback turns the case red
+  with the fence-not-refusing reason), and an absolute entry can neither widen nor narrow what the
+  relative entries already match. Before this, a target outside the workspace reduced to nothing and the
+  fence passed it - which is what made a channel stored outside the workspace writable anyway.
+- **The runtime holds its own state root, and no mode can reach it.** The harness protects the parent of
+  the per-workspace state directory unconditionally: it is not a mode's declaration, needs nothing in
+  `governance.yaml`, cannot be widened by any mode, and cannot be forgotten by a new one. It covers the
+  mutating tools whose target the built-in map can read (`write`, `edit`). It reached this shape because
+  three of four shipped modes allowed a write into the trace channel's own directory, and the mode
+  flagged read-only was the only one that refused - a control every mode must restate is a control that
+  goes missing.
+- **What that protection cannot see is recorded, not assumed closed.** Two blind spots, both measured:
+  **the shell** - a `bash` or `powershell` command writes wherever it likes and no check can see which
+  path it names, so the only control covering it is a mode giving up the shell (`fence.shell: denied`),
+  which a mode whose work is running the project's tests cannot do; and **the mutators outside the built-in
+  target map** (`replace`, `insert`, `notebook_edit`), which a mode can cover by declaring
+  `fence.targets`, because a mode's declaration wins over the built-in map. The map is deliberately tiny -
+  the installed catalog carries 57 tool names whose schemas this repository cannot read - so "which other
+  tools mutate, and where is their path" is a claim it does not make.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
@@ -109,9 +131,33 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - An `ask_before` action returns `ask`; an unlisted one returns the declared stance; a host with a dialog
   runs the first on consent and refuses it without. A limit without `tools` evaluates against every action,
   so a mode names the action its threshold belongs to.
+- The fence reaches a path outside the workspace: an entry naming one refuses a write into it, and the
+  same case with the absolute fallback reverted fails for the fence-not-refusing reason rather than any
+  other. A mode that declares **no** fence at all still refuses a write into the runtime's state root,
+  which is what makes the property independent of what a mode remembers to say.
+- The shell blind spot is pinned by a case that asserts the write is still **allowed**, so closing the gap
+  turns it red and the limitation cannot go stale in silence. A skipped case would not do that.
+- Every test that writes a mode fixture keeps Windows paths out of double-quoted YAML scalars: `\U` in one
+  is an escape and the document is unparseable, which fails as a fixture error wearing the fence's name.
 
 ### 6. Wrong vs Correct
 
 Wrong: ignore an unrecognised key, so a typo in `permissionMode` fails open and silent.
 
 Correct: reject it by name, and require the fields whose absence makes a mode unreviewable.
+
+Wrong: treat a fence as a workspace-relative control and store evidence outside the workspace on that
+assumption. The path is outside `cwd`, the fence cannot name it, the comparison yields nothing, and the
+write passes - which reads as "the channel is protected" while it is not.
+
+Correct: state the claim against the **policy**, not against where the file happens to live, and have the
+runtime hold the path itself. `outside the workspace` is a fact about a path; `no policy may write it` is
+a property of a control, and only the second one survives a session whose permissions change.
+
+Wrong: read a red case's summary and build on it, or grep for its reason through a filter.
+
+Correct: read the failure's own words first. In one run a case was red because a fixture's YAML had a
+Windows path in a double-quoted scalar, not because of the control it was written to test - and the greps
+that looked for the expected reason hid it twice. A verification command can lie too: reading a UTF-8 file
+with the platform default encoding turned its text into mojibake and reported a section missing that was
+present. State the encoding when the answer depends on text.
