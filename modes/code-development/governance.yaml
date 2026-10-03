@@ -50,6 +50,16 @@ effects:
     dev.python_version: idempotent
     dev.typecheck: idempotent
     workspace.inspect: idempotent
+    # The read-only project tools, each of which only reads the task store, so a second run cannot duplicate
+    # anything. They were absent until a twelve-session run measured what the default costs: on a retry of a
+    # request the boundary refused `agent_project_status` and `agent_project_context` as undeclared
+    # non-idempotent effects, and the sessions could not answer "where did we get to?".
+    agent_project_status: idempotent
+    agent_project_context: idempotent
+    agent_list_capabilities: idempotent
+    agent_doctor: idempotent
+    # `agent_task_convergence` is **not** here, and neither is `agent_workspace_patch`: both write, and a
+    # second run of either is not the state one run produced. They stay on the side the default protects.
     # `dev.project_test`, `dev.npm_build` and `dev.npm_install` are absent on purpose: they are
     # workspace writes, and a second run of a build or an install is not one run's state. The default
     # covers them, and the default is the safe one. `edit` and the shell tools are absent for the reason
