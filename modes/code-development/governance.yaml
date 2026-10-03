@@ -1,0 +1,79 @@
+version: 1.0.0
+framework: ">=0.2.0 <0.3.0"
+
+scope:
+  # Development happens inside the repository it is about.
+  targets: [repository]
+  environment: non-production
+  exclusions: []
+
+authority:
+  # **Every name here is real.** The `dev.*` and `workspace.*` entries are in the registry that
+  # `dove-pi capability list` prints, measured: dev.git_status, dev.node_version, dev.python_version,
+  # dev.typecheck (all read_only), dev.project_test, dev.npm_build, dev.npm_install (workspace_write)
+  # and workspace.inspect. `source.read` and `source.write` are this mode's own action names, given an
+  # idempotency class below, and **the loader does not resolve any of these against the registry** -
+  # measured in work-mode.ts, and it is why a reader should not assume every dotted name here is a
+  # capability. (code-audit's file says its own action names are "declared in permissions.yaml"; that
+  # file's accepted fields are unlisted, always_allow, ask_before and never_allow, so it cannot be, and
+  # this mode does not repeat the claim.)
+  #
+  # A wildcard that matches nothing would read as authority while granting none, which is why nothing
+  # here is abbreviated.
+  capabilities: [dev.git_status, dev.node_version, dev.python_version, dev.typecheck, dev.project_test, dev.npm_build, dev.npm_install, workspace.inspect, source.read, source.write]
+
+gate:
+  # `none`, and every other value would be a claim this mode cannot support.
+  #
+  # Not `conformance`: that is checked against an authority *document*, and ordinary development has no
+  # external grantor to write one. Not `limit` either: that means the mode is bounded by thresholds, and
+  # this one declares none - code-audit wrote `limit` once and it made the field read as a control that
+  # did not exist. What contains this mode is the permission list and the scope block, and MODE.md says
+  # so rather than leaving it to be inferred.
+  semantics: none
+
+# Which effects a retry may repeat. An undeclared tool is non-idempotent, so this map grants rather
+# than denies: it names only what a second run genuinely cannot duplicate, and everything listed here is
+# a read or a replacement.
+effects:
+  classes:
+    source.read: idempotent
+    # `write` replaces a file with the content it is given, so a second write leaves the same state.
+    source.write: idempotent
+    write: idempotent
+    read: idempotent
+    grep: idempotent
+    find: idempotent
+    ls: idempotent
+    dev.git_status: idempotent
+    dev.node_version: idempotent
+    dev.python_version: idempotent
+    dev.typecheck: idempotent
+    workspace.inspect: idempotent
+    # `dev.project_test`, `dev.npm_build` and `dev.npm_install` are absent on purpose: they are
+    # workspace writes, and a second run of a build or an install is not one run's state. The default
+    # covers them, and the default is the safe one. `edit` and the shell tools are absent for the reason
+    # code-audit states: a patch applied twice is not the state one application produced.
+
+sandbox:
+  # The boundary this runtime can enforce, and does, at the tool boundary. `network: none` blocks the
+  # host's network tools by name and reports the way out - measured in action-policy.ts, whose own
+  # comment calls it "a claim the policy can keep". The shell tools are not on that list, and
+  # `dev.npm_install` is classified as a workspace write rather than a network call, so development
+  # keeps its whole loop: install, build, test, typecheck.
+  #
+  # No `isolation`: it would need an OS sandbox this runtime does not provide, and a claim the runtime
+  # cannot honour refuses to load instead of reading as containment.
+  network: none
+  # Development writes source, and `unrestricted` is what stops the filesystem mutators from being
+  # blocked at the tool boundary. Where the writes land is not enforced and the mode does not pretend
+  # otherwise.
+  filesystem: unrestricted
+
+session:
+  budget:
+    turns: 40
+
+stop:
+  # The loop's own reasons: an exhausted turn budget and a run that finished its work.
+  on: [maxTurns, completed]

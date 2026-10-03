@@ -1,0 +1,27 @@
+# The list decides what the agent may do, so every entry names an action that can occur.
+#
+# `unlisted: allow` is the stance, stated rather than defaulted: development is mostly ordinary work,
+# and asking on every read would be noise. The containment is the scope block and the two lists below.
+unlisted: allow
+
+# Nothing is asked about. code-audit asks before every write, and documents that this is stricter than
+# it intended because the list is name-based while the intent was about the argument. For a mode whose
+# whole purpose is changing files, asking per write would make it unusable rather than safe - and an
+# unusable mode is the state this mode exists to end.
+ask_before: []
+
+# **The host's network tools, named exactly as the boundary list names them.** `network.*` would be the
+# shorter spelling and it was rejected on purpose: code-audit carries that entry and it matches nothing,
+# which its own file warns about - a wildcard that matches nothing reads as a control while enforcing
+# none. These eight are the ones `NETWORK_TOOLS` holds. They are refused here *and* blocked by
+# `sandbox.network: none` at the same boundary, because a mode whose declaration and content disagree
+# refuses to load.
+never_allow:
+  - web_search
+  - fetch_content
+  - get_search_content
+  - source_check
+  - browser
+  - agent_browser
+  - mcp
+  - mcpScript

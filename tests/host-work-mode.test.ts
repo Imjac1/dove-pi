@@ -118,7 +118,7 @@ function forceSemantics(root: string, name: string, value: string): void {
 /**
  * A mode over a capability the runtime **actually has**, so the mode's own controls are reachable at the host boundary.
  *
- * **Why a fixture and not a shipped mode.** All three shipped modes declare capabilities nothing implements - six of the
+ * **Why a fixture and not a shipped mode.** The three older shipped modes declare capabilities nothing implements - six of the
  * nine they declare (`repo.read`, `report.write`, `net.scan`, `exploit.run`, `market.read`, `order.submit`), verified by
  * grep on 2026-09-27. A capability invocation for one of those is refused by the registration check before any other
  * control is consulted, so a host case that demonstrates a mode control through such a call is demonstrating it for an
