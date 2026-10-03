@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { createProjectProvider, summarizeProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskConvergenceProgress, type ProjectTaskOperation } from "../project-provider/index.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { NATIVE_FORMAL_ARTIFACTS, nativeTaskArtifactPath, nativeTaskDirectory } from "../project-provider/native-artifacts.ts";
+import { findUnsupportedCriteria } from "../project-provider/record-freshness.ts";
 
 export async function runTaskCommand(commandArgs: readonly string[]): Promise<void> {
 	const provider = createProjectProvider(process.cwd());
@@ -166,8 +167,29 @@ function verifyTask(provider: ProjectProvider, task: ProjectTask): Record<string
 	const missing = files.filter((file) => !file.exists).map((file) => file.path);
 	const planningIssues = task.provider === "native" && task.formal ? inspectPlanningIssues(provider, task) : [];
 	const evidencePath = task.provider === "native" && task.formal ? join(nativeTaskDirectory(provider.projectRoot, task.providerTaskId), "evidence.jsonl") : undefined;
+	// A record is only as good as what backs it. `acceptance.md` can tick a criterion the ledger never mentions -
+	// measured on a real task, five ticked and four named nowhere - and until this read existed nothing noticed.
+	const unsupportedRecord = task.provider === "native" && task.formal ? inspectUnsupportedCriteria(provider, task) : [];
 	const structuralReady = missing.length === 0;
-	return { ready: structuralReady && planningIssues.length === 0, structuralReady, planningReady: planningIssues.length === 0, planningIssues, taskStatus: task.status, phase: task.phase, convergence: task.convergence ?? { health: "missing" }, files, missing, ...(evidencePath ? { evidencePath, evidenceExists: existsSync(evidencePath) } : {}), note: "Structural and planning check only; convergence state is reported separately and this command does not run tests or claim acceptance." };
+	return { ready: structuralReady && planningIssues.length === 0 && unsupportedRecord.length === 0, structuralReady, planningReady: planningIssues.length === 0, planningIssues, recordReady: unsupportedRecord.length === 0, unsupportedCriteria: unsupportedRecord, taskStatus: task.status, phase: task.phase, convergence: task.convergence ?? { health: "missing" }, files, missing, ...(evidencePath ? { evidencePath, evidenceExists: existsSync(evidencePath) } : {}), note: "Structural and planning check only; convergence state is reported separately and this command does not run tests or claim acceptance." };
+}
+
+/**
+ * Ticked criteria in `acceptance.md` that `evidence.jsonl` never names.
+ *
+ * A missing file is not reported here: `files` already says whether the artifacts exist, and this check is
+ * about a record that exists and does not hold together. An unreadable one is not reported either, for the same
+ * reason - this answers "does the record back its own ticks", not "can the record be read".
+ */
+function inspectUnsupportedCriteria(provider: ProjectProvider, task: ProjectTask): string[] {
+	const dir = nativeTaskDirectory(provider.projectRoot, task.providerTaskId);
+	try {
+		const acceptance = readFileSync(nativeTaskArtifactPath(provider.projectRoot, task.providerTaskId, "acceptance.md"), "utf8");
+		const evidence = readFileSync(join(dir, "evidence.jsonl"), "utf8");
+		return findUnsupportedCriteria(acceptance, evidence).map((entry) => entry.id);
+	} catch {
+		return [];
+	}
 }
 
 function inspectPlanningIssues(provider: ProjectProvider, task: ProjectTask): string[] {
