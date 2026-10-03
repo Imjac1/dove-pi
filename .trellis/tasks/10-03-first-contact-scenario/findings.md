@@ -26,11 +26,11 @@
 
 | 任务目录 | 对应发现 | 一句话 |
 |---|---|---|
-| `10-03-mode-prerequisites` | P1 + P13 ✓ | 模式的**前置条件**只能靠"被拒绝"来发现 ✓（framework 版本 ✓、授权文档可解析 ✓、机器缺 `nmap`/`hydra` ✓） |
-| `10-03-bom-declaration-trap` | P11 ✓ | **在这台平台上，写声明文件最顺手的方式就是坏的那种** ✓（PS 5.1 的 `-Encoding UTF8` 写 BOM ✓） |
-| `10-03-refusal-narration` | P12 ✓ | 拒绝的**权威理由**只经**模型的转述**到达用户 ✓，而那个转述实测**说反了** ✗ |
-| `10-03-silent-slash-command` | P10 ✓ | 非交互提示里的斜杠命令**被静默吞掉、退出码 0** ✓ |
-| `10-03-doctor-human-output` | P4 + P5 + P6 ✓ | `doctor` 默认是一整块 JSON ✓；报 `installed: false` 却对 `update`/`repair`/`rollback` 一字不提 ✓；生效 shell 是 Git Bash ✓ |
+| `10-03-mode-prerequisites` (still planning) | P1 + P13 ✓ | 模式的**前置条件**只能靠"被拒绝"来发现 ✓（framework 版本 ✓、授权文档可解析 ✓、机器缺 `nmap`/`hydra` ✓） |
+| `.trellis/tasks/archive/2026-10/10-03-bom-declaration-trap/` (archived) | P11 ✓ | **在这台平台上，写声明文件最顺手的方式就是坏的那种** ✓（PS 5.1 的 `-Encoding UTF8` 写 BOM ✓） |
+| `.trellis/tasks/archive/2026-10/10-03-refusal-narration/` (archived) | P12 ✓ | 拒绝的**权威理由**只经**模型的转述**到达用户 ✓，而那个转述实测**说反了** ✗ |
+| `.trellis/tasks/archive/2026-10/10-03-silent-slash-command/` (archived) | P10 ✓ | 非交互提示里的斜杠命令**被静默吞掉、退出码 0** ✓ |
+| `.trellis/tasks/archive/2026-10/10-03-doctor-human-output/` (archived) | P4 + P5 + P6 ✓ | `doctor` 默认是一整块 JSON ✓；报 `installed: false` 却对 `update`/`repair`/`rollback` 一字不提 ✓；生效 shell 是 Git Bash ✓ |
 
 ## 第三轮：**更正上一轮的结论** ✓（以及由此得到的四条真发现）
 
