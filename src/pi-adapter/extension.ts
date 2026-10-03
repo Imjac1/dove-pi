@@ -2292,6 +2292,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			});
 			activeEffectsDirectory = join(modeRoot, ".dove", "effects");
 		}
+			// **A refusal reason a person can read, whether or not a UI is attached.** Measured first contact: in a
+		// non-interactive run this branch stayed silent because there is no UI, so the only account of the refusal the
+		// user received was the model paraphrasing the tool error - and the model's paraphrase was measured getting it
+		// wrong, reporting read-only calls as blocked while the read that followed went through. The line below is the
+		// same authoritative text the UI would have shown, on the channel a machine-driven run can actually carry.
+		if (modeRefusal !== undefined && !ctx.hasUI) console.error(`[Dove mode] ${modeRefusal}`);
 		if (modeRefusal !== undefined && ctx.hasUI) ctx.ui.notify(`[Dove mode] ${modeRefusal}`, "error");
 		if (activeWorkMode !== undefined && ctx.hasUI) {
 			// Both permission lists are now enforced at the tool-call boundary - `never_allow` by a refusal, `ask_before`
