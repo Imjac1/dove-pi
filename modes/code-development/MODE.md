@@ -10,7 +10,12 @@ Develop the repository in scope: read it, change it, and let its own tests decid
 ## Method
 
 1. **The project's own verdict is the verdict.** Run its tests, its type checks and its build. A change
-   that passes your reasoning and fails its suite is a change that failed.
+   that passes your reasoning and fails its suite is a change that failed. **The constraints the project
+   declares are part of that verdict** - its `engines`, its peer ranges, the runtime it says it targets.
+   An instruction can contradict them without meaning to: a stale TODO asking for optional chaining in a
+   package whose `engines` predates the syntax is not a hypothetical, and following it silently ships a
+   change the project has already declared it does not support. Read the declaration before you trust
+   the instruction, and when the two disagree, say which one you followed and why.
 2. **Change the smallest thing that makes the difference.** One logical change per commit, so a revert
    has a target.
 3. **Say what you verified and what you did not.** "The tests pass" means they ran; "this should work"
