@@ -62,18 +62,48 @@ function declaredCapabilities(): readonly string[] {
 	return declared;
 }
 
-interface FreshnessRow {
-	/** Why this row exists, in the words of the failure it prevents. */
-	readonly what: string;
-	/** The page that states the number, relative to the repository root. */
-	readonly file: string;
-	/** A global regex with **named** groups, each holding one stated number. Every match of every group must agree. */
-	readonly claim: RegExp;
-	/** What the repository actually yields, per named group. A group with no entry here is a defect in the row. */
-	readonly expect: Readonly<Record<string, () => number>>;
+/** Count occurrences of a pattern in one repository file. */
+function countOf(pattern: RegExp, file: string): number {
+	return [...readFileSync(join(REPO, file), "utf8").matchAll(pattern)].length;
 }
 
+type FreshnessRow =
+	| {
+		/** The page **states** a number, in prose. */
+		readonly kind?: "stated";
+		/** Why this row exists, in the words of the failure it prevents. */
+		readonly what: string;
+		/** The page that states the number, relative to the repository root. */
+		readonly file: string;
+		/** A global regex with **named** groups, each holding one stated number. Every match of every group must agree. */
+		readonly claim: RegExp;
+		/** What the repository actually yields, per named group. A group with no entry here is a defect in the row. */
+		readonly expect: Readonly<Record<string, () => number>>;
+	  }
+	| {
+		/**
+		 * The page **holds a table** whose length is the number - it never writes the count down. The mount table is
+		 * the case this exists for: every row of it is checked by the citation door, and a row that is simply
+		 * **missing** leaves that door green, which is how it rotted to sixteen rows against eighteen declarations the
+		 * day lines moved in the extension.
+		 */
+		readonly kind: "rows";
+		readonly what: string;
+		readonly file: string;
+		/** A global regex matching one row of the table. */
+		readonly row: RegExp;
+		/** How many rows the repository yields. */
+		readonly actual: () => number;
+	  };
+
 const ROWS: readonly FreshnessRow[] = [
+	{
+		kind: "rows",
+		what: "the mount table, whose missing rows the per-row citation door cannot see",
+		file: ".trellis/spec/backend/personal-agent-use-time-architecture.md",
+		row: /^\|[^|\n]*\|\s*`:\d+`\s*\|/gmu,
+		actual: () => countOf(/pi\.on\(/gu, "src/pi-adapter/extension.ts"),
+	},
 	{
 		what: "the capability gap the shipped modes declare, which a fourth mode changed and no check noticed",
 		file: ".trellis/spec/backend/personal-agent-capability-runtime.md",
@@ -92,8 +122,19 @@ const ROWS: readonly FreshnessRow[] = [
 ];
 
 for (const row of ROWS) {
-	test(`${row.file} still states the number this repository yields: ${row.what}`, () => {
+	test(`${row.file} still yields the count this repository does: ${row.what}`, () => {
 		const page = readFileSync(join(REPO, row.file), "utf8");
+		if (row.kind === "rows") {
+			const rows = [...page.matchAll(row.row)].length;
+			assert.ok(rows > 0, `${row.file} holds no row this door can read (${row.what}), so nothing is being checked.`);
+			const actual = row.actual();
+			assert.equal(
+				rows,
+				actual,
+				`${row.file} carries ${rows} row(s) and this repository declares ${actual} (${row.what}). A row is missing or one too many.`,
+			);
+			return;
+		}
 		const matches = [...page.matchAll(row.claim)];
 		assert.ok(
 			matches.length > 0,
