@@ -9,7 +9,7 @@
 | Role | Who | Evidence |
 |---|---|---|
 | **Owner of the loop** | **the Pi host**: it runs "call the model, run the tools, repeat", and owns the session, the TUI and the provider channel | the extension attaches handlers and nothing else: **18 `pi.on(...)` calls, no loop body** (`src/pi-adapter/extension.ts:2112`-`:3389`) |
-| **Contract** of the loop | `src/core/loop.ts`: the contract's `interface` / `type` declarations - `GateInvocation`, `GateDecision`, `ActionGate`, `AgentLoop` - and **two functions**: `normalizeGateDecision`, the guard every loop applies, and `gateLabelOf`, which reads the refusal class a decision carries | `src/core/loop.ts:81`, `src/core/loop.ts:117``, `src/core/loop.ts:135``, `src/core/loop.ts:175``, `src/core/loop.ts:190``, `src/core/loop.ts:284`` |
+| **Contract** of the loop | `src/core/loop.ts`: the contract's `interface` / `type` declarations - `GateInvocation`, `GateDecision`, `ActionGate`, `AgentLoop` - and **two functions**: `normalizeGateDecision`, the guard every loop applies, and `gateLabelOf`, which reads the refusal class a decision carries | `src/core/loop.ts:81`, `:117`, `:135`, `:175`, `:190`, `:284` |
 | **Reference implementation** (reachable, and not the loop the Pi host runs) | `src/core/loop-runner.ts` | reached by `src/commands/axi-turn.ts`, which `src/cli.ts` dispatches; the allow-list entry was removed when that wiring landed |
 
 **Why this comes first**: the whole safety story of a self-improving harness rests on the sentence "every action passes the gate". **Today that sentence is kept by the host calling our hook** (§3), not by a dispatch path we own.
@@ -43,10 +43,10 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 
 **Site**: inside the `pi.on("tool_call")` handler, `src/pi-adapter/extension.ts:2623`.
 
-1. **The mode check comes first, ahead of the lease check** - a mode that failed to load must stop the action even when the request bookkeeping is not set up (`src/pi-adapter/extension.ts:2623``-`:2626`).
-2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`src/pi-adapter/extension.ts:2635``). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.
-3. On `block` it records the refusal - `ledger.appendGateRefused({ taskId, stepId: "gate:<toolCallId>", mode, tool, action, ... })` - and then **`return { block: true, reason: "[Dove mode ...] ...\nDo this instead: ..." }`** (from `src/pi-adapter/extension.ts:2648``). The call is really blocked, and the refusal **carries a deterministic remedy**.
-4. **The half that reads arguments runs after the input is final** (`src/pi-adapter/extension.ts:2745``).
+1. **The mode check comes first, ahead of the lease check** - a mode that failed to load must stop the action even when the request bookkeeping is not set up (`:2623`-`:2626`).
+2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`:2635`). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.
+3. On `block` it records the refusal - `ledger.appendGateRefused({ taskId, stepId: "gate:<toolCallId>", mode, tool, action, ... })` - and then **`return { block: true, reason: "[Dove mode ...] ...\nDo this instead: ..." }`** (from `:2648`). The call is really blocked, and the refusal **carries a deterministic remedy**.
+4. **The half that reads arguments runs after the input is final** (`:2745`).
 
 **The honest boundary**: this path is the **host** calling us at each tool call. "Every action passes the gate" is kept by the host's calling behaviour; the contract at `src/core/loop.ts:183` (that `ActionGate.evaluate` is invoked for **every** proposed action, including ones that will be blocked) is held up today by **tests and the host** together.
 
@@ -56,7 +56,7 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 |---|---|---|
 | the Pi host and the extension | **the main process** | the extension is a registration inside the host |
 | tools (shell, PowerShell, files) | **child processes**, started by the host | the host boundary is exactly the `tool_call` / `tool_result` pair of events |
-| subagents | **real child processes** (`spawn`) | `src/pi-adapter/subagent-provider.ts:1` (`import { spawn } from "node:child_process"`), `resolvePiChildCommand` (`src/pi-adapter/subagent-provider.ts:58``, defined at `src/pi-adapter/subagent-provider.ts:37``) |
+| subagents | **real child processes** (`spawn`) | `src/pi-adapter/subagent-provider.ts:1` (`import { spawn } from "node:child_process"`), `resolvePiChildCommand` (`:58`, defined at `:37`) |
 | workspace changes | **a transaction in the main process**: snapshot, patch, restore | `src/windows-runtime/workspace.ts` (`createWorkspaceSnapshot`, `applyWorkspacePatch`, `restoreWorkspaceSnapshot`, `verifyWorkspaceSnapshot`) |
 | cross-process mutation mutex | the project mutation lock, `withProjectMutationLock` | `src/project-provider/lock.ts` (50 lines over node built-ins). **Note**: this is the repository's only **upward** import (see `directory-structure.md`, "Layering and the allowed direction") |
 
@@ -74,7 +74,7 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 
 | What is recorded | Where | Anchor |
 |---|---|---|
-| the execution ledger (append-only) | `<stateDir>/execution.jsonl` | `src/pi-adapter/extension.ts:899`; the state directory resolves through `resolveDoveStateDir` (`src/pi-adapter/extension.ts:42``) |
+| the execution ledger (append-only) | `<stateDir>/execution.jsonl` | `src/pi-adapter/extension.ts:899`; the state directory resolves through `resolveDoveStateDir` (`:42`) |
 | effects / exactly-once | the effect store and its unresolved claims | `src/pi-adapter/extension.ts:66` (`createFileEffectStore`, `listUnresolvedClaims`) |
 | session-level context snapshots | the latest snapshot, restorable | `src/pi-adapter/extension.ts:44` (`restoreLatestContextSnapshot`) |
 | a formal task's convergence record | `<projectRoot>/.dove/tasks/<id>/convergence.json` | `src/project-provider/native-artifacts.ts:46` |
