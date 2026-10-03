@@ -881,8 +881,9 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 	});
 
 	it("refuses a target the mode excludes, at the boundary  [D4]", async () => {
-		// `scope.exclusions` used to be declared and unread: all three shipped modes carry one (`[t-payments]`,
-		// `[production-venue]`, `[]`), so a mode could exclude **the very target its own authority document
+		// `scope.exclusions` used to be declared and unread: the three older shipped modes carry one (`[t-payments]`,
+		// `[production-venue]`, `[]`) and so does the fourth, which lands on `[]` as well (`code-development`), so a mode
+		// could exclude **the very target its own authority document
 		// authorizes** and reach it anyway - the strongest form of the claim, an exclusion that cannot refuse the
 		// thing it names. This is the case the repository left with the instruction to invert when that changed.
 		const root = freshRoot();

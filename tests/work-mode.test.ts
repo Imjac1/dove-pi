@@ -581,7 +581,7 @@ describe("every entry in a shipped mode's permission list names an action that c
 	// a whole family of capabilities it has not enumerated.
 	const isCapabilityShaped = (entry: string): boolean => /^[a-z][a-z0-9-]*\.([a-z0-9_-]+|\*)$/.test(entry);
 
-	for (const name of ["code-audit", "pentest", "trading"]) {
+	for (const name of ["code-audit", "code-development", "pentest", "trading"]) {
 		it(name + " lists only host tools and capability names", () => {
 			const directory = join(process.cwd(), "modes", name);
 			const mode = loadWorkMode(

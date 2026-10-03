@@ -4,7 +4,7 @@
 
 ## 有序切片
 
-1. [ ] **能力名不编** ✓：已量 ✓（`capability list` 14 个 ✓）→ 写入 `authority.capabilities` 的**每一个名字都必须真实存在** ✓；本模式自有的动作名（`source.read`/`source.write` ✓）在 `permissions.yaml` 里声明 ✓ 并给 effect class ✓。
+1. [ ] **能力名不编** ✓：已量 ✓（`capability list` 14 个 ✓）→ 写入 `authority.capabilities` 的**每一个名字都必须真实存在** ✓；本模式自有的动作名（`source.read`/`source.write` ✓）**只在 `governance.yaml`** ✓（`authority.capabilities` + `effects.classes` ✓）—— `permissions.yaml` **声明不了动作名** ✗（`PERMISSION_FIELDS` 实测 ✓）。
 2. [ ] **`MODE.md`** ✓：frontmatter（`name`/`description`/`license`/**`compatibility`** ✓）+ Method / Output / Stop ✓；`compatibility` 写明**是什么 contained 了它** ✓ + **精确措辞**（"无 Pi 网络工具" ✓ ≠ "无法访问网络" ✗）+ 前置与代价 ✓。
 3. [ ] **`governance.yaml`** ✓：`version` ✓ · `framework: ">=0.2.0 <0.3.0"` ✓ · `scope{targets:[repository],environment:non-production,exclusions:[]}` ✓ · `authority{capabilities:[…真实名字…]}` ✓ · `gate{semantics:none}` ✓ · `effects{classes{source.write: idempotent, write: idempotent, …}}` ✓ · `sandbox{network:none,filesystem:unrestricted}` ✓ · `session{budget{turns:40}}` ✓ · `stop{on:[maxTurns,completed]}` ✓。**不放**任何解析不到的名字 ✗、**不放** `expires`/`approval`/`memory_scope`/`evidence`/`coordination` ✗（加载器按名拒绝 ✓）。
 4. [ ] **`permissions.yaml`** ✓：`unlisted: allow` ✓ · `ask_before: []` ✓ · **`never_allow` 点名那 8 个真实工具** ✓（`web_search` ✓ `fetch_content` ✓ `get_search_content` ✓ `source_check` ✓ `browser` ✓ `agent_browser` ✓ `mcp` ✓ `mcpScript` ✓ —— 取自 `action-policy.ts:20` ✓）。**不许出现匹配不到任何东西的项** ✗（`code-audit` 的 `network.*` 就是反例 ✓）。

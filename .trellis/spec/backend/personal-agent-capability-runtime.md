@@ -123,9 +123,10 @@ and evidence contracts still apply to Dove-owned executors.
   origin and gate. The existing CLI install diagnostics array remains backwards
   compatible alongside this projection.
 - **A mode's grant list and the registry are different things, and the gap between them is a deployment fact.** A
-  mode declares what it *authorizes*; the registry holds what this build *implements*. Six of the nine capabilities
-  the shipped modes declare have no implementation (`repo.read`, `report.write`, `net.scan`, `exploit.run`,
-  `market.read`, `order.submit`, checked 2026-09-27), so a mode naming them is stating what its environment must
+  mode declares what it *authorizes*; the registry holds what this build *implements*. Eight of the nineteen capabilities
+  the shipped modes declare have no implementation (`repo.read`, `report.write`, `source.read`, `source.write`,
+  `net.scan`, `exploit.run`, `market.read`, `order.submit`, recounted 2026-10-03 when a fourth shipped mode landed;
+  the previous count was six of nine, checked 2026-09-27), so a mode naming them is stating what its environment must
   provide - `modes/trading/MODE.md` says so in as many words. **Loading does not refuse the mismatch**, because a mode
   file is a portable document and the registry is a deployment; the host's tool-call boundary refuses it instead, and
   that refusal comes **before** the approval prompt and **before** the effect claim: an action that cannot run has no

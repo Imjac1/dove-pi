@@ -13,7 +13,7 @@
 | 模式 | `sandbox.filesystem` | 拿它开发的结果 |
 |---|---|---|
 | `code-audit` | **`read-only-source`** | **按设计挡住写** ✓（原话：*"declares `sandbox.filesystem: read-only-source`, so `index.js` can't be mutate[d]"* ✓） |
-| `pentest` | `unrestricted` | **拒绝加载** ✓（*"its engagement 'example-engagement' does not pre-flight clean"* ✓） |
+| `pentest` | `unrestricted` | **能加载** ✓；**拒绝发生在 pre-flight** ✓（*"its engagement 'example-engagement' does not pre-flight clean"* ✓）—— 我先前写成"拒绝加载" ✗，检查方实测更正 ✓ |
 | `trading` | `unrestricted` | 语义是**交易 venue** ✓（scope 写明 ✓） |
 | **无模式** | —— | **做完且做对** ✓✓（diff 正确 ✓，`ava` 7/7 ✓ + `tsd` 0 ✓） |
 
@@ -21,7 +21,7 @@
 
 - **三个文件** ✓：`MODE.md`（frontmatter `name`/`description`/`license`/**`compatibility`** ✓ + Method/Output/Stop ✓）· `governance.yaml` ✓ · `permissions.yaml` ✓。
 - `governance.yaml` 的字段集 ✓（实测 ✓）：`version` ✓ · `framework` ✓ · `scope{targets,environment,exclusions}` ✓ · `authority{capabilities[]}` ✓ · `gate{semantics}` ✓ · `effects{classes{}}` ✓ · `sandbox{network,filesystem}` ✓ · `session{budget{turns}}` ✓ · `stop{on[]}` ✓。
-- 允许值 ✓（`work-mode.ts` 实测 ✓）：`filesystem: unrestricted|ephemeral|read-only-source` ✓；`network: none|allowlist|unrestricted` ✓；`gate.semantics: none|conformance|limit` ✓；模式名 `/^[a-z0-9][a-z0-9-]*$/` ✓。
+- 允许值 ✓（`work-mode.ts` 实测 ✓）：`filesystem: unrestricted|ephemeral|read-only-source` ✓；`network: none|allowlist|unrestricted` ✓；**`gate.semantics: none|limit|conformance|both`** ✓（检查方实测 ✓ —— 我先前漏了 `both` ✗）；模式名 `/^[a-z0-9][a-z0-9-]*$/` ✓。
 - **`code-audit` 的注释本身就是规矩** ✓✓，三条直接适用本题：① **"声明与内容不一致的模式拒绝加载"** ✓（它曾写 `limit` 而**没有阈值** ✓ → 那读起来像一个**不存在的控制** ✓✓）；② **"匹配不到东西的通配符读起来像权限、实际什么都没给"** ✓；③ **"运行时兑现不了的声明"要删掉而不是留着** ✓（`isolation: worktree` 就是这么被删的 ✓✓）。
 
 ## Requirements
