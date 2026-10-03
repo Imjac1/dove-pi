@@ -59,6 +59,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
   no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
+  **Anchors.** Enforced at `src/core/action-policy.ts:626`; refused at load at `src/pi-adapter/extension.ts:2253`.
 - **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
   and compared as locations: inside the workspace the relative form is produced first and wins, and a
   target with no relative form falls back to the canonical absolute one. So an entry may name a path
@@ -66,13 +67,16 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   with the fence-not-refusing reason), and an absolute entry can neither widen nor narrow what the
   relative entries already match. Before this, a target outside the workspace reduced to nothing and the
   fence passed it - which is what made a channel stored outside the workspace writable anyway.
+  **Anchor.** `tests/a3-trace-independence.test.ts:186`, and the wall it protects is
+  `tests/a3-trace-independence.test.ts:179`.
 - **The runtime holds its own state root, and no mode can reach it.** The harness protects the parent of
   the per-workspace state directory unconditionally: it is not a mode's declaration, needs nothing in
   `governance.yaml`, cannot be widened by any mode, and cannot be forgotten by a new one. It covers the
   mutating tools whose target the built-in map can read (`write`, `edit`). It reached this shape because
   three of four shipped modes allowed a write into the trace channel's own directory, and the mode
   flagged read-only was the only one that refused - a control every mode must restate is a control that
-  goes missing.
+  goes missing. **Anchors.** `src/core/action-policy.ts:593`; `tests/a3-trace-independence.test.ts:94`
+  is the case that a mode declaring no fence at all still fails.
 - **What that protection cannot see is recorded, not assumed closed.** Two blind spots, both measured:
   **the shell** - a `bash` or `powershell` command writes wherever it likes and no check can see which
   path it names, so the only control covering it is a mode giving up the shell (`fence.shell: denied`),
@@ -80,7 +84,10 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   target map** (`replace`, `insert`, `notebook_edit`), which a mode can cover by declaring
   `fence.targets`, because a mode's declaration wins over the built-in map. The map is deliberately tiny -
   the installed catalog carries 57 tool names whose schemas this repository cannot read - so "which other
-  tools mutate, and where is their path" is a claim it does not make.
+  tools mutate, and where is their path" is a claim it does not make. **Anchors.** The map and its reason
+  are `src/core/work-mode.ts:217`; the shell gap is held open on purpose by
+  `tests/a3-trace-independence.test.ts:137`, which asserts the write is still allowed so that closing it
+  fails loudly.
 - **A vertical adds no core code.** A mode id appearing in executable code under `src/core` is a
   framework defect.
 
