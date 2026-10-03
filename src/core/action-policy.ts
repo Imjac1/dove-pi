@@ -8,6 +8,7 @@ import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath, type LimitSpec } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
 import { evaluatePermission, FENCE_TARGETS, matchesPermission, normalizeFencePath, type WorkMode } from "./work-mode.ts";
+import { resolveDoveStateDir } from "./state-dir.ts";
 import type { GateLabel } from "./task-convergence.ts";
 
 /**
@@ -576,6 +577,35 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 							);
 						}
 					}
+				}
+			}
+			// **The runtime's own evidence surface, held by the runtime rather than by a mode's declaration.** A
+			// `fence` protects what a mode names, so a mode that names nothing - or the next one somebody adds and
+			// forgets - leaves this writable. It is not a mode's to protect: it is where the runtime records what ran,
+			// and a mode is one of the things being recorded. No new syntax for a mode author to get wrong, nothing to
+			// forget, and no mode can widen it. The prefix is the state directory's parent, so no workspace's records
+			// are reachable from another's either.
+			//
+			// **The tools whose target this repository can read, and only those.** A shell command can write the same
+			// path and nothing here can see which path it names; the only control that covers that is a mode giving up
+			// the shell, which is the mode's decision and not this one's. That gap is stated in the trace task's
+			// limitation rather than asserted closed here.
+			const stateRoot = dirname(resolveDoveStateDir(workspaceRoot)).replace(/\\/gu, "/").toLowerCase();
+			if (FILESYSTEM_MUTATORS.has(invocation.tool) && !SHELL_TOOLS.has(invocation.tool)) {
+				const resolved = fenceTargetsOf(mode, invocation);
+				for (const target of resolved.kind === "targets" ? resolved.targets : []) {
+					const spelled = isAbsolute(target) ? target : resolve(workspaceRoot, target);
+					const canonicalSpelled = canonicalTarget(spelled);
+					const compared = workspaceRelativeTarget(canonicalWorkspaceRoot, canonicalSpelled) ?? canonicalSpelled.replace(/\\/gu, "/").toLowerCase();
+					if (declaredPrefixHit([stateRoot], compared) === undefined) continue;
+					return labelled(
+						{
+							outcome: "block",
+							reason: `'${invocation.tool}' would write inside the runtime's own state root (${compared}), where this run's records live.`,
+							remediation: "Write somewhere else. The evidence surface is not the mode's to widen, and no mode can.",
+						},
+						"fence",
+					);
 				}
 			}
 			// **A technique is checked before anything that could allow the call.** `never_allow` names actions; this

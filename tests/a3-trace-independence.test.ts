@@ -55,11 +55,12 @@ for (const name of SHIPPED) {
 	//
 	// **`code-audit` stays live on purpose** - it is the one shipped mode that already refuses the write, so it is the
 	// proof that the property is expressible with today's controls, and skipping it would have hidden a passing case
-	// behind three failing ones.
-	const redToday = name !== "code-audit";
+	// **No mode needs to declare anything for this to hold.** The runtime holds its own state root, so the property
+	// is the same under all four shipped modes and a fifth mode cannot break it by forgetting. What still varies by
+	// mode is the shell, and that gap has its own case below rather than being folded in here.
 	test(
 		`${name} does not let a mutating tool write the trace channel`,
-		redToday ? { skip: "A3 step 3: this mode allows the write today, and closing it is what the step is for" } : {},
+		{},
 		() => {
 		const directory = join(process.cwd(), "modes", name);
 		const mode = loadWorkMode(
@@ -74,7 +75,11 @@ for (const name of SHIPPED) {
 		// only fires for a capability the mode granted - says nothing here, and an empty list cannot make it pass.
 		const policy = createActionPolicy({ mode, workspaceRoot: process.cwd(), registeredCapabilities: [] });
 
-		for (const tool of ["write", "edit", "bash", "powershell"]) {
+		// **The tools whose target the runtime can read.** `replace`, `insert` and `notebook_edit` are mutators the
+		// built-in map does not carry, and the map's smallness is deliberate: the installed catalog holds 57 tool names
+		// the repository cannot read schemas for, so "which other tools mutate, and where is their path" is a claim it
+		// cannot back. A mode that wants them covered declares `fence.targets`, which wins over the built-in map.
+		for (const tool of ["write", "edit"]) {
 			const decision = policy.evaluate(invocationFor(tool, TRACE_PATH), { viaCapability: false });
 			assert.notEqual(
 				decision.outcome,
@@ -85,6 +90,91 @@ for (const name of SHIPPED) {
 		}
 	});
 }
+
+test("a mode that declares no fence at all still cannot write the runtime's own state root", () => {
+	// **(b) from the walk's report.** A fence protects only what a mode declares, so a mode that declares nothing -
+	// or the next mode somebody adds and forgets - leaves the runtime's own evidence surface writable. The channel's
+	// root is the runtime's, not the mode's, so the runtime is what should hold it: no new syntax for a mode author to
+	// get wrong, and nothing to forget.
+	const mode = loadWorkMode(
+		{
+			mode: "---\nname: plain\ndescription: A mode with no fence and an unrestricted filesystem.\nlicense: MIT\ncompatibility: fixture\n---\n\nProbe.\n",
+			governance: [
+				"version: 1.0.0",
+				`framework: ">=0.2.0 <0.3.0"`,
+				"scope:",
+				"  targets: [repository]",
+				"  environment: non-production",
+				"  exclusions: []",
+				"authority:",
+				"  capabilities: [source.read]",
+				"gate:",
+				"  semantics: none",
+				"sandbox:",
+				"  network: none",
+				"  filesystem: unrestricted",
+			].join("\n"),
+			permissions: "unlisted: allow\nask_before: []\nnever_allow: []\n",
+		},
+		{ frameworkVersion: FRAMEWORK },
+	);
+	const policy = createActionPolicy({ mode, workspaceRoot: process.cwd(), registeredCapabilities: [] });
+	// **The tools this repository has verified a target for, and only those.** The set is narrower than the list of
+	// filesystem mutators, and the difference is measured rather than overlooked: `replace`, `insert` and
+	// `notebook_edit` are mutators the built-in target map does not carry, so the check cannot see which path they
+	// name and neither can this test - the host bundle exposes no readable schema for them, so their argument names
+	// cannot be verified from here. They belong in the limitation with the shell tools, not behind a green case.
+	for (const tool of ["write", "edit"]) {
+		const decision = policy.evaluate(invocationFor(tool, TRACE_PATH), { viaCapability: false });
+		assert.notEqual(
+			decision.outcome,
+			"allow",
+			`mode 'plain' declares no fence and allows '${tool}' to write the runtime's own state root at ${TRACE_PATH}`,
+		);
+	}
+});
+
+test("the shell is the gap this control does not cover, and this case holds it in place", () => {
+	// **A case that asserts the limitation, on purpose.** A shell command writes wherever it likes and nothing in the
+	// policy can see which path it names, so `bash` and `powershell` are allowed to write the runtime's state root
+	// even after the runtime started holding it. The only control that covers them is a mode giving up the shell
+	// altogether - `fence.shell: denied` - which a mode whose work is running the project's tests cannot do.
+	//
+	// This asserts that the write **is** allowed, which reads backwards until you see what it buys: the gap cannot be
+	// closed silently, because closing it turns this case red and whoever closes it must come here and say so. The
+	// alternative - a skipped case - would let the gap close without anyone noticing the limitation had changed.
+	const mode = loadWorkMode(
+		{
+			mode: "---\nname: plain\ndescription: A mode with no fence and an unrestricted filesystem.\nlicense: MIT\ncompatibility: fixture\n---\n\nProbe.\n",
+			governance: [
+				"version: 1.0.0",
+				`framework: ">=0.2.0 <0.3.0"`,
+				"scope:",
+				"  targets: [repository]",
+				"  environment: non-production",
+				"  exclusions: []",
+				"authority:",
+				"  capabilities: [source.read]",
+				"gate:",
+				"  semantics: none",
+				"sandbox:",
+				"  network: none",
+				"  filesystem: unrestricted",
+			].join("\n"),
+			permissions: "unlisted: allow\nask_before: []\nnever_allow: []\n",
+		},
+		{ frameworkVersion: FRAMEWORK },
+	);
+	const policy = createActionPolicy({ mode, workspaceRoot: process.cwd(), registeredCapabilities: [] });
+	for (const tool of ["bash", "powershell"]) {
+		const decision = policy.evaluate(invocationFor(tool, TRACE_PATH), { viaCapability: false });
+		assert.equal(
+			decision.outcome,
+			"allow",
+			`'${tool}' is no longer allowed to write the runtime's state root (it answered '${decision.outcome}'): the shell gap has been closed, so this case and the limitation that records it both need updating`,
+		);
+	}
+});
 
 test("the trace path is outside the workspace, which is why the claim above cannot rest on that fact", () => {
 	// The other half of the same finding: the path *is* outside `cwd` today, and that is exactly the fact the design
