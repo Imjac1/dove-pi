@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { readFileSync } from "node:fs";
 import { loadWorkMode } from "../src/core/work-mode.ts";
 import { createActionPolicy } from "../src/core/action-policy.ts";
@@ -90,4 +91,54 @@ test("the trace path is outside the workspace, which is why the claim above cann
 	// says is not enough. If this ever fails, the path moved into the workspace and the red above got sharper for a
 	// different reason - so it is asserted rather than assumed.
 	assert.ok(TRACE_PATH.startsWith(process.cwd()) === false, `the trace path ${TRACE_PATH} sits inside the workspace ${process.cwd()}`);
+});
+
+test("a fence entry can name a path outside the workspace", () => {
+	// **Red before the change, and the change is ① from the walk's report.** The mechanism exists and refuses writes
+	// into paths it names, but every comparison it makes happens after the target has been reduced to a
+	// workspace-relative form - and a target outside the workspace has no such form, so the fence sees `undefined` and
+	// lets the write through. An absolute entry survives normalisation (`normalizeFencePath` strips `./`, trailing
+	// `/*` and `/**`, and nothing else), so the gap is in the comparison rather than in the declaration.
+	//
+	// This case is deliberately narrow: it asserts the mechanism, on a path under the operating system's temp
+	// directory, so it does not depend on where this machine keeps the runtime's state root.
+	const outside = join(tmpdir(), "dove-fence-probe", "execution.jsonl");
+	// **Forward slashes in the YAML, and that is not cosmetic.** A double-quoted YAML scalar reads `\U` as an escape,
+	// so a Windows path written with backslashes makes the whole document unparseable - which is how the first run of
+	// this case failed, for a reason that had nothing to do with the fence. The runtime normalises the two spellings
+	// to one anyway (`normalizeFencePath` turns backslashes into slashes), so writing the slash form here tests the
+	// same path and cannot silently become a test of the parser.
+	const outsideDeclared = join(tmpdir(), "dove-fence-probe").replace(/\\/gu, "/");
+	const mode = loadWorkMode(
+		{
+			mode: "---\nname: fenced-outside\ndescription: A mode that fences a path outside its workspace.\nlicense: MIT\ncompatibility: fixture\n---\n\nProbe.\n",
+			governance: [
+				"version: 1.0.0",
+				`framework: ">=0.2.0 <0.3.0"`,
+				"scope:",
+				"  targets: [repository]",
+				"  environment: non-production",
+				"  exclusions: []",
+				"authority:",
+				"  capabilities: [source.read]",
+				"gate:",
+				"  semantics: none",
+				"fence:",
+				`  paths: ["${join(tmpdir(), "dove-fence-probe").replace(/\\/gu, "/")}"]`,
+				"  shell: uncovered",
+				"sandbox:",
+				"  network: none",
+				"  filesystem: unrestricted",
+			].join("\n"),
+			permissions: "unlisted: allow\nask_before: []\nnever_allow: []\n",
+		},
+		{ frameworkVersion: FRAMEWORK },
+	);
+	const policy = createActionPolicy({ mode, workspaceRoot: process.cwd(), registeredCapabilities: [] });
+	const decision = policy.evaluate(invocationFor("write", outside), { viaCapability: false });
+	assert.equal(
+		decision.outcome,
+		"block",
+		`a fence over ${join(tmpdir(), "dove-fence-probe")} did not refuse a write to ${outside}: the policy answered '${decision.outcome}'`,
+	);
 });

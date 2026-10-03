@@ -551,8 +551,20 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 							// that two spellings of one location - a junction inside the workspace, or a workspace root
 							// that is itself reached through one - are compared as the location they name.
 							const spelled = isAbsolute(target) ? target : resolve(workspaceRoot, target);
-							const relativeTarget = workspaceRelativeTarget(canonicalWorkspaceRoot, canonicalTarget(spelled));
-							const hit = declaredPrefixHit(fence.paths, relativeTarget);
+							const canonicalSpelled = canonicalTarget(spelled);
+							const relativeTarget = workspaceRelativeTarget(canonicalWorkspaceRoot, canonicalSpelled);
+							// **A target outside the workspace has no workspace-relative form, and that used to be the end
+							// of the comparison** - the fence saw `undefined` and let the write through, which is how the
+							// trace channel's own directory stayed writable under three of the four shipped modes. The
+							// runtime's state root is not in the workspace, so a fence that can only be spelled relative to
+							// one cannot protect it. An absolute entry survives normalisation unchanged, so the two sides
+							// are compared as the locations they name: canonical, slash-separated, lowercased, exactly the
+							// shape `workspaceRelativeTarget` produces for the inside case.
+							//
+							// Inside the workspace nothing changes: `relativeTarget` is defined and wins, so a fence entry
+							// that happens to be absolute cannot widen or narrow what the relative entries already match.
+							const compared = relativeTarget ?? canonicalSpelled.replace(/\\/gu, "/").toLowerCase();
+							const hit = declaredPrefixHit(fence.paths, compared);
 							if (hit === undefined) continue;
 							return labelled(
 								{
