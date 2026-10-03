@@ -1,6 +1,37 @@
 # 第一次接触：一轮真实走查的问题与优化点（2026-10-03，全部实测）
 
-**方法** ✓：以**用户视角**按顺序走 ✓，每一步取真实输出 ✓；能驱动的地方**真跑**（真 provider ✓、真宿主 1.0.0 ✓、真扩展 ✓），不能驱动的地方**标为未证实** ✗（不猜 ✓）。
+## 第二轮补测（2026-10-03 晚）：把"被拒"这条腿走通了 ✓
+
+### 机制（量到的 ✓，不是猜的）
+
+- **用户设工作模式的文件** ✓：**`<项目>/.dove/mode.json`** ✓（`WORK_MODE_DECLARATION = join(".dove", "mode.json")` ✓，`work-mode.ts:869` ✓）；同目录另有 `.dove/workspace.json` ✓（`workspace-policy.ts:22` ✓，**一个关注点一个文件** ✓）。
+- 它带 `malformed` 与 `workModeRefusal` 的区分 ✓ —— 产品在这一层**已经有**"声明了却读不到"与"什么都没声明"**不合并**的纪律 ✓✓（本仓前两个任务清的那一套 ✓）。
+
+### **正面发现 ✓✓：治理是真的，而且对照组证明了它**
+
+| 跑法 | 结果 |
+|---|---|
+| **声明 `code-audit`** + "创建一个新文件 hello.txt" | **4 次工具调用全部被拦** ✓ · **磁盘上什么都没落** ✓ · exit 0 ✓ · `agent_end`/`agent_settled` 都有 ✓ |
+| **不声明模式** + 同一请求（对照 ✓） | **`hello2.txt` 真的被创建** ✓ · exit 0 ✓ |
+
+→ **同一请求，有模式被拦、无模式放行** ✓✓ —— 这是"受治理"这件事**第一次被端到端地证明** ✓（不是只跑测试 ✓，是真宿主 + 真模型 + 真闸门 ✓）。
+
+### **负面发现 ✗✗：闸门的"理由"到不了用户手上**
+
+同一个被拒的回合，**两种输出模式下用户看到的东西完全不同** ✗：
+
+| 输出模式 | 用户看到的 |
+|---|---|
+| **默认（text）** | 一个字：**`terminated`** ✓ · **exit 1** ✗ —— **没有原因、没有出何去何从、没有任何"你刚才被拒了什么"** ✗✗ |
+| **`--mode json`** | 事件流正常 ✓（`toolcall_start/end` ×4 ✓），最后由**模型自己**去解释 ✓：*"Every tool call … is being blocked by the sa…"* ✗ —— 这是**模型的转述** ✓，不是闸门的原话 ✗✓ |
+
+**而理由其实存在** ✓：本仓确实把拒绝写进账本 ✓（`appendGateRefused` ✓）—— 所以**机器有、用户没有** ✓✗✓。
+**这就是那条新发现（P9）** ✓，而且是本会话反复清掉的同一族（"拦住了，但没人知道为什么/没人知道拦的是哪条" ✗）—— 这次长在**用户可见的输出**上 ✓。
+
+### 另一条新发现（P10 ✗）：非交互下斜杠命令**静默空转、退出码 0**
+
+`-p --mode json "/status"` ✓ → **exit 0 ✓，整个事件流只有一条 `{"type":"session"}`** ✓ —— **命令没执行、没有输出、没有报错** ✗✓。
+一个把 `/dove-mode …` 写进脚本的人会得到**看上去成功**的空转 ✓✓（静默失败 + 0 退出码 ✓）。
 
 ## 走了什么（命令 + 结果）
 
@@ -10,8 +41,9 @@
 | 2 | `node bin/dove-pi.cjs --help` | 一套托管安装生命周期 ✓（`update` / `repair` / `rollback` / `uninstall` ✓） |
 | 3 | **`node bin/dove-pi.cjs doctor`** | **exit 0 ✓**，输出 JSON ✓（node / platform / shell / workspace / powershell / tools / managedInstall / diagnostics / adapters ✓） |
 | 4 | 真宿主非交互一回合 ✓：`pi -p --provider ant --model Atria-Dawn-Preview --no-session -e <repo>\.pi\extensions\personal-agent.ts "…用 read 工具读 AGENTS.md…"` | **exit 0 ✓**，输出文件第一行 ✓ → **真 provider ✓ + 工具调用真的发生 ✓ + 本仓扩展被加载 ✓** |
-| 5 | 斜杠命令探针：`-p` 的提示以 `/dove-mode` 开头 | exit 0 ✓，但**无法区分**"命令被执行"与"模型忽略了这行文字" ✗ → **未证实** ✗ |
+| 5 | 斜杠命令探针：`-p` 的提示以 `/dove-mode` 开头 | exit 0 ✓，但**无法区分**"命令被执行"与"模型忽略了这行文字" ✗ → 见 P10 ✓（第二轮已定论 ✓） |
 | 6 | 驱动脚本：`node scripts/real-dove-blackbox.mjs --provider faux --launcher <repo>\bin\dove-pi.cjs …` | 驱动**跑了** ✓，产出 1484 B 汇总 ✓，但 `stderr`: **`'dove-pi.cmd' is not recognized…`** ✗ |
+| 7 | **声明工作模式后跑真回合 + 对照组** ✓ | 见上 ✓：**治理成立** ✓✓ / **理由不到用户** ✗✗ |
 
 ## 问题（按严重度 ✓）
 
