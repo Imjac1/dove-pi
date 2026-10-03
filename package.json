@@ -22,9 +22,9 @@
     "dove-pi": "node ./bin/dove-pi.cjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.84.3",
-    "@earendil-works/pi-coding-agent": "0.84.3",
-    "@earendil-works/pi-tui": "0.84.3",
+    "@earendil-works/pi-agent-core": "^1.0.0",
+    "@earendil-works/pi-coding-agent": "1.0.0",
+    "@earendil-works/pi-tui": "1.0.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "typebox": "^1.1.38",
     "yaml": "^2.9.1",
