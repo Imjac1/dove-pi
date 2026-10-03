@@ -52,6 +52,9 @@
 ### 任务 3 —— 让不可见的变可见（发现 H + C + G + F ✓）
 
 8. [ ] **每次会话的结束状态落盘** ✓（正常 ✓ / 被拒 ✓ / 被杀 ✓）—— 让"长静默"与"已死"在外部**可区分** ✓✓（发现 H ✓）。
+   **⚠ 计划在此处被测量更正** ✗✓（2026-10-04 ✓）：**终态早就落盘了** ✓ —— 账本里已有 `request.received` ✓ `request.planned` ✓ `request.attempt.*` ✓ **`request.terminal`** ✓ `provider.request.*` ✓ `gate.refused` ✓；而 `projectExecutionDiagnostics`（`execution-ledger.ts:152` ✓）**已经在归约** `received` / `terminal` / `terminalReasons` ✓✓ → **`received > terminal` 就是"有请求没结束"的证据** ✓✓（**被杀的进程写不出 `terminal`** ✓）。
+   → **所以这一片剩下的是"接一个面"** ✓（照 `record-freshness` 那次的做法：**先看有没有，再造** ✓✓），**仓里已有先例** ✓✓：`harness-axes.ts:85` —— *"A ledger with no terminals must not report `1.0`. A perfect score from no evidence is the defect class this…"* ✓✓。
+   **与任务 1 的接缝** ✓✓（补上先前失败的那一次 ✗）：临时探测证明了一件事值得**永久**留下来 —— **租约与尝试的轨迹**（哪个请求 ✓、第几次尝试 ✓、何时触发 ✓）正是能把"长静默"变成"可读"的东西 ✓✓；探测本身**不永久保留** ✓（已移除 ✓），要留下的是**同一类数据的正式形态** ✓。
 9. [ ] **账本在运行中可见** ✓（现在最后写入停在运行开始处 ✓，发现 C ✓）。
 10. [ ] **发现 G 的诚实处置** ✓：**在文档里如实承认"这类控制只挡名字、不挡意图"** ✓✓（比收紧到效果层小得多 ✓，且更诚实 ✓）。
 11. [ ] **缓存上报** ✓（**不改本仓代码** ✗）：253 请求 / 0.0% 命中 / 240 全 MISS ✓ + 定位（`cache-audit.ts:87` 的 `no-context` 是**标签不是开关** ✓）+ 归属**提供商/宿主** ✗✓。
