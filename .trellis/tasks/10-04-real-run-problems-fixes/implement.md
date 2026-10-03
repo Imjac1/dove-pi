@@ -8,26 +8,30 @@
 
 ### 任务 1 —— 根因：延续会话里的新请求被当成重放 ✗✓（最高优先）
 
-### 判定（**已完成 ✓** —— 复现到手、机制收窄，下一步是"对复现做实验"而非读码 ✓✓）
+### 判决（**完成 ✓✓** —— 复现到手，根因是"差一个 1"，探测已移除 ✓）
 
-**最小复现** ✓✓✓（两句话、可重复、**无需改码** ✓）：
+**最小复现** ✓✓✓（两句话、可重复、**无需改码** ✓）：turn A **真的派发过** → turn B `--continue` 的第一个工具调用被拒 ✓。
 
-```
-turn A：读 package.json 的 engines            → 真的派发过 ✓
-turn B：--continue + agent_project_status      → 拒绝（原文照抄 ✓）
-```
+**探测读数**（临时探针插在唯一自增点 `startAttempt` 上 ✓，**已移除** ✓）：
 
-**触发条件** ✓✓：**上一回合真的派发过东西** ✗✓ —— 一句话的回合（无任何工具调用）**不触发** ✓（已实测 ✓）。
+| 回合 | 探测行 |
+|---|---|
+| turn A | `startAttempt trigger=initial request=req_29d4e4b5… next=1` ✓ |
+| turn B | `startAttempt trigger=initial request=req_0039a384… next=1` ✓✓ |
 
-**账本判决** ✓✓：两个回合的 dispatch **全带同一个 `logicalRequestId`**（`req_0d4ee908-…` ✓），末尾连着 `request:req_…` 三条 ✓ → 即输入钩子**判成了"同一提交"** ✗✓。
+→ **两个回合是两个不同租约** ✗✓（**推翻了我从账本得出的 (α) 判决** ✓），而**每个回合一开始就以 `trigger=initial` 把 `attemptCount` 推到 1** ✗✓✓。
 
-**代码定位（到分支 ✓，但到此为止 ✗✓）**：`request-lifecycle.ts:144-146` 的 **`active-delivery`** 分支 ✓ —— `delivery !== "initial"` 且存在 active 租约时，**原样返回旧租约** ✗✓，而它的注释假设 *"Pi 在**同一个**已活跃 low-level run 内部排空 steering/附言"* ✓ —— **`--continue` 起的是新 run，前提不成立** ✗✓✓。
-**但** ✗✓：两个回合是**两个进程** ✓，租约是内存 `Map` ✓ → 新进程**本该没有 active 租约** ✗ → **读码到此处无解** ✗✓✓（今晚第 N 次：**该停就停** ✓）。
+**根因（与代码和全部观察一致 ✓✓✓）**：`extension.ts:2818` 的
+`const replayed = (requestLifecycle.activeLease()?.attemptCount ?? 0) > 0;`
+**在任何回合的第一次 provider 调用之后即为 `true`** ✗✓ → 守卫的完整条件是 `claim.claimed || !input.replayed || isAutomaticallyRetryable(effectClass)` ✓ → **只在"未认领 + `replayed` + 非幂等未声明"时拒** ✓✓ → 于是：`read` 不拒 ✓（在 `effects.classes` 里是 `idempotent` ✓）· `agent_project_status` 拒 ✓✓（身份首次被认领 ✓）· `bash` 在命令是新的时也拒 ✗✓（seg-07/08/09/11 四次 ✓✓）。
 
-**下一步（实验，不是阅读 ✓）**：在 turn B 里观测 **`attemptCount` 在哪一步被自增** ✓（`startAttempt` 是唯一自增点 ✓）→ 那一步就是触发点 ✓。**本任务允许改码** ✓（探测性 instrumentation ✓，事后移除或转为永久观测 ✓）。
+**而缺陷就是"差一个 1"** ✓✓✓ —— 边界自己的文档写着：*"a dispatch on our own resumption path, where **an attempt after the first** re-issues work an earlier attempt may already have performed"* ✓✓ → **`attemptCount > 0` ≠ "an attempt after the first"** ✗✓ → **`replayed` 应为 `attemptCount > 1`** ✓（或 `trigger !== "initial"` ✓）。
 
-**仍站得住的（量出来的 ✓）**：拒绝只在 `replayed === true` 时出现 ✓；`replayed` 唯一来源是 `activeLease()?.attemptCount > 0` ✓；重试路径是 `startAttempt` ✓、与 `beginRequest` 不同 ✓。
-**被推翻的** ✗（都记着 ✓）：`beginRequest` 连调可复现 ✗ · 缺陷在 `:200-202` ✗ · 任何 `--continue` 都拒 ✗ · 效果记录带 `stepId` ✗。
+**这不是放宽保护** ✓✓：它让旗标**符合它自己的定义** ✓✓（第一次尝试从来不是重放 ✓）。
+
+**下一步** ✓：写**忠于复现的红**（`attemptCount === 1` 的回合里，首次被认领的未声明非幂等工具**不应被拒** ✓；而 `attemptCount === 2` 时**应被拒** ✓——属性用例 ✓）→ 改那一处比较 ✓ → 跑三条安全属性用例 ✓。
+
+**仍站得住 / 被推翻的** ✓✗（都留档 ✓）：站得住——拒绝只在 `replayed` 为真时出现 ✓；被推翻——`beginRequest` 连调可复现 ✗ · 缺陷在 `:200-202` ✗ · 任何 `--continue` 都拒 ✗ · 效果记录带 `stepId` ✗ · **账本显示的"租约复用"** ✗（两回合租约不同 ✓）。
 2. [ ] **红** ✓：一条用例——"**新请求 + 延续会话**"下，只读工具与 `bash` **不被拒** ✓（今天必红 ✓）。
 3. [ ] **绿** ✓：按判定结果改 (α) 或 (β) ✓ —— **守卫（`effect-boundary.ts:111`）不动** ✗、**键（`effect-ledger.ts:194`）不动** ✗。
 4. [ ] **三条安全属性各一条用例** ✓✓（**必须先红后绿** ✓）：真实重放的**非幂等未声明**仍被拒 ✓；幂等类在重放中仍放行 ✓；账本不可读时**任何情况都拒** ✓。
