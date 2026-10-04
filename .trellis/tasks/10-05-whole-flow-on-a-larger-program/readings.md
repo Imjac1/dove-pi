@@ -136,6 +136,27 @@ FAILED tests/test_redirects.py::TestPermanentRedirects::test_bust_cache_on_redir
 
 **为什么重要** ✓✓：§2 写着 *"Preconditions, **every one of which a person supplies**"* ✓✓ —— **这八步就是那句话的真实大小** ✓✓，**而今天没有任何地方记录它** ✗。**不该算 harness 的缺陷** ✗（不是它的问题 ✓），**也不能被跳过** ✗（没有它就没有判分 ✓）→ **它应当成为流程里被*记录*的一步** ✓✓。
 
+## 🎯 读数 #4（**流程第 1/3/4/5 步** ✓）：**同一个命令，三次调用、三个退出码** ✗✓✓
+
+**第 1 步（装/绑定）在克隆上第一次跑** ✓：`.dove` 原本不存在 ✓ → `project init` ✓（`initialized true` ✓ `ready true` ✓ `taskLifecycle true` ✓，退出码 **0** ✓）→ `.dove/project.json` 145 B ✓ `.dove/state.json` 57 B ✓✓；`doctor` ✓ 打印 `shell …bash.exe (global, source auto)` ✓ · `workspace … (mode development, source default)` ✓ · `powershell 5.1.22621.6133` ✓ · `missing tools nmap, hydra` ✓ · **`extensions none`** ✗✓（**而同一份输出又认得 `mode development`** ✓✓）。
+
+**第 3/4/5 步** ✓：`task create` ✓（`"operation": "create"` + stableId ✓，退出码 **0** ✓）· `task verify` ✓（打任务对象 ✓）· `task convergence status` ✓（同 ✓）· `task archive` ✓（`"operation": "archive"` ✓，退出码 **0** ✓）。
+
+**而退出码不可信** ✗✓✓✓（**同一命令 `task verify`，三次调用三个值** ✓）：
+
+| 怎么调用 | 它给什么 |
+|---|---|
+| 夹了管道的读法（先前那几次 ✓） | **-1** ✗✓ |
+| **立刻读、不夹管道** ✓ | **1** ✗✓ |
+| **经 `cmd /c … & echo %ERRORLEVEL%`** ✓ | **0** ✗✓✓ |
+| **对照**：`node -e "process.exit(7)"` ✓✓ | **7** ✓✓ —— **证明测法本身准** ✓ |
+
+→ **原因未定位** ✗✓（"`.cjs` shim 在两种 shell 下处理不同"是**假设** ✓，**未量** ✗✓ → **不写成已知** ✓）。
+
+**实用规则** ✓✓：**不靠退出码判断成败** ✗✓ → **读它的结构化输出** ✓✓（它本就打 `ready` / `status` / `operation` ✓✓）。这与本仓在别处早已采用的教条一致 ✓（*"the project's own tests decide"* ✓✓）。
+
+**而它与读数 #1 同族** ✓✓：**"输出说成功、另一份记录说不是"** ✓ —— 三次实例（`bind native` 输出 healthy 而 -1 ✗✓ · `doctor` 说 `extensions none` 而认得 mode ✗✓ · 退出码三值不一 ✗✓✓）→ **"同一件事的两份记录可以不一致" 在本轮出现于三个不同层次** ✓✓✓。
+
 ## 未定项 ✗
 
 **`uv` 不在这台机器上** ✗ —— **我未擅自安装** ✗✓（装新工具是你的决定 ✓）。`cachecontrol` 这条路**不需要它** ✓✓（已 green ✓）；`jinja` 那条需要 ✓ —— 若要用那条路，我再问 ✓。
