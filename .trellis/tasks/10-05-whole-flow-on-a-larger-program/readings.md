@@ -41,6 +41,37 @@
 
 **因此本轮的实用规则** ✓✓：**累计量取自账本事件流** ✓（数 `provider.request.*` ✓ · 数 `tool.observed` ✓）；**summary 的 `resources` 只作末次观测读** ✗✓。
 
+## 🎯 读数 #3（**流程跑** ✓）：**努力是真的，结果是错的** ✗✓✓
+
+**命令** ✓：同一 `real-dove-blackbox.mjs` ✓，`--scenario tests/fixtures/scenarios/immutable-directive-work.json` ✓，`--cwd` = 克隆 ✓，输出在仓外 ✓。
+
+**判分在运行器自己那份副本里跑** ✓✓（规格 §5：**活做得对不对，由项目自己的测试说** ✓✓）：
+
+```
+FAILED tests/test_immutable.py::TestImmutable::test_immutable_is_not_revalidated_while_fresh   ← 目标
+FAILED tests/test_redirects.py::TestPermanentRedirects::test_bust_cache_on_redirect           ← 原本通过
+2 failed, 114 passed in 2.30s        （基线：115 passed / 1 failed ✓）
+```
+
+**两次运行的对照** ✓✓：
+
+| 项 | 对照跑 | **流程跑** |
+|---|---|---|
+| 账本行数 | 41 ✓ | **132** ✓✓ |
+| `provider.request.started` / `.completed` | 4 / 4 ✓ | **16 / 16** ✓✓ |
+| **`tool.observed`** | 2 ✓ | **15** ✓✓ |
+| 改动 | 无 ✓ | **`cachecontrol/controller.py` 改过** ✓✓（03:07:41 ✓ **20,655 B vs 原 20,090 B** ✓ = **+565 B** ✓） |
+| summary 的裁决 | `exitCode 0` · `reason "completed"` ✓ | **`exitCode null`** · **`settled false`** · **`reason "cancelled"`** · **`terminalConsistency "harness-timeout"`** ✗✓ = **15 分钟到点** ✓ |
+| **项目自己的套件** | 115 / **1 failed**（我放的红 ✓） | **114 / 2 failed** ✗✓✓ |
+
+→ **结论** ✓✓：**努力是真的** ✓ · **改动是真的** ✓ · **结果是错的** ✗✓（目标仍红 ✓ **且弄坏一条原本通过的** ✗✓✓）。
+
+**这一轮的核心发现被它演示了** ✓✓✓：**"会话结束了" 与 "活做对了" 是两个不同的问题** ✓ —— **field run 只能回答第一个** ✓（§5 ✓✓），**第二个只有项目自己的套件能答** ✓✓。
+
+**对读数 #1 的修正** ✗✓：**summary 不是总在撒谎** ✓ —— 这一次它的**裁决字段是诚实的**（`cancelled` ✓ `harness-timeout` ✓）；同一个零仍出现在 `toolCalls`/`inputTokens` 上 ✓✗ → 更准的说法：**summary 的*裁决*可信，*资源累计*不可信** ✓✓。
+
+**未量到的** ✗✓（我把它标出来，不推断 ✓）：除 `controller.py` 外**副本里还改了什么** ✗ —— 我那条"逐文件比对"的命令因为**把 `if` 当表达式用**而没打印 ✓（PowerShell 5.1 不支持 ✓，**而我两次调用前刚犯过同一个错** ✗✓）。**mtime 只指到 `controller.py` 一条** ✓。
+
 ## 附：这次运行的基础（实测 ✓）
 
 同一个 scenario root（`control.jsonl-single-f1a803bfa4f3\` ✓）：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · **凭据按名携带**（`auth.json` 2 B ✓ `models.json` **496 B** ✓ `settings.json` 71 B ✓✓）· **`providerEvidence: []`** ✓（§5：真 provider 下按构造为空 ✓）· `activeToolCount 17` ✓。
