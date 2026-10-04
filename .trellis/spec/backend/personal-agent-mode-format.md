@@ -55,8 +55,16 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   turn bound is the reference one under `axi-turn`; the Pi host's loop is the host's, so a mode's turn
   budget does not bound it yet.
 - **`sandbox` and `fence` are honoured or refused, never ignored.** `network: none` and `filesystem:
-  read-only-source` are enforced at the boundary; `isolation: container`/`worktree` and `network:
-  allowlist` refuse to load. A `fence` refuses writes into the harness's `paths`, which is how `authority`'s
+  read-only-source` are enforced at the **tool** boundary: the network axis by tool name, the filesystem axis
+  by the fence's declared targets. **What the network axis does not cover is anything a shell command
+  reaches.** `bash` and `powershell` are not among the eight names it matches
+  (`src/core/action-policy.ts:21`), so a mode declaring `network: none` can still fetch over the network, and
+  that is measured rather than inferred: in a twelve-session run a mode declaring exactly that ran
+  `npm install`, which resolved and installed a new package version
+  (`.trellis/tasks/10-03-ten-million-token-project/findings.md`, finding A). The axis is a claim about the
+  tools this runtime dispatches, not about egress; a mode that needs the latter needs a host that provides it.
+  `isolation: container`/`worktree` and `network: allowlist` refuse to load. A `fence` refuses writes into the
+  harness's `paths`, which is how `authority`'s
   no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
   **Anchors.** Enforced at `src/core/action-policy.ts:626`; refused at load at `src/pi-adapter/extension.ts:2253`.

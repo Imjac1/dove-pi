@@ -35,6 +35,11 @@
 - **把 `sandbox.network` 变成真的沙箱** ✗。
 - **`isolation: container/worktree`** ✗（同样的 unenforceable 类别 ✓，另有其记录 ✓）。
 
-## Open Questions（**待用户定** ✗）
+## 决定（**已定 ✓，2026-10-04**）
 
-1. **采取哪种形状** —— 见本轮末尾给你的那一个决定 ✓。
+**形状 = (II) 先落 + (III) 的可见性另行设计** ✓ —— 而选择过程里最大的收获是**测量否掉了两个候选**：
+
+- **(I)「把组合并入 `unenforceable`」已出局** ✗✓ —— 实测 `extension.ts:2252-2262`：堆进 `unenforceable` 的后果是 **`activeWorkMode = undefined`** ✓，即**加载即拒** ✓ → 那会**拒掉已发布的 `code-development` 本身** ✗（它同时声明 `network: none` 与保留 shell ✓，而 R2 要求它必须能跑测试 ✓）。
+- **而仓自己的拒文早就把诚实话写好了** ✓✓：*"The enforceable claims are `network: 'none'` and `filesystem: 'read-only-source'`（**both checked at the tool boundary**）"* ✓✓ → **所以 (II) 不是发明措辞，而是把规格对齐到运行时自己说过的话** ✓。
+- **(II) 已落** ✓（本任务的第一次提交 ✓）：`personal-agent-mode-format.md` 里那句 *"enforced at the boundary"* 改成 **"enforced at the **tool** boundary"** ✓，并写明 **shell 不在其中** ✓，附**实测证据**（12 段那一轮 `npm install` 在 `network: none` 下装上了新版本 ✓）+ 指向 `action-policy.ts:21` 的八个名字 ✓。
+- **(III) 的可见性** ✗ **仍需自己的设计** ✓：它**不能**走 `unenforceable`（那是拒 ✓）→ 需要量"加载**成功**时哪里能留下一条可读记录" ✓。**单独一片，未开工** ✗。
