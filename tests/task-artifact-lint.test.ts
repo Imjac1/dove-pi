@@ -11,8 +11,8 @@
  *
  * **And why the manifest is asserted in both directions.** A fixture per check does not stop a check being *added*
  * without one - it would pass forever on nothing - so `--list-checks` and `manifest.json` are held equal as sets:
- * a check with no fixture, and a fixture with no check, each fail here. `tests/fence-drift.test.ts:21-23` says why
- * the second direction matters too: "a fence that refuses too much is a fence people turn off".
+ * a check with no fixture, and a fixture with no check, each fail here. The fence-drift suite's "fails in both
+ * directions" case says why the second direction matters too: "a fence that refuses too much is a fence people turn off".
  *
  * **What it does not check**: whether the four checks are the right four. That is the measurement in
  * `.trellis/tasks/10-05-pstack-reference-audit/research/design-artifact-linter.md`, including the four checks that
