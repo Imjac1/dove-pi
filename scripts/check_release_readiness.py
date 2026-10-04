@@ -146,6 +146,24 @@ def validate_archive(archive: Path, expected_manifest: dict[str, object]) -> Non
                     roots.append(prefix)
             if len(roots) != 1:
                 raise RuntimeError("Archive must contain exactly one complete Dove Pi release root")
+            # **The mode definitions are product content, and the archive is where a release's modes come from.** The runtime
+            # loads `modes/<id>/MODE.md` and refuses *every tool call* when a selected mode cannot be read, so an archive whose
+            # `modes/` is missing or half-copied publishes a release that stops working the moment a mode is declared. The
+            # requirement is derived from the archive itself - a mode directory it carries must carry its MODE.md - so it holds
+            # for a mode added later without a second list to keep in step.
+            prefix = roots[0]
+            mode_directories = {
+                name[len(prefix) + len("modes/"):].split("/")[0]
+                for name in names
+                if name.startswith(f"{prefix}modes/") and name.count("/") >= 2
+            }
+            if not mode_directories:
+                raise RuntimeError(
+                    "Archive carries no mode definitions under modes/, and a release whose selected mode cannot be read refuses every tool call"
+                )
+            for mode in sorted(mode_directories):
+                if f"{prefix}modes/{mode}/MODE.md" not in names:
+                    raise RuntimeError(f"Archive carries modes/{mode}/ without its MODE.md, so that mode cannot be loaded")
             embedded = json.loads(bundle.read(f"{roots[0]}release.json").decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError, zipfile.BadZipFile, KeyError) as error:
         raise RuntimeError(f"Unable to validate release archive: {error}") from error

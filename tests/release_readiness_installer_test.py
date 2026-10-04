@@ -64,6 +64,10 @@ def write_fixture(root: Path):
             "src/cli.ts",
         ):
             bundle.writestr(name, "fixture\n")
+        # **A mode definition, because a release without one is not a release**: the runtime loads `modes/<id>/MODE.md` and
+        # refuses every tool call when a selected mode cannot be read. The archive assembly carries `modes` for that reason,
+        # and a fixture that omitted it would be the shape the readiness check now refuses.
+        bundle.writestr("modes/code-development/MODE.md", "fixture\n")
         bundle.writestr("release.json", json.dumps(manifest))
     checksum = root / "dove-pi-windows.zip.sha256"
     checksum.write_text(
@@ -175,6 +179,31 @@ class ReleaseReadinessTests(unittest.TestCase):
                         bundle.writestr(entry, "first")
                         if entry == "duplicate.txt":
                             bundle.writestr(entry, "second")
+                with self.assertRaisesRegex(RuntimeError, expected):
+                    validate_archive(archive, expected_manifest)
+
+    def test_an_archive_whose_modes_are_missing_or_half_copied_is_rejected(self):
+        """**The rule this case exists for, and the defect it came from.**
+
+        `modes` is a root of the release digest (`scripts/release-roots.mts`) while the archive assembly list did not copy
+        it, so a published release could describe modes in its digest and not carry them. The pair is worse than either
+        alone: the runtime loads `modes/<id>/MODE.md` and refuses **every tool call** when a selected mode cannot be read.
+        Both directions are asserted - nothing under `modes/` at all, and a mode directory without its `MODE.md` - because a
+        check that only saw the first would pass a half-copied tree.
+        """
+        expected_manifest = {"schemaVersion": 1}
+        for extra, expected in (
+            ({}, "carries no mode definitions"),
+            ({"modes/code-audit/governance.yaml": "version: 1"}, "without its MODE.md"),
+        ):
+            with self.subTest(extra=sorted(extra)), TemporaryDirectory() as temporary:
+                archive = Path(temporary) / "dove-pi-windows.zip"
+                with zipfile.ZipFile(archive, "w") as bundle:
+                    for name in ("dove_pi.py", "package.json", "package-lock.json", "installer/release.py", "src/cli.ts"):
+                        bundle.writestr(name, "fixture\n")
+                    for name, body in extra.items():
+                        bundle.writestr(name, body)
+                    bundle.writestr("release.json", json.dumps(expected_manifest))
                 with self.assertRaisesRegex(RuntimeError, expected):
                     validate_archive(archive, expected_manifest)
 
