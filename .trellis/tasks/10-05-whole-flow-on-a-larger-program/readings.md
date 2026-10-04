@@ -72,6 +72,26 @@ FAILED tests/test_redirects.py::TestPermanentRedirects::test_bust_cache_on_redir
 
 **未量到的** ✗✓（我把它标出来，不推断 ✓）：除 `controller.py` 外**副本里还改了什么** ✗ —— 我那条"逐文件比对"的命令因为**把 `if` 当表达式用**而没打印 ✓（PowerShell 5.1 不支持 ✓，**而我两次调用前刚犯过同一个错** ✗✓）。**mtime 只指到 `controller.py` 一条** ✓。
 
+## 第 6 片：**形状差值**（§3：*"可比的是形状，不是数值"* ✓✓）
+
+**可比的部分** ✓✓（每一项都是"哪些字段被填充、字段间关系是否成立" ✓）：
+
+| 形状 | 对照跑 | 流程跑 | 关系 |
+|---|---|---|---|
+| 账本是否记录了 provider 往返 | 是 ✓（4 / 4 ✓） | 是 ✓（**16 / 16** ✓✓） | **关系成立** ✓（started = completed ✓） |
+| 账本是否记录了工具观测 | 是 ✓（2 ✓） | 是 ✓（**15** ✓✓） | **关系成立** ✓ |
+| 是否有 `request.terminal` | 有 ✓（1 ✓） | 有 ✓（1 ✓） | **关系成立** ✓ —— 两次都终止了 ✓ |
+| 裁决的种类 | `completed` ✓ | **`cancelled` + `harness-timeout`** ✗✓ | **不同** ✓（且**这一次 summary 的裁决是诚实的** ✓） |
+| 项目被改动 | **否** ✓ | **是** ✓（`controller.py` **+565 B** ✓✓） | **不同** ✓，与场景一致 ✓ |
+| **项目自己的套件** | 115 / **1 failed** ✓ | **114 / 2 failed** ✗✓ | **活没做对，且弄坏了别处** ✓✓ |
+| summary 的 `tokens` / `toolCalls` | 全 0 ✗ | 全 0 ✗ | **同一处结构性缺陷** ✓✓（非偶发 ✓） |
+
+**不可比的部分** ✗✓（必须写明 ✓）：
+- **两次用的场景不同** ✓（`read-only-audit` ✓ vs `immutable-directive-work` ✓）→ 所以**轮数/工具数/token 的*数值*不可比** ✗ ✓；
+- **时长不同** ✓（对照跑**未到点** ✓ / 流程跑**到点被取消** ✗✓）→ 它**同时解释**了流程跑为什么轮数更多 ✓（它跑了 15 分钟 ✓）；
+- **与上一轮（12 段手搓会话）的任何数字都不可比** ✗✓✓ —— **仪器不同** ✓（`real-dove-blackbox.mjs` vs 我直接调 CLI ✓）；**可对照的只有"形状"层面的一点：两次都真的调到了 provider** ✓✓；
+- **§5 的边界** ✓✓：**field run 不覆盖"活做得对不对"** ✗✓ —— **所以判分一律在项目自己的套件里** ✓✓，**绝不从 field run 的读数里推断** ✗。
+
 ## 附：这次运行的基础（实测 ✓）
 
 同一个 scenario root（`control.jsonl-single-f1a803bfa4f3\` ✓）：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · **凭据按名携带**（`auth.json` 2 B ✓ `models.json` **496 B** ✓ `settings.json` 71 B ✓✓）· **`providerEvidence: []`** ✓（§5：真 provider 下按构造为空 ✓）· `activeToolCount 17` ✓。
