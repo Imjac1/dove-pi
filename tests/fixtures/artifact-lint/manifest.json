@@ -1,0 +1,26 @@
+{
+  "TAL-001": {
+    "why": ".trellis/tasks/archive/2026-09/09-29-read-interop/prd.md:9-11 measured the defect it is named for - a fourteen-item plan with no checkbox at all, so the file could not say what is done - and .trellis/tasks/archive/2026-09/09-29-the-boxes/prd.md:10 measured a PRD with 7661 chars and zero checkbox lines. The eight live PRDs this check was first red on are named in .trellis/tasks/10-05-pstack-reference-audit/research/design-artifact-linter.md 2.2.",
+    "artifact": "prd.md",
+    "bad": "bad/TAL-001-ac-boxes",
+    "good": "good/prd.md"
+  },
+  "TAL-002": {
+    "why": "The same family as TAL-001: .trellis/tasks/archive/2026-09/09-29-read-interop/prd.md:9-11 names a plan of fourteen items with no checkboxes at all, and the task it names, 08-27-dove-interop-layer, is one of the sixteen measured hits. Cost measured at sixteen, all of them completed tasks.",
+    "artifact": "implement.md",
+    "bad": "bad/TAL-002-plan-boxes",
+    "good": "good/implement.md"
+  },
+  "TAL-003": {
+    "why": ".trellis/tasks/archive/2026-09/09-28-archived-criteria/implement.md:28-32 lists it as the first of three measured classes: a placeholder criterion, in a task whose only criterion reads TBD. The lines are the ones the skeleton writes at .trellis/scripts/common/task_store.py:277,281; the planning status that makes them legitimate is why this check is silent there.",
+    "artifact": "prd.md",
+    "bad": "bad/TAL-003-no-seed-placeholder",
+    "good": "good/prd.md"
+  },
+  "TAL-004": {
+    "why": ".trellis/tasks/archive/2026-09/09-28-archived-criteria/prd.md:23-24 asks for exactly this classification - a box left unticked, a criterion genuinely not met, or a task whose PRD has no criteria at all. Measured cost is three tasks, all completed; the empty-section half of the check was measured at zero and is kept to hold the shape for later.",
+    "artifact": "prd.md",
+    "bad": "bad/TAL-004-criteria-section",
+    "good": "good/prd.md"
+  }
+}
