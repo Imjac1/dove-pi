@@ -28,7 +28,7 @@ function record(kind: ExecutionRecordKind, correlation?: ExecutionRecord["correl
 describe("correlating lifecycle records", () => {
 	it("joins records by request id, and counts the families the children eliminated", () => {
 		const groups = correlateExecutionRecords([
-			record("dispatch.decided", { requestId: "req-1" }),
+			record("model.budget.checked", { requestId: "req-1" }),
 			record("request.received", { requestId: "req-1" }),
 			record("request.terminal", { requestId: "req-1" }),
 			record("tool.observed", { requestId: "req-1" }),
@@ -38,14 +38,13 @@ describe("correlating lifecycle records", () => {
 		assert.equal(group.key, "req-1");
 		assert.equal(group.keyKind, "requestId");
 		assert.equal(group.complete, true);
-		assert.equal(group.families.extension_identity, 1);
 		assert.equal(group.families.request_lifecycle, 2);
-		assert.equal(group.families.tool_loop, 1);
+		assert.equal(group.families.tool_loop, 2);
 	});
 
 	it("prefers the strongest key, so a session-wide record does not swallow a request group", () => {
 		const groups = correlateExecutionRecords([
-			record("dispatch.decided", { sessionId: "sess-1" }),
+			record("model.budget.checked", { sessionId: "sess-1" }),
 			record("request.received", { sessionId: "sess-1", requestId: "req-1" }),
 			record("request.attempt.started", { sessionId: "sess-1", requestId: "req-1", attemptId: "att-1" }),
 		]);
@@ -65,7 +64,6 @@ describe("correlating lifecycle records", () => {
 	});
 
 	it("names the family of a kind, and calls an unclaimed kind other", () => {
-		assert.equal(executionEvidenceFamily("dispatch.completed"), "extension_identity");
 		assert.equal(executionEvidenceFamily("request.redelivery.coalesced"), "request_lifecycle");
 		assert.equal(executionEvidenceFamily("model.budget.rejected"), "tool_loop");
 		assert.equal(executionEvidenceFamily("provider.request.rejected"), "tool_loop");

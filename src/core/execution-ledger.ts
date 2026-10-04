@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AgentMode, DispatchActual, DispatchDecision, ExecutionRecord, ExecutionRecordKind } from "./contracts.ts";
+import type { AgentMode, ExecutionRecord, ExecutionRecordKind } from "./contracts.ts";
 import type { ChangeVerdict } from "./task-convergence.ts";
 import type { RequestPlan } from "./request-plan.ts";
 import type { RequestAttemptOutcome, RequestAttemptTrigger, RequestDelivery, RequestInputSource, RequestTerminalEnvelope, RequestTerminalReason } from "./request-lifecycle.ts";
@@ -89,12 +89,16 @@ export interface ExecutionDiagnosticsProjection {
  * arbitrary details so a diagnostic query cannot echo secrets or large logs.
  */
 /**
- * Which of the three coupled defect families a record carries evidence for.
+ * Which of the coupled defect families a record carries evidence for.
  *
  * The kinds are grouped by the child tasks that eliminated the defects, so an audit summary can say which
  * family a run exercised without the reader knowing the kind vocabulary.
+ *
+ * **`extension_identity` left with the dispatch kinds, and it was the only member mapped to it.** The two
+ * `dispatch.*` kinds were the sole carriers of that family, so once they went nothing could produce it and a
+ * count that reads `0` in every ledger is the same defect one layer up: a declaration no input reaches.
  */
-export type ExecutionEvidenceFamily = "extension_identity" | "request_lifecycle" | "tool_loop" | "other";
+export type ExecutionEvidenceFamily = "request_lifecycle" | "tool_loop" | "other";
 
 export interface CorrelatedExecutionGroup {
 	/** The strongest identifier the group shares. Records with none of them are grouped under the unlinked key. */
@@ -110,7 +114,6 @@ export interface CorrelatedExecutionGroup {
 }
 
 const FAMILY_BY_PREFIX: readonly (readonly [string, ExecutionEvidenceFamily])[] = [
-	["dispatch.", "extension_identity"],
 	["request.", "request_lifecycle"],
 	["model.budget.", "tool_loop"],
 	["provider.request.", "tool_loop"],
@@ -150,7 +153,7 @@ export function correlateExecutionRecords(records: readonly ExecutionRecord[]): 
 		groups.set(key, group);
 	}
 	return [...groups.entries()].map(([key, group]) => {
-		const families: Record<ExecutionEvidenceFamily, number> = { extension_identity: 0, request_lifecycle: 0, tool_loop: 0, other: 0 };
+		const families: Record<ExecutionEvidenceFamily, number> = { request_lifecycle: 0, tool_loop: 0, other: 0 };
 		for (const record of group.records) families[executionEvidenceFamily(record.kind)] += 1;
 		const complete = group.keyKind !== "unlinked"
 			&& group.records.every((record) => record.correlation !== undefined);
@@ -355,7 +358,6 @@ export interface ExecutionAuditSummary {
 	}>;
 	readonly budget: Readonly<{ readonly checked: number; readonly rejected: number }>;
 	readonly providers: Readonly<{ readonly started: number; readonly completed: number; readonly rejected: number }>;
-	readonly dispatch: Readonly<{ readonly decided: number; readonly completed: number }>;
 	readonly families: Readonly<Record<ExecutionEvidenceFamily, number>>;
 	readonly groups: number;
 	readonly groupsMissingCorrelation: number;
@@ -393,9 +395,7 @@ export function summarizeExecutionRecords(content: string): ExecutionAuditSummar
 	let providerStarted = 0;
 	let providerCompleted = 0;
 	let providerRejected = 0;
-	let dispatchDecided = 0;
-	let dispatchCompleted = 0;
-	const families: Record<ExecutionEvidenceFamily, number> = { extension_identity: 0, request_lifecycle: 0, tool_loop: 0, other: 0 };
+	const families: Record<ExecutionEvidenceFamily, number> = { request_lifecycle: 0, tool_loop: 0, other: 0 };
 	for (const record of records) {
 		families[executionEvidenceFamily(record.kind)] += 1;
 		switch (record.kind) {
@@ -421,8 +421,6 @@ export function summarizeExecutionRecords(content: string): ExecutionAuditSummar
 			case "provider.request.started": providerStarted += 1; break;
 			case "provider.request.completed": providerCompleted += 1; break;
 			case "provider.request.rejected": providerRejected += 1; break;
-			case "dispatch.decided": dispatchDecided += 1; break;
-			case "dispatch.completed": dispatchCompleted += 1; break;
 			default: break;
 		}
 	}
@@ -433,7 +431,6 @@ export function summarizeExecutionRecords(content: string): ExecutionAuditSummar
 		tools: Object.freeze({ observed: toolCallsObserved, duplicateToolCalls, unattributable }),
 		budget: Object.freeze({ checked: budgetChecked, rejected: budgetRejected }),
 		providers: Object.freeze({ started: providerStarted, completed: providerCompleted, rejected: providerRejected }),
-		dispatch: Object.freeze({ decided: dispatchDecided, completed: dispatchCompleted }),
 		families: Object.freeze(families),
 		groups: groups.length,
 		groupsMissingCorrelation: groups.filter((group) => !group.complete).length,
@@ -463,33 +460,6 @@ export class ExecutionLedger {
 	public async append(record: ExecutionRecord): Promise<void> {
 		await mkdir(dirname(this.filePath), { recursive: true });
 		await appendFile(this.filePath, `${JSON.stringify(record)}\n`, "utf8");
-	}
-
-	public async appendDispatchDecision(taskId: string, stepId: string, mode: AgentMode, dispatchId: string, decision: DispatchDecision): Promise<void> {
-		await this.append({
-			taskId,
-			stepId,
-			kind: "dispatch.decided",
-			timestamp: new Date().toISOString(),
-			mode,
-			details: {
-				dispatchId,
-				route: decision.route,
-				reason: decision.reason,
-				estimate: decision.estimate,
-			},
-		});
-	}
-
-	public async appendDispatchCompletion(taskId: string, stepId: string, mode: AgentMode, actual: DispatchActual): Promise<void> {
-		await this.append({
-			taskId,
-			stepId,
-			kind: "dispatch.completed",
-			timestamp: actual.completedAt,
-			mode,
-			details: { ...actual },
-		});
 	}
 
 	public async appendRequestReceived(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; source: RequestInputSource; delivery: RequestDelivery }): Promise<void> {

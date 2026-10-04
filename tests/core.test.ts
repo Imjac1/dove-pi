@@ -3,11 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFile } from "node:fs/promises";
 import { CapabilityRegistry } from "../src/core/capability-registry.ts";
-import { decideDispatch } from "../src/core/dispatch-policy.ts";
 import { ModeController } from "../src/core/mode-controller.ts";
-import { executeDispatch } from "../src/core/dispatcher.ts";
 import { executeRecipe, RecipeRegistry } from "../src/core/recipe-registry.ts";
 import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { executeFastPath } from "../src/core/fast-path.ts";
@@ -222,109 +219,5 @@ describe("capability authorization", () => {
 		assert.equal(cancelled.status, "failed");
 		assert.equal(cancelled.interrupted, true);
 		await rm(temporary, { recursive: true, force: true });
-	});
-});
-
-describe("dispatch policy", () => {
-	it("keeps short work inline", () => {
-		assert.equal(decideDispatch({ inlineCost: 10, dispatchCost: 20, predictedWallTimeMs: 30_000, independentBranches: 1, hasSharedMutableState: false }).route, "inline");
-	});
-
-	it("parallelizes independent long work", () => {
-		assert.equal(decideDispatch({ inlineCost: 100, dispatchCost: 70, predictedWallTimeMs: 90_000, independentBranches: 2, hasSharedMutableState: false }).route, "parallel");
-	});
-
-	it("executes independent branches through the selected route", async () => {
-		const outcome = await executeDispatch({
-			estimate: { inlineCost: 100, dispatchCost: 70, predictedWallTimeMs: 90_000, independentBranches: 2, hasSharedMutableState: false },
-			runInline: async () => "inline",
-			branches: [async () => "one", async () => "two"],
-		});
-		assert.equal(outcome.decision.route, "parallel");
-		assert.deepEqual(outcome.result, ["one", "two"]);
-	});
-
-	it("can persist the dispatch decision", async () => {
-		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-dispatch-"));
-		const ledgerPath = join(temporary, "ledger.jsonl");
-		const ledger = new ExecutionLedger(ledgerPath);
-		const outcome = await executeDispatch({
-			estimate: { inlineCost: 10, dispatchCost: 20, predictedWallTimeMs: 30_000, independentBranches: 1, hasSharedMutableState: false },
-			runInline: async () => "inline",
-			reportActualMetrics: () => ({ contextTokens: 42, inputTokens: 10, outputTokens: 5, retries: 1, humanInterventions: 0 }),
-			ledger,
-			ledgerContext: { taskId: "test", stepId: "step-1", mode: "fast" },
-		});
-		assert.equal(outcome.decision.route, "inline");
-		assert.equal(outcome.actual.contextTokens, 42);
-		assert.equal(outcome.actual.status, "success");
-		const records = await readFile(ledgerPath, "utf8");
-		assert.match(records, /dispatch\.decided/);
-		assert.match(records, /dispatch\.completed/);
-		await rm(temporary, { recursive: true, force: true });
-	});
-
-	it("records failed dispatches for calibration", async () => {
-		const temporary = await mkdtemp(join(tmpdir(), "personal-agent-dispatch-failed-"));
-		const ledgerPath = join(temporary, "ledger.jsonl");
-		const ledger = new ExecutionLedger(ledgerPath);
-		await assert.rejects(() => executeDispatch({
-			estimate: { inlineCost: 100, dispatchCost: 70, predictedWallTimeMs: 90_000, independentBranches: 1, hasSharedMutableState: false },
-			runInline: async () => { throw new Error("boom"); },
-			ledger,
-			ledgerContext: { taskId: "test", stepId: "failed", mode: "standard" },
-		}), /boom/);
-		const records = await readFile(ledgerPath, "utf8");
-		assert.match(records, /"kind":"dispatch\.completed"/);
-		assert.match(records, /"status":"failed"/);
-		await rm(temporary, { recursive: true, force: true });
-	});
-
-	it("does not turn telemetry failure into worker failure", async () => {
-		const outcome = await executeDispatch({
-			estimate: { inlineCost: 10, dispatchCost: 20, predictedWallTimeMs: 30_000, independentBranches: 1, hasSharedMutableState: false },
-			runInline: async () => "inline",
-			reportActualMetrics: async () => { throw new Error("metrics unavailable"); },
-		});
-		assert.equal(outcome.result, "inline");
-		assert.equal(outcome.actual.status, "success");
-		assert.equal(outcome.actual.retries, 0);
-	});
-
-	it("runs an isolated child through a healthy host-neutral provider", async () => {
-		let launched = 0;
-		const outcome = await executeDispatch({
-			estimate: { inlineCost: 100, dispatchCost: 50, predictedWallTimeMs: 180_000, independentBranches: 1, hasSharedMutableState: false },
-			longRunningIsolation: true,
-			runInline: async () => "inline",
-			subagentRequest: (dispatchId) => ({ dispatchId, name: "inspect", prompt: "Read the project", cwd: process.cwd(), capabilities: ["read", "grep"] }),
-			subagentProvider: {
-				async inspect() { return { available: true, provider: "fake" }; },
-				async launch() { launched++; return { runId: "run-1", provider: "fake", state: "running", acceptedAt: new Date().toISOString() }; },
-				async collect(runId) { return { runId, dispatchId: "ignored-by-test", state: "succeeded", value: "isolated" }; },
-				async cancel(runId) { return { runId, dispatchId: "ignored-by-test", state: "cancelled", error: { code: "cancelled", summary: "cancelled", retryable: true } }; },
-			},
-		});
-		assert.equal(launched, 1);
-		assert.equal(outcome.decision.route, "subagent");
-		assert.equal(outcome.result, "isolated");
-	});
-
-	it("falls back inline when the provider is unavailable", async () => {
-		const outcome = await executeDispatch({
-			estimate: { inlineCost: 100, dispatchCost: 50, predictedWallTimeMs: 180_000, independentBranches: 1, hasSharedMutableState: false },
-			longRunningIsolation: true,
-			runInline: async () => "inline",
-			subagentRequest: (dispatchId) => ({ dispatchId, name: "inspect", prompt: "Read the project", cwd: process.cwd(), capabilities: ["read"] }),
-			subagentProvider: {
-				async inspect() { return { available: false, provider: "fake", reason: "tools missing" }; },
-				async launch() { throw new Error("must not launch"); },
-				async collect() { throw new Error("must not collect"); },
-				async cancel() { throw new Error("must not cancel"); },
-			},
-		});
-		assert.equal(outcome.decision.route, "inline");
-		assert.match(outcome.decision.reason, /provider unavailable: tools missing/);
-		assert.equal(outcome.result, "inline");
 	});
 });

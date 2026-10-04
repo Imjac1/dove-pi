@@ -68,14 +68,14 @@ describe("summarizing a ledger read-only", () => {
 
 	it("carries the family counts and the groups, and how many groups are incomplete", () => {
 		const summary = summarizeExecutionRecords(lines(
-			record("dispatch.decided", {}, { requestId: "req-1" }),
+			record("model.budget.checked", {}, { requestId: "req-1" }),
 			record("request.received", {}, { requestId: "req-1" }),
 			record("mode.changed"),
 		));
 		assert.equal(summary.records, 3);
 		assert.equal(summary.groups, 2);
 		assert.equal(summary.groupsMissingCorrelation, 1, "the legacy record cannot be joined to anything");
-		assert.equal(summary.families.extension_identity, 1);
+		assert.equal(summary.families.tool_loop, 1);
 		assert.equal(summary.families.request_lifecycle, 1);
 		assert.equal(summary.families.other, 1);
 	});

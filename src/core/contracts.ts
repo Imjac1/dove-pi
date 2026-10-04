@@ -87,7 +87,7 @@ export interface CapabilityResult<TResult = unknown> {
  * indistinguishable from one that never asked. The refusal record was added for the same reason in the other
  * direction.
  */
-export type ExecutionRecordKind = "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "dispatch.decided" | "dispatch.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "runtime.phase.completed" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered" | "task.convergence.decision" | "task.convergence.observed" | "gate.refused" | "gate.approved" | "tool.observed" | "change.decided" | "change.applied";
+export type ExecutionRecordKind = "mode.changed" | "capability.started" | "capability.blocked" | "capability.completed" | "project.mutation.started" | "project.mutation.completed" | "project.mutation.failed" | "project.mutation.reconciled" | "request.received" | "request.redelivery.coalesced" | "request.planned" | "request.attempt.started" | "request.attempt.completed" | "request.terminal" | "runtime.phase.completed" | "model.budget.checked" | "model.budget.rejected" | "provider.request.started" | "provider.request.completed" | "provider.request.rejected" | "capability.approval.pending" | "capability.approved" | "capability.cancelled" | "capability.timed_out" | "capability.recovered" | "task.convergence.decision" | "task.convergence.observed" | "gate.refused" | "gate.approved" | "tool.observed" | "change.decided" | "change.applied";
 
 export interface ExecutionRecord {
 	readonly taskId: string;
@@ -98,39 +98,4 @@ export interface ExecutionRecord {
 	readonly details: Record<string, unknown>;
 	/** Correlation identifiers are optional for legacy records but required for new runs. */
 	readonly correlation?: Readonly<{ requestId?: string; sessionId?: string; taskId?: string; attemptId?: string; providerCallId?: string; executionId?: string; toolCallId?: string }>;
-}
-
-export interface DispatchEstimate {
-	readonly inlineCost: number;
-	readonly dispatchCost: number;
-	readonly predictedWallTimeMs: number;
-	readonly independentBranches: number;
-	readonly hasSharedMutableState: boolean;
-}
-
-export interface DispatchDecision {
-	readonly route: "inline" | "subagent" | "parallel";
-	readonly reason: string;
-	readonly estimate: DispatchEstimate;
-}
-
-/** Runtime observations reported by a dispatch worker for later calibration. */
-export interface DispatchActualMetrics {
-	readonly startupTimeMs?: number;
-	readonly contextTokens?: number;
-	readonly inputTokens?: number;
-	readonly outputTokens?: number;
-	readonly retries?: number;
-	readonly humanInterventions?: number;
-}
-
-export interface DispatchActual extends DispatchActualMetrics {
-	readonly dispatchId: string;
-	readonly route: DispatchDecision["route"];
-	readonly startedAt: string;
-	readonly completedAt: string;
-	readonly wallTimeMs: number;
-	readonly retries: number;
-	readonly humanInterventions: number;
-	readonly status: "success" | "failed";
 }
