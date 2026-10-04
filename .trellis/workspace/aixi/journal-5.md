@@ -833,3 +833,32 @@ one is in this repository's lessons already, and this session was the fourth tim
 ### Status
 
 [OK] **Completed** — archived at `.trellis/tasks/archive/2026-10/10-02-unhonoured-declarations/`. Gates at the end: `typecheck` 0, `npm test` 873 / 871 pass / 0 fail / 2 skipped, installer 141 OK. Still open from the last check, recorded in its readings rather than fixed: whether `scope.targets`, `environment` and `ownership_evidence` are controls or records - a decision, not a repair - and the surfaces no door reads, `.trellis/tasks/**` among them.
+
+
+## Session 235: Twelve real sessions, their root cause fixed, and a plan that measurement kept correcting
+<!-- trellis-session: v=2 fp=d89070d01d53f895 -->
+
+**Date**: 2026-10-04
+**Task**: Twelve real sessions, their root cause fixed, and a plan that measurement kept correcting
+**Branch**: `master`
+
+### Summary
+
+Turned the findings of a twelve-session run into owned fixes. The root cause of the review-blocking refusal was measured to a line: the replayed flag read attemptCount greater than zero, which is a request first attempt, while the boundary definition is an attempt after the first. Fixed at the source with a two-prompt reproduction as the end-to-end check, plus the mode declarations that were one tool short. A task record that ticks criteria its evidence never mentions is now a checked, wired failure instead of a silent one. Three of my own readings were wrong and the repository doors caught each: an empty projection must omit keys rather than fill them, a code comment must name a thing rather than cite a line that drifts, and every citation path must resolve. Finding C was withdrawn by measurement - the ledger appends every record and I had compared a directory mtime to a ledger file.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f5561a8` | fix(lifecycle): the replayed flag was one attempt too early, and the reproduction now passes |
+| `949dd42` | fix(code-development): declare the read-only project tools idempotent, and keep the writing ones undeclared |
+| `e01edb6` | feat(task): a ticked criterion with no event behind it is reported, because a record can claim what its ledger does not back |
+| `74cd678` | docs(task): the cache report, and the plan's slice eight corrected by measurement |
+| `78dcb6e` | docs(spec): a control refuses a name, not an intent - recorded with the run that demonstrated it |
+| `9bdc1f0` | docs(task): finding C is withdrawn - the ledger appends every record, and the evidence was a directory's mtime |
+| `f2b2565` | docs(task): one clean checklist, because the plan had grown two overlapping numbering schemes |
+| `170d2cd` | feat(ledger): the diagnostics projection can say a request was received and never terminated |
+
+### Status
+
+[OK] **Completed**
