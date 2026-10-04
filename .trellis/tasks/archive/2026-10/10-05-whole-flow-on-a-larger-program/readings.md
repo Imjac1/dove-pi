@@ -1,5 +1,23 @@
 # 读数（**规范结构，每条实测只出现一次** ✓）
 
+## ⚠ 最重要的更正：**这一轮没有真的模拟用户使用** ✗✓✓（2026-10-05，事后量出 ✓）
+
+**被问到"你模拟用户真实使用了吗"时，我先去量、再回答** ✓✓：
+
+| 测的 | 读数 |
+|---|---|
+| **agent 干活时项目绑定了吗** | **`.dove` 不存在** ✗✓✓（**两次运行的副本都没有** ✓）；**克隆里的 `.dove` 是我*事后*才建的** ✓ |
+| **运行时用的哪个 mode** | **`executionMode: "standard"`** ✗✓✓✓ —— **不是任何 Dove mode** ✓ |
+| **会话记录里有没有 Dove 的痕迹** | 37 行 ✓；grep `Dove mode` / `Effect refused` / `action-policy` → **零命中** ✗✓ |
+
+**所以** ✓✓：**agent 那一半是真的** ✓（真模型 ✓ 真项目 ✓ 16 轮 ✓ 15 工具 ✓）；**user 那一半不成立** ✗✓✓ —— **项目没绑定** ✓（无 mode ✓ 无权限轴 ✓ 无能力面 ✓✓）· **流程各步是我事后分开手工跑的** ✓，**不是一条连续的用户旅程** ✓ · **"用户"就是*我*，没有被模拟** ✗✓。
+
+**它改写了两件事** ✗✓✓：
+1. **这一轮测的是"裸 Pi 会话在真项目上干活"** ✓ —— **不是"这个 harness 在真项目上走整个流程"** ✗✓✓：**harness 的那一半根本没被测到** ✓；
+2. **读数 #1 的机制因此*不完整*** ✗✓：我量到的（`summary` 的资源块取自**单条记录的 `details`** ✓，而账本是事件流 ✓）**成立** ✓，**但 `executionMode: "standard"` 是第二个、独立的解释** ✓ → **两个原因都在、都未排除** ✓✓（`providerEvidence: []` 与 `terminalConsistency: "completed-ledger-only"` 在无扩展的会话下也自洽 ✓✓）。
+
+**这条更正应当先于下面每一条读** ✗✓ —— 下面的读数在"真实模型在真项目上干活"这一点上依然有效 ✓✓，**在"harness 走流程"这一点上不成立** ✗。
+
 ## 🎯 读数 #1（**对照跑** ✓）：**summary 说零，会话记录说它干了活** ✗✓✓
 
 **命令** ✓（规格 §2 原文 ✓）：`node scripts/real-dove-blackbox.mjs --launcher source --provider real --cwd %TEMP%\dove-whole-flow\cachecontrol --scenario tests/fixtures/scenarios/read-only-audit.json --output %TEMP%\dove-whole-flow\runs\control.jsonl --timeout-ms 900000` ✓。
