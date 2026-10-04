@@ -70,7 +70,7 @@ FAILED tests/test_redirects.py::TestPermanentRedirects::test_bust_cache_on_redir
 
 **对读数 #1 的修正** ✗✓：**summary 不是总在撒谎** ✓ —— 这一次它的**裁决字段是诚实的**（`cancelled` ✓ `harness-timeout` ✓）；同一个零仍出现在 `toolCalls`/`inputTokens` 上 ✓✗ → 更准的说法：**summary 的*裁决*可信，*资源累计*不可信** ✓✓。
 
-**未量到的** ✗✓（我把它标出来，不推断 ✓）：除 `controller.py` 外**副本里还改了什么** ✗ —— 我那条"逐文件比对"的命令因为**把 `if` 当表达式用**而没打印 ✓（PowerShell 5.1 不支持 ✓，**而我两次调用前刚犯过同一个错** ✗✓）。**mtime 只指到 `controller.py` 一条** ✓。
+**改动的范围** ✓✓（**已量，逐文件比对** ✓）：**恰好一个文件** ✓ —— `cachecontrol/controller.py` ✓（**orig 20,090 B → copy 20,655 B** ✓ = **+565 B** ✓✓）；**副本里没有任何新文件** ✓✓。→ **所以它不是乱改** ✗✓：**一处、专注、看着合理的改动** ✓，**却既没达成目标、又弄坏旁边一条用例** ✗✓✓ —— 这比"改得一团糟"更值得记 ✓✓。
 
 ## 第 6 片：**形状差值**（§3：*"可比的是形状，不是数值"* ✓✓）
 
