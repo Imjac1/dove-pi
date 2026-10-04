@@ -31,12 +31,12 @@
 
 ## Acceptance Criteria
 
-- **AC-1** 能打印一个回合（含提议动作、判定、账本条数、`LoopOutcome`）。
-- **AC-2** 配对闸门测试：`executedActions 1 → 0`（成对断言）。
-- **AC-3** 一次 keep 与一次 revert 有记录（提交 hash + 账本条目），且**本仓历史里没有测试提交**。
-- **AC-4** 三条到期 allow-list 条目已删，`harness-reachability` 不红。
-- **AC-5** 门禁三条不降（附读数）。
-- **AC-6** 不站到语料里唯一不存在的位置：声明的能力都有消费者与测试（不再声明任何"跨仓等价"）。
+- [ ] **AC-1** 能打印一个回合（含提议动作、判定、账本条数、`LoopOutcome`）。
+- [ ] **AC-2** 配对闸门测试：`executedActions 1 → 0`（成对断言）。
+- [ ] **AC-3** 一次 keep 与一次 revert 有记录（提交 hash + 账本条目），且**本仓历史里没有测试提交**。
+- [ ] **AC-4** 三条到期 allow-list 条目已删，`harness-reachability` 不红。
+- [ ] **AC-5** 门禁三条不降（附读数）。
+- [ ] **AC-6** 不站到语料里唯一不存在的位置：声明的能力都有消费者与测试（不再声明任何"跨仓等价"）。
 
 ## Out of Scope
 
