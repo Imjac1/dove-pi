@@ -22,4 +22,12 @@ jobs:
         run: npm install --no-save @earendil-works/pi-coding-agent@latest @earendil-works/pi-tui@latest
       - run: npm run typecheck
       - run: npm test
+      # The four artifact checks have fixtures in `npm test`; this is the half that runs them over the repository's
+      # own task artifacts, which a working copy cannot do safely - the corpus is `status != completed`, so it moves
+      # whenever somebody starts or finishes a task. The assertion is therefore off unless the environment asks for
+      # it: `--assert-corpus` skips with a line on stderr on a working copy, and this step is where it is turned on.
+      - name: Lint task artifacts in the repository corpus
+        env:
+          DOVE_PI_TASK_ARTIFACT_CORPUS: "1"
+        run: node scripts/task-artifact-lint.mjs --assert-corpus
       - run: npm run pi:smoke
