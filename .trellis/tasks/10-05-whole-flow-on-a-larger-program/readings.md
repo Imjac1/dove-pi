@@ -1,6 +1,32 @@
 # 读数
 
-## 🎯 读数 #1（**对照跑** ✓）：**一次没有凭据的 field run 会静默地"成功"** ✗✓✓
+## 🎯 读数 #1（**对照跑** ✓）—— **两次更正后的最终版**：**summary 说零，会话记录说它干了活** ✗✓✓
+
+**更正轨迹** ✗✓（两次，都是我读错，都被下一份证据推翻 ✓）：
+1. **第一版说"没有凭据"** ✗ —— 被推翻 ✓：**凭据在 `models.json` 里**（`"apiKey": "atr_…"` ✓✓），而**它被完整携带过去了**（496 B ✓✓）；**且 key 此刻有效** ✓（直接调 CLI 回 `ok` ✓ exit 0 ✓）。
+2. **第二版说"静默 no-op"** ✗ —— 也被推翻 ✓✓：**会话记录里有 11 条 message** ✓，含 **`assistant` 的 `think`** ✓ · **`toolResult`（`toolCallId: chatcmpl-tool-…`）三次** ✓✓ · **最后一条 `assistant` 的 `text`** ✓（*"None of the three fil…"* ✓）→ **模型思考了、调了工具、给了答复** ✓✓。
+
+**所以真正的读数** ✓✓✓：**同一场运行里，两份记录互相矛盾** ✗✓ —— **会话真的干了活，而 `summary` 记成零** ✓：
+
+| 来源 | 它说什么 |
+|---|---|
+| **会话记录**（`pi-session/*.jsonl`，26,097 B ✓） | `system` → **`think`** → **3 × `toolResult`** → **`think`** → **`text`**（模型真的跑了 ✓✓） |
+| **`summary.json`**（§4 的读数取自它 ✓） | `inputTokens 0` · `observedTokens 0` · `toolCalls 0` · `providerRounds 4` · `resources.elapsedMs 8` · `stopReasons []` ✗✓ |
+| 成功的信号（两端都亮 ✓） | `exitCode 0` · `settled true` · `sawAgentStart/End/Settled = true` ✓ · `reason "completed"` ✓ · `stderr` 空 ✓ |
+
+→ **因此** ✓✓：**§4 的读数格式取自 `summary` ✓ → 在这一次运行上，"读数"与"事实"分叉** ✗✓✓ —— **这不是"运行坏了"，是"记录坏了"** ✓✓，而且**只有把两份记录对起来看才发现** ✓✓。
+
+**为什么它最重** ✓✓：**一整轮实验的证据基础**就是这份读数 ✓ —— **若只读 `summary`** ✗，会得出"模型没参与"的结论 ✓（**我起初就是这么错的 ✓，两次** ✗✓）；**若只读会话记录** ✗，会看不到成功信号与 token 的缺口 ✓。**两份必须一起读** ✓✓。
+
+**我自己的账** ✗✓：**这条读数读错两次，两次都只读了*一份*记录** ✓ —— **每次都是下一份证据把我拨回来的** ✓✓（今晚第 N 次同型的错 ✓）。
+
+## 附：这次运行的基础（实测 ✓）
+
+**命令** ✓（规格 §2 原文 ✓）：`node scripts/real-dove-blackbox.mjs --launcher source --provider real --cwd %TEMP%\dove-whole-flow\cachecontrol --scenario tests/fixtures/scenarios/read-only-audit.json --output %TEMP%\dove-whole-flow\runs\control.jsonl --timeout-ms 900000` ✓。
+
+同一个 scenario root（`control.jsonl-single-f1a803bfa4f3\` ✓）里：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · `pi-session/` 记录 **26,097 B** ✓ · **凭据按名携带**（`auth.json` 2 B ✓ `models.json` **496 B** ✓ `settings.json` 71 B ✓✓）· **`providerEvidence: []`** ✓（§5：真 provider 下按构造为空 ✓）· `activeToolCount 17` ✓。
+
+## 第 4 片：项目（四条标准，全部实测 ✓）
 
 **命令** ✓（按规格 §2 原文 ✓）：`node scripts/real-dove-blackbox.mjs --launcher source --provider real --cwd %TEMP%\dove-whole-flow\cachecontrol --scenario tests/fixtures/scenarios/read-only-audit.json --output %TEMP%\dove-whole-flow\runs\control.jsonl --timeout-ms 900000` ✓。
 
