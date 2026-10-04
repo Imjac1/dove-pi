@@ -2,6 +2,15 @@
 
 ## ⚠ 最重要的更正：**这一轮没有真的模拟用户使用** ✗✓✓（2026-10-05，事后量出 ✓）
 
+### 再更正一次：**判决对，但我给的原因错了** ✗✓✓（同日，第三次运行后量出 ✓）
+
+**我说**：harness 没装上（拿 `.dove` 缺席 ✓ · `executionMode "standard"` ✓ · 会话记录无 mode 字样当证据 ✗✓）。
+**真相** ✓✓✓：**harness 一直装着** ✗✓ —— **两次运行的账本都带着 harness 自己的生命周期记录** ✓✓（`request.received` ✓ `request.planned` ✓ `request.attempt.started/completed` ✓ `request.terminal` ✓ `model.budget.checked` ✓ `task.convergence.observed` ✓✓），**而 launcher 跑的就是 `dove-pi` 自己** ✓（`real-dove-blackbox.mjs:99` ✓）→ **缺的不是 harness，是*工作模式*** ✗✓：运行器**每次都传 `--mode rpc`** ✓✓（`:101-103` ✓），按 `work-mode.ts:903` 的优先级**它压过项目声明** ✗✓ → **`mode.json` 连问都没被问** ✗✓。
+
+→ **所以下面这条判决仍然成立** ✓（"用户走完整个流程"确实没成立 ✓ —— mode-scoped 的控制那一套确实没在场 ✗），**而它的证据要按上面这一条读** ✓✓。**"harness 在不在" 与 "工作模式选没选上" 是两个问题** ✓✓ —— **我先前把它们混成了一个** ✗✓✓。
+
+### 当事人（我）当时的量法与结论 ✗✓（保留原样，便于对照 ✓）
+
 **被问到"你模拟用户真实使用了吗"时，我先去量、再回答** ✓✓：
 
 | 测的 | 读数 |
