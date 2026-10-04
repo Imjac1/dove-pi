@@ -1,107 +1,69 @@
-# 读数
+# 读数（**规范结构，每条实测只出现一次** ✓）
 
-## 🎯 读数 #1（**对照跑** ✓）—— **两次更正后的最终版**：**summary 说零，会话记录说它干了活** ✗✓✓
-
-**更正轨迹** ✗✓（两次，都是我读错，都被下一份证据推翻 ✓）：
-1. **第一版说"没有凭据"** ✗ —— 被推翻 ✓：**凭据在 `models.json` 里**（`"apiKey": "atr_…"` ✓✓），而**它被完整携带过去了**（496 B ✓✓）；**且 key 此刻有效** ✓（直接调 CLI 回 `ok` ✓ exit 0 ✓）。
-2. **第二版说"静默 no-op"** ✗ —— 也被推翻 ✓✓：**会话记录里有 11 条 message** ✓，含 **`assistant` 的 `think`** ✓ · **`toolResult`（`toolCallId: chatcmpl-tool-…`）三次** ✓✓ · **最后一条 `assistant` 的 `text`** ✓（*"None of the three fil…"* ✓）→ **模型思考了、调了工具、给了答复** ✓✓。
-
-**所以真正的读数** ✓✓✓：**同一场运行里，两份记录互相矛盾** ✗✓ —— **会话真的干了活，而 `summary` 记成零** ✓：
-
-| 来源 | 它说什么 |
-|---|---|
-| **会话记录**（`pi-session/*.jsonl`，26,097 B ✓） | `system` → **`think`** → **3 × `toolResult`** → **`think`** → **`text`**（模型真的跑了 ✓✓） |
-| **`summary.json`**（§4 的读数取自它 ✓） | `inputTokens 0` · `observedTokens 0` · `toolCalls 0` · `providerRounds 4` · `resources.elapsedMs 8` · `stopReasons []` ✗✓ |
-| 成功的信号（两端都亮 ✓） | `exitCode 0` · `settled true` · `sawAgentStart/End/Settled = true` ✓ · `reason "completed"` ✓ · `stderr` 空 ✓ |
-
-→ **因此** ✓✓：**§4 的读数格式取自 `summary` ✓ → 在这一次运行上，"读数"与"事实"分叉** ✗✓✓ —— **这不是"运行坏了"，是"记录坏了"** ✓✓，而且**只有把两份记录对起来看才发现** ✓✓。
-
-**为什么它最重** ✓✓：**一整轮实验的证据基础**就是这份读数 ✓ —— **若只读 `summary`** ✗，会得出"模型没参与"的结论 ✓（**我起初就是这么错的 ✓，两次** ✗✓）；**若只读会话记录** ✗，会看不到成功信号与 token 的缺口 ✓。**两份必须一起读** ✓✓。
-
-**我自己的账** ✗✓：**这条读数读错两次，两次都只读了*一份*记录** ✓ —— **每次都是下一份证据把我拨回来的** ✓✓（今晚第 N 次同型的错 ✓）。
-
-## 附：这次运行的基础（实测 ✓）
+## 🎯 读数 #1（**对照跑** ✓）：**summary 说零，会话记录说它干了活** ✗✓✓
 
 **命令** ✓（规格 §2 原文 ✓）：`node scripts/real-dove-blackbox.mjs --launcher source --provider real --cwd %TEMP%\dove-whole-flow\cachecontrol --scenario tests/fixtures/scenarios/read-only-audit.json --output %TEMP%\dove-whole-flow\runs\control.jsonl --timeout-ms 900000` ✓。
 
-同一个 scenario root（`control.jsonl-single-f1a803bfa4f3\` ✓）里：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · `pi-session/` 记录 **26,097 B** ✓ · **凭据按名携带**（`auth.json` 2 B ✓ `models.json` **496 B** ✓ `settings.json` 71 B ✓✓）· **`providerEvidence: []`** ✓（§5：真 provider 下按构造为空 ✓）· `activeToolCount 17` ✓。
+**同一次运行里，两份记录互相矛盾** ✗✓ —— **而 §4 的读数格式取自 `summary`** ✓：
 
-## 第 4 片：项目（四条标准，全部实测 ✓）
-
-**命令** ✓（按规格 §2 原文 ✓）：`node scripts/real-dove-blackbox.mjs --launcher source --provider real --cwd %TEMP%\dove-whole-flow\cachecontrol --scenario tests/fixtures/scenarios/read-only-audit.json --output %TEMP%\dove-whole-flow\runs\control.jsonl --timeout-ms 900000` ✓。
-
-**同一个 scenario root 里** ✓（`control.jsonl-single-f1a803bfa4f3\` ✓）：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · `pi-session/` 会话记录 **26,097 B** ✓ · **凭据按名携带**（`auth.json` **2 B** ✓ `models.json` 496 B ✓ `settings.json` 71 B ✓✓）。
-
-**成功信号全亮** ✗✓：`exitCode 0` ✓ · `settled true` ✓ · `harnessTimedOut false` ✓ · `sawAgentStart/End/Settled = true/true/true` ✓ · **`reason "completed"`** ✓ · **`stderr` 空** ✓✗✓ · `terminal {origin: session, code: completed, retryable: false}` ✓。
-
-**而模型一次都没被调用** ✗✓✓✓（同一份 summary ✓）：
-
-| 字段 | 值 |
+| 来源 | 它说什么 |
 |---|---|
-| `providerRounds` | **4** ✗✓（它*真的*去问了四次 ✓） |
-| `inputTokens` / `outputTokens` / `observedTokens` | **0 / 0 / 0** ✗✓ |
-| `resources` | `{toolCalls: 0, toolDurationMs: 0, elapsedMs: 8, inputTokens: 0, cacheReadTokens: 0, …}` ✓✓ |
-| `stopReasons` | `[]` ✓ |
-| `dialogs` | 全 0 ✓ |
-| **`terminalConsistency`** | **`"completed-ledger-only"`** ✓✓（**值名自带答案** ✓） |
-| `providerEvidence` | `[]` ✓（§5：真 provider 下**按构造**为空 ✓✓） |
-| `activeToolCount` | 17 ✓（工具面挂上了 ✓） |
+| **会话记录**（`pi-session/*.jsonl`，26,097 B ✓） | `system` → **`assistant`/`think`** → **3 × `toolResult`（`toolCallId: chatcmpl-tool-…`）** → **`think`** → **`assistant`/`text`** ✓✓ = **模型思考、调工具、读结果、给答复** ✓ |
+| **`summary.json`**（§4 读数取自它 ✓） | `inputTokens 0` · `outputTokens 0` · `observedTokens 0` · `toolCalls 0` · `providerRounds 4` · `resources.elapsedMs 8` · `stopReasons []` ✗✓ |
+| **成功信号**（两端都亮 ✓） | `exitCode 0` · `settled true` · `harnessTimedOut false` · `sawAgentStart/End/Settled = true/true/true` · **`reason "completed"`** · **`stderr` 空** · `terminal {origin: session, code: completed}` · **`terminalConsistency "completed-ledger-only"`** ✓✓ |
 
-**原因** ✓✓（三处都量过 ✓）：**操作者目录里 `auth.json` = `{}`（2 B）** ✓ · `models-store.json` = `{}` ✓ · **环境变量里没有任何 provider 键** ✓✓（零命中 ✓）→ 携带者**忠实复制了空凭据** ✓ —— 而 run **没有报错** ✗✓。
+→ **这不是"运行坏了"，是"记录坏了"** ✓✓ —— 且**只有把两份记录对起来看才发现** ✓✓。
 
-**诚实的一处** ✗✓：**今晚那 12 段是有真 token 的**（3.24M prompt ✓✓）—— 因为当时是**直接调 CLI** ✓ → **provider 访问是通的** ✓，**空的是 blackbox 运行器这条凭据路径** ✗✓。
+**更正轨迹** ✗✓（两次，都是我读错，都被下一份证据推翻 ✓）：
+1. **"没有凭据"** ✗ → 被推翻 ✓：**凭据在 `models.json` 的 `apiKey` 里** ✓✓，**被完整携带**（496 B ✓），**且此刻有效** ✓（直接调 CLI 回 `ok` ✓ exit 0 ✓）。
+2. **"静默 no-op"** ✗ → 被推翻 ✓✓：**会话记录 11 条 message** ✓，含思考 ✓、三次工具结果 ✓、最终答复 ✓✓。
 
-**为什么它最重要** ✓✓：**"静默的成功"是测量里最危险的失败** ✗✓ —— 它**污染其后每一条读数** ✓；而**规格 §4 的格式抓得住它** ✓✓（`tokens` 全 0 ✓ + `terminalConsistency` ✓），**但前提是有人读那几个字段** ✗✓。
+**为什么它最重** ✓✓：**整轮实验的证据基础**就是这份读数 ✓ —— **只读 `summary`** 会得出"模型没参与" ✗（**我起初正是如此，两次** ✗✓）；**只读会话记录** 会看不到 token 与成功信号的缺口 ✗。**两份必须一起读** ✓✓。
 
-## 第 4 片：项目（四条标准，全部实测 ✓）
+## 附：这次运行的基础（实测 ✓）
 
-## 第 3 片：**判分仪器**（已建，红 ✓✓）
+同一个 scenario root（`control.jsonl-single-f1a803bfa4f3\` ✓）：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · **凭据按名携带**（`auth.json` 2 B ✓ `models.json` **496 B** ✓ `settings.json` 71 B ✓✓）· **`providerEvidence: []`** ✓（§5：真 provider 下按构造为空 ✓）· `activeToolCount 17` ✓。
 
-**任务** ✓（用户选 (c) 后，由我按"先量后挑"定 ✓）：**让 `cachecontrol` 遵守 `Cache-Control: immutable`（RFC 8246）** ✓✓。
+## 第 3 片：**判分仪器**（已建 ✓，红 ✓✓）
 
-**为什么是它** ✓✓（三条标准，全部量过 ✓）：**代码里 0 次、文档里 0 次** ✗（`immutable` ✓ · 对照：`max-age` 12 次 ✓ `no-store` 6 次 ✓✓）· **没有一处文档说它故意不支持** ✓（"unsupported/deliberately" 全文 0 命中 ✓）· **它小且可判** ✓✓（RFC 8246 的行为 = **新鲜期内不得再验证** ✓ = 这个库自己的信号 `from_cache` ✓✓）。**淘汰** ✗：`stale-while-revalidate`（需*后台*再验证 ✗ 而这是同步库 ✓）· `stale-if-error`（需错误路径 + 时序 ✓ 偏大 ✗）。
+**任务** ✓（用户选 (c) 后由我按"先量后挑"定 ✓）：**让 `cachecontrol` 遵守 `Cache-Control: immutable`（RFC 8246）** ✓✓。
 
-**仪器怎么建的** ✓✓（**克隆内** ✓，不在本仓 ✗）：① 在 `tests/conftest.py` 的 `SimpleApp` 加一条路由 ✓（该应用把路径首段 `getattr` 成同名方法 ✓✓ —— `immutable_cacheable` ✓）；② 新增 `tests/test_immutable.py` ✓，断言**只有那一个信号**：第二次请求 `from_cache is True` ✓✓。
+**为什么是它** ✓✓（三条标准全部量过 ✓）：**代码 0 次、文档 0 次** ✗（对照：`max-age` 12 次 ✓ `no-store` 6 次 ✓）· **无一处说它故意不支持** ✓（全文 0 命中 ✓）· **小且可判** ✓✓（RFC 8246 = 新鲜期内不得再验证 ✓ = 库自己的信号 `from_cache` ✓✓）。**淘汰** ✗：`stale-while-revalidate`（需*后台*再验证 ✗ 而它是同步库 ✓）· `stale-if-error`（需错误路径 + 时序 ✓ 偏大 ✗）。
 
-**它的红** ✓✓（跑出来的原文 ✓）：`assert False is True` · `where False = <Response [200]>.from_cache` ✓✓ —— 服务器确实起了（`ENGINE Serving on http://127.0.0.1:63560` ✓），**而库真的又去了一趟服务器** ✗✓✓。
+**仪器** ✓✓（**在克隆内** ✓，不在本仓 ✗）：① `tests/conftest.py` 的 `SimpleApp` 加路由 `immutable_cacheable` ✓（该应用把路径首段 `getattr` 成同名方法 ✓✓）；② 新增 `tests/test_immutable.py` ✓，断言**只有一个信号** `from_cache is True` ✓✓。
 
-→ **于是"做完了"有了机器可判的定义** ✓✓，**且它住在项目自己的套件里** ✓（AC 4 满足 ✓），**而 agent 的活只剩代码改动** ✓（"小" ✓）。
+**它的红** ✓✓：`assert False is True` · `where False = <Response [200]>.from_cache` ✓ —— 服务器起了（`ENGINE Serving on http://127.0.0.1:63560` ✓），**而库真的又去了一趟服务器** ✗✓✓。→ **"做完了"有了机器可判的定义，且住在项目自己的套件里** ✓（AC 4 ✓），**agent 的活只剩代码改动** ✓（"小" ✓）。
 
-## 第 4 片：项目（四条标准，全部实测 ✓）
-
-## 项目（四条标准，全部实测 ✓）
+## 第 4 片：**项目**（四条标准全部实测 ✓）
 
 **`cachecontrol`**（`github.com/psf/cachecontrol` ✓，HEAD `d6e3140` ✓）：
 
 | 标准 | 读数 |
 |---|---|
-| ① 有自己的测试套件 | **17 个测试文件 / 1,375 行** ✓✓ |
-| ② 有真实运行时依赖 | **`requests >= 2.16.0`** ✓ · **`msgpack >= 0.5.2, < 2.0.0`** ✓✓ |
-| ③ 比 `yocto-queue`（~300 行）大一档 | **14 个源文件 / 1,492 行** ✓（≈5× ✓ = "稍微大一点"正好 ✓） |
-| ④ 可整体克隆、无需凭据 | ✓（公开 ✓，已克隆 ✓） |
-| **它自己的测试能跑** | **`115 passed in 2.23s`** ✓✓（exit 0 ✓） |
+| ① 自己的测试套件 | **17 测试文件 / 1,375 行** ✓✓ · **`115 passed in 2.23s`** ✓✓ |
+| ② 真实运行时依赖 | **`requests >= 2.16.0`** ✓ · **`msgpack >= 0.5.2, < 2.0.0`** ✓✓ |
+| ③ 比 `yocto-queue`（~300 行）大一档 | **14 源文件 / 1,492 行** ✓（≈5× ✓） |
+| ④ 可整体克隆、无需凭据 | ✓（公开 ✓ 已克隆 ✓） |
 
-**被淘汰的两个候选** ✗（记录原因，避免以后重走）：
-- **`itsdangerous`** ✗：**运行时不依赖任何东西** ✗（只有 `ruff`/`tox` 工具 ✓）；**951 行**（≈3× ✗）；**其套件 collection 5 错** ✗✓。
-- **`jinja`** ✗：尺寸够（**11,616 行 / 24 测试文件** ✓✓）、依赖真（`MarkupSafe` ✓），但**其 dev/test 组在 PEP 735 里** ✗✓、套件需 `trio` ✓ → **对这次实验过于复杂** ✗。
+**淘汰的候选** ✗（记原因，避免重走）：**`itsdangerous`**（无运行时依赖 ✗ · 951 行 ✗ · collection 5 错 ✗✓）· **`jinja`**（11,616 行 ✓✓ 依赖真 ✓，但其 dev/test 组在 **PEP 735** ✗✓、套件需 `trio` ✓ → 对本次实验过于复杂 ✗）。
 
-## 🎯 第一条真读数：**在 Windows 上，让真实项目自己的测试跑起来是八步** ✗✓✓
+## 🎯 读数 #2：**在 Windows 上，让真实项目自己的测试跑起来是八步** ✗✓✓
 
-**而这正是"整个流程"的第 4 片（判分来源）所依赖的前提** ✓✓ —— 也就是说，**任何真实项目都会先撞上这八步** ✓，且**它发生在任何 agent 会话开始之前** ✓✓。
+**它是第 4 片（判分来源）的前提** ✓✓ —— 即**任何真实项目都会先撞上这八步** ✓，**且它发生在任何 agent 会话之前** ✓✓。
 
-| # | 墙 | 谁纠正了它 |
+| # | 墙 | 谁纠正的 |
 |---|---|---|
-| 1 | 运行时依赖未装（`requests`/`msgpack`）✗ | traceback 自己点名 ✓ |
-| 2 | `pip install -e ".[dev]"` → **该 extra 不存在** ✗ | pip 的 `WARNING` ✓ |
-| 3 | `.[tests]` → **同样不存在** ✗ | pip 的 `WARNING` ✓ |
-| 4 | 组在 **`[dependency-groups]`（PEP 735）** 里 ✗✓ | 读 `pyproject.toml` 的表 ✓ |
-| 5 | `pip 25.0.1` **无 `--group`** ✗ | 它自己的 `no such option` ✓ |
-| 6 | 文档给的是 **`make test`**；**`make` 不存在** ✗、Makefile 是 **POSIX** 形（`$(VENV)/bin/activate`）✗✓ | `Get-Command make` ✓ + 读 Makefile ✓ |
+| 1 | 运行时依赖未装（`requests`/`msgpack`）✗ | traceback 点名 ✓ |
+| 2 | `.[dev]` **不存在** ✗ | pip `WARNING` ✓ |
+| 3 | `.[tests]` **同样不存在** ✗ | pip `WARNING` ✓ |
+| 4 | 组在 **`[dependency-groups]`（PEP 735）** ✗✓ | 读 `pyproject.toml` 的表 ✓ |
+| 5 | **`pip 25.0.1` 无 `--group`** ✗ | 它自己的 `no such option` ✓ |
+| 6 | 文档给 `make test`，而 **`make` 不存在**、Makefile 是 **POSIX** 形 ✗✓ | `Get-Command make` ✓ + 读 Makefile ✓ |
 | 7 | 手装"最小集"仍不够 ✗ | 逐条 collection 错误 ✓ |
-| 8 | **从未对*这个*项目做 `pip install -e .`** ✗✓（**我在 jinja 上做了、在它身上漏了** ✗ —— 如实记账 ✓）→ 再做**它声明的 extras**（`.[filecache,redis]`）✓ | 错误文本 ✓ → **green** ✓✓ |
+| 8 | **从未对*这个*项目做 `pip install -e .`** ✗✓（**我对 jinja 做了、对它漏了** ✗ —— 如实记账 ✓）→ 再做它声明的 extras ✓ | 错误文本 ✓ → **green** ✓✓ |
 
-**为什么这条重要** ✓✓：规格 §2 早已写着 *"Preconditions, **every one of which a person supplies**"* ✓✓ —— **这八步正是"一个人提供的东西"的真实大小** ✓✓，而**今天没有任何地方记录它** ✗✓。**它既不该算 harness 的缺陷** ✗（不是它的问题 ✓），**也不该被忽略** ✗（没有它，第 4 片无从谈起 ✓）→ **它应当成为流程里被*记录*的一步** ✓✓。
+**为什么重要** ✓✓：§2 写着 *"Preconditions, **every one of which a person supplies**"* ✓✓ —— **这八步就是那句话的真实大小** ✓✓，**而今天没有任何地方记录它** ✗。**不该算 harness 的缺陷** ✗（不是它的问题 ✓），**也不能被跳过** ✗（没有它就没有判分 ✓）→ **它应当成为流程里被*记录*的一步** ✓✓。
 
-## 未定的一项（留给后面）✗
+## 未定项 ✗
 
-`uv` **不在这台机器上** ✗ —— **我未擅自安装** ✗✓（往你的机器上装新工具，是你的决定 ✓）。**若**后续片需要它（`jinja` 那条路需要 ✓、`cachecontrol` 这条路**不需要** ✓✓ —— 它已经 green 了 ✓），我再问 ✓。
+**`uv` 不在这台机器上** ✗ —— **我未擅自安装** ✗✓（装新工具是你的决定 ✓）。`cachecontrol` 这条路**不需要它** ✓✓（已 green ✓）；`jinja` 那条需要 ✓ —— 若要用那条路，我再问 ✓。
