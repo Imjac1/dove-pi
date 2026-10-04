@@ -1,6 +1,7 @@
 import type { ExecutionRecord } from "./contracts.ts";
 import { readFailures, type ClientAccount, type FailureRecord } from "./failure-reading.ts";
-import { classifyTerminal, gateRefusalCounts, TERMINAL_CLASSES, type TerminalClass } from "./harness-axes.ts";
+import { classifyTerminal, TERMINAL_CLASSES, type TerminalClass } from "./harness-axes.ts";
+import { countGateRefusals } from "./harness-verifier.ts";
 import type { RequestTerminalReason } from "./request-lifecycle.ts";
 import type { ChangeSurface } from "./task-convergence.ts";
 
@@ -12,8 +13,10 @@ import type { ChangeSurface } from "./task-convergence.ts";
  * re-run: every ledger the caller hands over is counted, and the counts come from the rules that already exist.
  *
  * **Nothing here is derived twice.** The terminal classes are the SSM axis classification, the failures are the failure
- * reading, and the refusal labels are the axis refusal split - so a corpus summary cannot disagree with the instrument
- * it is summarising, and a reader never has to work out which of two numbers is the right one.
+ * reading, and the refusal labels are the refusal split the verifier read path owns (`countGateRefusals`, which the axis
+ * reads as well) - so a corpus summary cannot disagree with the instrument it is summarising, and a reader never has to
+ * work out which of two numbers is the right one. **That sentence was false until 2026-10-05**: the axis carried a
+ * byte-identical copy of the split, so there were two, and the only reason they agreed was that nobody had edited one.
  */
 
 /**
@@ -69,7 +72,7 @@ export function summarizeCorpus(ledgers: readonly CorpusLedger[]): CorpusSummary
 			const reason = record.details?.reason;
 			if (typeof reason === "string" && reason in TERMINAL_CLASSES) terminalClasses[classifyTerminal(reason as RequestTerminalReason)] += 1;
 		}
-		for (const [label, count] of Object.entries(gateRefusalCounts(ledger.records))) byLabel[label] = (byLabel[label] ?? 0) + count;
+		for (const [label, count] of Object.entries(countGateRefusals(ledger.records))) byLabel[label] = (byLabel[label] ?? 0) + count;
 		const reading = readFailures(ledger.records, { ...(ledger.clientAccounts === undefined ? {} : { clientAccounts: ledger.clientAccounts }), ...(ledger.verifiedBy === undefined ? {} : { verifiedBy: ledger.verifiedBy }) });
 		requests += reading.requests;
 		unrefused += reading.unrefused;

@@ -1,6 +1,12 @@
 import type { ExecutionRecord } from "./contracts.ts";
 import type { RequestTerminalReason } from "./request-lifecycle.ts";
 import type { GateLabel } from "./task-convergence.ts";
+// **The refusal split lives in the verifier read path, and this module reads it rather than repeating it.** Until
+// 2026-10-05 this file carried its own `gateRefusalCounts` - byte-identical to `countGateRefusals` in `harness-verifier.ts`
+// - while `harness-corpus.ts` stated in its own header that "nothing here is derived twice" and the harness-loop page said
+// one rule served three readers. Two implementations that agree today are two that can disagree tomorrow, and a corpus
+// summary disagreeing with the instrument it summarises is the failure that claim exists to prevent.
+import { countGateRefusals } from "./harness-verifier.ts";
 
 /**
  * **D6's first axis, taken from the field rather than invented.**
@@ -53,27 +59,6 @@ export function classifyTerminal(reason: RequestTerminalReason): TerminalClass {
 	return TERMINAL_CLASSES[reason];
 }
 
-/**
- * The counts, per **atom**, of the refusals a ledger holds.
- *
- * **A recorded label may be composite**: the refusal path falls back to `gates.join("+")`, so an entry can read
- * `deny+scope+registered+ask`. Splitting here is the same rule the observation reader applies, so the axis, the
- * observation and the corpus summary agree about what a refusal is - one rule, three readers.
- */
-export function gateRefusalCounts(records: readonly ExecutionRecord[]): Readonly<Record<string, number>> {
-	const counts: Record<string, number> = {};
-	for (const record of records) {
-		if (record.kind !== "gate.refused") continue;
-		const gate = record.details?.gate;
-		if (typeof gate !== "string") continue;
-		for (const atom of gate.split("+")) {
-			const label = atom.trim();
-			if (label !== "") counts[label] = (counts[label] ?? 0) + 1;
-		}
-	}
-	return counts;
-}
-
 export interface SafetyAndStability {
 	readonly axis: "SSM";
 	/** One per `request.terminal` record, which is the denominator: several terminals can follow from one settle. */
@@ -106,7 +91,7 @@ export function safetyAndStability(records: readonly ExecutionRecord[]): SafetyA
 	const terminals: Record<TerminalClass, number> = { clean: 0, recovered: 0, interrupted: 0, failure: 0 };
 	let requests = 0;
 	let unclassifiedTerminals = 0;
-	const byLabel = gateRefusalCounts(records);
+	const byLabel = countGateRefusals(records);
 	const refusalTotal = Object.values(byLabel).reduce((sum, count) => sum + count, 0);
 	for (const record of records) {
 		if (record.kind === "request.terminal") {
