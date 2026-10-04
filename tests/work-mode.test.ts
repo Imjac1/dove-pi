@@ -12,6 +12,12 @@ import {
 	workModeDirectory,
 	workModeRefusal,
 	WorkModeError,
+	SANDBOX_AXES,
+	SANDBOX_CLAIMS,
+	enforceableSandboxClaims,
+	formatSandboxClaim,
+	sandboxClaimsOf,
+	unenforceableSandboxClaims,
 	type WorkModeFiles,
 	type WorkModeSelection,
 } from "../src/core/work-mode.ts";
@@ -650,6 +656,38 @@ describe("the fence", () => {
 
 	it("leaves a mode without a fence exactly as it was, which is what makes this additive", () => {
 		assert.equal(loadWorkMode(files(), { frameworkVersion: FRAMEWORK }).fence, undefined);
+	});
+
+	it("classifies every sandbox value a mode may declare, and classifies nothing else", () => {
+		// **Both directions, because one direction is the defect this table replaced.** `ENFORCEABLE_SANDBOX` was a pair
+		// nothing read while the adapter refused claims from its own literal list: a value added to an axis reached neither.
+		// So: every accepted value has exactly one stance here, and every stance names an accepted value.
+		for (const axis of Object.keys(SANDBOX_AXES) as (keyof typeof SANDBOX_AXES)[]) {
+			for (const value of SANDBOX_AXES[axis]) {
+				const matches = SANDBOX_CLAIMS.filter((claim) => claim.axis === axis && claim.value === value);
+				assert.equal(matches.length, 1, `${axis}: ${value} must carry exactly one stance`);
+			}
+		}
+		for (const claim of SANDBOX_CLAIMS) {
+			assert.ok((SANDBOX_AXES[claim.axis] as readonly string[]).includes(claim.value), `${formatSandboxClaim(claim)} carries a stance without being an accepted value`);
+			assert.notEqual(claim.reason.trim(), "", `${formatSandboxClaim(claim)} must say why, because a refusal prints the reason`);
+		}
+		// The enforced list is the way out a refusal offers, so an empty one would leave an author with nowhere to go.
+		assert.ok(enforceableSandboxClaims().length > 0, "a refused claim must come with an enforceable alternative to name");
+	});
+
+	it("refuses the filesystem claim this runtime cannot keep, under every isolation", () => {
+		// `ephemeral` was the value that fell through: the loader refuses `isolation: none` plus `ephemeral` as a
+		// contradiction in the mode's own file, and nothing else ever mentioned the word - so with the isolation axis absent
+		// the mode loaded and the claim was decoration. The stance is read from the table, not from a second list.
+		assert.deepEqual(unenforceableSandboxClaims({ filesystem: "ephemeral" }).map(formatSandboxClaim), ["filesystem: 'ephemeral'"]);
+		assert.deepEqual(unenforceableSandboxClaims({ isolation: "worktree", filesystem: "ephemeral" }).map(formatSandboxClaim), ["isolation: 'worktree'", "filesystem: 'ephemeral'"]);
+		// And the claims the host can keep are not refused, which is what makes the refusal about the claim rather than the block.
+		assert.deepEqual(unenforceableSandboxClaims({ isolation: "none", network: "none", filesystem: "read-only-source" }), []);
+		assert.deepEqual(unenforceableSandboxClaims({ network: "unrestricted" }), []);
+		assert.deepEqual(sandboxClaimsOf(undefined), [], "a mode that says nothing about its sandbox makes no claim to judge");
+		// A value the table does not know is refused rather than waved through: no one can say what the host would do about it.
+		assert.equal(unenforceableSandboxClaims({ network: "tunnel" as never }).length, 1);
 	});
 });
 

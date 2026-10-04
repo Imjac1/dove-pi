@@ -737,6 +737,32 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 
+	it("refuses the filesystem claim this runtime cannot keep, which used to load and be ignored", async () => {
+		// **`filesystem: ephemeral` with the isolation axis absent is the case the claim table was written for.** The loader
+		// refuses one specific contradiction (`isolation: none` plus `ephemeral`), and nothing else in the tree mentioned the
+		// word, so this fixture loaded, ran, and the claim meant nothing - a mode flagging isolation it did not get. The
+		// refusal is read out of the table now, so the message names the axis rather than one hand-written pair of strings.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		writeFixtureMode(root, "thin-air", { capability: "workspace.inspect" });
+		let governance = readFileSync(join(root, "modes", "thin-air", "governance.yaml"), "utf8");
+		governance = governance.replace("gate:", "sandbox:\n  filesystem: ephemeral\n\ngate:");
+		writeFileSync(join(root, "modes", "thin-air", "governance.yaml"), governance);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "thin-air" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const refusal = host.notifications.find((message: string) => /cannot honour/.test(message));
+			assert.ok(refusal, "a claim the runtime cannot keep stops the mode: " + host.notifications.join(" | "));
+			assert.match(refusal ?? "", /filesystem: 'ephemeral'/, "and the refusal names the axis that was decoration");
+			assert.match(refusal ?? "", /network: 'none'/, "and offers the enforceable claims as the way out");
+			const blocked = await callTool(host, "bash", { command: "ls" });
+			assert.equal(blocked?.block, true, "with the mode refused, nothing runs under the claim");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
 	it("enforces the sandbox claims a mode can honour, at the tool boundary  [D1]", async () => {
 		const root = freshRoot();
 		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";

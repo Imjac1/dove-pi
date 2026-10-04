@@ -209,11 +209,92 @@ const LIMIT_FIELDS = new Set(["argument", "max", "min", "unit", "required", "too
 const EFFECTS_FIELDS = new Set(["classes"]);
 const EFFECT_CLASSES = new Set(["idempotent", "key-idempotent", "non-idempotent"]);
 const SANDBOX_FIELDS = new Set(["isolation", "network", "filesystem"]);
-const SANDBOX_ISOLATION = new Set(["none", "container", "worktree"]);
-const SANDBOX_NETWORK = new Set(["none", "allowlist", "unrestricted"]);
-const SANDBOX_FILESYSTEM = new Set(["unrestricted", "ephemeral", "read-only-source"]);
-/** The isolation claims a host can actually enforce at its tool boundary, without an OS sandbox. */
-const ENFORCEABLE_SANDBOX = new Set(["network: none", "filesystem: read-only-source"]);
+/**
+ * The values each sandbox axis accepts.
+ *
+ * **Exported because the claim table below is checked against it.** A value added to an axis and not classified there would
+ * be a claim this runtime cannot say anything about, which is the shape of the defect the table was written to end.
+ */
+export const SANDBOX_AXES = {
+	isolation: ["none", "container", "worktree"],
+	network: ["none", "allowlist", "unrestricted"],
+	filesystem: ["unrestricted", "ephemeral", "read-only-source"],
+} as const;
+const SANDBOX_ISOLATION = new Set<string>(SANDBOX_AXES.isolation);
+const SANDBOX_NETWORK = new Set<string>(SANDBOX_AXES.network);
+const SANDBOX_FILESYSTEM = new Set<string>(SANDBOX_AXES.filesystem);
+export interface SandboxClaim {
+	readonly axis: "isolation" | "network" | "filesystem";
+	readonly value: string;
+	readonly stance: "unconstrained" | "enforced" | "refused";
+	/** Why this stance, in the words a refusal prints: the reason *is* the design point, so it travels with the claim. */
+	readonly reason: string;
+}
+
+/**
+ * Every sandbox claim a mode may declare, and what this runtime does about it.
+ *
+ * **One table, because there were two lists and neither could see the other.** This file carried `ENFORCEABLE_SANDBOX`, a
+ * hand-written pair that **nothing read** (`rg -n ENFORCEABLE_SANDBOX src` returned its own definition and no other line),
+ * while the adapter decided for itself which claims to refuse by naming literals in an `if` chain. A value added to an axis
+ * reached neither, and the pair that read like a control could be edited without changing any behaviour. The stances below
+ * are the whole decision, and a test holds the table against `SANDBOX_AXES` in both directions.
+ *
+ * `refused` means the host must not start the mode: a claim it cannot keep is worse than no claim, because an operator
+ * plans around it. **`filesystem: ephemeral` is in that bucket, and it is the case this table was written for**: with
+ * `isolation: none` the loader refuses the contradiction, but with any other isolation - or with the axis simply absent -
+ * the mode loaded and nothing happened, and the word appeared nowhere in `src` outside this file. `unconstrained` is not a
+ * third kind of silence: it is the axis saying "nothing asked", which is a declaration too.
+ */
+export const SANDBOX_CLAIMS: readonly SandboxClaim[] = [
+	{ axis: "isolation", value: "none", stance: "unconstrained", reason: "an unconfined run is what this host provides" },
+	{ axis: "isolation", value: "container", stance: "refused", reason: "requires an OS sandbox this runtime does not provide" },
+	{ axis: "isolation", value: "worktree", stance: "refused", reason: "requires an OS sandbox this runtime does not provide" },
+	{ axis: "network", value: "none", stance: "enforced", reason: "refused by tool name at the tool boundary" },
+	{ axis: "network", value: "allowlist", stance: "refused", reason: "requires an egress control this runtime does not provide" },
+	{ axis: "network", value: "unrestricted", stance: "unconstrained", reason: "the axis declares no constraint rather than omitting one" },
+	{ axis: "filesystem", value: "read-only-source", stance: "enforced", reason: "refused by the fence's declared targets at the tool boundary" },
+	{ axis: "filesystem", value: "ephemeral", stance: "refused", reason: "this runtime has no ephemeral filesystem, so the claim would be ignored rather than kept" },
+	{ axis: "filesystem", value: "unrestricted", stance: "unconstrained", reason: "the axis declares no constraint rather than omitting one" },
+];
+
+/** `isolation: 'container'` - one rendering, so a rule and the message about it cannot be spelled differently. */
+export function formatSandboxClaim(claim: Pick<SandboxClaim, "axis" | "value">): string {
+	return `${claim.axis}: '${claim.value}'`;
+}
+
+/** The claims a mode actually makes - only the axes it names - each with its stance. */
+export function sandboxClaimsOf(sandbox: WorkMode["sandbox"] | undefined): readonly SandboxClaim[] {
+	if (sandbox === undefined) return [];
+	const named: readonly (readonly [SandboxClaim["axis"], string | undefined])[] = [
+		["isolation", sandbox.isolation],
+		["network", sandbox.network],
+		["filesystem", sandbox.filesystem],
+	];
+	return named
+		.filter((entry): entry is readonly [SandboxClaim["axis"], string] => entry[1] !== undefined)
+		.map(([axis, value]) => SANDBOX_CLAIMS.find((claim) => claim.axis === axis && claim.value === value) ?? {
+			axis,
+			value,
+			stance: "refused" as const,
+			reason: "this value is not in the claim table, so no one can say what the host would do about it",
+		});
+}
+
+/**
+ * The claims that stop a mode from starting, with the reason a refusal prints.
+ *
+ * An unclassified value is refused rather than allowed: a mode declaring something this runtime has no stance on is exactly
+ * the case where starting it silently would be the claim nobody checked.
+ */
+export function unenforceableSandboxClaims(sandbox: WorkMode["sandbox"] | undefined): readonly SandboxClaim[] {
+	return sandboxClaimsOf(sandbox).filter((claim) => claim.stance === "refused");
+}
+
+/** The claims the tool boundary enforces, for the way out a refusal offers. */
+export function enforceableSandboxClaims(): readonly SandboxClaim[] {
+	return SANDBOX_CLAIMS.filter((claim) => claim.stance === "enforced");
+}
 const FENCE_FIELDS = new Set(["paths", "shell", "targets"]);
 const FENCE_SHELL_STANCES = new Set(["denied", "uncovered"]);
 /**

@@ -65,7 +65,7 @@ import { createEffectBoundary, type EffectBoundary } from "../core/effect-bounda
 import { admit } from "../core/context-admission.ts";
 import { createFileEffectStore, listUnresolvedClaims } from "../core/effect-store-file.ts";
 import { preflightAuthority, type AuthorityDocument } from "../core/authority.ts";
-import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, type WorkMode } from "../core/work-mode.ts";
+import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, enforceableSandboxClaims, formatSandboxClaim, unenforceableSandboxClaims, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
 import { projectModelMessages } from "./context-projection.ts";
 
@@ -2246,24 +2246,21 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				}
 			}
 		}
-		// **D1's fail-honest path: refuse an isolation claim the runtime cannot honour.** `isolation: container` or
-		// `worktree` requires an OS sandbox this runtime does not provide, and `network: allowlist` requires an egress
-		// control it does not have. Loading the mode anyway would be exactly the claim the host's own documentation
-		// warns against - a string that reads as a security boundary and is not one. The mode author's two ways out
-		// are named: declare what the runtime can honour (enforced at the tool boundary), or run the mode under a
-		// host that provides the isolation.
-		if (activeWorkMode?.sandbox !== undefined) {
-			const sandbox = activeWorkMode.sandbox;
-			const unenforceable: string[] = [];
-			if (sandbox.isolation === "container" || sandbox.isolation === "worktree") unenforceable.push(`isolation: '${sandbox.isolation}' requires an OS sandbox this runtime does not provide`);
-			if (sandbox.network === "allowlist") unenforceable.push(`network: 'allowlist' requires an egress control this runtime does not provide`);
-			if (unenforceable.length > 0) {
-				modeRefusal = `Work mode '${activeWorkMode.id}' declares sandbox isolation this runtime cannot honour: ${unenforceable.join("; ")}.` +
-					` The enforceable claims are network: 'none' and filesystem: 'read-only-source' (both checked at the tool boundary), plus isolation: 'none' with network: 'unrestricted'.` +
-					` Declare one of those, or run this mode under a host that provides the isolation it names.`;
-				activeWorkMode = undefined;
-				activeAuthorityDocument = undefined;
-			}
+		// **D1's fail-honest path: refuse a sandbox claim the runtime cannot honour.** Which claims those are is not decided
+		// here - it is one table in `work-mode.ts` (`SANDBOX_CLAIMS`), read from the axes the loader validates, because the
+		// two hand-written lists that came before it (a constant nobody read, and the `if` chain this replaces) could not see
+		// each other and a value added to one of the axes reached neither. Loading the mode anyway is exactly the claim the
+		// host's own documentation warns against: a string that reads as a security boundary and is not one. The author's two
+		// ways out are named from the same table - declare what the tool boundary enforces, or run under a host that provides
+		// the isolation asked for.
+		const refusedSandboxClaims = unenforceableSandboxClaims(activeWorkMode?.sandbox);
+		if (refusedSandboxClaims.length > 0 && activeWorkMode !== undefined) {
+			const enforceable = enforceableSandboxClaims().map(formatSandboxClaim).join(" and ");
+			modeRefusal = `Work mode '${activeWorkMode.id}' declares sandbox claims this runtime cannot honour: ${refusedSandboxClaims.map((claim) => `${formatSandboxClaim(claim)} ${claim.reason}`).join("; ")}.` +
+				` The enforceable claims are ${enforceable} (both checked at the tool boundary).` +
+				` Declare those, or run this mode under a host that provides what it asks for.`;
+			activeWorkMode = undefined;
+			activeAuthorityDocument = undefined;
 		}
 		activeActionPolicy = undefined;
 		if (activeWorkMode !== undefined) {
