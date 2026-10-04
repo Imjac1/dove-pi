@@ -77,6 +77,15 @@ export interface WorkMode {
 	readonly id: string;
 	readonly description: string;
 	readonly body: string;
+	/**
+	 * The directory name this mode was loaded from, when a host loaded it by name.
+	 *
+	 * **Carried because a consumer that shows the body has to be able to cite it.** `id` is the frontmatter's display name
+	 * and need not equal the directory, so `modes/<id>/MODE.md` is a path that can fail to exist - and a citation that can
+	 * be false is the defect this repository keeps finding in its own declarations. Absent means the mode was built from
+	 * file contents alone (`loadWorkMode`), and then no path is named rather than a guessed one.
+	 */
+	readonly source?: string;
 	readonly governanceVersion: string;
 	readonly frameworkRange: string;
 	readonly governance: Readonly<Record<string, unknown>>;
@@ -992,7 +1001,10 @@ export interface LoadedWorkMode {
  */
 export function loadWorkModeFromDirectory(root: string, name: string, options: LoadWorkModeOptions): LoadedWorkMode {
 	const workspaceRoot = resolve(root);
-	const mode = loadWorkMode(readWorkModeFiles(workModeDirectory(workspaceRoot, name)), options);
+	// **The directory name travels with the mode**, because it is the only place that knows it: the frontmatter's `name` is
+	// the mode's own display name, and a prompt that cited `modes/<name>/MODE.md` would be citing a path derived from the
+	// wrong field. See `WorkMode.source`.
+	const mode: WorkMode = { ...loadWorkMode(readWorkModeFiles(workModeDirectory(workspaceRoot, name)), options), source: name };
 	// **Both no-contract values return here, and this line is why `none` had to extend it.** A value that fell through
 	// would be sent to the conformance path and refused with a message about grant documents - the value would look
 	// implemented and not be.

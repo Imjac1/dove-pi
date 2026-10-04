@@ -26,6 +26,8 @@ after(() => {
 
 interface FakeContext {
 	hasUI?: boolean;
+	/** The model the host reports, when a case needs a window narrow enough to make the budget pre-flight decide. */
+	model?: { contextWindow?: number };
 	ui: {
 		theme: { fg: (color: string, value: string) => string };
 		setStatus: (key: string, value: string | undefined) => void;
@@ -84,6 +86,11 @@ function startHost(root: string) {
 		setConfirmAnswer: (value: boolean) => { confirmAnswer = value; },
 		/** A host with no dialog: `confirm` is gone and `hasUI` is false, the way the host's own no-op context is. */
 		removeDialog: () => { dialogAvailable = false; context.hasUI = false; delete context.ui.confirm; },
+		/** The window Pi reports for the active model, so a case can make Dove's own pre-flight the deciding gate. */
+		setContextWindow: (value: number | undefined) => {
+			if (value === undefined) delete context.model;
+			else context.model = { contextWindow: value };
+		},
 		restoreCwd: () => process.chdir(previousCwd),
 	};
 }
@@ -1387,6 +1394,84 @@ describe("the fence at the host boundary  [D8]", () => {
 			assert.notEqual(shell?.block, true, "so the shell is not refused by the fence: " + (shell?.reason ?? "(no reason)"));
 			const write = await callTool(host, "write", { path: "modes/open/governance.yaml", content: "x" }, "c-fence-still");
 			assert.equal(write?.block, true, "while the path check still applies to the tools it can read");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("carries the loaded mode's own instructions into the assembled system prompt", async () => {
+		// The finding: `modes/<name>/MODE.md` was parsed, validated, projected into the loader's `WorkMode` and then read by
+		// **nothing** - so a mode was only its permission list, its sandbox and its effect classes, and everything its body
+		// said (the method, the refusals, the stop conditions) never reached the model. A mode file an agent never reads is
+		// prose with a validator, and the mode format specification had already said the body *is* the instructions.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-development");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-development" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const turn = await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "change one small thing", systemPrompt: "" }, host.context) as { systemPrompt?: string } | undefined;
+			const systemPrompt = String(turn?.systemPrompt ?? "");
+			// **The probe is read out of the shipped file rather than written here.** A sentence hard-coded in this case would
+			// keep passing after the mode body was rewritten, which is the check-matches-nothing failure this repository names.
+			const shipped = readFileSync(join(repoRoot, "modes", "code-development", "MODE.md"), "utf8").replace(/\r\n/g, "\n");
+			const probe = shipped.split("\n").map((line) => line.trim()).find((line) => line.includes("command that produced it is not evidence"));
+			assert.ok(probe !== undefined, "the probe sentence is still in the shipped mode body");
+			assert.ok(systemPrompt.includes(probe), "the mode's own instructions reach the model: " + systemPrompt.slice(0, 400));
+			assert.match(systemPrompt, /\[DOVE MODE INSTRUCTIONS id=code-development governance=[^\s]+ source=modes\/code-development\/MODE\.md trust=authoritative\]/);
+			assert.match(systemPrompt, /\[\/DOVE MODE INSTRUCTIONS\]/);
+			// The claim the prompt used to make - that the mode is supplied only at request time - is now wrong, and a prompt
+			// that denies its own contents is worse than a silent one.
+			assert.doesNotMatch(systemPrompt, /Dove execution mode and adaptive project context are supplied separately at request time/);
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("keeps the mode instructions across turns and cuts a body past the ceiling rather than the block", async () => {
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-development");
+		const bodyPath = join(root, "modes", "code-development", "MODE.md");
+		const longBody = "\n## Filler\n\n" + "x".repeat(20_000) + "\n";
+		writeFileSync(bodyPath, readFileSync(bodyPath, "utf8") + longBody);
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-development" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const first = await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "change one small thing", systemPrompt: "" }, host.context) as { systemPrompt?: string } | undefined;
+			const firstPrompt = String(first?.systemPrompt ?? "");
+			assert.match(firstPrompt, /\[DOVE MODE INSTRUCTIONS budget: truncated at 8000 characters, \d+ omitted\]/, "the cut is stated where the rule would have been");
+			assert.ok(!firstPrompt.includes("x".repeat(8_001)), "and no more than the ceiling is carried");
+
+			// The second half is what makes the block safe in a prefix: the same mode produces the same bytes, so a turn after
+			// the first does not invalidate what was cached.
+			const second = await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "and another", systemPrompt: "" }, host.context) as { systemPrompt?: string } | undefined;
+			const blockOf = (prompt: string) => prompt.slice(prompt.indexOf("[DOVE MODE INSTRUCTIONS"), prompt.indexOf("[/DOVE MODE INSTRUCTIONS]"));
+			assert.ok(blockOf(String(second?.systemPrompt ?? "")) !== "", "the second turn carries it too");
+			assert.equal(blockOf(String(second?.systemPrompt ?? "")), blockOf(firstPrompt), "and byte for byte the same block");
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
+	it("keeps the mode instructions when the project fragment is the part dropped for budget", async () => {
+		// Order of sacrifice, asserted rather than assumed: the compiled project documents are what the budget pre-flight is
+		// allowed to drop (`requestContextText = undefined`), and the operator's own mode rules are not. Without this case the
+		// two could be swapped by a later edit and nothing would say so.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-development");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-development" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			// A window narrow enough that Dove's own additions exceed it, which is what makes the pre-flight refuse the fragment.
+			host.setContextWindow(4_000);
+			const turn = await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "change one small thing", systemPrompt: "" }, host.context) as { systemPrompt?: string; message?: unknown } | undefined;
+			assert.match(String(turn?.systemPrompt ?? ""), /\[DOVE MODE INSTRUCTIONS id=code-development/, "the mode block survives the budget decision");
+			assert.equal(turn?.message, undefined, "while the project fragment is the part that was dropped");
 		} finally {
 			host.restoreCwd();
 		}

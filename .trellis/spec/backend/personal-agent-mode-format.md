@@ -30,6 +30,21 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 - A mode is three files: `MODE.md` (frontmatter `name` + `description`, body = instructions),
   `governance.yaml`, `permissions.yaml`. `MODE.md` stays Agent-Skills-compatible, so the portable part
   remains consumable elsewhere.
+- **The body reaches the model; it is not only parsed.** The loaded body is carried into the system prompt as one labelled
+  block - `[DOVE MODE INSTRUCTIONS id=<frontmatter name> governance=<version> source=modes/<dir>/MODE.md
+  trust=authoritative]` - bounded by `MODE_BODY_MAX_CHARS` (8000), and a body past that ceiling is cut with the cut stated
+  inside the block, because a silent cut would read as the whole method. **`trust=authoritative` is the point of the label**:
+  the compiled project documents in the same request are labelled `trust=untrusted`, since a repository's files are input
+  while a mode's rules are the operator's, and a model that cannot tell the two apart cannot apply either. A body that is
+  empty or absent contributes **no block at all**, so a mode declaring only permissions and a sandbox leaves the prompt byte
+  for byte unchanged. The citation names the **directory the loader read**, not the frontmatter `name`, because the two need
+  not agree and a citation that can be false is the defect this repository keeps finding in its own declarations; when a mode
+  was built from file contents alone (`loadWorkMode`), no path is named rather than a guessed one. Whether the body was
+  carried, how many characters entered, and whether it was cut are reported through the strategy snapshot, computed by the
+  same call that builds the block so the reading cannot describe a block that was not sent.
+  **Anchors.** `src/core/prompt-policy.ts` (`workModeInstructions`), `src/core/work-mode.ts` (`WorkMode.source`),
+  `src/pi-adapter/extension.ts:3318`, `src/core/strategy-snapshot.ts`; `tests/mode-body-prompt.test.ts` and the three host
+  cases in `tests/host-work-mode.test.ts`.
 - `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities` and
   `gate.semantics` (`none`/`limit`/`conformance`/`both`).
 - The framework range accepts only `>=X.Y.Z` and `<X.Y.Z` clauses; anything else is refused rather than
@@ -143,7 +158,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
 
 ### 5. Tests Required
 
-- A well-formed three-file mode loads; body and permission set are exposed.
+- A well-formed three-file mode loads; the body is carried into the prompt and the permission set is enforced.
 - Unknown fields rejected in frontmatter, governance, permissions, and the nested `scope` /
   `authority` / `gate` mappings.
 - Each required field, when absent, is rejected.

@@ -34,7 +34,7 @@ import { createRequestPlan, isTaskInventoryRequest, type RequestPlan } from "../
 import { RequestLifecycleController, classifyProviderFailure, type ProviderFailureClassification, type RequestAttemptOutcome, type RequestAttemptTrigger, type RequestTerminalEnvelope, type RequestTerminalReason, type RequestTerminalTransition } from "../core/request-lifecycle.ts";
 import { createStrategySnapshot, formatStrategySnapshot, type StrategySnapshot, type StrategyValueSource } from "../core/strategy-snapshot.ts";
 import { ModelBudgetError, ModelGateway, accountModelBudget, boundedOutputReservation, limitProviderOutputTokens, modelPayloadFromProvider, normalizeStopReason, providerOutputTokenLimit, providerToolSchemaMetrics, providerToolSchemaTokens, type BudgetAccounting } from "../core/model-gateway.ts";
-import { stablePromptPolicy } from "../core/prompt-policy.ts";
+import { stablePromptPolicy, workModeInstructions } from "../core/prompt-policy.ts";
 import { formatPolicyShort, parsePolicy, parseThinkingLevel, resolveThinkingLevel, serializePolicy, THINKING_LEVELS, type ThinkingLevel, type ThinkingPolicyState } from "./thinking-policy.ts";
 import { inspectExtensionProfile } from "../extensions/doctor.ts";
 import { projectExtensionCapabilities } from "../extensions/capabilities.ts";
@@ -965,6 +965,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const thinkingSource: StrategyValueSource = thinkingPolicy.kind === "auto" ? "auto" : "user";
 		const toolSource: StrategyValueSource = hasExplicitToolSelection || toolProfile !== "auto" ? "user" : "pi";
 		const contextText = requestContextText ?? "";
+		// **Read out of the same call that builds the prompt block**, so the number an operator reads cannot disagree with what
+		// was actually sent. A second computation of the same rule is how a reading and its subject drift apart.
+		const workModeReading = workModeInstructions(activeWorkMode);
 		return createStrategySnapshot({
 			plan: currentRequestPlan,
 			interactionMode,
@@ -985,6 +988,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				budgetSource: typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0 && typeof usage?.tokens === "number" && Number.isFinite(usage.tokens) ? "provider-window" : "unknown",
 				omitted: requestContextRevision?.endsWith(":budget-omitted") === true,
 				compacted: contextText.includes("context compacted") || contextText.includes("上下文已压缩"),
+				modeBodyChars: workModeReading.bodyChars,
+				modeBodyTruncated: workModeReading.truncated,
 			},
 			cache: inspectCacheDiagnostics(ctx.sessionManager.getEntries()),
 			resources: {
@@ -3306,7 +3311,15 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const guidanceForTurn = requestGuidance.length > 0 ? `[PERSONAL AGENT REQUEST GUIDANCE]\n${requestGuidance.join("\n")}` : undefined;
 		let messageForTurn = [snapshotForTurn, guidanceForTurn].filter((value): value is string => Boolean(value)).join("\n\n") || undefined;
 		const reasoningVoiceInstruction = reasoningVoice ? ` In your internal reasoning, speak in a concise, action-oriented first-person-plural voice ("We need …" / "We should …") instead of generic lead-ins like "Let me think…". This is a style preference; keep the final answer's substance and correctness unchanged.` : "";
-		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} Dove execution mode and adaptive project context are supplied separately at request time. Formal task artifacts organize work but never gate Pi tools.${reasoningVoiceInstruction}`;
+		// **The mode's own instructions, assembled once here.** They are a function of the mode alone, and the mode is loaded
+		// once per session (`session_start`), so the block is byte-for-byte constant across a session - which is what lets it
+		// live in the system prompt, the stable provider prefix, without moving it. The clause before it names what is *not*
+		// in the prompt: a prompt that denied its own contents would be worse than a silent one.
+		const workModeBlock = workModeInstructions(activeWorkMode);
+		const modeClause = workModeBlock.text === ""
+			? "Dove execution mode and adaptive project context are supplied separately at request time."
+			: "Dove execution mode's structured fields (permissions, sandbox, effect classes) and adaptive project context are supplied separately at request time; this mode's own instructions are in the block below.";
+		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} ${modeClause} Formal task artifacts organize work but never gate Pi tools.${reasoningVoiceInstruction}${workModeBlock.text === "" ? "" : `\n\n${workModeBlock.text}`}`;
 		// Preflight the newly compiled request fragment against the active model
 		// window. Historical conversation usage is accounted for by Pi's own
 		// context usage API; this gate prevents Dove's additions from consuming

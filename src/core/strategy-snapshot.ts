@@ -18,6 +18,16 @@ export interface StrategyContextSnapshot {
 	readonly budgetSource?: "provider-window" | "unknown";
 	readonly omitted: boolean;
 	readonly compacted: boolean;
+	/**
+	 * Characters of the active mode's own instructions that entered the system prompt, and whether the body was past the
+	 * ceiling and was cut.
+	 *
+	 * **Reported by the call that built the block**, not recomputed here, so the reading cannot disagree with what was sent.
+	 * Without it the harness would be making a claim about its own prompt with no reading behind it - which is the state
+	 * this field was added to end.
+	 */
+	readonly modeBodyChars?: number;
+	readonly modeBodyTruncated?: boolean;
 }
 
 export interface StrategyCacheSnapshot {
@@ -126,6 +136,8 @@ export function createStrategySnapshot(input: StrategySnapshotInput): StrategySn
 			...(input.context?.budgetSource ? { budgetSource: input.context.budgetSource } : {}),
 			omitted: input.context?.omitted === true,
 			compacted: input.context?.compacted === true,
+			...(nonNegative(input.context?.modeBodyChars) === undefined ? {} : { modeBodyChars: nonNegative(input.context?.modeBodyChars) }),
+			...(input.context?.modeBodyTruncated === true ? { modeBodyTruncated: true } : {}),
 		},
 		...(input.cache ? { cache: input.cache } : {}),
 		resources: {
@@ -150,5 +162,11 @@ export function formatStrategySnapshot(snapshot: StrategySnapshot): string {
 	// below still prints one because it has real thresholds.
 	const round = snapshot.providerRound.limit === undefined ? `${snapshot.providerRound.used}` : `${snapshot.providerRound.used}/${snapshot.providerRound.limit}`;
 	const terminal = snapshot.terminal ? ` terminal=${snapshot.terminal.code}` : " terminal=none";
-	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${snapshot.readOnlyBudget.used}/${snapshot.readOnlyBudget.hardStop ?? "unknown"}${terminal}`;
+	// **Printed only when a mode body was carried**, because zero characters is the ordinary case (no mode declared, or a mode
+	// whose body is empty) and a `modeBody=0` on every line would become noise a reader stops seeing. The `+` marks a cut:
+	// the number is what entered, and the prompt says how much was omitted.
+	const modeBody = snapshot.context.modeBodyChars === undefined || snapshot.context.modeBodyChars === 0
+		? ""
+		: `, modeBody=${snapshot.context.modeBodyChars}${snapshot.context.modeBodyTruncated ? "+" : ""}`;
+	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${snapshot.readOnlyBudget.used}/${snapshot.readOnlyBudget.hardStop ?? "unknown"}${modeBody}${terminal}`;
 }
