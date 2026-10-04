@@ -59,7 +59,6 @@ interface RecoveryOwnerOptions {
 - The Pi adapter normalizes complete DeepSeek DSML text tool calls at `message_end` into standard Pi `toolCall` blocks. It accepts only complete wrapper/invocation/parameter tags, preserves non-DSML content, leaves malformed text unchanged, and uses Pi's normal policy/approval path.
 - Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
 - Pi resource samples are observation-only; never stop convergence.
-- Dispatches write correlated `dispatch.decided` and `dispatch.completed` records. Completion includes unique ID, route, duration, status, and optional token/retry/intervention metrics. Failed dispatches record completion before propagating the error.
 - Tool-loop fingerprints coalesce duplicate reads and stop unchanged repeats. The read-only budget is advisory metadata, not an unconditional terminal: changing reads continue past its historical threshold. Test changing and unchanged cases.
 - Structured `ask_user_question` calls are bounded separately from read caching. A logical user goal may execute one structured question; a second call is blocked and terminates regardless of wording, option shape, or intervening tool results. A new logical goal receives a fresh budget. Semantic fingerprints remain diagnostic evidence, not the enforcement boundary.
 - Project tracking is automatic and optional. No `PlanningSession`, task-creation handshake, or workflow-specific question guard exists; the general one-question-per-goal progress bound remains.

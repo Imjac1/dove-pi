@@ -27,7 +27,7 @@ repository enforces.
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Active |
 | [Personal Agent Runtime](./personal-agent-runtime.md) | Stable router for ownership-scoped Agent runtime specifications | Active |
 | [Personal Agent Request Runtime](./personal-agent-request-runtime.md) | Core, Pi adapter, request planning, and provider-budget contracts | Active |
-| [Personal Agent Capability Runtime](./personal-agent-capability-runtime.md) | Capability Protocol, adapters, dispatch, and workspace contracts | Active |
+| [Personal Agent Capability Runtime](./personal-agent-capability-runtime.md) | Capability Protocol, adapters, and workspace contracts | Active |
 | [Personal Agent Project Context](./personal-agent-project-context.md) | Trellis context, project-provider, and skill-discovery contracts | Active |
 | [Personal Agent Extension Runtime](./personal-agent-extension-runtime.md) | Pi extension profiles, doctor, identity, and authority contracts | Active |
 | [Personal Agent Managed Installation](./personal-agent-managed-install.md) | Managed install, release, launcher, update, and repair contracts | Active |

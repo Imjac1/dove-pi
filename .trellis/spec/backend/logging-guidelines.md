@@ -17,7 +17,7 @@ Ledger records include `kind`, timestamp, task/step identity, mode, and boundary
 
 ## What to Log
 
-Log provider selection, health transitions, mode changes, capability identity, predicted/actual dispatch costs, mutation intent/completion, and verification results.
+Log provider selection, health transitions, mode changes, capability identity, mutation intent/completion, and verification results.
 
 ## What NOT to Log
 

@@ -59,12 +59,12 @@ The layer marker on each line is defined under [Layering and the allowed directi
 
 ## Naming Conventions
 
-- Files and directories use kebab-case (`dispatch-policy.ts`, `project-provider/`).
+- Files and directories use kebab-case (`action-policy.ts`, `project-provider/`).
 - Public factories use `createX`; predicates use `isX`/`hasX`; command handlers use imperative verbs.
 - Use explicit provider-qualified IDs such as `native:<goalId>` and keep Pi session, legacy task, native goal, and Dove execution IDs distinct.
 
 ## Examples
 
-- [src/core/dispatch-policy.ts](../../../src/core/dispatch-policy.ts)
+- [src/core/action-policy.ts](../../../src/core/action-policy.ts)
 - [src/project-provider/native-provider.ts](../../../src/project-provider/native-provider.ts)
 - [src/pi-adapter/extension.ts](../../../src/pi-adapter/extension.ts)

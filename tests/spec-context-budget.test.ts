@@ -34,7 +34,6 @@ const expectedHeadingsBySpec = {
 	],
 	"personal-agent-capability-runtime.md": [
 		"Scenario: Capability Protocol and External Adapters",
-		"Scenario: Dispatch Cost Calibration",
 		"Scenario: Transactional Workspace Operations",
 		"Scenario: Reusable Development Capabilities",
 	],

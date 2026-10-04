@@ -1,6 +1,6 @@
 # Personal Agent Capability Runtime
 
-> **Scope:** Capability Protocol, external adapters, dispatch calibration, transactional workspace operations, and reusable development capabilities.
+> **Scope:** Capability Protocol, external adapters, transactional workspace operations, and reusable development capabilities.
 >
 > **Canonical router:** [Personal Agent Runtime Contract](./personal-agent-runtime.md)
 > **Related specifications:** [personal-agent-request-runtime](./personal-agent-request-runtime.md), [personal-agent-project-context](./personal-agent-project-context.md)
@@ -216,80 +216,6 @@ const required = definition.sideEffects.some((effect) => effect !== "read_only")
 const approved = required && request.approval === "granted"
   ? await hostAuthorize(request)
   : !required;
-```
-
-## Scenario: Dispatch Cost Calibration
-
-### 1. Scope / Trigger
-
-- Trigger: any call to the adaptive dispatcher that needs to compare its predicted route cost with observed execution cost.
-- Scope: `src/core/dispatcher.ts`, `src/core/execution-ledger.ts`, and the core contracts. This does not implement replay or automatic heuristic mutation.
-
-### 2. Signatures
-
-```typescript
-interface DispatchWork<TResult> {
-  estimate: DispatchEstimate;
-  runInline: () => Promise<TResult>;
-  runSubagent?: () => Promise<TResult>;
-  branches?: readonly (() => Promise<TResult>)[];
-  reportActualMetrics?: () => DispatchActualMetrics | Promise<DispatchActualMetrics>;
-}
-
-executeDispatch<TResult>(work: DispatchWork<TResult>): Promise<DispatchOutcome<TResult>>;
-```
-
-### 3. Contracts
-
-- Before execution, append `dispatch.decided` with `dispatchId`, route, reason, and the full `DispatchEstimate`.
-- After execution, append exactly one correlated `dispatch.completed` record whenever execution starts. It contains `dispatchId`, effective route, `startedAt`, `completedAt`, `wallTimeMs`, `status`, `retries`, `humanInterventions`, and any reported startup/context/input/output token metrics.
-- `reportActualMetrics` is optional and must only report observations; it must not change the selected route or policy.
-- A failed worker writes `status: "failed"` and then rethrows the original error.
-
-### 4. Validation & Error Matrix
-
-| Condition | Required behavior |
-|---|---|
-| No metrics provider | Record wall time and default retries/interventions to zero |
-| Worker resolves | Record `status: "success"` |
-| Worker rejects | Record `status: "failed"`, then propagate the original error |
-| Parallel branch rejects | Record one failed dispatch completion for the joined dispatch |
-| Metrics provider rejects | Preserve the worker result/error; do not silently mark a successful worker as failed due only to optional telemetry |
-
-### 5. Good/Base/Bad Cases
-
-- Good: provide token counts from the host adapter after a Pi/model run and correlate them with `dispatchId`.
-- Base: omit optional metrics for deterministic local work; wall time still supports calibration.
-- Bad: append only the prediction record, or let a metrics callback choose a different route after execution.
-
-### 6. Tests Required
-
-- Assert successful dispatch returns actual metrics and writes both ledger record kinds with the same `dispatchId`.
-- Assert rejected work writes a failed completion record before the original error reaches the caller.
-- Assert missing optional metrics defaults retries and human interventions to zero.
-- Assert parallel dispatch writes one completion record for the joined operation.
-
-### 7. Wrong vs Correct
-
-#### Wrong
-
-```typescript
-await ledger.appendDispatchDecision(taskId, stepId, mode, decision);
-await runWorker();
-// No actual cost or correlation identifier is persisted.
-```
-
-#### Correct
-
-```typescript
-const outcome = await executeDispatch({
-  estimate,
-  runInline,
-  reportActualMetrics: () => ({ inputTokens, outputTokens, retries }),
-  ledger,
-  ledgerContext: { taskId, stepId, mode },
-});
-// outcome.actual and dispatch.completed support later calibration.
 ```
 
 ## Scenario: Transactional Workspace Operations
