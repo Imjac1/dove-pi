@@ -55,7 +55,7 @@ describe("correlating lifecycle records", () => {
 	});
 
 	it("groups a legacy record under the unlinked key and marks the group incomplete", () => {
-		const groups = correlateExecutionRecords([record("mode.changed")]);
+		const groups = correlateExecutionRecords([record("capability.started")]);
 		assert.equal(groups.length, 1);
 		assert.equal(groups[0]!.key, UNLINKED_GROUP_KEY);
 		assert.equal(groups[0]!.keyKind, "unlinked");
@@ -69,7 +69,7 @@ describe("correlating lifecycle records", () => {
 		assert.equal(executionEvidenceFamily("provider.request.rejected"), "tool_loop");
 		assert.equal(executionEvidenceFamily("tool.observed"), "tool_loop");
 		// The control: a kind no child claimed is not forced into one of the three.
-		assert.equal(executionEvidenceFamily("mode.changed"), "other");
+		assert.equal(executionEvidenceFamily("capability.started"), "other");
 	});
 
 	it("keeps an empty input empty rather than inventing a group", () => {

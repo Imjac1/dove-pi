@@ -70,7 +70,7 @@ describe("summarizing a ledger read-only", () => {
 		const summary = summarizeExecutionRecords(lines(
 			record("model.budget.checked", {}, { requestId: "req-1" }),
 			record("request.received", {}, { requestId: "req-1" }),
-			record("mode.changed"),
+			record("capability.started"),
 		));
 		assert.equal(summary.records, 3);
 		assert.equal(summary.groups, 2);

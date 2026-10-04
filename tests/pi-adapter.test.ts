@@ -250,7 +250,7 @@ describe("Pi adapter", () => {
 		const projectContextTool = tools.get("agent_project_context") as { execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }> }> };
 		const projectContextResult = await projectContextTool.execute("test-call", {});
 		const projectContextText = projectContextResult.content[0]?.text ?? "";
-		assert.ok(projectContextText.length < 20_000, "project context without a query must remain an index, not a raw project dump");
+		assert.ok(projectContextText.length < 20_000, `project context without a query must remain an index, not a raw project dump (length ${projectContextText.length})`);
 		assert.match(projectContextText, /intentionally an index/);
 		assert.match(projectContextText, /"taskCount"/);
 		const projectStatusTool = tools.get("agent_project_status") as { promptGuidelines?: string[]; execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }> }> };

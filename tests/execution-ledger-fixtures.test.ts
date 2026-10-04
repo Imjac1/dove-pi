@@ -24,7 +24,9 @@ describe("the ledger reader against fixtures built to break it", () => {
 		assert.equal(summary.lifecycle.terminal, 1);
 		assert.equal(summary.lifecycle.terminalReasons.unknown, 1, "the legacy terminal has no reason to report");
 		assert.equal(summary.groupsMissingCorrelation, 1, "all three land in one unlinked group");
-		assert.equal(summary.families.other, 1, "mode.changed belongs to no child");
+		// The legacy fixture's third line names a kind no child claims, which is what puts it in `other`: a reader must read a
+		// kind it does not know rather than refuse the ledger, and that is the property this line holds.
+		assert.equal(summary.families.other, 1, "a kind no child claims lands in other");
 	});
 
 	it("drops a line that is not a record and keeps the ones that are", () => {

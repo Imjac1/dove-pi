@@ -233,4 +233,19 @@ describe("harness reachability", () => {
 			assert.ok(entry.reason.trim().length >= 12, `${file} needs a stated reason, not a placeholder`);
 		}
 	});
+
+	it("reaches every record kind from a writer, so a kind nothing produces cannot stay in the set", () => {
+		// **A record kind is a claim about what this harness writes, and it belongs in this file for the same reason a module
+		// does.** The dispatch path's `dispatch.decided` and `dispatch.completed` sat in the closed set after their writer went,
+		// so a reader saw two mechanisms where there was none, and an audit found them rather than a check. The union is read
+		// out of `contracts.ts` and every member has to appear as a literal somewhere else in the source tree.
+		const contracts = readFileSync(join(repoRoot, "src", "core", "contracts.ts"), "utf8");
+		const union = /export type ExecutionRecordKind =([^;]+);/u.exec(contracts);
+		assert.ok(union, "the record-kind union is still declared in one place");
+		const kinds = [...(union[1] ?? "").matchAll(/"([^"]+)"/gu)].map((match) => match[1] as string);
+		assert.ok(kinds.length > 10, `expected the vocabulary, found ${kinds.length} kinds`);
+		const writers = files.filter((file) => !file.endsWith("contracts.ts")).map((file) => readFileSync(file, "utf8"));
+		const unwritten = kinds.filter((kind) => !writers.some((text) => text.includes(`"${kind}"`)));
+		assert.deepEqual(unwritten, [], "a kind in the closed set must be written by something, or it describes a mechanism nothing has");
+	});
 });

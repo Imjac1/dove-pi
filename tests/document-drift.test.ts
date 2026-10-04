@@ -25,6 +25,8 @@ import * as record from "../src/core/task-convergence.ts";
  *   file own directory.
  * - **Citations** - a comment in the live code names a thing rather than a line, because a line drifts the moment somebody edits
  *   above it.
+ * - **Enforcement** - every rule in `AGENTS.md`'s front-door table is paired with something that fails when it breaks, from a
+ *   closed grammar, and the pairing resolves against the tree rather than being believed.
  *
  * **What this does not check, and every case below carries its own limit.** They share one: a check holds that a name resolves, never
  * that the sentence around it is still true. Two are worth repeating because a reader is most likely to assume they are covered:
@@ -34,12 +36,104 @@ import * as record from "../src/core/task-convergence.ts";
  * - **The guide prose is not checked.** Which surface to choose, what to predict, whether to keep or revert - the judgments the guide
  *   exists to leave visible.
  *
- * **Why eleven cases in one file rather than four files**: they are one shape and the helpers are the rules. Splitting by subject would
+ * **Why twelve cases in one file rather than four files**: they are one shape and the helpers are the rules. Splitting by subject would
  * produce files of two cases each, which is more surface for no gain. The measurement is in the task that wrote this header.
  */
 
 const DECLARATION = join(process.cwd(), ".trellis", "harness-surface.yaml");
 const GUIDE = join(process.cwd(), ".trellis", "spec", "guides", "harness-loop-turn.md");
+
+/**
+ * The rule table in the front door, parsed as rows.
+ *
+ * **Why this is a door and not a report.** A rule that nobody enforces is a rule that gets broken again: this repository
+ * spent a fortnight finding the same class twice - a declaration that reads as a control while nothing compares it - and
+ * the fix that stays fixed is the one paired with the thing that fails. So `AGENTS.md` carries the pairing, and this is
+ * what holds the pairing honest: a rule with no enforcer, an enforcer that names a file or a case that does not exist, or
+ * a level outside the set.
+ *
+ * **A row may be fixed by deleting something and held by a test**, which is why `Level` and `Enforcer` are separate
+ * columns: the level says what actually stops the mistake (a door that notices, the typechecker, a case, a CI step), and
+ * this file is where that claim is checked against the tree rather than believed.
+ */
+const RULE_LEVELS: Readonly<Record<string, string>> = {
+	"architecture": "suite:",
+	"type": "type:",
+	"test": "test:",
+	"gate": "gate:",
+};
+
+interface RuleRow {
+	readonly line: number;
+	readonly rule: string;
+	readonly level: string;
+	readonly enforcer: string;
+	readonly failsHow: string;
+}
+
+function parseRuleTable(source: string): readonly RuleRow[] {
+	const lines = source.split(/\r?\n/);
+	const start = lines.findIndex((line) => line.trim() === "## Rules, and what enforces each one");
+	if (start < 0) return [];
+	const rows: RuleRow[] = [];
+	for (let index = start + 1; index < lines.length; index++) {
+		const line = lines[index] ?? "";
+		if (/^## /.test(line)) break;
+		const cells = line.split("|").map((cell) => cell.trim().replace(/^`|`$/gu, ""));
+		if (cells.length !== 6) continue;
+		const [, rule, level, enforcer, failsHow] = cells;
+		if (rule === undefined || rule === "" || rule === "Rule" || /^-+$/.test(rule)) continue;
+		rows.push({ line: index + 1, rule, level: level ?? "", enforcer: enforcer ?? "", failsHow: failsHow ?? "" });
+	}
+	return rows;
+}
+
+/** Every problem a row has, as sentences that name the row and what is wrong with it. */
+function ruleRowProblems(row: RuleRow, root: string): readonly string[] {
+	const where = `AGENTS.md:${row.line} (${row.rule})`;
+	const problems: string[] = [];
+	if (row.rule === "") problems.push(`${where}: no rule`);
+	if (row.failsHow === "") problems.push(`${where}: says what enforces it but not what would fail`);
+	const expectedPrefix = RULE_LEVELS[row.level];
+	if (expectedPrefix === undefined) {
+		problems.push(`${where}: level '${row.level}' is outside ${Object.keys(RULE_LEVELS).join(", ")}`);
+		return problems;
+	}
+	const [kind, target = ""] = row.enforcer.split(":", 2);
+	if (kind === undefined || !["test", "suite", "type", "gate", "verifiedBy"].includes(kind)) {
+		problems.push(`${where}: enforcer '${row.enforcer}' is outside the grammar test|suite|type|gate|verifiedBy`);
+		return problems;
+	}
+	// The level and the enforcer have to agree, or the table is describing a mechanism that is not the one failing.
+	const required = row.level === "architecture" ? ["suite:", "verifiedBy:"] : [expectedPrefix];
+	if (!required.some((prefix) => row.enforcer.startsWith(prefix))) {
+		problems.push(`${where}: level '${row.level}' must be enforced by ${required.join(" or ")}, not by '${row.enforcer}'`);
+	}
+	if (kind === "verifiedBy") {
+		const surface = parseHarnessSurface(readFileSync(join(root, ".trellis", "harness-surface.yaml"), "utf8"));
+		if (!surface.components.some((component) => component.name === target)) {
+			problems.push(`${where}: verifiedBy names a component the surface map does not declare: '${target}'`);
+		}
+		return problems;
+	}
+	const [path, detail = ""] = target.split("#", 2);
+	const absolute = join(root, path ?? "");
+	if (path === undefined || path === "" || !existsSync(absolute)) {
+		problems.push(`${where}: enforcer names a file that does not exist: '${path}'`);
+		return problems;
+	}
+	// A suite names a file, and one case inside it is not the claim: the door is what it holds.
+	if (kind === "suite") return problems;
+	if (detail === "") {
+		problems.push(`${where}: enforcer names no case, symbol or step`);
+		return problems;
+	}
+	const text = readFileSync(absolute, "utf8");
+	if (!text.includes(detail)) {
+		problems.push(`${where}: '${detail}' is not in ${path}, so the row points at something that is not there`);
+	}
+	return problems;
+}
 
 /** The modules the declaration may name as embedding verifier code, by the path it names them with. */
 const EMBEDDING_MODULES: Readonly<Record<string, Record<string, unknown>>> = {
@@ -64,6 +158,29 @@ function walk(roots: readonly string[]): readonly string[] {
 }
 
 describe("the documents that name things", () => {
+	it("pairs every rule in the front door with what fails when it breaks, in one closed grammar", () => {
+		// **The seeds are constructed rather than stored**, because the table is one artifact in one file: a bad row is a
+		// string, and five of them are what proves this check can fail. Each is expected to produce exactly one problem for
+		// one reason - so a check that quietly matched nothing would leave the list empty and this case red.
+		const rows = parseRuleTable(readFileSync(join(process.cwd(), "AGENTS.md"), "utf8"));
+		assert.ok(rows.length > 0, "a table with no rows enforces nothing");
+		const problems = rows.flatMap((row) => ruleRowProblems(row, process.cwd()));
+		assert.equal(problems.length, 0, "every row must name an enforcer that resolves: " + problems.join(" | "));
+
+		const seeds: readonly { readonly row: RuleRow; readonly expect: string }[] = [
+			{ row: { line: 1, rule: "a rule held by this file alone", level: "doc", enforcer: "doc:AGENTS.md", failsHow: "nothing" }, expect: "is outside" },
+			{ row: { line: 1, rule: "a rule held by a file that is not there", level: "test", enforcer: "test:tests/no-such-file.test.ts#x", failsHow: "nothing" }, expect: "does not exist" },
+			{ row: { line: 1, rule: "a rule held by a case that is not there", level: "test", enforcer: "test:tests/mode-body-prompt.test.ts#no such case", failsHow: "nothing" }, expect: "is not in tests/mode-body-prompt.test.ts" },
+			{ row: { line: 1, rule: "a rule held by a component that is not declared", level: "architecture", enforcer: "verifiedBy:no-such-component", failsHow: "nothing" }, expect: "does not declare" },
+			{ row: { line: 1, rule: "a level that disagrees with its enforcer", level: "type", enforcer: "test:tests/mode-body-prompt.test.ts#the mode-instructions block", failsHow: "nothing" }, expect: "must be enforced by type:" },
+		];
+		for (const seed of seeds) {
+			const problems = ruleRowProblems(seed.row, process.cwd());
+			assert.equal(problems.length, 1, `one problem for ${seed.row.rule}: ` + problems.join(" | "));
+			assert.ok(problems[0]?.includes(seed.expect), `${seed.row.rule} must be reported for '${seed.expect}': ` + (problems[0] ?? "(nothing)"));
+		}
+	});
+
 	it("names only symbols that are exported functions, in every embedded entry", () => {
 		const surface = parseHarnessSurface(readFileSync(DECLARATION, "utf8"));
 		for (const entry of surface.verifier.embedded) {

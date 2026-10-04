@@ -23,6 +23,38 @@ Managed by Trellis. Edits outside this block are preserved; edits inside may be 
 <!-- Everything in this section is outside the Trellis-managed block above, which a test checks: content inside the block may be
      overwritten by a `trellis update`, and content outside it is preserved. -->
 
+## Rules, and what enforces each one
+
+Every rule this repository has learned the hard way, paired with the thing that fails when it is broken. **`doc` is not an
+enforcer**: a rule whose only guardian is this file is a rule nobody keeps, so such a row is either given a mechanism or
+deleted. The `Enforcer` column is a closed grammar - `test:<file>#<case>`, `suite:<file>`, `type:<file>#<Symbol>`,
+`gate:<file>#<step>`, `verifiedBy:<component>` - and `tests/document-drift.test.ts` fails when a row names a file, a case,
+a symbol or a component that does not exist, when a level is outside the set, when the level and the enforcer disagree, or
+when the table is empty.
+
+**The `Level` column is the level that actually holds the rule** (`architecture` for a door that notices, `type` for the
+typechecker, `test` for a case, `gate` for a step in CI), which is why a row may be fixed by subtracting something and
+still be held by a test. That distribution is a fact about this repository worth reading: most of these are held by cases,
+and the two doors are the ones that catch what no case is looking for.
+
+| Rule | Level | Enforcer | Fails how |
+|---|---|---|---|
+| A mode's `MODE.md` body reaches the model as one labelled block, and the prompt does not deny its own contents | test | `test:tests/host-work-mode.test.ts#carries the loaded mode's own instructions into the assembled system prompt` | the block stops being appended, or the clause saying the mode arrives only at request time returns |
+| A body past the ceiling is cut, and the cut is stated inside the block | test | `test:tests/mode-body-prompt.test.ts#cuts a body past the ceiling, states the cut in the block, and reports both numbers` | a body is truncated in silence, or the reading stops matching the text sent |
+| Every sandbox value a mode may declare carries a stance, and anything unclassified is refused | test | `test:tests/work-mode.test.ts#classifies every sandbox value a mode may declare, and classifies nothing else` | a value is added to an axis with no stance, which is how `filesystem: ephemeral` was ignored |
+| A sandbox claim this runtime cannot keep stops the mode from starting | test | `test:tests/host-work-mode.test.ts#refuses the filesystem claim this runtime cannot keep, which used to load and be ignored` | a claim that reads as isolation is loaded and dropped again |
+| The read-only budget is one number, and it is the threshold that fires | test | `test:tests/pi-adapter.test.ts#warns but allows varied read-only exploration beyond the historical request budget` | a second number is added to the budget rows and projected as a ceiling nothing compares |
+| Which host tools reach the network is one declaration, read through a derived view | test | `test:tests/invocation-disposition.test.ts#names every host tool that reaches the network, and nothing that does not` | a networked tool is added to one list and not the other, so `network: none` covers whatever the reader happened to open |
+| A mode file states requirements, not dated accounts of what the framework does not do yet | test | `test:tests/trading-mode.test.ts#states the requirement instead of an account of what the framework does not do yet` | our own progress is written into a body the model reads as a rule |
+| A mode file may not deny a control the host already runs | test | `test:tests/pentest-mode.test.ts#does not deny the preflight the host runs, because the host runs it` | a live control is described as an operator's duty, so a reader thinks it may be skipped |
+| A name a mode declares must be an action that can occur | test | `test:tests/code-audit-mode.test.ts#declares no gate, states its approval stance, and names only actions that can occur` | a permission or capability name is added that nothing produces |
+| The mount-point table cites the line each registration is on | test | `test:tests/spec-anchors.test.ts#cites the declaration each mount-point row names, as that page says it does` | an edit above a registration leaves a citation pointing at the wrong line |
+| Every path the surface map names resolves, and the map agrees with the record vocabulary | test | `test:tests/harness-surface.test.ts#declares every component the record vocabulary has, and nothing else` | a component or path is declared that is not real, which is how a map stops describing the tree |
+| Every task-artifact check has a fixture that must trip it, and the manifest is held equal in both directions | test | `test:tests/task-artifact-lint.test.ts#holds --list-checks and the manifest equal in both directions, and names which way it broke` | a check is added that passes forever on nothing |
+| The task-artifact corpus is asserted where it is stable | gate | `gate:.github/workflows/compatibility.yml#Lint task artifacts in the repository corpus` | the corpus step leaves CI, so the fixture suite is the only thing left checking |
+| A record kind in the closed set has a writer | test | `test:tests/harness-reachability.test.ts#reaches every record kind from a writer, so a kind nothing produces cannot stay in the set` | a kind is declared that nothing produces, so a reader sees a mechanism where there is none |
+| A module nothing reaches is declared with a reason, or deleted | architecture | `suite:tests/harness-reachability.test.ts` | an unreachable module is added without a reason, or an allow-list entry goes stale after the module is wired |
+
 ## Where this harness is documented
 
 The coding specifications live under `.trellis/spec/`, indexed in [`.trellis/spec/backend/index.md`](./.trellis/spec/backend/index.md) -

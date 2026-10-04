@@ -173,10 +173,9 @@ that reports says so in a field a reader can check.
 - **`scripts/harness-corpus.mts` summarises the recorded corpus, and says why it is empty when it is.** Mining needs a
   corpus rather than one ledger, and this is the reading that answers "what do we have" once instead of per round.
   - **Every count comes from a rule that already exists**: the terminal classes are the axis classification, the
-    failures are the failure reading, and the refusal labels are the refusal split the verifier read path owns (exported
-    as `countGateRefusals`, one rule for three readers - the axis and this summary both call it, and until 2026-10-05
-    the axis carried its own byte-identical copy). A corpus summary that derived any of them again could disagree
-    with the instrument it is summarising, and a reader would have no way to tell which was right.
+    failures are the failure reading, and the refusal labels are the refusal split the verifier read path owns
+    (`countGateRefusals`; the axis duplicated it until 2026-10-05). A corpus summary that derived
+    any of them again could disagree with the instrument it is summarising, and a reader could not tell which was right.
   - **What is missing is scoped to what the summary can see.** No ledger at all says so rather than reporting zero; a
     corpus with no failure record names **its input size** and the cause it can speak for - host tests' `mkdtempSync` state
     directories go with the run, while the blackbox runner keeps a scenario root, and **a real session's ledger lives
