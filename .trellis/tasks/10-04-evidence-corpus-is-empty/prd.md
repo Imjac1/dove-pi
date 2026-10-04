@@ -1,36 +1,57 @@
-# The evidence corpus is empty, so the loop has nothing to mine
+# The corpus is not empty and it is already mined - what is missing is that nobody asks
 
-## Goal
+## ⚠ 前提被两次实测推翻（**2026-10-04** ✗✓✓）
 
-让这个项目**能从自己的运行里挖东西** ✓ —— 而今天它挖的是**别人论文里的语料** ✓✓。
+**本任务原先的前提是"语料是空的"** ✗✓ —— **两次测量把它推翻了**：
 
-**用户价值** ✓：AHE 的三根柱子里，**②（经验可观测）是唯一空的一根** ✗✓ —— 而"自动进化"的**素材**全部来自它 ✓：*"distills millions of raw trajectory tokens into a layered, drill-down evidence corpus that an evolving agent can actually consume"* ✓✓。素材为空 ⇒ 回路只能靠**试错** ✗（正是那篇论文说它要避免的 ✓）。
+**① 第一次推翻（`harness-corpus.ts` 比预想的成熟）** ✓✓：`summarizeCorpus`（`:55` ✓）**不重复推导任何东西**（*"Nothing here is derived twice … a corpus summary **cannot disagree with the instrument it is summarising**"* ✓✓），**并且已经写出空的原因**（`EMPTY_FAILURE_NOTE` ✓）。
 
-## Background（全部实测 ✓）
+**② 第二次推翻（决定性，自造证据 ✓✓）**：把它跑在**真实账本**上 —— `node --import tsx scripts/harness-corpus.mts "C:\Users\Macfy\.pi\agent\dove\workspaces"` ✓：
 
-- **这个仓已经在消费语料 —— 只是不是自己的** ✓✓：`src/core/action-policy.ts:657` 引 *"the corpus's **measured evasion (98% of attempts, 88% succeeding)**"* ✓；`src/core/argument-syntax.ts:5` 引 *"the corpus measured exactly that（`2609.30217`）"* ✓✓ → **来源是论文，不是我们跑的会话** ✗✓✓。
-- **"corpus" 一词在此仓指三种不同东西** ✗✓：① `src/core/harness-corpus.ts` —— *"**What the recorded corpus contains, as one summary**"* ✓（一份**摘要** ✓）；② `src/core/failure-reading.ts:113` 的 `readonly corpus: readonly string[]` —— *"**What this corpus does not contain**, so an empty reading is not mistaken for a working one"* ✓✓（**"空要说出来"** ✓）；③ 上述论文语料 ✓。**三者同名、无一处互相说明** ✗。
-- **没有语料文件或目录** ✓（`.trellis/corpus` ✓ `.trellis/harness-corpus.jsonl` ✓ `.trellis/workspace/corpus` ✓ 全不存在 ✓）。
-- **`.trellis/tasks/**` 下的 `*.jsonl` 几乎全是 0 B** ✗✓（约 40 个任务，仅 `09-30-axi-a0/a1/a2` 有字节 ✓）。
-- **可挖的原始材料是真的** ✓✓：账本里有 `request.received/planned/terminal` ✓ `request.attempt.*` ✓ `provider.request.*` ✓ `gate.refused` ✓ `tool.observed` ✓ `dispatch.decided` ✓ `model.budget.checked` ✓ `runtime.phase.completed` ✓ `task.convergence.observed` ✓ —— 而 **12 段那一轮还留下了 26.6 KB `readings.md` + 6.4 KB `findings.md`** ✓✓（**本项目第一批真的可挖的轨迹** ✓）。
-- **判据的外尺** ✓✓：AHE 论文测得**增益来自 tools / middleware / long-term memory，而非 system prompt** ✓✓（*"factual harness structure transfers while prose-level strategy does not"* ✓）→ 语料要能**指出去改哪个组件** ✓。
+```
+ledgers 13 · records 3956 · requests 59
+terminals by class:  clean 55 · recovered 0 · interrupted 0 · failure **3**
+refusals by label:   deny 3 · effect-claim 42 · sandbox 4 · scope 6
+
+req_8fd11e4c…  failed / provider-unknown  ->  middleware
+  because: a gate refused this request (effect-claim, scope), and the policy that refuses is src/core/action-policy.ts …
+  cite:     ledger:request:req_8fd11e4c-…
+  preserve: tests/action-policy.test.ts, tests/fence-drift.test.ts, …
+req_33af17c4…  failed / provider-unknown  ->  unattributed
+  because: the cause is outside the harness: a provider outcome is not one of our components
+```
+
+→ **要造的东西早就有** ✗✓✓：**组件归属** ✓、**原因** ✓、**回指账本** ✓、**`preserve:`（回归防线）** ✓✓ —— 最后一项**连原计划都没有想到** ✓。**而 `EMPTY_FAILURE_NOTE` 那句"no failure record"对**真实会话**不成立** ✗✓：13 个账本里就有 3 个失败 ✓。
+
+**为什么空注记会写错** ✗✓：它依据的是 **host *测试*** 的 `mkdtempSync` 路径 ✓，而**真实会话的状态目录走 `state-dir.ts:35` 的稳定哈希路径** ✓✓（`…/dove/workspaces/<hash>` ✓）→ **真实会话的账本留得下来** ✓✓（12 段那轮克隆的 `.dove/` **153,242 字节仍活着** ✓）。
+
+## Goal（**改写后** ✓）
+
+**让这台已经建好的挖掘机**被**自动**开动 ✓ —— 而不是**等人手去开** ✓，并且**让那条真正会丢证据的路径（host 测试）不再丢** ✗✓。
+
+**用户价值** ✓：AHE 第②柱要的是 *"a corpus **an evolving agent can actually consume**"* ✓✓ —— 今天它**能被消费** ✓（形状已验证 ✓✓），但**消费它的动作在回路之外** ✗（一个需要人记得跑的脚本 ✓），且**注记里那句断言是错的** ✗✓（它会让读者以为失败不可得 ✓）。
 
 ## Requirements
 
-- **R1 三种 "corpus" 必须被区分** ✓：规格里说清哪一个是**摘要** ✓、哪一个是**缺口声明** ✓、哪一个是**外部论文语料** ✓；不得继续同名混用 ✗。
-- **R2 我们自己的运行必须可挖** ✓✓：从**已有且真实**的账本记录（上列 10 种 `kind` ✓）产出**分层、可下钻**的形式 ✓ —— **不新增采集** ✗（材料已经足够 ✓）。
-- **R3 空要说出来** ✓✓：**延伸** `failure-reading` 的既有规矩 ✓（"What this corpus does not contain" ✓），**不发明新词汇** ✗。
-- **R4 必须能被演化中的 agent 消费** ✓：产出**受上下文预算约束** ✓（沿本仓的 budget 教条 ✓），并**能指向应改的组件** ✓（AHE 七组件名 ✓，见 `.trellis/harness-surface.yaml` ✓）。
-- **R5 先红后绿** ✓；**引文门保持全绿** ✓（新增锚点必须**可解析** ✓）。
+- **R1 注记必须说真话** ✓✓：`EMPTY_FAILURE_NOTE` 现在的措辞（*"no failure record … state directories are not preserved"* ✗）对**真实会话**不成立 ✓ → 改成**区分两条路径**：真实会话的账本**保留** ✓（有 13 个为证 ✓）；host 测试的状态目录**不保留** ✓（那才是它真正在说的事 ✓），且**这一条要能测** ✓✓。
+- **R2 让挖掘进入回路** ✓：`summarizeCorpus` 的输出应**在回路能读到的地方出现** ✓（已量到两个面 ✓：`src/cli.ts:73` ✓ 与 `local-rpc.ts:47` 的 `diagnostics/status` ✓✓）→ **并入其中之一** ✓，**不新开命令** ✗。
+- **R3 三种 "corpus" 各归其名** ✓：**摘要**（`summarizeCorpus` ✓）· **缺口声明**（`failure-reading` 的 `corpus` 字段 ✓）· **外部论文语料**（`2609.30217` 等 ✓）—— 规格里各给一名 ✓，且**本条不需要假红** ✗（它是措辞 ✓；仓里没有术语门 ✓，实测过 ✓）。
+- **R4 保住已经验证过的形状** ✓✓：**组件归属** ✓ · **`cite:` 回指** ✓ · **`preserve:` 防线** ✓ —— 新工作**不得使其退化** ✓（它现在是这个仓里离 AHE 第②柱最近的东西 ✓✓）。
+- **R5 先红后绿** ✓（针对 R1 的断言与 R2 的接线 ✓）。
 
 ## Acceptance Criteria
 
-- [ ] 规格里**三种 corpus 各有其名** ✓，且**没有一处继续混用** ✓。
-- [ ] 有一条**今天必红**的用例：给定一组真实形状的账本记录（含 `request.received` 与 `gate.refused` ✓），**产出可下钻的语料条目** ✓。
-- [ ] **空语料时明确说"空"及原因** ✓✓（复用 `failure-reading` 的规矩 ✓），且**有空/非空两条对照用例** ✓。
-- [ ] 条目**能指向七组件之一** ✓（不是自由文本 ✓✓）。
-- [ ] 产出**受预算约束** ✓（有明确上限，且**超限时说它截断了** ✓✗ —— 不得静默截断 ✗）。
+- [ ] **一条用例**证明：给定真实形状的账本（含 `gate.refused` ✓ 与 `failure` 终端 ✓），`summarizeCorpus` **报出失败并给出组件归属 + cite + preserve** ✓✓（**今天已绿** ✓ —— 这是**防退化**用 ✓，不是红 ✓；对照：`failure-reading` 与 `harness-axes` 有同款手法 ✓）。
+- [ ] **一条用例**证明 **`EMPTY_FAILURE_NOTE` 的措辞与事实一致** ✓✓（**今天必红** ✗ —— 它现在把"host 测试不保留"写成了"失败不可得" ✓）。
+- [ ] `summarizeCorpus` 的输出在**既有面**上可见 ✓（并入 ✓，不新开命令 ✗）。
+- [ ] 术语三条**各有其名** ✓，且**没有一处继续把"摘要"叫成"缺口"** ✓。
 
 ## Out of Scope
 
-- **新增采集通道** ✗（账本已够 ✓）；**改动账本写入** ✗；**把语料喂回 prompt 的自动注入** ✗（那是另一个决定 ✓）；**第③柱（预测→下轮验证）** ✗（另有其记录 ✓，见发现 D ✓）。
+**新增采集** ✗（账本已够 ✓）· **改账本写入** ✗ · **自动把语料注入 prompt** ✗ · **第③柱（预测→下轮验证）** ✗（见发现 D ✓）· **给 host 测试做保留机制** ✗（它属于测试基建 ✓，本任务只负责**把断言改对** ✓）。
+
+## 进度
+
+- **第一片（R1 说真话）** ✗ 未开工 —— 红已明确 ✓（`EMPTY_FAILURE_NOTE` 的措辞与实测不符 ✓）。
+- **第二片（R2 接线）** ✗ 未开工 —— 面已量到 ✓。
+- **R3 命名** ✗ 未开工（措辞 ✓，无假红 ✗）。
