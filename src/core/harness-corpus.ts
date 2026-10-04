@@ -42,15 +42,16 @@ export interface CorpusSummary {
 }
 
 /**
- * The absence note, stated with its cause.
+ * The absence notes, each scoped to what this function can see.
  *
- * "No failure record" on its own reads as a healthy harness, and this corpus note is a statement about what was
- * **kept**. The measured cause: the paths that produce a failure are driven by host tests, whose state directories are
- * created with mkdtempSync and go away with the run, while the blackbox runner keeps its state under a scenario root.
- * So the ledgers that survive are the ones from runs that did not fail. A reading that says "zero" and stops is the
- * kind of statement this project keeps having to correct.
+ * **What replaced the constant that stood here.** It said "no failure record in the corpus: the paths that produce
+ * one are driven by host tests whose state directories are not preserved" - a true statement about the host tests'
+ * mkdtempSync directories, and a false one about sessions, whose state resolves through a stable path and whose
+ * ledgers do survive. Thirteen real ledgers on this machine happen to contain three failures, so the sentence was
+ * not only wrong but contradicted by what the tool it sits in reports. The part worth keeping is the contrast that
+ * makes the true half true: the blackbox runner keeps its state under a scenario root, so its ledgers survive where
+ * the host tests' do not. The part to state is the size of the input, as its two neighbouring notes already do.
  */
-const EMPTY_FAILURE_NOTE = "no failure record in the corpus: the paths that produce one are driven by host tests whose state directories are not preserved, while the blackbox runner keeps the ledgers of runs that did not fail";
 
 export function summarizeCorpus(ledgers: readonly CorpusLedger[]): CorpusSummary {
 	const kinds: Record<string, number> = {};
@@ -77,7 +78,13 @@ export function summarizeCorpus(ledgers: readonly CorpusLedger[]): CorpusSummary
 	const refusalTotal = Object.values(byLabel).reduce((sum, count) => sum + count, 0);
 	const corpus: string[] = [];
 	if (ledgers.length === 0) corpus.push("no ledger at all: nothing to read, which is a fact about the walk rather than about the harness");
-	if (failures.length === 0 && ledgers.length > 0) corpus.push(EMPTY_FAILURE_NOTE);
+	// Scoped like its two neighbours: it states what was handed over and how much of it, and it separates the cause it
+	// can speak for from the one it cannot. The old wording said failures are not preserved, which is true of the host
+	// tests' mkdtempSync directories and false of real sessions, whose state resolves through a stable path and whose
+	// ledgers are still on disk. A sentence that says failure is unavailable stops a reader from looking.
+	if (failures.length === 0 && ledgers.length > 0) {
+		corpus.push(`no failure record in the ${ledgers.length} ledger(s) and ${requests} request(s) handed over: host tests drive failures into state directories that are not preserved, while the blackbox runner keeps its state under a scenario root and a real session's ledger lives under a stable path, so theirs do survive`);
+	}
 	if (unrefused > 0) corpus.push(unrefused + " refusal(s) carry no request id and are counted rather than attributed");
 	return {
 		ledgers: ledgers.length,

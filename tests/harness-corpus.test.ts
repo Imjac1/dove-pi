@@ -55,11 +55,24 @@ describe("what the recorded corpus contains", () => {
 
 	it("says why a corpus with no failure has none, instead of only saying zero", () => {
 		// The point of the reading: "zero failures" on its own reads as a healthy harness, and it is a statement about
-		// what was kept. The note is the measured cause, not a guess.
+		// what was kept. The note must therefore be about **the ledgers handed over**, and must separate the cause it
+		// can speak for from the one it cannot.
+		//
+		// This case used to call the note "the measured cause, not a guess" - and the note it asserted was neither. It
+		// said the paths producing a failure are not preserved, which is true of the host tests' mkdtempSync state
+		// directories and false of sessions, whose state resolves through a stable path; thirteen real ledgers on this
+		// machine contain three failures. The sentence never fired on real data, so nothing caught it here either.
 		const summary = summarizeCorpus([ledger(terminal("completed"))]);
 		assert.deepEqual(summary.failures, []);
-		assert.match(summary.corpus.join(" "), /no failure record in the corpus/);
-		assert.match(summary.corpus.join(" "), /state directories are not preserved/);
+		const note = summary.corpus.join(" ");
+		assert.match(note, /no failure record in the 1 ledger\(s\)/, "the note states how much it was handed, as its two neighbouring notes already do");
+		assert.match(note, /host tests drive failures into state directories that are not preserved/, "the cause it can speak for is named as the host tests'");
+		assert.match(note, /blackbox runner keeps its state under a scenario root/, "and the contrast that makes that half true is kept");
+		assert.doesNotMatch(
+			note,
+			/no failure record in the corpus: the paths that produce one are driven by host tests whose state directories are not preserved/,
+			"the wording that read as a claim about the world must not come back",
+		);
 	});
 
 	it("does not say it when the corpus holds a failure", () => {
