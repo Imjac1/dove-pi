@@ -13,9 +13,11 @@ authority:
   # same fact, and the second is now stated instead of implied by a dangling name.
   # **Two namespaces, and this list holds both on purpose.** `code-audit.seed`, `code-audit.disposition` and `code-audit.diff` are
   # capability names: they are in the registry `dove-pi capability list` prints. `repo.read` and `report.write` are this mode own
-  # action names, declared in permissions.yaml and given an idempotency class below. A grant covers what the mode may do, which is both
-  # kinds, and the loader does not resolve them against the registry - measured, and it is why a reader should not assume every dotted
-  # name here is a capability.
+  # action names, named here and given an idempotency class below. **They are not declared in permissions.yaml and cannot be**: that
+  # file accepts only `unlisted`, `always_allow`, `ask_before` and `never_allow`, so this file does not claim otherwise - naming a
+  # field a reader would go looking for is the same defect as naming a grant that resolves to nothing. A grant covers what the mode
+  # may do, which is both kinds, and the loader does not resolve them against the registry - measured, and it is why a reader should
+  # not assume every dotted name here is a capability.
   capabilities: [repo.read, report.write, code-audit.seed, code-audit.disposition, code-audit.diff]
   # No `expires`: the runtime refuses it as unenforceable - see the note in `modes/pentest/governance.yaml`.
 

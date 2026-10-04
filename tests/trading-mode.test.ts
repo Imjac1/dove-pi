@@ -145,4 +145,13 @@ describe("trading vertical (limit gate + venue-level idempotency)", () => {
 		assert.equal(retry.executed, false, "a timeout may have filled; the framework must not guess");
 		assert.equal(attempts, 1, "no automatic resubmission");
 	});
+
+	it("states the requirement instead of an account of what the framework does not do yet", async () => {
+		const mode = await loadMode();
+		// **The same shape `modes/pentest/MODE.md` carried until 2026-10-05**, and it is why that one was wrong for nine days: a dated
+		// sentence about our own progress, inside the document whose job is to say what this mode allows. It is true when written and
+		// stops being true the moment the capability lands, with nothing red to say so. The requirement it wraps stays; the account of
+		// what is not built belongs in the repository's own task records, where a reader can check it.
+		assert.ok(!/Not yet (performed|produced) by the/.test(mode.body), "the mode body states a requirement, not a dated account of what is missing");
+	});
 });
