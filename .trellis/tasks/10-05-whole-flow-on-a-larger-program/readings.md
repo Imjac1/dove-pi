@@ -1,4 +1,33 @@
-# 读数（第 4 片：挑项目 + 验它自己的判分）
+# 读数
+
+## 🎯 读数 #1（**对照跑** ✓）：**一次没有凭据的 field run 会静默地"成功"** ✗✓✓
+
+**命令** ✓（按规格 §2 原文 ✓）：`node scripts/real-dove-blackbox.mjs --launcher source --provider real --cwd %TEMP%\dove-whole-flow\cachecontrol --scenario tests/fixtures/scenarios/read-only-audit.json --output %TEMP%\dove-whole-flow\runs\control.jsonl --timeout-ms 900000` ✓。
+
+**同一个 scenario root 里** ✓（`control.jsonl-single-f1a803bfa4f3\` ✓）：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · `pi-session/` 会话记录 **26,097 B** ✓ · **凭据按名携带**（`auth.json` **2 B** ✓ `models.json` 496 B ✓ `settings.json` 71 B ✓✓）。
+
+**成功信号全亮** ✗✓：`exitCode 0` ✓ · `settled true` ✓ · `harnessTimedOut false` ✓ · `sawAgentStart/End/Settled = true/true/true` ✓ · **`reason "completed"`** ✓ · **`stderr` 空** ✓✗✓ · `terminal {origin: session, code: completed, retryable: false}` ✓。
+
+**而模型一次都没被调用** ✗✓✓✓（同一份 summary ✓）：
+
+| 字段 | 值 |
+|---|---|
+| `providerRounds` | **4** ✗✓（它*真的*去问了四次 ✓） |
+| `inputTokens` / `outputTokens` / `observedTokens` | **0 / 0 / 0** ✗✓ |
+| `resources` | `{toolCalls: 0, toolDurationMs: 0, elapsedMs: 8, inputTokens: 0, cacheReadTokens: 0, …}` ✓✓ |
+| `stopReasons` | `[]` ✓ |
+| `dialogs` | 全 0 ✓ |
+| **`terminalConsistency`** | **`"completed-ledger-only"`** ✓✓（**值名自带答案** ✓） |
+| `providerEvidence` | `[]` ✓（§5：真 provider 下**按构造**为空 ✓✓） |
+| `activeToolCount` | 17 ✓（工具面挂上了 ✓） |
+
+**原因** ✓✓（三处都量过 ✓）：**操作者目录里 `auth.json` = `{}`（2 B）** ✓ · `models-store.json` = `{}` ✓ · **环境变量里没有任何 provider 键** ✓✓（零命中 ✓）→ 携带者**忠实复制了空凭据** ✓ —— 而 run **没有报错** ✗✓。
+
+**诚实的一处** ✗✓：**今晚那 12 段是有真 token 的**（3.24M prompt ✓✓）—— 因为当时是**直接调 CLI** ✓ → **provider 访问是通的** ✓，**空的是 blackbox 运行器这条凭据路径** ✗✓。
+
+**为什么它最重要** ✓✓：**"静默的成功"是测量里最危险的失败** ✗✓ —— 它**污染其后每一条读数** ✓；而**规格 §4 的格式抓得住它** ✓✓（`tokens` 全 0 ✓ + `terminalConsistency` ✓），**但前提是有人读那几个字段** ✗✓。
+
+## 第 4 片：项目（四条标准，全部实测 ✓）
 
 ## 第 3 片：**判分仪器**（已建，红 ✓✓）
 
