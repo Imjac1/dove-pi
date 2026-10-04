@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { classifyInvocation, declaredMutatingToolNames, declaredReadOnly, isReadOnlyShellCommand } from "../src/core/invocation-disposition.ts";
+import { classifyInvocation, declaredMutatingToolNames, declaredNetworkToolNames, declaredReadOnly, isReadOnlyShellCommand } from "../src/core/invocation-disposition.ts";
 import { createDoveRuntime } from "../src/runtime.ts";
 
 /**
@@ -101,5 +101,28 @@ describe("what an invocation is, and what that answer rests on", () => {
 		assert.equal(isReadOnlyShellCommand("powershell", { command: "Get-ChildItem -Force" }), true);
 		assert.equal(isReadOnlyShellCommand("read", { path: "a.ts" }), false, "it answers for the shell, and only the shell");
 		assert.equal(isReadOnlyShellCommand("bash", { command: "npm install" }), false);
+	});
+
+	it("names every host tool that reaches the network, and nothing that does not", () => {
+		// **The list is written here on purpose.** The sandbox's `network: none` is a boundary claim, so the set of tools it
+		// covers is a decision rather than a detail: a ninth name is a change to what that mode refuses, and the point of
+		// asserting the whole set here is that adding one has to be written down twice - once in the declaration and once in
+		// this sentence about it. Before 2026-10-05 this set lived in three places at once (`action-policy.ts` carried eight
+		// names, this module declared four of the same tools, and the representative catalog carried a third set) and no two
+		// of them were compared, so "does `network: none` cover browser calls" had three answers.
+		assert.deepEqual([...declaredNetworkToolNames()].sort(), [
+			"agent_browser",
+			"browser",
+			"fetch_content",
+			"get_search_content",
+			"mcp",
+			"mcpScript",
+			"source_check",
+			"web_search",
+		]);
+		// A tool whose only reach is the local machine is not in it, or the axis would refuse ordinary work.
+		for (const local of ["read", "grep", "ls", "write", "bash", "agent_project_status"]) {
+			assert.ok(!declaredNetworkToolNames().includes(local), local + " reaches nothing outside the machine");
+		}
 	});
 });

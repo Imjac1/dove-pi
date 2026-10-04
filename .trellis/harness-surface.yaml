@@ -18,7 +18,10 @@ components:
   # A component implementation surface includes its tests: the check that an edit stayed inside a surface would
   # otherwise report every real edit as outside, and the tests of a component are part of its implementation.
   tool-implementation: [src, tests]
-  middleware: [src/core/action-policy.ts, src/core/argument-syntax.ts, src/pi-adapter/extension.ts, tests/action-policy.test.ts, tests/host-work-mode.test.ts]
+  # `invocation-disposition.ts` joined this component with the network-axis change: it answers the gate's question (what
+  # is this invocation), which is middleware, and until now it was only reachable as part of `src` under
+  # tool-implementation - so a verdict about an edit to it would have called the change a tool implementation change.
+  middleware: [src/core/action-policy.ts, src/core/argument-syntax.ts, src/core/invocation-disposition.ts, src/pi-adapter/extension.ts, tests/action-policy.test.ts, tests/host-work-mode.test.ts]
   skill: [.agents/skills]
   subagent-config: [src/pi-adapter/subagent-provider.ts, .codex/agents]
   long-term-memory: [.trellis/spec, .trellis/workspace, .trellis/tasks]

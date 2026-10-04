@@ -8,17 +8,20 @@ import { createConformanceGate } from "./gate-conformance.ts";
 import { createLimitGate, readArgumentPath, type LimitSpec } from "./gate-limit.ts";
 import type { GateDecision, GateInvocation } from "./loop.ts";
 import { evaluatePermission, FENCE_TARGETS, matchesPermission, normalizeFencePath, type WorkMode } from "./work-mode.ts";
+import { declaredNetworkToolNames } from "./invocation-disposition.ts";
 import { resolveDoveStateDir } from "./state-dir.ts";
 import type { GateLabel } from "./task-convergence.ts";
 
 /**
- * The host tools that can reach outside the machine (a network call) or mutate the workspace filesystem, by name.
+ * The host tools that can reach outside the machine, **derived from the one place that classifies host tools**.
  *
- * **This is a boundary list, not a capability list**: it names Pi's own tools, because the host's tool boundary is
- * where an isolation claim becomes enforceable without an OS sandbox. A capability that shells out is governed by
- * the mode's permission list and its own declared effects, which is a separate control.
+ * **This was a hand-maintained set of eight names here**, while `invocation-disposition.ts` declared four of the same
+ * tools with the same fact spelled differently and `tests/fixtures/representative-tool-catalog.ts` carried a third set.
+ * Three lists, no reconciliation, and a `sandbox.network: none` boundary whose reach depended on which one a reader
+ * happened to open - the defect the audit recorded against this axis (`.trellis/tasks/10-05-pstack-reference-audit`
+ * findings, level B item 8). A boundary list is the last place to keep a copy of a declaration.
  */
-const NETWORK_TOOLS = new Set(["web_search", "fetch_content", "get_search_content", "source_check", "browser", "agent_browser", "mcp", "mcpScript"]);
+const NETWORK_TOOL_NAMES = new Set(declaredNetworkToolNames());
 export const FILESYSTEM_MUTATORS = new Set(["write", "edit", "bash", "powershell", "replace", "insert", "notebook_edit"]);
 
 /**
@@ -619,7 +622,7 @@ export function createActionPolicy(options: ActionPolicyOptions): ActionPolicy {
 			// `allowlist`) at load, so whatever reaches here is a claim the policy can hold.
 			const sandbox = mode.sandbox;
 			if (sandbox !== undefined) {
-				if (sandbox.network === "none" && NETWORK_TOOLS.has(invocation.tool)) {
+				if (sandbox.network === "none" && NETWORK_TOOL_NAMES.has(invocation.tool)) {
 					return labelled(
 						{
 							outcome: "block",

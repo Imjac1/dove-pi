@@ -48,7 +48,7 @@ export interface InvocationClassification {
  *
  * A tool absent from this table is not assumed to be either: see `classifyInvocation`.
  */
-const DECLARED_TOOLS: Readonly<Record<string, { readonly readOnly: boolean; readonly replaySafe: boolean }>> = {
+const DECLARED_TOOLS: Readonly<Record<string, { readonly readOnly: boolean; readonly replaySafe: boolean; readonly network?: boolean }>> = {
 	read: { readOnly: true, replaySafe: true },
 	grep: { readOnly: true, replaySafe: true },
 	find: { readOnly: true, replaySafe: true },
@@ -65,10 +65,10 @@ const DECLARED_TOOLS: Readonly<Record<string, { readonly readOnly: boolean; read
 	module_report: { readOnly: true, replaySafe: true },
 	read_symbol: { readOnly: true, replaySafe: true },
 	read_enclosing: { readOnly: true, replaySafe: true },
-	web_search: { readOnly: true, replaySafe: true },
-	source_check: { readOnly: true, replaySafe: true },
-	fetch_content: { readOnly: true, replaySafe: true },
-	get_search_content: { readOnly: true, replaySafe: true },
+	web_search: { readOnly: true, replaySafe: true, network: true },
+	source_check: { readOnly: true, replaySafe: true, network: true },
+	fetch_content: { readOnly: true, replaySafe: true, network: true },
+	get_search_content: { readOnly: true, replaySafe: true, network: true },
 	write: { readOnly: false, replaySafe: false },
 	edit: { readOnly: false, replaySafe: false },
 	replace: { readOnly: false, replaySafe: false },
@@ -78,6 +78,36 @@ const DECLARED_TOOLS: Readonly<Record<string, { readonly readOnly: boolean; read
 	agent_workspace_patch: { readOnly: false, replaySafe: false },
 	agent_workspace_restore: { readOnly: false, replaySafe: false },
 };
+
+/**
+ * The host tools that reach the network through a **bridge**, so their reach is a fact this repository knows while their
+ * disposition is one it has not decided.
+ *
+ * A tool that forwards to an MCP server or drives a browser can do anything the server or the page can, so there is no
+ * honest `readOnly` to write for it: calling it read-only would let it through a gate that only admits reads, and calling
+ * it mutating would put an MCP read behind the freeze gate. They are **not** in the disposition table for that reason, and
+ * they are here so the network axis still covers them - the list they used to live in was a hand-maintained set inside
+ * `action-policy.ts`, and the sandbox axis reading a second list is exactly how the two came to disagree.
+ */
+const NETWORK_BRIDGE_TOOLS: readonly { readonly name: string; readonly reason: string }[] = [
+	{ name: "browser", reason: "drives a page, which can fetch and can act" },
+	{ name: "agent_browser", reason: "the same, through the agent's own browser" },
+	{ name: "mcp", reason: "forwards to an MCP server; what it reaches is the server's business" },
+	{ name: "mcpScript", reason: "the same, through a script" },
+];
+
+/**
+ * Every host tool name this repository knows can reach the network, from the one place that classifies host tools.
+ *
+ * **A view, not a list.** `action-policy.ts` carried its own `NETWORK_TOOLS` set of eight names while this file carried
+ * four of them with different spellings of the same fact, and `tests/fixtures/representative-tool-catalog.ts` carried a
+ * third set - three lists, no reconciliation, which is the defect the audit recorded against this axis. The sandbox's
+ * `network: none` axis is a boundary claim, so it now reads the declaration instead of repeating it.
+ */
+export function declaredNetworkToolNames(): readonly string[] {
+	const declared = Object.entries(DECLARED_TOOLS).filter(([, declaration]) => declaration.network === true).map(([toolName]) => toolName);
+	return [...declared, ...NETWORK_BRIDGE_TOOLS.map((bridge) => bridge.name)];
+}
 
 const READ_ONLY_SHELL_SEGMENT = /^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+))|(?:env\s+)?(?:git(?:\s+-C\s+(?:"[^"]*"|'[^']*'|\S+))?\s+(?:status|log|diff|show|ls-files|rev-parse|branch|describe|remote|tag|blame|shortlog|cat-file)\b|go\s+(?:test|vet|list|version|env)\b|(?:ls|dir|find|rg|grep|sed|awk|cat|head|tail|wc|pwd|echo|env|printenv)\b|(?:Get-ChildItem|Get-Content|Select-String|Test-Path)\b).*)$/i;
 const READ_ONLY_SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:\$\?|\d+)$/;

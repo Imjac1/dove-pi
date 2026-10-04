@@ -73,7 +73,8 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   read-only-source` are enforced at the **tool** boundary: the network axis by tool name, the filesystem axis
   by the fence's declared targets. **What the network axis does not cover is anything a shell command
   reaches.** `bash` and `powershell` are not among the eight names it matches
-  (`src/core/action-policy.ts:21`), so a mode declaring `network: none` can still fetch over the network, and
+  (declared in `src/core/invocation-disposition.ts`, read through the derived view at `src/core/action-policy.ts:24`), so
+  a mode declaring `network: none` can still fetch over the network, and
   that is measured rather than inferred: in a twelve-session run a mode declaring exactly that ran
   `npm install`, which resolved and installed a new package version
   (`.trellis/tasks/10-03-ten-million-token-project/findings.md`, finding A). The axis is a claim about the
@@ -82,7 +83,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   harness's `paths`, which is how `authority`'s
   no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
-  **Anchors.** Enforced at `src/core/action-policy.ts:626`; refused at load at `src/pi-adapter/extension.ts:2253`.
+  **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2256`.
 - **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
   and compared as locations: inside the workspace the relative form is produced first and wins, and a
   target with no relative form falls back to the canonical absolute one. So an entry may name a path
@@ -98,7 +99,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   mutating tools whose target the built-in map can read (`write`, `edit`). It reached this shape because
   three of four shipped modes allowed a write into the trace channel's own directory, and the mode
   flagged read-only was the only one that refused - a control every mode must restate is a control that
-  goes missing. **Anchors.** `src/core/action-policy.ts:593`; `tests/a3-trace-independence.test.ts:94`
+  goes missing. **Anchors.** `src/core/action-policy.ts:596`; `tests/a3-trace-independence.test.ts:94`
   is the case that a mode declaring no fence at all still fails.
 - **What that protection cannot see is recorded, not assumed closed.** Two blind spots, both measured:
   **the shell** - a `bash` or `powershell` command writes wherever it likes and no check can see which
@@ -115,9 +116,10 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   framework defect.
 - **What a control refuses is a name, not an intent.** Every control in this format is a name match:
   `effects.classes` matches the tool's name at the effect boundary (`src/core/effect-boundary.ts:122`),
-  `never_allow` matches the action's name (`src/core/action-policy.ts:431`, and `src/core/action-policy.ts:611`
+  `never_allow` matches the action's name (`src/core/action-policy.ts:434`, and `src/core/action-policy.ts:614`
   says as much in its own words - `never_allow` *names actions*), and the sandbox's network axis is membership in a
-  fixed set of tool names (`src/core/action-policy.ts:21`). So a control refuses **an action, not an intent**,
+  fixed set of tool names (one declaration in `src/core/invocation-disposition.ts`, since the audit found the same set
+  spelled three ways with no two of them compared). So a control refuses **an action, not an intent**,
   and the same effect reached under another name is not refused. This is measured rather than argued: in one
   twelve-session run a `bash` command was refused as a non-idempotent undeclared effect, and the model did the
   same work another way and said so - *"That blocked a re-run of `npm test`; I substituted a direct runtime
