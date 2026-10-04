@@ -1,88 +1,54 @@
-# 执行清单
+# 执行清单（`10-04` ✓ —— **一份、单编号、带状态** ✓）
 
-**先说清一件事** ✓：本任务**只规划** ✓ —— 下面的每一片都**开成自己的子任务** ✓，各带先红后绿 ✓；本任务在批准前**不动产品代码** ✗。
+**状态总览** ✓：**任务 1 完成** ✓✓ · **任务 2 完成** ✓✓ · **任务 3：2 片完成 ✓、1 片被测量推翻并合并 ✗✓、1 项（接面）待做** ✗。**A–I 无一条悬空** ✓。
 
-## 顺序
+**所有提交** ✓：`f5561a8`（根因 ✓ 端到端验证过 ✓）· `949dd42`（症状 ✓）· `e01edb6`（记录新鲜度 ✓ + 接线 ✓）· `74cd678`（缓存上报 ✓ + 计划更正 ✓）· `78dcb6e`（发现 G 的文档 ✓）· `9bdc1f0`（发现 C 撤回 ✓）。
 
-**收敛成三个任务** ✓✓（原先的六片里，两片是同一缺陷的两半 ✓；另三片都是"让不可见的变可见" ✓）：
+---
 
-### 任务 1 —— 根因：延续会话里的新请求被当成重放 ✗✓（最高优先）
+## 任务 1 —— 根因：延续会话里的新请求被当成重放 ✗✓ **完成** ✓✓
 
-### 判决（**完成 ✓✓** —— 复现到手，根因是"差一个 1"，探测已移除 ✓）
+1. [x] **判定** ✓✓ **完成** —— 最小复现 = **两句话**（turn A **真派发过** → turn B `--continue` 的第一个工具调用被拒 ✓）· 反例：turn A 只答一句**不触发** ✓ · 临时探针（插在唯一自增点 `startAttempt` ✓，**已移除并逐字节核对** ✓）读数：两回合**租约不同** ✓、每个回合各以 `trigger=initial` 把 `attemptCount` 推到 **1** ✓✓。
+2. [x] **红·单元** ✓ 完成（`actual: true, expected: false` ✓ —— 第一次尝试之后它自称重放 ✓）。
+3. [x] **绿·一处** ✓ 完成 —— 规则挪到计数器旁并命名 `isReplay()` ✓，比较 `> 0` → **`> 1`** ✓（守卫 `effect-boundary.ts:111` 不动 ✗ · 键 `effect-ledger.ts:194` 不动 ✗）。
+4. [x] **集成红→绿** ✓ 完成 —— 同一对复现：修复前**拒** ✓ → 修复后 **`agent_project_status` 成功并返回真实任务状态** ✓✓ · `'Effect refused'` **不再出现** ✓（字面判据 ✓）。
+5. [x] **三条安全属性** ✓ 完成 —— `tests/effect-boundary.test.ts` **8/8 不变** ✓（真实重放的未声明非幂等仍被拒 ✓ · 幂等类仍放行 ✓ · 账本不可读时任何情况都拒 ✓）。
+6. [x] **顺带：`effects.classes` 补只读四工具** ✓ 完成（`agent_project_status` ✓ `agent_project_context` ✓ `agent_list_capabilities` ✓ `agent_doctor` ✓）—— **`agent_task_convergence`（写）与 `bash` 明确不补** ✗，并有**断言**守住 ✓✓。
 
-**最小复现** ✓✓✓（两句话、可重复、**无需改码** ✓）：turn A **真的派发过** → turn B `--continue` 的第一个工具调用被拒 ✓。
+## 任务 2 —— 记录新鲜度（发现 I ✓）**完成** ✓✓
 
-**探测读数**（临时探针插在唯一自增点 `startAttempt` 上 ✓，**已移除** ✓）：
+7. [x] **红** ✓ 完成 —— `"agent_project_status only reads, and an undeclared effect is non-idempotent, so a retry of it is refused for no reason"` ✓。
+8. [x] **绿 + 接线** ✓✓ 完成 —— `src/project-provider/record-freshness.ts`（规则窄到账本真能判定的那条 ✓：**打了勾的判据必须有事件提到它** ✓；未打勾不报 ✓；文本里声称的测试数**不猜** ✗）· 并进 `dove-pi task verify` ✓（与已有的 `prd.md` TBD 检查并列 ✓）· **真实记录读出 `ready: false` + `unsupportedCriteria` 非空** ✓✓。
+   **接线不是可选项** ✓✓：只加模块时仓自己的门直接红 —— *"Either wire them or list them with a reason"* ✓，且它**拒占位理由** ✓、把**过期名单条目**判为失败 ✓。
 
-| 回合 | 探测行 |
-|---|---|
-| turn A | `startAttempt trigger=initial request=req_29d4e4b5… next=1` ✓ |
-| turn B | `startAttempt trigger=initial request=req_0039a384… next=1` ✓✓ |
+## 任务 3 —— 让不可见的变可见 + 上报
 
-→ **两个回合是两个不同租约** ✗✓（**推翻了我从账本得出的 (α) 判决** ✓），而**每个回合一开始就以 `trigger=initial` 把 `attemptCount` 推到 1** ✗✓✓。
+9. [x] **发现 G 的诚实处置** ✓✓ 完成（`78dcb6e` ✓）—— 写进 `.trellis/spec/backend/personal-agent-mode-format.md` 的"看不见什么"一节 ✓，逐条指出是**哪个名**（`effect-boundary.ts:122` ✓ · `action-policy.ts:431`/`:611` ✓ · `action-policy.ts:21` ✓），附那一轮**原文照抄**的绕道证据 ✓。**引文门当场抓我一次** ✗✓（漏 `src/core/` 前缀 ✓）。
+10. [x] **缓存上报** ✓✓ 完成（`74cd678` ✓ · `cache-report.md` 2682 B ✓）—— 253 请求 / 0.0% 命中 / 240 全 MISS ✓ · `cache-audit.ts:87` 的 `no-context` 是**标签不是开关** ✓ · 归属**提供商/宿主** ✗✓ · **本仓零代码改动** ✓。
+11. [ ] **接一个面（第 8 + 9 片合并后的唯一剩余项）** ✗ ——
+    - **计划记的"把终态落盘"不存在** ✗✓：账本**早已**写 `request.received` ✓ `request.planned` ✓ `request.attempt.*` ✓ **`request.terminal`** ✓ `provider.request.*` ✓ `gate.refused` ✓，且 `projectExecutionDiagnostics`（`execution-ledger.ts:152` ✓）**已在归约** `received`/`terminal`/`terminalReasons` ✓✓ → **"被杀" = 一个从未 terminal 的请求** ✓✓。
+    - **发现 C 撤回** ✗✓：`execution-ledger.ts:444` 的 `append` 就是 `await appendFile(...)` ✓ —— **无缓冲** ✗ → 账本每条即写 ✓；我原先的证据把**工作区目录**的 mtime 当成了**账本文件**的 ✓（重取：账本 mtime **比目录新** ✓✓）。
+    - **真问题只剩"面"** ✓：**数据在，运行中看不见** ✓。
+    - **做法** ✓：照 `record-freshness` 那次 —— **先看有没有，再造** ✓；仓内先例 **`harness-axes.ts:85`**（*"没有终态的账本不得报满分"* ✓✓）。
+    - **不做** ✗：**不为不存在的缓冲问题加 flush** ✗✓。
 
-**根因（与代码和全部观察一致 ✓✓✓）**：`extension.ts:2818` 的
-`const replayed = (requestLifecycle.activeLease()?.attemptCount ?? 0) > 0;`
-**在任何回合的第一次 provider 调用之后即为 `true`** ✗✓ → 守卫的完整条件是 `claim.claimed || !input.replayed || isAutomaticallyRetryable(effectClass)` ✓ → **只在"未认领 + `replayed` + 非幂等未声明"时拒** ✓✓ → 于是：`read` 不拒 ✓（在 `effects.classes` 里是 `idempotent` ✓）· `agent_project_status` 拒 ✓✓（身份首次被认领 ✓）· `bash` 在命令是新的时也拒 ✗✓（seg-07/08/09/11 四次 ✓✓）。
+## 任务 3 之外：这条**新读数**归属它自己的任务 ✗✓
 
-**而缺陷就是"差一个 1"** ✓✓✓ —— 边界自己的文档写着：*"a dispatch on our own resumption path, where **an attempt after the first** re-issues work an earlier attempt may already have performed"* ✓✓ → **`attemptCount > 0` ≠ "an attempt after the first"** ✗✓ → **`replayed` 应为 `attemptCount > 1`** ✓（或 `trigger !== "initial"` ✓）。
+12. [ ] **`pentest` 与 `trading` 的 `effects.classes` 一条都没有** ✗✓（量过 ✓）→ 那两个模式下**每个工具**都非幂等，含只读的 ✓ → **同一类遗漏、面更大，单独开任务** ✓。
 
-**这不是放宽保护** ✓✓：它让旗标**符合它自己的定义** ✓✓（第一次尝试从来不是重放 ✓）。
-
-**下一步（切片已精确 ✓✓，可直接照做 ✓）**：
-
-1. [ ] **红·单元** ✓：`tests/effect-boundary.test.ts` **已存在** ✓（`createEffectBoundary` ✓ + **`createInMemoryEffectStore()`** ✓ `effect-ledger.ts:159` ✓）→ **新增一条断言点** ✓：把"这次 dispatch 是不是重放"的规则变成**可调用、有名的**东西 ✓，断言 **`attemptCount === 0` / `1` ⇒ 不是重放** ✓、**`>= 2` ⇒ 是** ✓（今天必红 ✓）。
-2. [ ] **绿·一处** ✓：把 `extension.ts:2818` 的内联推导**挪到计数器旁边并命名** ✓（`request-lifecycle.ts` ✓，规则与它所读的计数器同处 ✓），比较改为 **`> 1`** ✓ —— **守卫（`effect-boundary.ts:111`）不动** ✗、**效果键不动** ✗。
-3. [ ] **红→绿·集成** ✓：用**那对复现**（turn A 真派发 → turn B `--continue` 用 `agent_project_status` ✓✓）验证：修复前**拒** ✓、修复后**不拒** ✓。
-4. [ ] **三条安全属性：重跑 + 确认** ✓✓（`tests/effect-boundary.test.ts:58-79` **已覆盖** ✓）：真实重放的**非幂等未声明**仍被拒 ✓ · 幂等/键幂等类在重放中仍放行 ✓ · **账本不可读时任何情况都拒** ✓ —— 它们是"别改坏"的判据 ✓，不是新写的 ✓。
-5. [ ] **顺带（原 B 片）** ✓：`code-development` 的 `effects.classes` 补**只读**四工具 ✓（`agent_project_status` ✓ `agent_project_context` ✓ `agent_list_capabilities` ✓ `agent_doctor` ✓）—— **`agent_task_convergence` 是写 → 不补** ✗、**`bash` 不补** ✗；并查 `pentest`/`trading` 的 `effects.classes` **为空** ✓ 是否同因 ✓。（根因修好后它**不再必须** ✓，但**补它无害且能缩短暴露窗口** ✓✓。）
-
-**仍站得住 / 被推翻的** ✓✗（都留档 ✓）：站得住——拒绝只在 `replayed` 为真时出现 ✓；被推翻——`beginRequest` 连调可复现 ✗ · 缺陷在 `:200-202` ✗ · 任何 `--continue` 都拒 ✗ · 效果记录带 `stepId` ✗ · **账本显示的"租约复用"** ✗（两回合租约不同 ✓）。
-2. [ ] **红** ✓：一条用例——"**新请求 + 延续会话**"下，只读工具与 `bash` **不被拒** ✓（今天必红 ✓）。
-3. [ ] **绿** ✓：按判定结果改 (α) 或 (β) ✓ —— **守卫（`effect-boundary.ts:111`）不动** ✗、**键（`effect-ledger.ts:194`）不动** ✗。
-4. [ ] **三条安全属性各一条用例** ✓✓（**必须先红后绿** ✓）：真实重放的**非幂等未声明**仍被拒 ✓；幂等类在重放中仍放行 ✓；账本不可读时**任何情况都拒** ✓。
-5. [ ] **顺带（原 B 片）** ✓：`code-development` 的 `effects.classes` 补**只读**的四个 ✓（`agent_project_status` ✓ `agent_project_context` ✓ `agent_list_capabilities` ✓ `agent_doctor` ✓）—— **`agent_task_convergence` 是写 → 不补** ✗、**`bash` 不补** ✗；并查 `pentest`/`trading` 的 `effects.classes` **为空** ✓ 是否同因 ✓。
-   （**它是症状** ✓：根因修好后这条**不再必须** ✓ —— 但**补它是无害的** ✓✓，且能**缩短暴露窗口** ✓。）
-
-### 任务 2 —— 记录新鲜度（发现 I ✓）
-
-6. [ ] **红** ✓：一条用例断言"**打勾意味着账本里有对应事件**" ✓ —— 对今天的 `acceptance.md` **必红** ✓（打勾 AC-001…005 ✓ 而 `evidence.jsonl` 无 closure ✓）。
-7. [ ] **绿** ✓：与 `spec-freshness` 同构 ✓✓ —— **只对账机器能算的** ✓（测试数 ✓ / CI 矩阵 ✓ / 引擎声明 ✓；AC↔账本事件 ✓）。
-
-### 任务 3 —— 让不可见的变可见（发现 H + C + G + F ✓）
-
-8. [ ] **每次会话的结束状态落盘** ✓（正常 ✓ / 被拒 ✓ / 被杀 ✓）—— 让"长静默"与"已死"在外部**可区分** ✓✓（发现 H ✓）。
-   **⚠ 计划在此处被测量更正** ✗✓（2026-10-04 ✓）：**终态早就落盘了** ✓ —— 账本里已有 `request.received` ✓ `request.planned` ✓ `request.attempt.*` ✓ **`request.terminal`** ✓ `provider.request.*` ✓ `gate.refused` ✓；而 `projectExecutionDiagnostics`（`execution-ledger.ts:152` ✓）**已经在归约** `received` / `terminal` / `terminalReasons` ✓✓ → **`received > terminal` 就是"有请求没结束"的证据** ✓✓（**被杀的进程写不出 `terminal`** ✓）。
-   → **所以这一片剩下的是"接一个面"** ✓（照 `record-freshness` 那次的做法：**先看有没有，再造** ✓✓），**仓里已有先例** ✓✓：`harness-axes.ts:85` —— *"A ledger with no terminals must not report `1.0`. A perfect score from no evidence is the defect class this…"* ✓✓。
-   **与任务 1 的接缝** ✓✓（补上先前失败的那一次 ✗）：临时探测证明了一件事值得**永久**留下来 —— **租约与尝试的轨迹**（哪个请求 ✓、第几次尝试 ✓、何时触发 ✓）正是能把"长静默"变成"可读"的东西 ✓✓；探测本身**不永久保留** ✓（已移除 ✓），要留下的是**同一类数据的正式形态** ✓。
-9. [ ] **账本在运行中可见** ✗✓ **发现 C 被测量推翻，并与第 8 片合并** ——
-   **撤回** ✗：*"账本运行中不刷新"* **不成立** ✓ —— `execution-ledger.ts:444` 的 `append` 就是一句 `await appendFile(...)` ✓✓（**无缓冲、无流、无队列** ✗），**每条即写** ✓。
-   **错在哪** ✗✓：我当初把**工作区目录**的 mtime（`20:44:27`）当成了**账本文件**的 mtime ✓；重取为 **`03:53:59`** ✓ → **账本比目录还新** ✓✓ = **运行中一直在写** ✓。
-   **仍在的真问题** ✓✓（= 第 8 片的范围 ✓）：**数据在，但没有"面"** ✓ —— 21 分钟静默里，外部**看不到**账本已经在动 ✓✓。
-   → **两片合并为一件** ✓：**给账本已有的终态与尝试轨迹接一个可读的面** ✓（照 `record-freshness` 那次：**先看有没有，再造** ✓；先例是 `harness-axes.ts:85` ✓✓）。
-   **不做** ✗：**不为一个不存在的缓冲问题加 flush** ✗✓（那正是本会话一直在猎的那类错 ✓）。
-10. [x] **发现 G 的诚实处置** ✓✓ **完成**（`78dcb6e` ✓）：写进 `.trellis/spec/backend/personal-agent-mode-format.md` 的"它看不见什么"那一节 ✓，逐条指出是**哪个名**（`effect-boundary.ts:122` ✓ · `action-policy.ts:431`/`:611` ✓ · `action-policy.ts:21` ✓），并附那一轮**原文照抄**的绕道证据 ✓。**引文门当场抓我一次** ✗✓（一个锚点漏了 `src/core/` 前缀 ✓）。
-11. [x] **缓存上报** ✓✓ **完成**（`74cd678` ✓，`cache-report.md` 2682 B ✓）：253 请求 / 0.0% 命中 / 240 全 MISS ✓ · `cache-audit.ts:87` 的 `no-context` 是**标签不是开关** ✓ · 归属**提供商/宿主** ✗✓ · **本仓零代码改动** ✓。
-
-## 验证
+## 验证（每次提交前都跑过 ✓）
 
 ```
-npm run typecheck && npm test && npm run test:installer
-# 子任务 A 另需：一条"新请求在延续会话里不被拒"的用例（今天必红）
-#             + 三条"安全属性仍成立"的用例
-# 子任务 C 另需：一条"打勾必须有账本事件"的用例（对今天的 acceptance.md 必红）
+npm run typecheck && npm test          # 最后：0 · 899 / 897 pass / 0 fail / 2 skipped
 ```
+另有按片追加的：`tests/request-lifecycle-new-request.test.ts` ✓（4 ✓）· `tests/code-development-mode-effects.test.ts` ✓（2 ✓）· `tests/record-freshness.test.ts` ✓（4 ✓）· `tests/harness-reachability.test.ts` ✓（6 ✓）。
 
-## 风险与回退点
+## 风险与回退 ✓
 
-- **子任务 A 的风险** ✗✓：标识**太宽** → 真实重放漏判 ✗（安全属性失守 ✓）→ **属性用例必须先红后绿** ✓✓；**太窄** ✗ → 保守方向 ✓，可容忍 ✓。
-- **子任务 B 的风险** ✗：把**写**工具也补成幂等 ✗✓ → **只补只读那四个** ✓，`agent_task_convergence` 明确排除 ✓。
-- **子任务 C 的风险** ✗：把检查做得比记录本身还复杂 ✗ → **只对账机器能算的** ✓（照 `spec-freshness` 的边界 ✓✓）。
-- **回退** ✓：A 是单点 ✓（旗标来源 ✓），B 是清单 ✓，C 是新增检查 ✓ —— 三者的回退面都小 ✓✓。
+- **任务 1 已落** ✓：单点改动 ✓（规则与调用点各一处 ✓）→ 回退面小 ✓；安全属性是**结构性**保住（重试走 `startAttempt` ✓ 与 `beginRequest` 不同）✓，且**仍有用例** ✓✓。
+- **任务 2 已落** ✓：新增模块 + 一处接线 ✓；`ready` 的语义变化是**有意的** ✓（记录撑不住自己的打勾就不该 ready ✓）。
+- **剩余项** ✗：只增观测 ✓，不改判定 ✗。
 
-## 提交前
+## 与本任务同时进行的精神条款（本会话立的规矩 ✓）
 
-- [ ] **A–I 每条都落到"子任务 ✓ / 不属于我们并已上报 ✓ / 写明为何不做 ✗✓"之一** ✓，无悬空 ✓
-- [ ] 安全属性 2、3、4 **各有自己的用例** ✓（不是靠"改动很小"来担保 ✗）
-- [ ] 缓存那条**没有**引入本仓代码改动 ✗
-- [ ] 每条子任务都有**今天必红**的用例 ✓（先红后绿 ✓）
+**先量再写** ✓（今天我自己的判读被仪器纠正 **≥8 次** ✓：`beginRequest` 连调 ✓ · `:200-202` ✓ · 任何 `--continue` 都拒 ✓ · 效果记录带 `stepId` ✓ · 账本租约复用 ✓ · `effectClassOf` 参数序 ✓ · YAML 缩进 ✓ · **锚点写 `**被杀**` 而文件是 `被杀`** ✓ · **引文漏路径前缀** ✓ · `state.json` 位置 ✓ · **发现 C 的 mtime 混淆** ✓）。
