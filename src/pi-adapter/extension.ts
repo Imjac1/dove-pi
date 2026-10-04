@@ -968,6 +968,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		// **Read out of the same call that builds the prompt block**, so the number an operator reads cannot disagree with what
 		// was actually sent. A second computation of the same rule is how a reading and its subject drift apart.
 		const workModeReading = workModeInstructions(activeWorkMode);
+		// The assembled prompt: the system prompt this adapter last built plus the fragment attached to that turn, which is the
+		// question a cost reading asks. "Last" is honest - `/status` can be typed between turns, and there is then nothing newer
+		// to report than the prompt that was actually sent.
+		const assembledPromptChars = (lastSystemPrompt?.length ?? 0) + contextText.length;
 		return createStrategySnapshot({
 			plan: currentRequestPlan,
 			interactionMode,
@@ -990,6 +994,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				compacted: contextText.includes("context compacted") || contextText.includes("上下文已压缩"),
 				modeBodyChars: workModeReading.bodyChars,
 				modeBodyTruncated: workModeReading.truncated,
+				...(assembledPromptChars === 0 ? {} : { promptChars: assembledPromptChars }),
 			},
 			cache: inspectCacheDiagnostics(ctx.sessionManager.getEntries()),
 			resources: {

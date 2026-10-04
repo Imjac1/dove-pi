@@ -1502,6 +1502,34 @@ describe("the fence at the host boundary  [D8]", () => {
 			host.restoreCwd();
 		}
 	});
+
+	it("reports the size of the prompt it actually assembled, rather than a nominal number", async () => {
+		// **The reading a cost question needs, and the one assertion that keeps it honest.** The repo measures the *fragments*
+		// it compiles (project context, mode body) but nothing reported the assembled prompt, so "how big is a turn" had no
+		// in-product answer - and the mode body this task added is exactly a change to that number. The check ties the reading
+		// to the prompt the same turn returned: a cached or nominal value cannot satisfy it, and neither can a reading taken
+		// before the block was appended.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-development");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-development" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const turn = await host.events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "change one small thing", systemPrompt: "" }, host.context) as { systemPrompt?: string; message?: { content?: string } } | undefined;
+			const assembled = String(turn?.systemPrompt ?? "").length + String(turn?.message?.content ?? "").length;
+			assert.ok(assembled > 0, "the turn assembled something, so the comparison below is not two zeroes");
+
+			host.notifications.length = 0;
+			await host.commands.get("status")?.handler("full", host.context);
+			const printed = host.notifications.at(-1) ?? "";
+			const reported = Number(/prompt=(\d+)/.exec(printed)?.[1]);
+			assert.ok(Number.isFinite(reported), "the status line reports the prompt size: " + printed.slice(0, 300));
+			assert.equal(reported, assembled, "and it is the size of the prompt that was assembled, not a cached or nominal number");
+		} finally {
+			host.restoreCwd();
+		}
+	});
 });
 
 

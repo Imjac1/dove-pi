@@ -34,6 +34,16 @@ export interface StrategyContextSnapshot {
 	 */
 	readonly modeBodyChars?: number;
 	readonly modeBodyTruncated?: boolean;
+	/**
+	 * The size, in characters, of the last prompt the adapter assembled: the system prompt it built plus the request
+	 * fragment it attached for that turn.
+	 *
+	 * **The two halves are already reported separately** (the mode body here, the compiled project context through
+	 * `doveBudgetChars`), and neither answers the question a cost reading is actually asking. This is the sum, so a change to
+	 * either half moves a number an operator can see. It is asserted against the prompt the same turn returned, which is what
+	 * stops it becoming a nominal value.
+	 */
+	readonly promptChars?: number;
 }
 
 export interface StrategyCacheSnapshot {
@@ -144,6 +154,7 @@ export function createStrategySnapshot(input: StrategySnapshotInput): StrategySn
 			compacted: input.context?.compacted === true,
 			...(nonNegative(input.context?.modeBodyChars) === undefined ? {} : { modeBodyChars: nonNegative(input.context?.modeBodyChars) }),
 			...(input.context?.modeBodyTruncated === true ? { modeBodyTruncated: true } : {}),
+			...(nonNegative(input.context?.promptChars) === undefined ? {} : { promptChars: nonNegative(input.context?.promptChars) }),
 		},
 		...(input.cache ? { cache: input.cache } : {}),
 		resources: {
@@ -176,5 +187,8 @@ export function formatStrategySnapshot(snapshot: StrategySnapshot): string {
 	const modeBody = snapshot.context.modeBodyChars === undefined || snapshot.context.modeBodyChars === 0
 		? ""
 		: `, modeBody=${snapshot.context.modeBodyChars}${snapshot.context.modeBodyTruncated ? "+" : ""}`;
-	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${readOnly}${modeBody}${terminal}`;
+	// **Printed only after a turn has assembled one**, because before that there is no prompt to report and a zero would read
+	// as "the prompt is empty" rather than "nothing has been sent yet".
+	const prompt = snapshot.context.promptChars === undefined ? "" : `, prompt=${snapshot.context.promptChars}`;
+	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${readOnly}${modeBody}${prompt}${terminal}`;
 }
