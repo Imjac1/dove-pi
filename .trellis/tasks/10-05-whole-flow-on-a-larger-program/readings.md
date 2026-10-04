@@ -1,5 +1,19 @@
 # 读数（第 4 片：挑项目 + 验它自己的判分）
 
+## 第 3 片：**判分仪器**（已建，红 ✓✓）
+
+**任务** ✓（用户选 (c) 后，由我按"先量后挑"定 ✓）：**让 `cachecontrol` 遵守 `Cache-Control: immutable`（RFC 8246）** ✓✓。
+
+**为什么是它** ✓✓（三条标准，全部量过 ✓）：**代码里 0 次、文档里 0 次** ✗（`immutable` ✓ · 对照：`max-age` 12 次 ✓ `no-store` 6 次 ✓✓）· **没有一处文档说它故意不支持** ✓（"unsupported/deliberately" 全文 0 命中 ✓）· **它小且可判** ✓✓（RFC 8246 的行为 = **新鲜期内不得再验证** ✓ = 这个库自己的信号 `from_cache` ✓✓）。**淘汰** ✗：`stale-while-revalidate`（需*后台*再验证 ✗ 而这是同步库 ✓）· `stale-if-error`（需错误路径 + 时序 ✓ 偏大 ✗）。
+
+**仪器怎么建的** ✓✓（**克隆内** ✓，不在本仓 ✗）：① 在 `tests/conftest.py` 的 `SimpleApp` 加一条路由 ✓（该应用把路径首段 `getattr` 成同名方法 ✓✓ —— `immutable_cacheable` ✓）；② 新增 `tests/test_immutable.py` ✓，断言**只有那一个信号**：第二次请求 `from_cache is True` ✓✓。
+
+**它的红** ✓✓（跑出来的原文 ✓）：`assert False is True` · `where False = <Response [200]>.from_cache` ✓✓ —— 服务器确实起了（`ENGINE Serving on http://127.0.0.1:63560` ✓），**而库真的又去了一趟服务器** ✗✓✓。
+
+→ **于是"做完了"有了机器可判的定义** ✓✓，**且它住在项目自己的套件里** ✓（AC 4 满足 ✓），**而 agent 的活只剩代码改动** ✓（"小" ✓）。
+
+## 第 4 片：项目（四条标准，全部实测 ✓）
+
 ## 项目（四条标准，全部实测 ✓）
 
 **`cachecontrol`**（`github.com/psf/cachecontrol` ✓，HEAD `d6e3140` ✓）：
