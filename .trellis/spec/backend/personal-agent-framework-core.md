@@ -168,7 +168,13 @@ Trigger: any action with a side effect that a retry or a resume could duplicate.
 function deriveEffectKey(i: DeriveEffectKeyInput): string;
 function toClientOrderId(effectKey: string, o?: ClientOrderIdOptions): string;
 function createEffectLedger(o: { engagement: string; store: EffectStore; now?: () => string }): EffectLedger;
-function dispatchOnce<T>(l: EffectLedger, r: Omit<EffectRecord,"startedAt">, execute: () => Promise<T>, o?: { retryPriorAttempt?: boolean }): Promise<{ executed: boolean; value?: T; existing?: EffectRecord }>;
+// The product path: the boundary claims through the ledger and reports the class it read.
+// src/core/effect-boundary.ts
+function createEffectBoundary(o: EffectBoundaryOptions): EffectBoundary;
+interface EffectBoundary {
+  prepare(i: { action: string; arguments: unknown; replayed: boolean }): Promise<EffectBoundaryDecision>;
+  complete(effectKey: string, outcome: EffectOutcome): Promise<void>;
+}
 ```
 
 ### 3. Contracts
@@ -177,9 +183,10 @@ function dispatchOnce<T>(l: EffectLedger, r: Omit<EffectRecord,"startedAt">, exe
   optional explicit key (a client order id) taking precedence.
 - Consume-once is an **atomic `claim`** in the store, never a read-then-write: the window between a
   check and a write is where a cross-host duplicate lands.
-- `dispatchOnce` **skips by default** when a prior attempt exists, completed or not. Re-dispatching an
-  ambiguous attempt requires `retryPriorAttempt`, and is only safe when the effect key is an
-  idempotency key **the backend honours**.
+- **A prior attempt is skipped by default, completed or not, and a replay proceeds only when the mode's
+  declared effect class says a second run is harmless** (`isAutomaticallyRetryable`: `idempotent` or
+  `key-idempotent`), which is the boundary's `prepare` reading the class beside the claim. That is only
+  safe when the effect key is an idempotency key **the backend honours**.
 - The durable guarantee lives in the tool/backend contract, not the loop: the harness barely affects
   duplicate behaviour, while the contract explains most of it.
 - `toClientOrderId` maps the identity onto a venue-safe id so the venue, not only the framework, can
@@ -191,8 +198,8 @@ function dispatchOnce<T>(l: EffectLedger, r: Omit<EffectRecord,"startedAt">, exe
 | Condition | Required behavior |
 |---|---|
 | Effect already completed | Not re-dispatched |
-| Claimed but not completed | Not re-dispatched unless the caller opts in |
-| Prior attempt failed | Not retried unless the caller opts in; a failure may have landed |
+| Claimed but not completed | Not re-dispatched unless the mode's effect class makes a second run harmless |
+| Prior attempt failed | Not retried unless the class makes a second run harmless; a failure may have landed |
 | Concurrent resumers of one effect | **At most one executes**; the claim is atomic in the store. The guarantee is **at-most-once dispatch from our own resumption paths** - never exactly-once, which requires the backend to enforce the key the tool forwards |
 | Claimed, then the process died | Reads as `unknown`, which is a state rather than an error: an interrupted dispatch wrote no outcome, and the ledger must be able to say that instead of choosing between `completed` and `failed` |
 | Record from another engagement | Refused |
@@ -201,9 +208,10 @@ function dispatchOnce<T>(l: EffectLedger, r: Omit<EffectRecord,"startedAt">, exe
 ### 5. Tests Required
 
 - The same logical effect derives the same key; any component change derives a different one.
-- A completed effect is not re-dispatched; an ambiguous one is skipped by default and retried only on
-  opt-in.
-- Several concurrent resumers produce exactly one execution.
+- A completed effect is not re-dispatched; an ambiguous one is skipped by default, and a replay proceeds
+  only when the declared class makes a second run harmless (`tests/effect-boundary.test.ts`, both
+  directions).
+- Several concurrent resumers produce exactly one claim (`tests/effect-ledger.test.ts`, eight at once).
 - The venue rejects a duplicate the framework's own ledger did not see.
 - A record from another engagement is refused.
 

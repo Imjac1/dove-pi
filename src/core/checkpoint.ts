@@ -86,8 +86,8 @@ export interface CaptureCheckpointInput {
 
 /**
  * Capture a checkpoint from the effects that have **completed**. Blocked and failed effects are not
- * part of it: a blocked action never ran, and a failed one is ambiguous (see `dispatchOnce`), so
- * neither may be recorded as done.
+ * part of it: a blocked action never ran, and a failed one is ambiguous (its outcome may have landed
+ * after the failure), so neither may be recorded as done.
  */
 export function captureCheckpoint(input: CaptureCheckpointInput): ActionCheckpoint {
 	const now = input.now ?? (() => new Date().toISOString());

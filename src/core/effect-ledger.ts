@@ -279,20 +279,6 @@ export class EffectKeyConflictError extends Error {
 	}
 }
 
-/**
- * Raised when a retry is opted into for an effect that cannot tolerate one.
- *
- * The opt-in is only safe because a backend enforces the key, which is what `key-idempotent` means. Asking
- * for a retry without declaring a retryable class is the unsafe case, and it is refused rather than
- * downgraded: a silent downgrade would leave the caller believing the retry happened.
- */
-export class EffectRetryRefusedError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "EffectRetryRefusedError";
-	}
-}
-
 export interface EffectLedgerOptions {
 	readonly engagement: string;
 	readonly store: EffectStore;
@@ -352,90 +338,26 @@ export function createEffectLedger(options: EffectLedgerOptions): EffectLedger {
 }
 
 /**
- * Wrap an executor so that an effect is dispatched at most once by default.
+ * **What used to be here, and where the same guarantees live now.**
  *
- * **Why the default is "never duplicate" rather than "never lose work".** A claimed-but-incomplete
- * effect is ambiguous: the previous attempt may be in flight right now, or it may have died
- * mid-effect. A ledger cannot tell those apart - that is exactly the late-commit problem
- * (arXiv 2609.29095: *"no verification-only policy is exactly-once under late commits"*).
+ * This file carried `dispatchOnce` - a wrapper that claimed an effect through {@link EffectLedger.begin}, ran an executor,
+ * and completed the record - plus `DispatchOptions`, `DispatchResult` and `EffectRetryRefusedError`. Its retry policy (an
+ * explicit opt-in plus a declared effect class) and its guarantee were real, but **the product never called it**: the
+ * boundary's own `prepare`/`complete` (`effect-boundary.ts`) make the same decision, and `tests/effect-ledger.test.ts`'s
+ * eight-way race assertion was the only thing holding the wrapper's version of it. Two implementations of one rule, one of
+ * them unreachable, is the defect class this task exists to close.
  *
- * The two failure directions are not symmetric:
+ * What the deleted code asserted now lives where the product runs:
  *
- * - Choosing "retry" makes a race between resumers duplicate the effect **k times** - the measured
- *   failure is saturation in 36 of 40 cells, crossing hosts (arXiv 2608.03836).
- * - Choosing "skip" risks losing work that a crash interrupted.
+ * - The atomic claim - concurrent resumers produce exactly one `claimed: true` - is the store's, and is asserted against
+ *   {@link EffectLedger.begin} in `tests/effect-ledger.test.ts`.
+ * - Refusing a replay whose class says a second run is not harmless, and allowing one whose class says it is, is
+ *   `effect-boundary.ts`'s `prepare` reading {@link isAutomaticallyRetryable} - asserted in
+ *   `tests/effect-boundary.test.ts` and `tests/code-development-mode-effects.test.ts`.
+ * - The unreadable-claim answer (`unreadable: true`, and never a permission) is `begin`'s, asserted in
+ *   `tests/harness-effect-claim.test.ts`.
  *
- * So the default skips, and re-dispatching an incomplete effect is an **explicit opt-in**
- * ({@link DispatchOptions.retryPriorAttempt}). That opt-in is only safe when the effect key is an
- * idempotency key **the backend honours** - which is where the durable guarantee actually lives
- * (*"the harness barely matters ... the contract explains 81%"*).
- *
- * The claim itself is atomic in the store, so concurrent resumers produce one `claimed: true`.
+ * The one rule that went with the wrapper is the wrapper's own input validation - throwing when a caller opted into a
+ * retry without naming a retryable class. That flag existed only in the deleted API; the product path has no opt-in to
+ * validate, because there the class decides on its own.
  */
-export interface DispatchOptions {
-	/**
-	 * Re-dispatch an effect whose prior attempt is ambiguous - it was claimed but never completed, or it
-	 * failed after possibly taking effect. Only safe when the effect key is an idempotency key the
-	 * executing backend honours; otherwise this is the at-least-once duplicate. Defaults to `false`.
-	 *
-	 * Which effects may set this is a **mode** decision, not a call-site convenience: design section 5.2
-	 * has a mode declare each effect as idempotent, key-idempotent, or non-idempotent.
-	 *
-	 * Setting this without a retryable {@link DispatchOptions.effectClass} throws
-	 * {@link EffectRetryRefusedError} rather than being quietly ignored.
-	 */
-	readonly retryPriorAttempt?: boolean;
-	/**
-	 * The tool's declared class. Required whenever `retryPriorAttempt` is set, because the opt-in's safety
-	 * *is* the class: `key-idempotent` means a backend enforces the key, and `non-idempotent` means a second
-	 * run is a second effect no matter what the caller believes.
-	 */
-	readonly effectClass?: EffectClass;
-}
-
-/**
- * What a dispatch did, or why it did not.
- *
- * `existing` is the report for the ordinary refusal ("this effect was already claimed, here is the record").
- * `unreadableClaim` is the report for the one case the record cannot describe, because the record is the
- * thing that could not be read.
- */
-export interface DispatchResult<T> {
-	readonly executed: boolean;
-	readonly value?: T;
-	readonly existing?: EffectRecord;
-	/** A claim exists with an unreadable record. The effect must not run, and the operator must be told. */
-	readonly unreadableClaim?: boolean;
-}
-
-export async function dispatchOnce<T>(
-	ledger: EffectLedger,
-	record: Omit<EffectRecord, "startedAt">,
-	execute: () => Promise<T>,
-	options: DispatchOptions = {},
-): Promise<DispatchResult<T>> {
-	if (options.retryPriorAttempt === true && (options.effectClass === undefined || !isAutomaticallyRetryable(options.effectClass))) {
-		throw new EffectRetryRefusedError(
-			`Retry opted in for '${record.tool}' without a retryable effect class (got ${options.effectClass === undefined ? "none" : `'${options.effectClass}'`}). A retry is only safe for 'idempotent' or 'key-idempotent', so declare the class the mode gives this tool.`,
-		);
-	}
-	const claim = await ledger.begin(record);
-	// The one case a record cannot describe, because the record is what could not be read.
-	if (claim.unreadable === true) {
-		return { executed: false, unreadableClaim: true };
-	}
-	if (!claim.claimed) {
-		const completed = claim.existing?.outcome === "completed";
-		if (completed || options.retryPriorAttempt !== true) {
-			return { executed: false, existing: claim.existing };
-		}
-	}
-	try {
-		const value = await execute();
-		await ledger.complete(record.effectKey, { outcome: "completed" });
-		return { executed: true, value };
-	} catch (error) {
-		await ledger.complete(record.effectKey, { outcome: "failed" });
-		throw error;
-	}
-}

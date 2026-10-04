@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { evaluatePermission, loadWorkMode, workModeDirectory, type WorkModeFiles } from "../src/core/work-mode.ts";
 import { createLimitGate } from "../src/core/gate-limit.ts";
-import { createEffectLedger, createInMemoryEffectStore, deriveEffectKey, dispatchOnce, toClientOrderId } from "../src/core/effect-ledger.ts";
+import { createEffectLedger, createInMemoryEffectStore, deriveEffectKey, toClientOrderId } from "../src/core/effect-ledger.ts";
 
 const FRAMEWORK = "0.2.0";
 // **The runtime own resolver, not a path written by hand**, so this test cannot drift from where the host looks.
@@ -110,16 +110,23 @@ describe("trading vertical (limit gate + venue-level idempotency)", () => {
 	});
 
 	it("does not double-execute when a resume resubmits the same order", async () => {
+		// **Driven through the ledger's own claim, which is what the product uses.** These two cases ran through the deleted
+		// `dispatchOnce` wrapper; the wrapper's only caller was a test, while the boundary's `prepare`/`complete` make the
+		// same decision on the real path. What the venue sees is unchanged: a submission happens only for the claim that was
+		// granted, so a resume that loses the race sends nothing.
 		const venue = createSandboxVenue();
 		const ledger = createEffectLedger({ engagement: "paper-1", store: createInMemoryEffectStore() });
 		const effectKey = deriveEffectKey({ engagement: "paper-1", mode: MODE_IDENTITY, tool: "order.submit", argumentsDigest: "abc", explicitKey: "BTCUSDT-buy-1" });
 		const clientOrderId = toClientOrderId(effectKey, { prefix: "dove-" });
 		const record = { effectKey, engagement: "paper-1", mode: MODE_IDENTITY, tool: "order.submit", decision: "allowed" as const };
 
-		const first = await dispatchOnce(ledger, record, () => venue.submit({ clientOrderId, notional: 50_000 }));
-		const resumed = await dispatchOnce(ledger, record, () => venue.submit({ clientOrderId, notional: 50_000 }));
-		assert.equal(first.executed, true);
-		assert.equal(resumed.executed, false, "a completed effect is not resubmitted");
+		const first = await ledger.begin(record);
+		if (first.claimed) await venue.submit({ clientOrderId, notional: 50_000 });
+		await ledger.complete(effectKey, { outcome: "completed" });
+		const resumed = await ledger.begin(record);
+		if (resumed.claimed) await venue.submit({ clientOrderId, notional: 50_000 });
+		assert.equal(first.claimed, true);
+		assert.equal(resumed.claimed, false, "a completed effect is not resubmitted");
 		assert.equal(venue.fills.length, 1);
 	});
 
@@ -136,13 +143,21 @@ describe("trading vertical (limit gate + venue-level idempotency)", () => {
 	});
 
 	it("does not auto-retry a submission whose outcome is ambiguous", async () => {
+		// A failed attempt is recorded as failed, and the ledger grants no second claim: a timeout may have filled, so the
+		// framework must not guess. Whether a retry is safe is the effect class's question, answered on the product path in
+		// `effect-boundary.ts` and asserted in `tests/effect-boundary.test.ts`.
 		const ledger = createEffectLedger({ engagement: "paper-1", store: createInMemoryEffectStore() });
 		const effectKey = deriveEffectKey({ engagement: "paper-1", mode: MODE_IDENTITY, tool: "order.submit", argumentsDigest: "abc" });
 		const record = { effectKey, engagement: "paper-1", mode: MODE_IDENTITY, tool: "order.submit", decision: "allowed" as const };
 		let attempts = 0;
-		await assert.rejects(() => dispatchOnce(ledger, record, async () => { attempts += 1; throw new Error("request timed out"); }));
-		const retry = await dispatchOnce(ledger, record, async () => { attempts += 1; return "filled"; });
-		assert.equal(retry.executed, false, "a timeout may have filled; the framework must not guess");
+		const claim = await ledger.begin(record);
+		if (claim.claimed) {
+			attempts += 1;
+			await ledger.complete(effectKey, { outcome: "failed" });
+		}
+		const retry = await ledger.begin(record);
+		if (retry.claimed) attempts += 1;
+		assert.equal(retry.claimed, false, "a timeout may have filled; the framework must not guess");
 		assert.equal(attempts, 1, "no automatic resubmission");
 	});
 

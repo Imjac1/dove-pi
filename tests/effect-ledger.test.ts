@@ -4,7 +4,6 @@ import {
 	createEffectLedger,
 	createInMemoryEffectStore,
 	deriveEffectKey,
-	dispatchOnce,
 	EffectIsolationError,
 	type EffectRecord,
 } from "../src/core/effect-ledger.ts";
@@ -69,63 +68,49 @@ describe("effect ledger", () => {
 	});
 });
 
-describe("dispatchOnce (exactly-once at the effect boundary)", () => {
-	it("does not re-dispatch an effect that already completed", async () => {
+describe("the claim, which is where exactly-once starts", () => {
+	it("does not claim an effect that already completed, and reports the completion", async () => {
 		const ledger = createEffectLedger({ engagement: "eng-1", store: createInMemoryEffectStore() });
 		const rec = record();
-		let executions = 0;
-		const first = await dispatchOnce(ledger, rec, async () => { executions += 1; return "first"; });
-		const second = await dispatchOnce(ledger, rec, async () => { executions += 1; return "second"; });
-		assert.equal(first.executed, true);
-		assert.equal(first.value, "first");
-		assert.equal(second.executed, false, "a completed effect must not run again");
-		assert.equal(second.existing?.outcome, "completed");
-		assert.equal(executions, 1);
+		const first = await ledger.begin(rec);
+		assert.equal(first.claimed, true);
+		await ledger.complete(rec.effectKey, { outcome: "completed" });
+		const second = await ledger.begin(rec);
+		assert.equal(second.claimed, false, "a completed effect must not be claimed again");
+		assert.equal(second.existing?.outcome, "completed", "and the caller can see why it was refused");
 	});
 
-	it("executes exactly once when several resumers race for the same effect", async () => {
+	it("claims exactly once when several resumers race for the same effect", async () => {
+		// **The property the product depends on, asserted on the product's own path.** This was asserted through the deleted
+		// `dispatchOnce` wrapper, whose only caller was this file: the atomicity lives in the store's `claim`, so the race is
+		// driven through `begin` here. The failure it prevents crosses hosts - k resumers must not fire the effect k times.
 		const ledger = createEffectLedger({ engagement: "eng-1", store: createInMemoryEffectStore() });
 		const rec = record();
-		let executions = 0;
-		const results = await Promise.all(
-			Array.from({ length: 8 }, () => dispatchOnce(ledger, rec, async () => { executions += 1; return "x"; })),
-		);
-		assert.equal(executions, 1, "the failure this prevents crosses hosts: k resumers must not fire the effect k times");
-		assert.equal(results.filter((r) => r.executed).length, 1);
+		const claims = await Promise.all(Array.from({ length: 8 }, () => ledger.begin(rec)));
+		assert.equal(claims.filter((claim) => claim.claimed).length, 1);
+		assert.equal(ledger.records().length, 1, "and only the winner is in the log");
 	});
 
-	it("does not re-dispatch a claimed-but-incomplete effect by default", async () => {
-		const ledger = createEffectLedger({ engagement: "eng-1", store: createInMemoryEffectStore() });
-		const rec = record();
-		await ledger.begin(rec); // simulates a previous attempt that is either in flight or died mid-effect
-		let executions = 0;
-		const result = await dispatchOnce(ledger, rec, async () => { executions += 1; return "x"; });
-		assert.equal(result.executed, false, "the default must not duplicate: the ambiguity is unresolvable here");
-		assert.equal(result.existing?.outcome, undefined, "the caller can see it is stuck rather than completed");
-		assert.equal(executions, 0);
-	});
-
-	it("re-dispatches an incomplete effect only when the caller opts in, because the backend's key makes it safe", async () => {
+	it("does not claim a claimed-but-incomplete effect, and says it is stuck rather than done", async () => {
+		// A claimed effect with no outcome is ambiguous: the previous attempt may be in flight right now, or it may have died
+		// mid-effect, and the ledger cannot tell those apart (the late-commit problem). Whether that is retried is a policy
+		// decision this module does not make - `effect-boundary.ts` makes it from the mode's effect class, and
+		// `tests/effect-boundary.test.ts` asserts both directions.
 		const ledger = createEffectLedger({ engagement: "eng-1", store: createInMemoryEffectStore() });
 		const rec = record();
 		await ledger.begin(rec);
-		let executions = 0;
-		// The class is now the thing that makes the opt-in safe, so the test states which class it asserts.
-		// Before M1 the opt-in alone was accepted, which meant the caller's belief stood in for the backend's
-		// enforcement - the exact substitution this contract exists to prevent.
-		const result = await dispatchOnce(ledger, rec, async () => { executions += 1; return "recovered"; }, { retryPriorAttempt: true, effectClass: "key-idempotent" });
-		assert.equal(result.executed, true, "work is not lost when a process dies mid-effect");
-		assert.equal(executions, 1);
+		const again = await ledger.begin(rec);
+		assert.equal(again.claimed, false);
+		assert.equal(again.existing?.outcome, undefined, "the caller can see it is stuck rather than completed");
 	});
 
-	it("does not retry a failed effect by default, because a failure may have landed after the effect", async () => {
+	it("reports a failed attempt's outcome, so a caller is not left guessing what happened", async () => {
 		const ledger = createEffectLedger({ engagement: "eng-1", store: createInMemoryEffectStore() });
 		const rec = record();
-		await assert.rejects(() => dispatchOnce(ledger, rec, async () => { throw new Error("transient"); }));
-		assert.equal(ledger.records()[0]?.outcome, "failed");
-		const retry = await dispatchOnce(ledger, rec, async () => "ok");
-		assert.equal(retry.executed, false, "a timeout that failed after the effect landed is indistinguishable from one that did not");
-		const optedIn = await dispatchOnce(ledger, rec, async () => "ok", { retryPriorAttempt: true, effectClass: "key-idempotent" });
-		assert.equal(optedIn.executed, true, "the mode declares this effect key-idempotent, which is what makes the retry safe");
+		await ledger.begin(rec);
+		await ledger.complete(rec.effectKey, { outcome: "failed" });
+		const again = await ledger.begin(rec);
+		assert.equal(again.claimed, false, "a failure may have landed after the effect, so it is not a permission to re-run");
+		assert.equal(again.existing?.outcome, "failed");
 	});
 });

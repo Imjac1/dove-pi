@@ -9,11 +9,9 @@ import { createScriptedProvider } from "../src/adapters/loop-scripted.ts";
 import {
 	createEffectLedger,
 	deriveEffectKey,
-	dispatchOnce,
 	effectClassOf,
 	isAutomaticallyRetryable,
 	EffectKeyConflictError,
-	EffectRetryRefusedError,
 	type EffectRecord,
 } from "../src/core/effect-ledger.ts";
 import { createFileEffectStore, UnreadableClaimError } from "../src/core/effect-store-file.ts";
@@ -106,17 +104,18 @@ describe("the three states, and why two are not enough", () => {
 		assert.equal(await ledger.outcomeOf(key), "completed");
 	});
 
-	it("does not dispatch an effect whose claim is unreadable, even with a retry opted in", async () => {
+	it("does not dispatch an effect whose claim is unreadable, and never treats it as a permission", async () => {
 		const directory = join(freshDirectory(), "effects");
 		const ledger = createEffectLedger({ engagement: "eng-1", store: createFileEffectStore({ directory }) });
 		const key = keyFor();
 		mkdirSync(directory, { recursive: true });
 		writeFileSync(join(directory, `${key}.json`), "");
-		let executions = 0;
-		const result = await dispatchOnce(ledger, recordFor(key), async () => { executions += 1; return "x"; }, { retryPriorAttempt: true, effectClass: "key-idempotent" });
-		assert.equal(result.executed, false);
-		assert.equal(result.unreadableClaim, true, "the ambiguity is surfaced, not resolved");
-		assert.equal(executions, 0, "an unreadable claim is never a permission, not even for a retryable class");
+		// **Asserted on `begin`, which is where the answer comes from.** This used to run through the deleted `dispatchOnce`
+		// wrapper; the wrapper only forwarded `begin`'s `unreadable` flag, and the product path reads the same flag in
+		// `effect-boundary.ts`'s `prepare`, which is covered in `tests/effect-boundary.test.ts`.
+		const claim = await ledger.begin(recordFor(key));
+		assert.equal(claim.claimed, false);
+		assert.equal(claim.unreadable, true, "the ambiguity is surfaced, not resolved");
 	});
 });
 
@@ -136,25 +135,21 @@ describe("effect class decides whether a retry is allowed", () => {
 		assert.equal(isAutomaticallyRetryable("non-idempotent"), false);
 	});
 
-	it("refuses a retry that declares no class, rather than quietly not retrying", async () => {
+	it("leaves the retry decision to the class, which is the only thing that makes one safe", async () => {
+		// **Two cases were deleted here, and the deletion is the point.** They drove the removed `dispatchOnce` wrapper: one
+		// asserted that the wrapper refuses a retry whose caller named no class, the other that it permits the retry a
+		// retryable class justifies. The wrapper is gone, so the first rule has no input to validate - the product path has
+		// no retry flag, because the class decides on its own - and the second is `effect-boundary.ts`'s `prepare` reading
+		// `isAutomaticallyRetryable`, which `tests/effect-boundary.test.ts` asserts in both directions on the real path.
+		// What is left here is what this module still owns: the class, and whether a replay may proceed.
 		const ledger = createEffectLedger({ engagement: "eng-1", store: createFileEffectStore({ directory: join(freshDirectory(), "effects") }) });
-		await ledger.begin(recordFor(keyFor()));
-		await assert.rejects(
-			() => dispatchOnce(ledger, recordFor(keyFor()), async () => "x", { retryPriorAttempt: true }),
-			EffectRetryRefusedError,
-		);
-		await assert.rejects(
-			() => dispatchOnce(ledger, recordFor(keyFor()), async () => "x", { retryPriorAttempt: true, effectClass: "non-idempotent" }),
-			EffectRetryRefusedError,
-		);
-	});
-
-	it("allows the retry an idempotent class justifies", async () => {
-		const ledger = createEffectLedger({ engagement: "eng-1", store: createFileEffectStore({ directory: join(freshDirectory(), "effects") }) });
-		await ledger.begin(recordFor(keyFor()));
-		const result = await dispatchOnce(ledger, recordFor(keyFor()), async () => "recovered", { retryPriorAttempt: true, effectClass: "idempotent" });
-		assert.equal(result.executed, true);
-		assert.equal(result.value, "recovered");
+		const key = keyFor();
+		const first = await ledger.begin(recordFor(key));
+		assert.equal(first.claimed, true);
+		await ledger.complete(key, { outcome: "completed" });
+		const replay = await ledger.begin(recordFor(key));
+		assert.equal(replay.claimed, false, "the ledger's answer is the claim, and the class decides what a caller may do with it");
+		assert.equal(replay.existing?.outcome, "completed", "and it hands back what the earlier attempt recorded");
 	});
 });
 
