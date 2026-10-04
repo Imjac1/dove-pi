@@ -862,3 +862,33 @@ Turned the findings of a twelve-session run into owned fixes. The root cause of 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 236: A real user's flow on a real project, and the four readings it produced
+<!-- trellis-session: v=2 fp=bfa22561bbc69e01 -->
+
+**Date**: 2026-10-05
+**Task**: A real user's flow on a real project, and the four readings it produced
+**Branch**: `master`
+
+### Summary
+
+The round simulated the whole flow with the repository's own field-run runner instead of hand-rolled sessions, on cachecontrol, a real library five times the size of the previous round's toy. A grading instrument was written before the behaviour: a route serving Cache-Control immutable and one assertion on from_cache, failing, inside the project's own suite. The control run completed and the flow run was cancelled at the fifteen-minute timeout after sixteen provider rounds, fifteen tool observations and a single 565-byte change to controller.py - and the project's suite went from one failing test to two, so the effort was real and the result was wrong. Reading one was read wrongly twice before two records were compared: the summary says zero tokens and the transcript says the model thought, called tools and answered, and the mechanism is that the summary's resource block copies one record's details where the ledger is an event stream. The same shape appeared in two more layers, an output against an exit code and one exit code against another.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f2ed3d1` | docs(task): the project is picked and its grading source runs, and the onboarding cost is the first reading |
+| `ac0c356` | docs(task): the grading instrument for the round, red before the behaviour exists |
+| `2b8b3c1` | feat(scenario): the field-runnable scenario for one small piece of real work |
+| `98013cd` | docs(task): reading one corrected twice - the summary says zero and the transcript says it worked |
+| `a32afb7` | docs(task): the mechanism behind reading one, measured to the line |
+| `ec29b50` | docs(task): reading three - the effort was real and the result was wrong |
+| `65a1723` | docs(task): the shape delta, and what the two runs may not be compared on |
+| `dc00c6e` | docs(task): the change was one file, and that makes reading three sharper |
+| `c18c375` | docs(task): reading four - one command, three exit codes, and the same disagreement in a third layer |
+
+### Status
+
+[OK] **Completed**

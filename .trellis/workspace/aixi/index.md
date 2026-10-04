@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 235
-- **Last Active**: 2026-10-04
+- **Total Sessions**: 236
+- **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~864 | Active |
+| `journal-5.md` | ~894 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 236 | 2026-10-05 | A real user's flow on a real project, and the four readings it produced | `f2ed3d1`, `ac0c356`, `2b8b3c1`, `98013cd`, `a32afb7`, `ec29b50`, `65a1723`, `dc00c6e`, `c18c375` | `master` |
 | 235 | 2026-10-04 | Twelve real sessions, their root cause fixed, and a plan that measurement kept correcting | `f5561a8`, `949dd42`, `e01edb6`, `74cd678`, `78dcb6e`, `9bdc1f0`, `f2b2565`, `170d2cd` | `master` |
 | 231 | 2026-10-01 | Use-time architecture page, the tree described as it is, and a time bomb found on the way | `5de9969`, `86c842a`, `b06360a`, `fb945b5`, `eceba75`, `7c4b906` | `master` |
 | 230 | 2026-10-01 | axi: plan converged onto one repo, the boundary landed in the product repo, and a documented cleanup | `a0e58f7`, `8e721f3`, `f0d0325`, `685eca2`, `00e953b`, `9aa40a0`, `70ac2dc`, `eac2eb6`, `3fa34ec`, `b2c8dc9`, `2a761b0`, `5f14588`, `e70b8e2`, `363f853`, `9d998ca`, `7db2751` | `master` |
