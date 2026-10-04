@@ -1,6 +1,27 @@
 # 读数：**命题仍不成立，按计划停下** ✗✓✓（2026-10-05 ✓）
 
-## ⚠ 追加：**AC 的前提本身是错的** ✗✓✓✓（第三次运行后量出 ✓）
+## 🎯 查的结果：**模式可以被声明、也会被读到，但它必然 `missing-file`** ✗✓✓ + **harness 自报编辑工具不在** ✗✓✓✓
+
+**仪器就是扩展自己** ✓✓（`extension.ts:1172` ✓）：它打印 `` `workMode=${activeWorkMode?.id ?? "none"}` `` ✓，拒绝时打印 `` `workMode=failed, modeRefused: …` `` ✓ —— **而答案就在那次运行的 `flow-mode.jsonl` 里** ✓✓（`stepIndex 1` = 我场景的 `/status` 那一步 ✓）：
+
+```
+Dove Pi: workspace=development, workMode=failed, modeRefused:
+         Work mode 'code-development' could not be loaded: missing-file: mode…
+```
+
+→ **声明被读到了** ✓✓✓（名字正是我写的 `code-development` ✓）· **加载被尝试** ✓ · **以 `missing-file` 失败** ✗✓ → **因为 `modes/<name>/` 要落在*运行时能找到的根*下，而运行的 `--cwd` 是*项目*** ✓，**仓自己的 `modes/` 在*仓*里** ✗✓ → **在这个布局下，一个工作模式*不可能*加载成功** ✗✓✓ = **一条*边界*** ✓✓（**该写进边界的记录，不是拿去除错** ✓）。
+
+**而先前那条"`--mode rpc` 是元凶"是错的** ✗✓✓：**CLI 的工作模式开关是 `--workspace-mode=`** ✓（`dove_pi.py:124` ✓），**扩展的覆盖来自环境变量 `DOVE_PI_WORKSPACE_MODE_OVERRIDE`** ✓✓（`extension.ts:694` ✓），**而 runner 的 env 块里根本没有它** ✓✓（`:112-117` ✓）→ **`--mode rpc` 是别的东西，`executionMode` 也是别的字段** ✗✓ —— **我又追错了一个字段** ✗✓（今晚第二次同型 ✓）。
+
+**同一份输出里的第三条，而且最大** ✗✓✓✓：
+
+```
+当前 Pi 宿主未提供 hashline 编辑工具（replace<path> Pi 或执行 dove-pi install。
+```
+
+→ **harness *自己告诉用户*：它的 hashline 编辑工具不在这个宿主里** ✓✓ → **而读数 #3 里那个 agent 是在*没有*这套编辑工具的情况下干活的** ✗✓✓ → **"改了一个文件、弄坏一条原本通过的用例"因此不再只是"模型草率"** ✗✓✓✓ —— **工具不在场是一个在场的解释** ✓✓，**而我在上一轮把它写成了"一处专注、看着合理的改动"** ✗✓。
+
+## 追加：**AC 的前提本身是错的** ✗✓✓✓（第三次运行后量出 ✓）
 
 **第三次运行** ✓：项目里写了 `.dove/mode.json`（`{schemaVersion: 1, mode: "code-development"}` ✓，**55 B，前三字节 `123,10,32` = 无 BOM** ✓✓ —— 这个仓为一个 BOM 付过代价 ✓）→ 复制到运行副本时**`.dove` ✓ 与 `mode.json` ✓ 都在** ✓✓ → **而 `executionMode` 仍是 `"standard"`，且 `executionModeSource` 是 `"user"`** ✗✓✓。
 
