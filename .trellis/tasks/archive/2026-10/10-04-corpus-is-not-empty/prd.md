@@ -34,7 +34,8 @@ req_33af17c4…  failed / provider-unknown  ->  unattributed
 ## Requirements
 
 - **R1 注记必须说真话** ✓✓：`EMPTY_FAILURE_NOTE` 现在的措辞（*"no failure record … state directories are not preserved"* ✗）对**真实会话**不成立 ✓ → 改成**区分两条路径**：真实会话的账本**保留** ✓（有 13 个为证 ✓）；host 测试的状态目录**不保留** ✓（那才是它真正在说的事 ✓），且**这一条要能测** ✓✓。
-- **R2 让挖掘进入回路** ✓：`summarizeCorpus` 的输出应**在回路能读到的地方出现** ✓（已量到两个面 ✓：`src/cli.ts:73` ✓ 与 `local-rpc.ts:47` 的 `diagnostics/status` ✓✓）→ **并入其中之一** ✓，**不新开命令** ✗。
+- **R2 让挖掘进入回路** ✓ **（已收口：不改动 ✓）** —— **前提被第三次推翻** ✗✓：把 `scripts/harness-corpus.mts` 当作"没人记得跑的脚本"是错的 ✓ —— ① **两份规格引用它** ✓（`personal-agent-harness-loop.md:173` ✓ · `guides/harness-loop-turn.md:26` ✓）→ 它是**一等、有文档的仪器** ✓；② 它自己写着 *"**It prints and never asserts, exit 0 in every case including a root that does not exist**"* ✓✓；③ **默认就走真实根** ✓（`tmpdir()` + `resolveDoveStateDir(…)` ✓）；④ **它已经能被 agent 自己跑到** ✓✓（会话里 `bash` 可用 —— 本任务的证据就是这么取的 ✓）。
+  → **结论** ✓：**不新增 CLI 子命令** ✗。若将来要加 ✓，那是一个**产品决定** ✓（本仓答不了 ✓），且**不是**这个任务的范围 ✗。
 - **R3 三种 "corpus" 各归其名** ✓：**摘要**（`summarizeCorpus` ✓）· **缺口声明**（`failure-reading` 的 `corpus` 字段 ✓）· **外部论文语料**（`2609.30217` 等 ✓）—— 规格里各给一名 ✓，且**本条不需要假红** ✗（它是措辞 ✓；仓里没有术语门 ✓，实测过 ✓）。
 - **R4 保住已经验证过的形状** ✓✓：**组件归属** ✓ · **`cite:` 回指** ✓ · **`preserve:` 防线** ✓ —— 新工作**不得使其退化** ✓（它现在是这个仓里离 AHE 第②柱最近的东西 ✓✓）。
 - **R5 先红后绿** ✓（针对 R1 的断言与 R2 的接线 ✓）。
