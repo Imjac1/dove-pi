@@ -1,0 +1,18 @@
+{
+  "name": "immutable-directive-work",
+  "description": "A user asks for one small behaviour to be implemented in a real library, and that library's own test suite is what says whether it was done.",
+  "requires": "a real provider; --cwd points at the project to work in, which is copied, so the run cannot touch the original; the project's own suite must run there before and after this scenario",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "This project's test suite has one failing test: tests/test_immutable.py. Make it pass by teaching the library to honour the `immutable` cache directive from RFC 8246: a response that is still fresh and marked immutable must not be revalidated, even when the client asks for a fresh copy. Work out the rest from the code and the test. Change only what the behaviour needs, and when the whole suite passes, report which files you changed and why."
+    },
+    {
+      "kind": "prompt",
+      "message": "/status"
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}
