@@ -176,11 +176,12 @@ that reports says so in a field a reader can check.
     failures are the failure reading, and the refusal labels are the axis refusal split (exported as
     `gateRefusalCounts`, one rule for three readers). A corpus summary that derived any of them again could disagree
     with the instrument it is summarising, and a reader would have no way to tell which was right.
-  - **What is missing is part of the summary, with its measured cause.** A corpus with no failure record says so **and**
-    names why: the paths that produce one are driven by host tests whose state directories are created with
-    `mkdtempSync` and go away with the run, while the blackbox runner keeps the ledgers of runs that did not fail. The
-    surviving corpus is skewed by **which runner keeps its ledgers**, so "zero failures" is a statement about what was
-    kept rather than about the harness.
+  - **What is missing is scoped to what the summary can see.** No ledger at all says so rather than reporting zero; a
+    corpus with no failure record names **its input size** and the cause it can speak for - host tests' `mkdtempSync` state
+    directories go with the run, while the blackbox runner keeps a scenario root, and **a real session's ledger lives
+    under a stable workspace-derived path** (thirteen real ledgers here hold three failures). "Zero failures" is therefore
+    a statement about **what was handed over**, not about the harness; a sentence saying failure is unavailable stops a
+    reader from looking, and `tests/harness-corpus-note-scope.test.ts` keeps that one from returning.
   - **It walks and says what it walked**, skipping `node_modules` and `.git`, counting an unparseable ledger as empty
     rather than stopping, and printing rather than asserting - exit 0 in every case, including a root that does not exist.
 

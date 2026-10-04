@@ -8,6 +8,13 @@
 
 A field run is a **measurement**, never an assertion. Nothing in this specification fails a build.
 
+**Three things in this repository are called a corpus, and they are not the same thing**, so a reading should name
+which it means: the **summary** is what `summarizeCorpus` returns over the ledgers a caller hands it (its notes array is
+the field named `corpus`); the **coverage field** is what one reading does *not* contain, in `src/core/failure-reading.ts`
+(the sentence a reader would otherwise take as a clean result); and the **external corpus** is a distribution a paper
+measured - `2609.30217`'s evasion rates, cited at `src/core/argument-syntax.ts`. The first two share an identifier across
+two modules that mean different things by it, and only the second is about an absence.
+
 ## Scenario: Real-Provider Field Run
 
 ### 1. Scope / Trigger
