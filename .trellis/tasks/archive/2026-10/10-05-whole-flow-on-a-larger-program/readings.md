@@ -5,7 +5,20 @@
 ### 再更正一次：**判决对，但我给的原因错了** ✗✓✓（同日，第三次运行后量出 ✓）
 
 **我说**：harness 没装上（拿 `.dove` 缺席 ✓ · `executionMode "standard"` ✓ · 会话记录无 mode 字样当证据 ✗✓）。
-**真相** ✓✓✓：**harness 一直装着** ✗✓ —— **两次运行的账本都带着 harness 自己的生命周期记录** ✓✓（`request.received` ✓ `request.planned` ✓ `request.attempt.started/completed` ✓ `request.terminal` ✓ `model.budget.checked` ✓ `task.convergence.observed` ✓✓），**而 launcher 跑的就是 `dove-pi` 自己** ✓（`real-dove-blackbox.mjs:99` ✓）→ **缺的不是 harness，是*工作模式*** ✗✓：运行器**每次都传 `--mode rpc`** ✓✓（`:101-103` ✓），按 `work-mode.ts:903` 的优先级**它压过项目声明** ✗✓ → **`mode.json` 连问都没被问** ✗✓。
+**真相** ✓✓✓：**harness 一直装着** ✗✓ —— **两次运行的账本都带着 harness 自己的生命周期记录** ✓✓（`request.received` ✓ `request.planned` ✓ `request.attempt.started/completed` ✓ `request.terminal` ✓ `model.budget.checked` ✓ `task.convergence.observed` ✓✓），**而 launcher 跑的就是 `dove-pi` 自己** ✓（`real-dove-blackbox.mjs:99` ✓）。
+
+**缺的是*工作模式*，而原因在第四次测量里定死了** ✓✓：项目里那份 `.dove/mode.json`（`{schemaVersion: 1, mode: "code-development"}` ✓，55 B、无 BOM ✓）**被读到了** ✓✓ —— 扩展自己的状态行给出了证据 ✓：
+
+```
+Dove Pi: workspace=development, workMode=failed, modeRefused:
+         Work mode 'code-development' could not be loaded: missing-file: mode…
+```
+
+**拒绝信息里的名字正是被声明的那个** ✓✓ → **所以失败发生在*目录*** ✗✓：`modes/<name>/` 要落在**运行时能看到的根**下 ✓，而运行的 `--cwd` 是**项目** ✓、**仓自己的 `modes/` 在*仓*里** ✗✓ → **在这个布局下工作模式*不可能*加载** ✗✓✓ = **一条边界**（已开 `10-05-declared-mode-unloadable` ✓）。
+
+**而这一节先前写的那条原因是错的** ✗✓✓（保留于此以便对照 ✓）：我写过 *"运行器每次都传 `--mode rpc`，按优先级它压过项目声明，`mode.json` 连问都没被问"* ✗✓ —— **被推翻** ✓：**CLI 的工作模式开关是 `--workspace-mode=`** ✓（`dove_pi.py:124` ✓），**扩展的覆盖来自环境变量 `DOVE_PI_WORKSPACE_MODE_OVERRIDE`** ✓✓（`extension.ts:694` ✓），**而 runner 的 env 块里没有它** ✓✓ → **`--mode rpc` 与 `executionMode` 都不是在工作模式这件事上说话** ✗✓。
+
+**同一次测量还给出第三条** ✗✓✓✓：**harness 自报"当前 Pi 宿主未提供 hashline 编辑工具"** ✓✓ → **读数 #3 里那个 agent 是在*没有*这套编辑工具的情况下干活的** ✗✓ → **"改了一个文件、弄坏一条原本通过的用例"因此有了一个*在在场的*解释** ✓✓（已开 `10-05-missing-hashline-edit-tool` ✓）。
 
 → **所以下面这条判决仍然成立** ✓（"用户走完整个流程"确实没成立 ✓ —— mode-scoped 的控制那一套确实没在场 ✗），**而它的证据要按上面这一条读** ✓✓。**"harness 在不在" 与 "工作模式选没选上" 是两个问题** ✓✓ —— **我先前把它们混成了一个** ✗✓✓。
 
