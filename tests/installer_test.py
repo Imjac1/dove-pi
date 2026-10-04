@@ -212,6 +212,31 @@ class InstallerCliTests(unittest.TestCase):
         self.assertIn("process.execPath", source)
         self.assertIn("pythonCommands", source)
 
+    def test_launcher_routes_every_command_the_cli_implements(self):
+        """**The table the launcher decides with, held against the table the CLI implements.**
+
+        The launcher sends a command to the Python CLI only when it is named in `pythonCommands`, and anything else is
+        handed to Pi as a prompt for a new session. `axi-turn` was in `dove_pi.LOCAL_CLI_COMMANDS` and named in `--help`
+        while missing from that set, so the documented entry point to the framework's own loop started a Pi conversation
+        instead - and the case above cannot see it, because it asks whether three identifiers appear in the file rather
+        than whether the table is complete.
+        """
+        source = (Path(__file__).resolve().parents[1] / "bin" / "dove-pi.cjs").read_text(encoding="utf-8")
+        table = re.search(r"const pythonCommands = new Set\(\[(.*?)\]\)", source, re.S)
+        self.assertIsNotNone(table, "the launcher no longer declares its command table where this check looks for it")
+        routed = set(re.findall(r'"([^"]+)"', table.group(1)))
+        self.assertGreater(len(routed), 5, "a table this small would pass this check vacuously")
+        self.assertGreater(len(dove_pi.LOCAL_CLI_COMMANDS), 5, "and so would an empty command set")
+        missing = sorted(dove_pi.LOCAL_CLI_COMMANDS - routed)
+        self.assertEqual(
+            missing,
+            [],
+            "these commands are implemented by the CLI and not routed to it, so running them starts a Pi session: " + ", ".join(missing),
+        )
+        # The three the help promises as entry points, which is the shape the defect had.
+        for documented in ("axi-turn", "doctor", "task"):
+            self.assertIn(documented, routed, f"{documented} is documented and must reach the CLI")
+
     def test_windows_path_cleanup_removes_only_the_managed_launcher(self):
         current = r'C:\Tools;"C:\Users\Alice\AppData\Local\DovePi\bin\";C:\Other;'
         updated, removed = without_user_path_entry(current, Path(r"c:\users\alice\appdata\local\dovepi\bin"))

@@ -16,6 +16,11 @@ const piEntry = path.join(
 );
 const extension = path.join(packageRoot, ".pi", "extensions", "personal-agent.ts");
 const python = process.platform === "win32" ? "python" : "python3";
+// **A command reaches the CLI only from this list**, and anything else is handed to Pi as a prompt for a new session. So a
+// command the CLI implements and `--help` names has to be here, or the documented entry point silently starts a
+// conversation instead of running: `axi-turn` was exactly that, and no check could see it, because the launcher is outside
+// the type gate and the installer suite only asked whether three identifiers appear in this file.
+// `tests/installer_test.py` now holds this table against `dove_pi.LOCAL_CLI_COMMANDS`, which is the set the CLI implements.
 const pythonCommands = new Set([
 	"doctor",
 	"project",
@@ -25,6 +30,7 @@ const pythonCommands = new Set([
 	"web",
 	"cache",
 	"token",
+	"axi-turn",
 	"capability",
 	"rpc",
 	"mcp",
