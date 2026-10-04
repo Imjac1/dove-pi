@@ -1,5 +1,25 @@
 # 读数：**命题仍不成立，按计划停下** ✗✓✓（2026-10-05 ✓）
 
+## ⚠ 追加：**AC 的前提本身是错的** ✗✓✓✓（第三次运行后量出 ✓）
+
+**第三次运行** ✓：项目里写了 `.dove/mode.json`（`{schemaVersion: 1, mode: "code-development"}` ✓，**55 B，前三字节 `123,10,32` = 无 BOM** ✓✓ —— 这个仓为一个 BOM 付过代价 ✓）→ 复制到运行副本时**`.dove` ✓ 与 `mode.json` ✓ 都在** ✓✓ → **而 `executionMode` 仍是 `"standard"`，且 `executionModeSource` 是 `"user"`** ✗✓✓。
+
+**元凶量到一行** ✓✓✓（`scripts/real-dove-blackbox.mjs` ✓）：
+
+```js
+:101  const launcherArgs = launcher === "source"
+:102    ? [resolve(repoRoot, "dove_pi.py"), "--offline", "--mode", "rpc", "--session-dir", sessionDir]
+:103    : [...managedLauncherArgs, "--offline", "--mode", "rpc", "--session-dir", sessionDir];
+```
+
+→ **每一次运行都传 `--mode rpc`** ✓✓ → 按 `work-mode.ts:903` 的优先级（*"highest first: **an explicit override (a CLI flag)**, the project's declaration"* ✓✓），**它压过项目声明** ✗✓ → **所以 `mode.json` 连被问到都没被问到** ✗✓（不是"读到但被覆盖" ✓）。
+
+**而 `executionMode` 取自 `strategy?.executionMode`** ✓✓（`:495-498` ✓）= **harness 自己的策略记录** ✓ → **所以 `"standard"` 是"工作模式"，被一个*传输*参数覆盖** ✗✓✓ = **本轮真正的发现** ✓✓。
+
+**最关键的一条** ✗✓✓✓：**harness 从来都装上了** ✓✓ —— **两次运行的账本都带着 harness 自己的生命周期记录** ✓✓（`request.received` ✓ `request.planned` ✓ `request.attempt.*` ✓ `request.terminal` ✓ `model.budget.checked` ✓ `task.convergence.observed` ✓✓）；**而 launcher 跑的就是 `dove-pi` 自己** ✓（`:99` ✓）→ **"harness 在不在" ✓ 与 "工作模式选没选上" ✗ 是*两个*问题** ✓✓ —— **而我的 AC 用第二个去判第一个，判错了** ✗✓✓。
+
+**所以本任务的 AC 已失效** ✗✓：它要检的东西**不是它以为的那个东西** ✓ → **下一次该问的是**：*这个运行器里，一个工作模式**能不能**被选上* ✓（若能 ✓ → 那"用户流程"要它 ✓；若不能 ✗ → **那是运行器的边界，应当写成边界** ✗✓）。
+
 ## 这一轮要检的两条（**AC 原文** ✓）
 
 | AC 要求 | 读数 |
