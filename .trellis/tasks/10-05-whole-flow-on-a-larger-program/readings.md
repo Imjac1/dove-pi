@@ -20,6 +20,27 @@
 
 **为什么它最重** ✓✓：**整轮实验的证据基础**就是这份读数 ✓ —— **只读 `summary`** 会得出"模型没参与" ✗（**我起初正是如此，两次** ✗✓）；**只读会话记录** 会看不到 token 与成功信号的缺口 ✗。**两份必须一起读** ✓✓。
 
+### 分叉的机制（**已量到行** ✓✓）
+
+**账本里数据是全的** ✓✓（`dove-state/execution.jsonl`，41 行 ✓）：`provider.request.started` **×4** ✓ · `provider.request.completed` **×4** ✓ · **`tool.observed` ×2** ✓ · `request.terminal` ×1 ✓ —— **而 summary 说 `toolCalls: 0`** ✗✓ → **它不只和会话记录矛盾，也和账本矛盾** ✓✓。
+
+**原因在 runner 的取值方式** ✓✓：
+
+```js
+:489  const resources = resourceRecord ? redactResourceObservation(resourceRecord) : strategy?.resources;
+:516  function redactResourceObservation(record) {
+:517      const details = record?.details || {};
+:519      toolCalls: details.toolCalls,
+:520      providerRounds: details.providerRounds,
+:523      inputTokens: details.inputTokens,
+```
+
+→ **这些字段全部取自*同一条*记录的 `details`** ✗✓✓ —— 而账本是**事件流** ✓ → **"单条详情"与"事件流"在结构上即可不一致** ✓✓。
+
+**那条记录是谁** ✓（已量 ✓）：`execution-ledger.ts` 里 `resourceRecord` 的选法是 `[…].reverse().find(kind === "task.convergence.observed")` ✓✓ = **末次收敛观测** → **summary 描述的是那一刻的状态，不是整场累计** ✗✓✓ —— 而 §4 的格式让后者看起来像"整场运行的数字" ✓✓。**（runner 从何处取得那条记录：尚待核 ✗✓ —— 我不把它写成已知。）**
+
+**因此本轮的实用规则** ✓✓：**累计量取自账本事件流** ✓（数 `provider.request.*` ✓ · 数 `tool.observed` ✓）；**summary 的 `resources` 只作末次观测读** ✗✓。
+
 ## 附：这次运行的基础（实测 ✓）
 
 同一个 scenario root（`control.jsonl-single-f1a803bfa4f3\` ✓）：**项目的*副本*** ✓（`project/` ✓，含我那条 `test_immutable.py` ✓✓）· `dove-state/execution.jsonl` **25,652 B** ✓ · **凭据按名携带**（`auth.json` 2 B ✓ `models.json` **496 B** ✓ `settings.json` 71 B ✓✓）· **`providerEvidence: []`** ✓（§5：真 provider 下按构造为空 ✓）· `activeToolCount 17` ✓。
