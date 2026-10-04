@@ -70,6 +70,17 @@ export interface ExecutionDiagnosticsProjection {
 	readonly lastTerminal?: ExecutionTerminalDiagnostic;
 	readonly lastResourceObservation?: ExecutionResourceDiagnostic;
 	readonly lastRefusals?: readonly ExecutionRefusalDiagnostic[];
+	/**
+	 * Requests that arrived and never terminated, capped like the refusals above.
+	 *
+	 * This is the only evidence a process that is gone leaves: it cannot write its own ending, so the absence of a
+	 * terminal record is the record. Two host-level hard stops in one run were unlocatable partly because nothing
+	 * could express that absence - the projection reported the last terminal it saw and not whether the counts
+	 * agreed.
+	 */
+	readonly requestsReceived?: number;
+	readonly requestsTerminated?: number;
+	readonly unterminatedRequests?: readonly string[];
 }
 
 /**
@@ -162,6 +173,9 @@ export function projectExecutionDiagnostics(
 	const strategy = strategyRecord && isRecord(strategyRecord.details) && isRecord(strategyRecord.details.strategy)
 		? mergeStrategyResources(strategyRecord.details.strategy as unknown as StrategySnapshot, resource)
 		: undefined;
+	const received = matching.filter((record) => record.kind === "request.received").map((record) => stringValue(record.correlation?.requestId)).filter((id): id is string => id !== undefined);
+	const terminated = new Set(matching.filter((record) => record.kind === "request.terminal").map((record) => stringValue(record.correlation?.requestId)));
+	const unterminated = received.filter((id) => !terminated.has(id)).slice(-MAX_LAST_REFUSALS);
 	return {
 		schemaVersion: 1,
 		...(strategy ? { strategy } : {}),
@@ -170,6 +184,11 @@ export function projectExecutionDiagnostics(
 		// The key is omitted rather than set to an empty array, which is what a consumer iterating keys sees: a session with no
 		// refusal must not read as one whose refusals were dropped.
 		...(refusalRecords.length > 0 ? { lastRefusals: refusalRecords.map(projectRefusalDiagnostic) } : {}),
+		// Counted over the same filtered records, and omitted when the ledger held no request at all - the rule this
+		// projection already follows for refusals: a consumer iterating keys must not read "nothing arrived" as
+		// "arrivals were dropped". A ledger that did record requests always carries both counts, equal or not.
+		...(received.length > 0 ? { requestsReceived: received.length, requestsTerminated: terminated.size } : {}),
+		...(unterminated.length > 0 ? { unterminatedRequests: unterminated } : {}),
 	};
 }
 

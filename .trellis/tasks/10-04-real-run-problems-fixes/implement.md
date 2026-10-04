@@ -25,7 +25,8 @@
 
 9. [x] **发现 G 的诚实处置** ✓✓ 完成（`78dcb6e` ✓）—— 写进 `.trellis/spec/backend/personal-agent-mode-format.md` 的"看不见什么"一节 ✓，逐条指出是**哪个名**（`effect-boundary.ts:122` ✓ · `action-policy.ts:431`/`:611` ✓ · `action-policy.ts:21` ✓），附那一轮**原文照抄**的绕道证据 ✓。**引文门当场抓我一次** ✗✓（漏 `src/core/` 前缀 ✓）。
 10. [x] **缓存上报** ✓✓ 完成（`74cd678` ✓ · `cache-report.md` 2682 B ✓）—— 253 请求 / 0.0% 命中 / 240 全 MISS ✓ · `cache-audit.ts:87` 的 `no-context` 是**标签不是开关** ✓ · 归属**提供商/宿主** ✗✓ · **本仓零代码改动** ✓。
-11. [ ] **接一个面（第 8 + 9 片合并后的唯一剩余项）** ✗ ——
+11. [x] **接一个面** ✓✓ **完成** —— `projectExecutionDiagnostics` 现在带出 **`requestsReceived`** ✓ · **`requestsTerminated`** ✓ · **`unterminatedRequests`** ✓✓（`execution-ledger.ts` ✓）；红是 `actual: undefined` ✓ → 绿两条 ✓。**而两个"面"早就存在** ✓✓：`src/cli.ts:73` 已在读账本 ✓、`local-rpc.ts:47` 的 **`diagnostics/status` 是运行中可查的活接口** ✓✓ —— **缺的只是投影说不出"有请求从未结束"** ✗✓。
+    **仓自己的规矩纠正了我两次** ✓✓：① 一条既有用例（*"carries only the schema version when the ledger holds nothing to project"* ✓）说明**空则省略键** ✓ —— 而我原本"无条件上报" ✗ → 改回省略 ✓；② **代码注释不得引行号** ✓✓（*"a comment cites a line of this repository, which drifts: name the thing instead"* ✓）—— 我三次引文违规里，这是门给出的**比我的习惯更好的规矩** ✓。
     - **计划记的"把终态落盘"不存在** ✗✓：账本**早已**写 `request.received` ✓ `request.planned` ✓ `request.attempt.*` ✓ **`request.terminal`** ✓ `provider.request.*` ✓ `gate.refused` ✓，且 `projectExecutionDiagnostics`（`execution-ledger.ts:152` ✓）**已在归约** `received`/`terminal`/`terminalReasons` ✓✓ → **"被杀" = 一个从未 terminal 的请求** ✓✓。
     - **发现 C 撤回** ✗✓：`execution-ledger.ts:444` 的 `append` 就是 `await appendFile(...)` ✓ —— **无缓冲** ✗ → 账本每条即写 ✓；我原先的证据把**工作区目录**的 mtime 当成了**账本文件**的 ✓（重取：账本 mtime **比目录新** ✓✓）。
     - **真问题只剩"面"** ✓：**数据在，运行中看不见** ✓。
