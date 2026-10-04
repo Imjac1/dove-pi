@@ -125,7 +125,7 @@ describe("local CLI/RPC capability adapter", () => {
 				schemaVersion: 1, logicalRequestId: "req-diagnostics", intent: "lookup", lane: "fast", interactionMode: "auto",
 				executionMode: "standard", executionModeSource: "user", thinkingPolicy: "auto", thinkingPolicySource: "auto",
 				toolProfile: "auto", toolProfileSource: "pi", activeToolCount: 2,
-				providerRound: { used: 1, limit: 3 }, readOnlyBudget: { used: 0, warning: 10, hardStop: 20 },
+				providerRound: { used: 1, limit: 3 }, readOnlyBudget: { used: 0, warning: 10 },
 				context: { omitted: false, compacted: false }, resources: { toolCalls: 0, toolDurationMs: 0, elapsedMs: 12, stopReasons: [] },
 			});
 			await ledger.appendTaskResourceObservation({

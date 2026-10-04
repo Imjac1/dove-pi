@@ -20,9 +20,16 @@ export interface ProgressGuardOptions {
 	longRunMinutes?: number;
 }
 
+/**
+ * The read-only exploration budget for one run.
+ *
+ * **One threshold, because one is compared.** This carried a second number - a hard stop - which was computed, clamped
+ * against the warning, projected into `/status` and compared to nothing: no branch ever ended a run because of it, so it
+ * read as a ceiling while being decoration. A threshold that cannot fire is worse than none, because an operator plans
+ * around it; the warning is the one that fires, and it is the one that stays.
+ */
 export interface ProgressRunOptions {
 	readOnlyToolWarningThreshold?: number;
-	readOnlyToolHardStopThreshold?: number;
 }
 
 export interface ProgressSnapshot {
@@ -191,7 +198,6 @@ export class ProgressGuard {
 	private interactiveQuestion?: InteractiveQuestionState;
 	private interactiveWarningIssued = false;
 	private readOnlyToolWarningThreshold?: number;
-	private readOnlyToolHardStopThreshold?: number;
 	private readOnlyBudgetWarningIssued = false;
 
 	constructor(options: ProgressGuardOptions = {}) {
@@ -224,10 +230,6 @@ export class ProgressGuard {
 	start(now = Date.now(), options: ProgressRunOptions = {}): void {
 		this.state = { ...this.emptySnapshot(), active: true, startedAt: now, lastActivityAt: now };
 		this.readOnlyToolWarningThreshold = optionalPositiveInteger(options.readOnlyToolWarningThreshold);
-		this.readOnlyToolHardStopThreshold = optionalPositiveInteger(options.readOnlyToolHardStopThreshold);
-		if (this.readOnlyToolWarningThreshold !== undefined && this.readOnlyToolHardStopThreshold !== undefined) {
-			this.readOnlyToolHardStopThreshold = Math.max(this.readOnlyToolWarningThreshold, this.readOnlyToolHardStopThreshold);
-		}
 		this.lastFailureFingerprint = undefined;
 		this.batchCalls.clear();
 		this.lastSuccessfulObservation = undefined;
@@ -415,7 +417,6 @@ export class ProgressGuard {
 		this.interactiveQuestion = undefined;
 		this.interactiveWarningIssued = false;
 		this.readOnlyToolWarningThreshold = undefined;
-		this.readOnlyToolHardStopThreshold = undefined;
 		this.readOnlyBudgetWarningIssued = false;
 	}
 }

@@ -4,11 +4,17 @@ import type { RequestTerminalEnvelope } from "./request-lifecycle.ts";
 
 export type StrategyValueSource = "auto" | "user" | "pi" | "inherited";
 
+/**
+ * One budget a request is running against.
+ *
+ * **`limit` is the threshold that fires**, not a ceiling nobody compares: the read-only pair this used to carry included a
+ * hard stop that was projected and never read, so the projected line showed a bound no branch could reach. A number here
+ * has to be one some code acts on, which is the reason `warning` is separate rather than folded into `limit`.
+ */
 export interface StrategyBudgetSnapshot {
 	readonly used: number;
 	readonly limit?: number;
 	readonly warning?: number;
-	readonly hardStop?: number;
 }
 
 export interface StrategyContextSnapshot {
@@ -158,15 +164,17 @@ export function createStrategySnapshot(input: StrategySnapshotInput): StrategySn
 export function formatStrategySnapshot(snapshot: StrategySnapshot): string {
 	const plan = snapshot.intent && snapshot.lane ? `${snapshot.intent}/${snapshot.lane}` : "idle";
 	// **A count, not a budget.** Nothing fills a provider-round limit any more, so the `used/limit` form would print a
-	// ceiling that does not exist - `providerRounds=3/unknown` reads as a budget nobody enforces. The read-only line
-	// below still prints one because it has real thresholds.
+	// ceiling that does not exist - `providerRounds=3/unknown` reads as a budget nobody enforces. The read-only line below
+	// prints the warning threshold, which is the one `ProgressGuard` acts on, and it is the only threshold that remains:
+	// the hard stop it used to print beside it was compared to nothing, so the line was showing two bounds where one fires.
 	const round = snapshot.providerRound.limit === undefined ? `${snapshot.providerRound.used}` : `${snapshot.providerRound.used}/${snapshot.providerRound.limit}`;
 	const terminal = snapshot.terminal ? ` terminal=${snapshot.terminal.code}` : " terminal=none";
+	const readOnly = snapshot.readOnlyBudget.warning === undefined ? `${snapshot.readOnlyBudget.used}` : `${snapshot.readOnlyBudget.used}/${snapshot.readOnlyBudget.warning}`;
 	// **Printed only when a mode body was carried**, because zero characters is the ordinary case (no mode declared, or a mode
 	// whose body is empty) and a `modeBody=0` on every line would become noise a reader stops seeing. The `+` marks a cut:
 	// the number is what entered, and the prompt says how much was omitted.
 	const modeBody = snapshot.context.modeBodyChars === undefined || snapshot.context.modeBodyChars === 0
 		? ""
 		: `, modeBody=${snapshot.context.modeBodyChars}${snapshot.context.modeBodyTruncated ? "+" : ""}`;
-	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${snapshot.readOnlyBudget.used}/${snapshot.readOnlyBudget.hardStop ?? "unknown"}${modeBody}${terminal}`;
+	return `strategy=${plan} mode=${snapshot.executionMode}(${snapshot.executionModeSource}) thinking=${snapshot.thinkingPolicy}(${snapshot.thinkingPolicySource}) tools=${snapshot.toolProfile}(${snapshot.toolProfileSource}), activeTools=${snapshot.activeToolCount}, providerRounds=${round}, readOnly=${readOnly}${modeBody}${terminal}`;
 }

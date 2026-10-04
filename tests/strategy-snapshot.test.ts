@@ -16,7 +16,7 @@ describe("strategy snapshot", () => {
 			toolProfileSource: "pi",
 			activeToolCount: 12,
 			providerRound: { used: 2, limit: 5 },
-			readOnlyBudget: { used: 3, warning: 6, hardStop: 12 },
+			readOnlyBudget: { used: 3, warning: 6 },
 			context: { contextWindow: 128_000, observedTokens: 18_000, doveBudgetChars: 64_000, budgetSource: "provider-window", omitted: false, compacted: false },
 			resources: { toolCalls: 4, elapsedMs: 1200, stopReasons: ["provider-round"] },
 		});

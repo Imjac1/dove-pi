@@ -980,11 +980,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			toolProfileSource: toolSource,
 			activeToolCount: (typeof pi.getActiveTools === "function" ? pi.getActiveTools() : activeToolSnapshot).length,
 			providerRound: { used: currentRequestProviderRounds },
-			readOnlyBudget: { used: progress.readOnlyToolCalls, warning: readBudget.readOnlyToolWarningThreshold, hardStop: readBudget.readOnlyToolHardStopThreshold },
+			readOnlyBudget: { used: progress.readOnlyToolCalls, warning: readBudget.readOnlyToolWarningThreshold },
 			context: {
 				contextWindow,
 				observedTokens: usage?.tokens ?? undefined,
-				doveBudgetChars: getProjectContextBudget({ tokens: usage?.tokens ?? undefined, contextWindow, promptChars: contextText.length }),
+				doveBudgetChars: getProjectContextBudget({ tokens: usage?.tokens ?? undefined, contextWindow }),
 				budgetSource: typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0 && typeof usage?.tokens === "number" && Number.isFinite(usage.tokens) ? "provider-window" : "unknown",
 				omitted: requestContextRevision?.endsWith(":budget-omitted") === true,
 				compacted: contextText.includes("context compacted") || contextText.includes("上下文已压缩"),
@@ -3243,8 +3243,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		const usage = typeof ctx.getContextUsage === "function" ? ctx.getContextUsage() : undefined;
 		const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
-		const promptChars = event.systemPrompt.length + event.prompt.length;
-		const remainingContextChars = getProjectContextBudget({ tokens: usage?.tokens, contextWindow, promptChars });
+		const remainingContextChars = getProjectContextBudget({ tokens: usage?.tokens, contextWindow });
 		// **Read the session entries once rather than twice**: the guard counts them for the turn cap and the fuse
 		// reads their usage samples, and two reads of the same list on adjacent lines is how the two advisers would
 		// drift apart.
@@ -3426,32 +3425,22 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 }
 
 /**
- * Reserve a small amount of headroom for the current user turn and the model
- * response. Ultra has no fixed Dove token cap, but it must still respect the
- * active model's real context window when Pi exposes one.
- */
-export function getRemainingContextChars(tokens: number | null | undefined, contextWindow: number | undefined): number | undefined {
-	if (tokens === null || tokens === undefined || !Number.isFinite(tokens)) return undefined;
-	if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
-	const reserveTokens = Math.min(8_192, Math.max(2_048, Math.floor(contextWindow * 0.05)));
-	const remainingTokens = contextWindow - tokens - reserveTokens;
-	if (remainingTokens <= 0) return undefined;
-	// ASCII-heavy project text averages ~4 chars/token; using 3 keeps a safety
-	// margin for CJK and structured delimiters. This is derived only from the
-	// active provider window and observed usage, not from a Dove mode ceiling.
-	return Math.floor(remainingTokens * 3);
-}
-
-/**
  * Derive a provider-window-based project-context budget when live usage is
  * available. Dove does not reserve a percentage share of the model window and
  * does not guess a small budget when usage is unknown; the final ModelGateway
  * payload check remains authoritative in that case.
+ *
+ * **Two parameters, and the third one is named here because its absence is deliberate.** This took a `promptChars`
+ * argument that both call sites computed and the body never read: the budget therefore never subtracted the current
+ * turn's own length, which is one of the variables in the truncation it exists to prevent. Subtracting it now would be a
+ * guess dressed as a fix - whether Pi's reported `tokens` already includes the in-flight prompt is unverified, so the
+ * subtraction would either double-count or under-count by an unknown amount. What is measured is the pre-flight below,
+ * which refuses the request against the real window and the real payload; that is the authority, and this number only
+ * sizes an optional fragment.
  */
 export function getProjectContextBudget(input: {
 	tokens?: number | null;
 	contextWindow?: number;
-	promptChars?: number;
 }): number | undefined {
 	const contextWindow = input.contextWindow;
 	if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
@@ -3474,28 +3463,35 @@ function summarizeProjectTask(task: ProjectTask | undefined): (ProjectTask & { f
 	};
 }
 
+/**
+ * The read-only exploration budget for a request, by intent and execution mode.
+ *
+ * **One number per row, because only one of them was ever compared.** These were pairs - a warning and a hard stop - and
+ * the hard stop was carried all the way to `/status` and never read by a branch, so the line printed a ceiling that could
+ * not fire. The warning is the threshold `ProgressGuard` acts on, so it is the one that remains; the numbers are unchanged,
+ * which is why nothing about when an operator is warned moved.
+ */
 export function readOnlyToolBudget(plan: Pick<RequestPlan, "intent" | "mode"> | undefined, taskInventory = false): ProgressRunOptions {
 	if (!plan || plan.intent === "chat") return {};
-	if (taskInventory) return { readOnlyToolWarningThreshold: 1, readOnlyToolHardStopThreshold: 2 };
+	if (taskInventory) return { readOnlyToolWarningThreshold: 1 };
 	const budgets = {
 		fast: {
-			lookup: [4, 8],
-			"project-work": [6, 12],
-			execution: [12, 24],
+			lookup: 4,
+			"project-work": 6,
+			execution: 12,
 		},
 		standard: {
-			lookup: [6, 12],
-			"project-work": [10, 20],
-			execution: [20, 40],
+			lookup: 6,
+			"project-work": 10,
+			execution: 20,
 		},
 		ultra: {
-			lookup: [12, 24],
-			"project-work": [16, 32],
-			execution: [32, 64],
+			lookup: 12,
+			"project-work": 16,
+			execution: 32,
 		},
 	} as const;
-	const [readOnlyToolWarningThreshold, readOnlyToolHardStopThreshold] = budgets[plan.mode][plan.intent];
-	return { readOnlyToolWarningThreshold, readOnlyToolHardStopThreshold };
+	return { readOnlyToolWarningThreshold: budgets[plan.mode][plan.intent] };
 }
 
 /** Build the complete bounded task inventory from the projection already read

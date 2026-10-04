@@ -32,7 +32,7 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 | `before_provider_request` | `:3052` | keepalive observation (every provider call counts), provider budgeting against the model window (`model-gateway`), and the request plan when one is due |
 | `after_provider_response` | `:3154` | record the HTTP status; at 400 and above classify the failure (`classifyProviderFailure`) |
 | `thinking_level_select` | `:3021` | **only when the policy is `off`** (fully manual) is the user's choice written back to the default baseline |
-| `context` | `:3408` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
+| `context` | `:3407` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
 | `session_before_compact` | `:2558` | **the one replay still refused**: compaction replaces the surrounding context with a summary, so the model's record that the tool already ran is weaker |
 | `session_compact` | `:2572` | if the compaction will retry, mark the trigger `compaction-retry` |
 | `agent_end` | `:2356` | close the progress guard (`progressGuard.end()`), project cancellation into the request state, take the last assistant message |

@@ -5,7 +5,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createBashTool } from "@earendil-works/pi-coding-agent";
-import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, admitToolResult, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getRemainingContextChars, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
+import extension, { accumulateRequestUsage, applyAdaptiveShellTimeout, classifyAssistantProviderFailure, compactModelPayload, admitToolResult, emptyRequestResourceSnapshot, formatTaskInventoryGuidance, getLsObservationMetadata, getProjectContextBudget, getToolResultCharBudget, normalizeLsToolInput, readOnlyToolBudget, readProjectContinuationForPlan } from "../src/pi-adapter/extension.ts";
 // The shell predicate moved to the one classifier module with the rest of the mutation/replay question; it is the
 // gate's reading of a command's text, and it is asserted there rather than through the adapter that consumes it.
 import { isReadOnlyShellCommand } from "../src/core/invocation-disposition.ts";
@@ -1062,7 +1062,7 @@ describe("Pi adapter", () => {
 
 	it("warns but allows varied read-only exploration beyond the historical request budget", () => {
 		const guard = new ProgressGuard();
-		guard.start(1_000, { readOnlyToolWarningThreshold: 2, readOnlyToolHardStopThreshold: 3 });
+		guard.start(1_000, { readOnlyToolWarningThreshold: 2 });
 		for (let index = 0; index < 2; index++) {
 			assert.equal(guard.beforeToolCall(`read-${index}`, "read", { path: `${index}.ts` }, true).action, "allow");
 			const warning = guard.recordToolResult({ toolName: "read", input: { path: `${index}.ts` }, observation: [index], idempotent: true, isError: false });
@@ -1074,9 +1074,13 @@ describe("Pi adapter", () => {
 		assert.equal(beyondBudget.action, "allow", "a changing observation is productive even after the advisory threshold");
 		guard.recordToolResult({ toolName: "read", input: { path: "3.ts" }, observation: [3], idempotent: true, isError: false });
 		assert.equal(guard.snapshot().readOnlyToolCalls, 4);
-		assert.deepEqual(readOnlyToolBudget({ intent: "lookup", mode: "standard" }), { readOnlyToolWarningThreshold: 6, readOnlyToolHardStopThreshold: 12 });
-		assert.deepEqual(readOnlyToolBudget({ intent: "project-work", mode: "standard" }, true), { readOnlyToolWarningThreshold: 1, readOnlyToolHardStopThreshold: 2 });
-		assert.deepEqual(readOnlyToolBudget({ intent: "execution", mode: "ultra" }), { readOnlyToolWarningThreshold: 32, readOnlyToolHardStopThreshold: 64 });
+		// **One number per row, and it is the one that fires.** These rows carried a hard stop beside the warning until
+		// 2026-10-05; nothing compared it, so the ceiling `/status` printed could not end a run. The deletion was observed
+		// rather than assumed: removing the option field produced exactly four type errors (`extension.ts` three times
+		// through the projection and this table, and this line), which is every referent in the tree.
+		assert.deepEqual(readOnlyToolBudget({ intent: "lookup", mode: "standard" }), { readOnlyToolWarningThreshold: 6 });
+		assert.deepEqual(readOnlyToolBudget({ intent: "project-work", mode: "standard" }, true), { readOnlyToolWarningThreshold: 1 });
+		assert.deepEqual(readOnlyToolBudget({ intent: "execution", mode: "ultra" }), { readOnlyToolWarningThreshold: 32 });
 	});
 
 	it("accumulates usage across provider rounds using Pi usage field names", () => {
@@ -1440,18 +1444,11 @@ describe("Pi adapter", () => {
 		assert.equal(getToolResultCharBudget("read", "project-work"), 12_000);
 		assert.equal(getToolResultCharBudget("bash", "project-work"), 32_000);
 	});
-	it("derives context capacity only from observed provider-window usage", () => {
-		assert.equal(getRemainingContextChars(undefined, 200_000), undefined);
-		assert.equal(getRemainingContextChars(10_000, undefined), undefined);
-		const remaining = getRemainingContextChars(180_000, 200_000);
-		assert.ok(remaining && remaining > 0 && remaining < 60_000);
-	});
-
 	it("does not guess a first-request budget when usage is unknown", () => {
-		assert.equal(getProjectContextBudget({ contextWindow: 12_800, promptChars: 18_000 }), undefined);
+		assert.equal(getProjectContextBudget({ contextWindow: 12_800 }), undefined);
 		const observed = getProjectContextBudget({ tokens: 23_218, contextWindow: 12_800 });
 		assert.equal(observed, undefined);
-		assert.equal(getProjectContextBudget({ promptChars: 1_000 }), undefined);
+		assert.equal(getProjectContextBudget({}), undefined);
 	});
 
 	it("does not apply a percentage share cap when provider capacity is known", () => {
