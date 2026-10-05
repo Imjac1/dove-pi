@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 240
+- **Total Sessions**: 241
 - **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1050 | Active |
+| `journal-5.md` | ~1075 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 241 | 2026-10-05 | The spec tree's provable defects, and a shell that cannot write UTF-8 without a BOM | `3d9f77b`, `272d01b`, `5cd5dcc`, `8bec1e1` | `master` |
 | 240 | 2026-10-05 | The operator thread: what axi was always meant to implement, and the anchor door that corrected my citations | `2bf3b0e`, `570f74e`, `cb3868d` | `master` |
 | 239 | 2026-10-05 | The product face and the whole usage process, written down; and one attribution my own measurement refuted | `37012e0`, `16aac83`, `f6b96e6`, `b0915d2`, `cb108ed`, `5b2e644`, `f4d126f`, `38ccf22`, `cf624a0`, `b08f116` | `master` |
 | 238 | 2026-10-05 | The pstack audit lands: six steps, three product defects, and what the instruments caught | `848dd92`, `147d567`, `eefbfba`, `d1af4fb`, `4a0fa6e`, `1b1a8b5`, `cbefcfb`, `784e043`, `a8b2f51`, `41c94bf`, `8166b83`, `a854722`, `712d6fb`, `e190771`, `572572c`, `2b28475`, `9fbe593`, `c275554`, `576920a`, `2f6a639`, `db71eb8`, `7b50cf9`, `25dafae`, `cdd4765` | `master` |

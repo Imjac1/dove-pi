@@ -1048,3 +1048,28 @@ The product face became two threads. The user thread already existed; this sessi
 ### Status
 
 [OK] **Completed**
+
+
+## Session 241: The spec tree's provable defects, and a shell that cannot write UTF-8 without a BOM
+<!-- trellis-session: v=2 fp=68ea84d61aa3070d -->
+
+**Date**: 2026-10-05
+**Task**: The spec tree's provable defects, and a shell that cannot write UTF-8 without a BOM
+**Branch**: `master`
+
+### Summary
+
+The spec tree got the cleanup it was measured as needing. Four provable defects went to zero: three duplicated section titles in the cross-layer guide, a code-reuse section teaching a mechanism this repository does not have, the template taglines on both indexes, and four headings that described a database and a server this project does not own. The measurement before the fix is what decided the fix: the duplicated copies were not identical, so the criterion became which codebase a section talks about, judged by whether the paths it names exist here. Two things this round taught the hard way. First, this shell is Windows PowerShell 5.1, whose Set-Content has no utf8NoBOM encoding, so the deletion command failed outright - and it failed cleanly, so nothing was half-written; the fix was a .NET write with an explicit no-BOM encoding, after measuring the file for CRLF and a BOM first, which is the same trap AGENTS.md already records for a declaration file. Second, an acceptance criterion was written too wide: one name it promised to zero out survives in two places this round does not own, and it was narrowed by measurement rather than by deleting what the criterion did not name. Then the archive: this task's own two manifests pointed inside its own directory, so the tax was two rather than zero, which turns that tax from an anecdote into a rule, and AGENTS.md now says so. Gates at the end: typecheck 0, npm test 937 tests with 934 passing, one failing and two skipped, that failure the same pre-existing index-length assertion, installer 143 OK, and the documentation doors 21 of 21.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3d9f77b` | docs(spec): the duplicated guide blocks, the mechanism that exists nowhere, and the headings that described another project |
+| `272d01b` | docs(task): the cleanup, a shell that cannot write UTF-8 without a BOM, and a criterion I wrote too wide |
+| `5cd5dcc` | docs(agents): the archive tax is the number of entries pointing inside the task, measured at two |
+| `8bec1e1` | chore(task): repoint the two entries this archive broke, which is the tax paid by hand |
+
+### Status
+
+[OK] **Completed**
