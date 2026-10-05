@@ -1,0 +1,14 @@
+{
+  "name": "status-line-only",
+  "description": "Ask the harness to report its own state, so the reading carries the work mode and the tool surface without waiting for a long piece of work to finish first.",
+  "requires": "a real provider; --cwd points at the project whose declaration is being checked, which is copied, so the run cannot touch the original",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "/status"
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}
