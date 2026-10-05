@@ -1126,3 +1126,27 @@ The reading this session owed came back positive, and it took three instruments 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 244: A parallel batch is a list of runs, the reading that was half-asserted, and the key the CLI already published
+<!-- trellis-session: v=2 fp=318e35d81dda38fc -->
+
+**Date**: 2026-10-05
+**Task**: A parallel batch is a list of runs, the reading that was half-asserted, and the key the CLI already published
+**Branch**: `master`
+
+### Summary
+
+This session resumed the parallel-dispatch task at Phase 2 and found the working tree holding two change sets its own plan had said must not land together: the doctor `[object Object]` and `sourceDrift` fix from a previous, untasked round, and this task's extension change. The first was verified and committed alone (`24fe516`) before anything else moved, which left exactly this task's three files. Two things the plan had left undone were then closed. AC-3 was only half-asserted: the case read the in-flight set and never the settled one, and a case that reads only the in-flight set passes for a map that is never emptied, so it now also reads the projection after the batch resolves - `activeRuns` empty, `lastTerminal` succeeded, its `runId` one of the two children. Phase 3.3 extended the spec sentence that promised four `subagent` fields to what the projection now emits. AC-5 was re-measured rather than assumed: with only `extension.ts` stashed the case fails on `actual: undefined` against `expected: 2`, and the stash popped clean. The review then found what the plan's own compatibility check had missed - `src/cli.ts:128` already published `activeRuns` as a count, so the rename would have given one key two types across the two forms of the same payload; the CLI publishes an empty list now, held by a case, and the design's claim that nothing else reads these fields was corrected, because it asked who reads the field and not who already writes a name. One reading could not be taken, and that is recorded rather than smoothed over: the previous commit's `sourceDrift` fix is undecidable on this machine, because the install's recorded commit is not in this repository's object database, so `drifted` here is a true positive under either root list; what was measured instead is that the old runtime list and the builder's list digest differently over the same tree, on two trees, with the added roots non-empty. Gates: typecheck 0, `npm test` 946 with 944 passing and 2 skipped, installer 143 OK, and every door green again after the archive. The archive tax was zero, as predicted: both curated manifests were empty and no page cited the task's own files.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `24fe516` | fix(doctor): the extensions line names what it counted, and the drift digest walks the builder's roots |
+| `d160117` | fix(subagent): a parallel batch is reported as a list of runs, and one key keeps one type |
+| `727dc19` | docs(task): the batch is parallel, the reading that was half-asserted, and the key the CLI already published |
+
+### Status
+
+[OK] **Completed**
