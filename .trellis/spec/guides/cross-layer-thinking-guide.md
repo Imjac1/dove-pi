@@ -169,52 +169,6 @@ Regression tests should cover multiple calls, typed parameters, thinking/text
 carriers, malformed input, and the final host event shape—not only the parser
 in isolation.
 
-In Trellis, command templates (e.g., `record-session.md`) exist in **multiple platforms** with identical or near-identical content. This is a cross-layer boundary.
-
-### Checklist: After Modifying Any Command Template
-
-- [ ] Find all platforms with the same command: `find src/templates/*/commands/trellis/ -name "<command>.*"`
-- [ ] Update all platform copies (Markdown `.md` and TOML `.toml`)
-- [ ] For Gemini TOML: adapt line continuations (`\\` vs `\`) and triple-quoted strings
-- [ ] Run `/trellis:check-cross-layer` to verify nothing was missed
-
-**Real-world example**: Updated `record-session.md` in Claude to use `--mode record`, but forgot iFlow, Kilo, OpenCode, and Gemini — caught by cross-layer check.
-
----
-
-## Versioned Documentation Boundary
-
-Versioned documentation is a cross-layer boundary: source paths, `docs.json`
-version routing, and the rendered version selector must all describe the same
-release line.
-
-### Checklist: Before Editing Versioned Docs
-
-- [ ] Identify the target release line: stable, beta, or RC
-- [ ] Verify the edited MDX path matches that line:
-  - stable: `docs-site/{start,advanced,...}` and `docs-site/zh/{start,advanced,...}`
-  - beta: `docs-site/beta/**` and `docs-site/zh/beta/**`
-  - RC: `docs-site/rc/**` and `docs-site/zh/rc/**`
-- [ ] Verify `docs.json` navigation points the version label to the same paths
-- [ ] Grep the opposite tree for release-line-specific terms before committing
-- [ ] Treat beta content appearing under root release paths as a source-path bug,
-      not a rendering bug
-
-**Real-world example**: A beta-only task workflow change documented
-`prd.md` + `design.md` + `implement.md`, task-creation consent, and Codex
-mode banners under root `start/` and `advanced/` paths. The docs site then
-served 0.6 beta behavior under the Release selector. The fix was to restore root
-release docs, move the 0.6 content to `beta/` and `zh/beta/`, and add a grep
-audit for beta markers against the root release tree.
-
-**Real-world example**: Codex inline mode changed workflow platform markers from
-`[Codex]` / `[Kilo, Antigravity, Windsurf]` to `[codex-sub-agent]` /
-`[codex-inline, Kilo, Antigravity, Windsurf]`. Fresh init was correct, but
-`trellis update` only merged `[workflow-state:*]` blocks and preserved stale
-markers outside those blocks. Result: upgraded projects got new hook scripts
-but old workflow routing, so `get_context.py --mode phase --platform codex`
-could return empty Phase 2.1 detail.
-
 ---
 
 ## When to Create Flow Documentation

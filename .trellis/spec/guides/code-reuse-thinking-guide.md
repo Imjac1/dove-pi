@@ -182,9 +182,7 @@ def cli_name(self) -> str:
 **Symptom**: Init works perfectly, but update creates files at wrong paths or misses files entirely.
 
 **Prevention**:
-- **Best**: Eliminate the asymmetry — have the manual path call the automatic one (e.g., `collectTemplateFiles()` calls `getAllScripts()` instead of maintaining its own list)
+- **Best**: Eliminate the asymmetry — have the manual path call the automatic one
 - **If asymmetry is unavoidable**: Add a regression test that compares outputs from both mechanisms
 - When migrating directory structures, search for ALL code paths that reference the old structure
-
-**Real example**: `trellis update` had a manual `files.set()` list for 11 scripts that `getAllScripts()` already tracked. Fix: replaced the manual list with a `for..of getAllScripts()` loop. See `update.ts` refactor in v0.4.0-beta.3.
 
