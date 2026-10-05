@@ -7,6 +7,7 @@ const backendSpecDir = join(process.cwd(), ".trellis", "spec", "backend");
 const routerName = "personal-agent-runtime.md";
 const routedSpecNames = [
 	"personal-agent-product.md",
+	"personal-agent-usage.md",
 	"personal-agent-request-runtime.md",
 	"personal-agent-capability-runtime.md",
 	"personal-agent-project-context.md",
@@ -31,6 +32,19 @@ const expectedHeadingsBySpec = {
 		"7. What the product has not yet demonstrated",
 		"8. axi, as an internal program",
 		"9. The non-goals",
+		"How to check this page",
+	],
+	"personal-agent-usage.md": [
+		"1. What this page is, and what it is not",
+		"2. The four surfaces a design may use",
+		"3. Stage 0 - Getting it installed",
+		"4. Stage 1 - The first time in a project",
+		"5. Stage 2 - The first real work",
+		"6. Stage 3 - When it refuses or asks",
+		"7. Stage 4 - A formal task, closed",
+		"8. Stage 5 - The second day",
+		"9. Stage 6 - Maintenance",
+		"10. The gaps, and who owns each",
 		"How to check this page",
 	],
 	"personal-agent-request-runtime.md": [
