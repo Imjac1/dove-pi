@@ -1116,16 +1116,12 @@ The reading this session owed came back positive, and it took three instruments 
 |------|---------|
 | `a02d71f` | docs(agents): the archive tax has two payers, and the doors are what names the second one |
 | `b1d11c9` | fix(docs): the citations the archive moved, repointed where a door reads them |
-| `8673df2` | chore(task): archive 10-05-mode-tool-use-rule |
-| `44806e2` | chore(task): archive 10-03-day-two-walk |
 | `52c2697` | docs(task): the flag that shares a root, owned by a task instead of the ledger |
 | `88c8fa1` | docs: the resume flag shares a session root, and now the sentence says only that |
 | `f8e6f08` | docs(spec): continuation carries the conversation, and the resume flag that only shares a root |
 | `0e8f3d6` | docs(task): the second day's plan, which is one reading it still owes |
 | `8eff33e` | docs(task): the rule in three mode bodies, the case that goes red without it, and the index red that was a task-count effect |
 | `73db7dd` | feat(modes): run the tool the work needs, and write the script that gets used twice |
-| `dd19d0d` | chore(task): archive 10-03-pi-1-upgrade |
-| `f20a4f6` | chore(task): archive 10-03-mode-prerequisites |
 
 ### Status
 
