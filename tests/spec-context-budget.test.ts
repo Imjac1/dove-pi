@@ -23,13 +23,14 @@ const routedSpecNames = [
 const expectedHeadingsBySpec = {
 	"personal-agent-product.md": [
 		"1. The product and the person it is for",
-		"2. The user-visible loop",
-		"3. The surfaces a person can reach",
-		"4. The axes, and which one owns what",
-		"5. What the product promises, and what enforces it",
-		"6. What the product has not yet demonstrated",
-		"7. axi, as an internal program",
-		"8. The non-goals",
+		"2. The design direction, as rules that can fail",
+		"3. The user-visible loop",
+		"4. The surfaces a person can reach",
+		"5. The axes, and which one owns what",
+		"6. What the product promises, and what enforces it",
+		"7. What the product has not yet demonstrated",
+		"8. axi, as an internal program",
+		"9. The non-goals",
 		"How to check this page",
 	],
 	"personal-agent-request-runtime.md": [

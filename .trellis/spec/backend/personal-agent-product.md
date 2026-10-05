@@ -31,10 +31,60 @@ project memory, loop control, diagnostics, and recoverable updates - [demonstrat
 | An install, update, rollback, or uninstall does not delete `.dove/`, an existing `.trellis/`, or uncommitted work | `README.md:478-486` | [demonstrated] |
 | It is for people who want their own model, provider, and Pi extensions; long projects; and an update that can be repaired or rolled back | `README.md:11-16` | [demonstrated] |
 
-## 2. The user-visible loop
+## 2. The design direction, as rules that can fail
+
+Five constraints decide the shape of everything below. Each is stated with the mechanism or the number that makes it
+concrete, plus what a violation would look like. The promises they produce are §6; what they rule out is §9.
+
+**D1 · One authority per concern.**
+Loop and tools are **Pi's**: Dove's extension registers handlers and owns **no loop body** — 18 `pi.on(...)` calls in
+five groups (assembly, request boundaries, the tool boundary, evidence, session boundaries) —
+[demonstrated] [`personal-agent-use-time-architecture.md`](./personal-agent-use-time-architecture.md) §1-§2. Tool
+permission is **the declared work mode's** `permissions.yaml` and nothing else: not `/mode`, not `/dove-mode`, not
+`/dove-tools` — [demonstrated] `README.md:322-326`. Context, goals, loop control, diagnostics, and records are
+**Dove's** — [demonstrated] `README.md:240-249`. *A violation looks like* a second loop, a second permission source,
+or a strength preset that changes which tools are active.
+
+**D2 · The boundary decides, and it decides by name first.**
+The gate lives inside the host's `tool_call` handler, and the **name-only half runs before the half that reads
+arguments**, so a mutation later in the same call cannot invalidate the decision; the mode check runs **ahead of the
+request lease**, so a mode that cannot be read stops every tool call —
+[demonstrated] [`personal-agent-use-time-architecture.md`](./personal-agent-use-time-architecture.md) §3. A refusal
+carries a reason and a way out, and a host with no dialog refuses rather than runs unasked — [demonstrated]
+`README.md:249` and `tests/host-work-mode.test.ts`. *A violation looks like* enforcement kept in a prompt, in a
+document, or in an instruction the model may ignore.
+
+**D3 · A declaration is a contract, and an unkeepable one refuses to load.**
+Every sandbox value a mode may declare carries a stance and anything unclassified is refused
+(`tests/work-mode.test.ts`); a filesystem claim this runtime cannot keep stops the mode from starting
+(`tests/host-work-mode.test.ts`); a declared name must be an action that can occur (`tests/code-audit-mode.test.ts`).
+**The whole permission surface of the four shipped modes, counted**: `code-development` 0 ask / 1 deny (`web.*`);
+`pentest` 1 ask (`exploit.run`) / 3 deny; `trading` 1 ask (`order.submit`) / 2 deny; `code-audit` 2 ask (`write`,
+`edit`) / 3 deny (`bash`, `powershell`, `network.*`); all four state `unlisted: allow` rather than defaulting it —
+[demonstrated] counted in the four `permissions.yaml` under `modes/`. *A violation looks like* a declaration whose
+only guardian is prose, which is the rule `AGENTS.md` states and the reason every row there names something that
+fails.
+
+**D4 · Diagnosis is a deliverable, and one snapshot serves both seats.**
+`/status full`, `agent_doctor`, and `diagnostics/status` over RPC report the same fields — `strategy`, `lastPlan`,
+`lastTerminal`, `lastRefusals` — and the last three outlive the request that produced them — [demonstrated]
+`README.md:326`. A terminal object carries an origin, a code, a summary, retryability, and the next step —
+[demonstrated] `README.md:333-348`. *A violation looks like* a failure that leaves only `Operation aborted`.
+
+**D5 · No guessed numbers, and one number per row.**
+The read-only budget is exactly one threshold per strength × intent — `fast` 4/6/12, `standard` 6/10/20, `ultra`
+12/16/32, 1 for a task inventory, and none for chat — [demonstrated] `src/pi-adapter/extension.ts:3500-3521`. The
+pair that used to sit beside it was carried all the way to `/status` and compared by nothing, which is why the row
+holds one number — same lines, and `README.md:326`. The shell watchdog is **240 s**, names the aggregate commands it
+covers, yields to an explicit `timeout`, and falls back to 240 on a malformed value — [demonstrated]
+`README.md:357-366`. Context is never a per-strength total and never a fixed percentage of the window; an unknown
+window prints `unknown` — [demonstrated] `README.md:328-331`. *A violation looks like* a number projected as a
+ceiling that nothing compares.
+
+## 3. The user-visible loop
 
 The steps below are what a person does and sees. A step is `[demonstrated]` when a test or a reading fixes it; the
-loop **as one run** is §6.
+loop **as one run** is §7.
 
 | # | What the person does | What they see | Mark and anchor |
 |---|---|---|---|
@@ -49,7 +99,7 @@ loop **as one run** is §6.
 | 9 | Maintains: `dove-pi update`, `repair`, `rollback`, `uninstall --yes` | the old and new Pi version; a failed update keeps the previous version | [demonstrated] `README.md:294-297`, `README.md:414-430` |
 | 10 | Deletes nothing by hand: uninstall keeps user and project data | the managed directory and the exact PATH entry go; the rest stays | [demonstrated] `README.md:421-427`, `README.md:478-484` |
 
-## 3. The surfaces a person can reach
+## 4. The surfaces a person can reach
 
 | Surface | What is on it | Mark and anchor |
 |---|---|---|
@@ -59,7 +109,7 @@ loop **as one run** is §6.
 | **Protocols** | the same reviewed capabilities over MCP stdio and over JSON-RPC, with the Pi adapter as a third face of one execution path | [demonstrated] `README.md:490-513`, `README.md:577-587` |
 | **Internal entries, not promised** | `axi-turn` and the `harness-*` scripts under `scripts/`. `axi-turn` is reachable from the CLI because the harness's own staged work needs it; it is not part of what a user is promised, and it is not listed in the README. | [demonstrated] `src/cli.ts`; absence from `README.md:206-224` |
 
-## 4. The axes, and which one owns what
+## 5. The axes, and which one owns what
 
 Four settings are easy to confuse, and they are independent - [demonstrated] `README.md:170-176`, `README.md:320-326`.
 
@@ -75,7 +125,7 @@ The modes that ship are directories under `modes/`: `code-audit`, `code-developm
 product content: the release digest covers them, because `modes/<id>/MODE.md` is what the runtime loads -
 [demonstrated] `scripts/release-roots.mts:3-19`.
 
-## 5. What the product promises, and what enforces it
+## 6. What the product promises, and what enforces it
 
 Each row is a promise a user can rely on, and the thing that fails when it breaks.
 
@@ -93,9 +143,9 @@ Each row is a promise a user can rely on, and the thing that fails when it break
 | A mode may not describe a control the host already runs as the operator's duty | `AGENTS.md` | `tests/pentest-mode.test.ts`: *does not deny the preflight the host runs, because the host runs it* |
 | A mode states requirements, not dated accounts of what the framework does not do yet | `AGENTS.md` | `tests/trading-mode.test.ts`: *states the requirement instead of an account of what the framework does not do yet* |
 
-## 6. What the product has not yet demonstrated
+## 7. What the product has not yet demonstrated
 
-These are not defects of the reading; they are the readings. Stating them is what keeps §2 and §5 from becoming
+These are not defects of the reading; they are the readings. Stating them is what keeps §3 and §6 from becoming
 advertising.
 
 | Not yet demonstrated | The reading that says so |
@@ -111,11 +161,11 @@ advertising.
 > longer resolves is a task that moved, not a fact that changed: repoint the anchor. What an archive breaks, and why
 > nobody notices, is recorded in `AGENTS.md`.
 
-## 7. axi, as an internal program
+## 8. axi, as an internal program
 
 `axi` is the name of the internal program that works on this harness's own bounded self-improvement: which parts of the
 harness may be edited, what evidence a change is judged by, and where the judging authority sits. **It is an
-implementation route, not a product promise.** A person using Dove Pi is promised what §5 lists, and nothing in this
+implementation route, not a product promise.** A person using Dove Pi is promised what §6 lists, and nothing in this
 section.
 
 Its staged plan is a task artifact, and it is deliberately referred to **by name**: a path into a task directory breaks
@@ -125,7 +175,7 @@ What a reader needs from the program is already stated where it landed - the sel
 [`personal-agent-framework-core.md`](./personal-agent-framework-core.md) - and the two blanks it is meant to close are
 named in [`personal-agent-use-time-architecture.md`](./personal-agent-use-time-architecture.md) §7.
 
-## 8. The non-goals
+## 9. The non-goals
 
 **This list is not complete, and its completeness has no instrument.** Every line is anchored; an omission here is not
 a claim that something is allowed. A dash under *held by* means no test was found that would fail if the product started
@@ -148,4 +198,4 @@ doing it, which is a fact about what is checked rather than a licence.
   behaviour it no longer has, and no path check can tell. That part is a reader's.
 - **When a fact changes, change this page** rather than adding a footnote - the rule
   [`personal-agent-use-time-architecture.md`](./personal-agent-use-time-architecture.md) closes with. When a
-  `[not yet demonstrated]` row in §6 becomes demonstrated, it moves into §5 with the reading that did it.
+  `[not yet demonstrated]` row in §7 becomes demonstrated, it moves into §6 with the reading that did it.
