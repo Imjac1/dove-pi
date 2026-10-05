@@ -530,8 +530,16 @@ export class ExecutionLedger {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, attemptId: input.attemptId, providerCallId: input.providerCallId, inputTokens: input.inputTokens, providerToolCount: input.providerToolCount, providerToolSchemaBytes: input.providerToolSchemaBytes, cachePolicyVersion: input.cachePolicyVersion, cachePrefix: input.cachePrefix, ownerPid: input.ownerPid } });
 	}
 
-	public async appendProviderRequestCompleted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; attemptId?: string; providerCallId: string; stopReason?: string; usage?: Readonly<Record<string, number>>; cache?: ProviderCacheAttribution; durationMs?: number }): Promise<void> {
-		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.completed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, attemptId: input.attemptId, providerCallId: input.providerCallId, stopReason: input.stopReason, usage: input.usage, cache: input.cache, ...(input.durationMs === undefined ? {} : { durationMs: Math.max(0, Math.round(input.durationMs)) }) } });
+	/**
+	 * **A failed provider call records why, because `stopReason: "error"` alone answers nothing.** The adapter classifies
+	 * the failure (the assistant message's own words, or the response status) to decide whether a retry is allowed, and that
+	 * classification used to live only in that decision: measured across every ledger on this machine, six errored provider
+	 * records and none of them named a cause, one of them after a round that ran five minutes. The vocabulary is the
+	 * classifier's own, and the ledger carries it as two scalars rather than a nested object so a reader picks it up the way
+	 * it picks up `stopReason`.
+	 */
+	public async appendProviderRequestCompleted(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; attemptId?: string; providerCallId: string; stopReason?: string; usage?: Readonly<Record<string, number>>; cache?: ProviderCacheAttribution; durationMs?: number; failure?: { readonly kind?: string; readonly reason?: string } }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "provider.request.completed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, providerCallId: input.providerCallId, taskId: input.taskId }, details: { requestId: input.requestId, attemptId: input.attemptId, providerCallId: input.providerCallId, stopReason: input.stopReason, usage: input.usage, cache: input.cache, ...(input.failure?.kind === undefined ? {} : { failureKind: input.failure.kind }), ...(input.failure?.reason === undefined ? {} : { failureReason: input.failure.reason }), ...(input.durationMs === undefined ? {} : { durationMs: Math.max(0, Math.round(input.durationMs)) }) } });
 	}
 
 	public async appendProviderRequestRejected(input: { taskId: string; stepId: string; mode: AgentMode; requestId: string; sessionId?: string; attemptId?: string; providerCallId: string; diagnostic: BudgetDiagnostic }): Promise<void> {

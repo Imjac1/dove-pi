@@ -2531,7 +2531,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		if (currentProviderCall) {
 			const call = currentProviderCall;
 			if (lastProviderFailure) {
-				await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason: "error", usage: call.httpStatus === undefined ? undefined : { httpStatus: call.httpStatus }, cache: call.cachePrefix ? attributeProviderCache(call.cachePrefix) : undefined, durationMs: Date.now() - call.startedAt });
+				await ledger.appendProviderRequestCompleted({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, stopReason: "error", usage: call.httpStatus === undefined ? undefined : { httpStatus: call.httpStatus }, cache: call.cachePrefix ? attributeProviderCache(call.cachePrefix) : undefined, failure: lastProviderFailure, durationMs: Date.now() - call.startedAt });
 			} else {
 				await ledger.appendProviderRequestRecovered({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id });
 			}
@@ -2993,6 +2993,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const stopReason = normalizeStopReason(observed.stopReason);
 			if (currentRequestPlan && currentRequestStopReasons.length < 64) currentRequestStopReasons.push(stopReason);
 			accumulateRequestUsage(currentRequestResources, observed.usage as Readonly<Record<string, unknown>> | undefined);
+			// **Classify before recording, because the record is where a reader asks why.** The classification reads the
+			// assistant message's own words (an `ECONNRESET`, a `429`, `rate limit`) and used to be computed below this line,
+			// after the provider record had been written - so the ledger held `stopReason: "error"` with no cause, while the
+			// answer sat in the variable the retry decision was about to read. One classification site, two readers: the record
+			// and the retry decision, which reads the same value it always did.
+			const providerFailure = stopReason === "error" ? (lastProviderFailure ??= classifyAssistantProviderFailure(message)) : undefined;
 			if (currentProviderCall) {
 				const call = currentProviderCall;
 				const providerDurationMs = Date.now() - call.startedAt;
@@ -3008,6 +3014,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					usage: observed.usage,
 					cache: call.cachePrefix ? attributeProviderCache(call.cachePrefix, observed.usage) : undefined,
 					durationMs: providerDurationMs,
+					failure: providerFailure,
 				});
 				try {
 					await ledger.appendRuntimePhase({ taskId: call.taskId, stepId: call.stepId, mode: call.mode, requestId: call.requestId, sessionId: call.sessionId, attemptId: call.attemptId, providerCallId: call.id, phase: "provider", durationMs: providerDurationMs });
@@ -3015,10 +3022,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				currentProviderCall = undefined;
 			}
 			if (stopReason === "error") {
-				lastProviderFailure ??= classifyAssistantProviderFailure(message);
-				if (requestLifecycle.activeLease()) {
-					const decision = requestLifecycle.retryDecision(lastProviderFailure);
-					if (!decision.retry) pendingRequestTerminal = await terminalForFailureWithRecovery(lastProviderFailure, decision.reason);
+				if (requestLifecycle.activeLease() && providerFailure) {
+					const decision = requestLifecycle.retryDecision(providerFailure);
+					if (!decision.retry) pendingRequestTerminal = await terminalForFailureWithRecovery(providerFailure, decision.reason);
 				}
 			} else if (stopReason !== "cancelled") {
 				lastProviderFailure = undefined;

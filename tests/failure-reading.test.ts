@@ -168,6 +168,25 @@ describe("the failure reading", () => {
 		assert.notEqual(failure.provider?.stopReason, failure.mechanism.code, "two vocabularies, never one merged code");
 	});
 
+	it("carries the classification of a provider failure, not only its stop reason", () => {
+		// **The other half of the reader for `failureKind`/`failureReason`.** The adapter always classified the failure to
+		// decide whether it could retry, and the ledger used to keep only `stopReason: "error"` - so a reading could say a
+		// provider call failed and not why, which is the one question an operator asks of it. The classification rides beside
+		// the provider's own account rather than inside it: the status is what the boundary saw, the kind is what Dove made
+		// of it.
+		const reading = readFailures([
+			received("req-1"),
+			record("provider.request.started", "req-1", { providerCallId: "call-1" }),
+			record("provider.request.completed", "req-1", { providerCallId: "call-1", stopReason: "error", usage: { input: 0 }, failureKind: "transient", failureReason: "http_429" }),
+			terminal("req-1", "failed", { origin: "provider", code: "provider-attempt-limit", retryable: true }),
+		]);
+		assert.deepEqual(
+			reading.failures[0]?.provider,
+			{ stopReason: "error", failureKind: "transient", failureReason: "http_429" },
+			"the cause the adapter recorded reaches the reading",
+		);
+	});
+
 	it("carries a rejected provider call diagnostic", () => {
 		const reading = readFailures([
 			received("req-1"),

@@ -1096,6 +1096,58 @@ describe("Pi adapter", () => {
 		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
 	});
 
+	it("records why a provider round failed, because the retry was decided from that classification", async () => {
+		// **The defect this case exists for.** The `message_end` handler wrote the provider record and classified the failure
+		// eight lines later, so the record could not carry the cause by construction: a ledger holding `stopReason: "error"`
+		// said nothing about what happened, while the classification - the thing that decided between a retry and a terminal -
+		// was in hand. Measured before the change: across every ledger on this machine, six errored provider records and not
+		// one of them named a cause, one of them after a five-minute round.
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return representativeTools.map((name) => ({ name })); },
+			setActiveTools() {},
+			getActiveTools() { return [...representativeTools]; },
+			getThinkingLevel() { return "max"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			hasUI: true,
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+			sessionManager: { getEntries: () => [], getSessionId: () => "provider-cause-session" },
+			getContextUsage: () => ({ tokens: 1_000, contextWindow: 1_000_000 }),
+			// The provider-request handler returns before recording anything when the model's window is unknown, which is
+			// why this case supplies one: the record it asserts only exists for a call the runtime was willing to make.
+			model: { contextWindow: 200_000, maxTokens: 16_384, provider: "test", id: "test-model" },
+		} as FakeContext;
+		const ledgerPath = join(adapterStateDir, "execution.jsonl");
+		const before = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).length;
+		// A request has to exist before a provider call does: the plan comes from `before_agent_start`, and the call record
+		// from `before_provider_request`, which is why the pair is staged rather than assumed.
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "go", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		await events.get("before_provider_request")?.({ type: "before_provider_request", payload: { messages: [{ role: "user", content: "go" }] } }, context);
+		// The provider's own words, which is all the adapter has when the failure arrives as a message rather than as an
+		// `after_provider_response` status - the shape the field run's errored round had.
+		const failure = { role: "assistant", stopReason: "error", errorMessage: "429 Too Many Requests", content: [] };
+		await events.get("message_end")?.({ type: "message_end", message: failure }, context);
+		await events.get("agent_end")?.({ type: "agent_end", messages: [failure] }, context);
+		const written = readFileSync(ledgerPath, "utf8")
+			.split(/\r?\n/)
+			.filter(Boolean)
+			.slice(before)
+			.map((line) => JSON.parse(line) as { kind?: string; details?: Record<string, unknown> });
+		const errored = written.find((record) => record.kind === "provider.request.completed" && record.details?.stopReason === "error");
+		assert.ok(errored, `the errored round is recorded: ${JSON.stringify(written.map((record) => record.kind))}`);
+		assert.equal(errored.details?.failureKind, "transient", "the record names the kind, which is what made the retry happen");
+		assert.equal(errored.details?.failureReason, "http_429", "and why Dove called it that, in the vocabulary the classifier already owns");
+	});
+
 	it("formats task inventory as a bounded no-tool projection", () => {
 		const guidance = formatTaskInventoryGuidance({
 			provider: "trellis",

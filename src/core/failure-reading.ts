@@ -38,6 +38,17 @@ export interface ProviderOutcome {
 	readonly stopReason: string;
 	readonly httpStatus?: number;
 	readonly diagnostic?: string;
+	/**
+	 * **What Dove called the failure, and why.** The provider's own account is the status and the stop reason; this is the
+	 * adapter's classification, which is what decided whether the request could be retried - and it belongs here rather than
+	 * folded into the provider's vocabulary because it is an inference (a regex over the provider's message, or a status the
+	 * boundary saw), not a fact the provider stated.
+	 *
+	 * It was added because the ledger held `stopReason: "error"` with no cause at all: across every ledger on this machine,
+	 * six errored records and not one naming why, one of them after a five-minute round.
+	 */
+	readonly failureKind?: string;
+	readonly failureReason?: string;
 }
 
 /**
@@ -231,8 +242,16 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 			const usage = providerDetails.usage as Record<string, unknown> | undefined;
 			const httpStatus = typeof usage?.httpStatus === "number" ? usage.httpStatus : undefined;
 			const diagnostic = stringField(providerDetails, "diagnostic");
+			const failureKind = stringField(providerDetails, "failureKind");
+			const failureReason = stringField(providerDetails, "failureReason");
 			if (record.kind === "provider.request.rejected" || stopReason === "error") {
-				providers.set(id, { stopReason, ...(httpStatus === undefined ? {} : { httpStatus }), ...(diagnostic === undefined ? {} : { diagnostic }) });
+				providers.set(id, {
+					stopReason,
+					...(httpStatus === undefined ? {} : { httpStatus }),
+					...(diagnostic === undefined ? {} : { diagnostic }),
+					...(failureKind === undefined ? {} : { failureKind }),
+					...(failureReason === undefined ? {} : { failureReason }),
+				});
 			}
 			continue;
 		}
