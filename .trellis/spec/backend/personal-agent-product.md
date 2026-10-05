@@ -104,7 +104,7 @@ stage, the specific failure each stage prevents, and which gaps have an owner - 
 | 5 | Chooses an execution strength, a context mode, or a workspace mode as needed | the choice is reflected in the status line and in `/status full` | [demonstrated] `README.md:148-176`, `README.md:301-316` |
 | 6 | Hits a refusal, when the declared mode forbids the action | the call is blocked with a reason and a way out | [demonstrated] `README.md:249`; `tests/host-work-mode.test.ts` carries the boundary cases |
 | 7 | Reads what a formal task produced | `.dove/state.json` and `.dove/tasks/<task-id>/` hold the PRD, design, implementation, and acceptance artifacts | [demonstrated] `README.md:199-228` |
-| 8 | Returns the next day and says "继续当前项目任务" | **not yet read**: whether continuation works across a real day | [not yet demonstrated] `.trellis/tasks/10-03-day-two-walk/prd.md` |
+| 8 | Returns the next day and says "继续当前项目任务" | **not yet read**: whether continuation works across a real day | [not yet demonstrated] `.trellis/tasks/archive/2026-10/10-03-day-two-walk/prd.md` |
 | 9 | Maintains: `dove-pi update`, `repair`, `rollback`, `uninstall --yes` | the old and new Pi version; a failed update keeps the previous version | [demonstrated] `README.md:294-297`, `README.md:414-430` |
 | 10 | Deletes nothing by hand: uninstall keeps user and project data | the managed directory and the exact PATH entry go; the rest stays | [demonstrated] `README.md:421-427`, `README.md:478-484` |
 
@@ -161,7 +161,7 @@ advertising.
 |---|---|
 | **The whole loop in one run.** Steps 1-9 have never been walked end to end inside a single session: the last attempt ran only `/status`, and the attempt before it spent its 15-minute timeout at step 1 and was cancelled | `.trellis/tasks/10-05-whole-flow-end-to-end/readings.md` |
 | **The host's editing tools present.** The extension's own status line reports `hashlineEditTools=absent`, so the agent that ran had no harness edit tools; the reading is about the host, not about the model being careless | `.trellis/tasks/10-05-whole-flow-end-to-end/readings.md` |
-| **The second day.** Returning to the same project and continuing is written down, not read: the walking task says so itself | `.trellis/tasks/10-03-day-two-walk/prd.md` |
+| **The second day.** Returning to the same project and continuing is written down, not read: the walking task says so itself | `.trellis/tasks/archive/2026-10/10-03-day-two-walk/prd.md` |
 | **A refusal a user can read without a UI.** The first-contact walk found the gate's reason not reaching the person, and that a model's own retelling is the only explanation available in a non-interactive run | `.trellis/tasks/10-03-first-contact-scenario/findings.md` |
 | **A formal task that completed a recorded round in this repository.** This repository has no `.dove/`, so "the record reports, the person decides" is untested in place rather than proven | [`personal-agent-use-time-architecture.md`](./personal-agent-use-time-architecture.md) §7 |
 | **That the product is good.** No success criterion is claimed. A real-provider field run is a *measurement*, not a gate: it needs the person's own credentials, its raw output stays outside this repository, and the same command on another day is another experiment | `README.md:284-287`; [`personal-agent-field-run.md`](./personal-agent-field-run.md) |

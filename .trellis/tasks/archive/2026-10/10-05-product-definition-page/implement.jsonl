@@ -1,6 +1,6 @@
 {"file": ".trellis/spec/backend/personal-agent-use-time-architecture.md", "reason": "The closest existing page and the shape to copy: numbered ## sections, an anchor per claim, a blanks section, and the closing rule 'when a square moves, change this page rather than adding a footnote'."}
 {"file": ".trellis/tasks/10-03-first-contact-scenario/findings.md", "reason": "P1-P13, the measured product-face findings (unreachable pentest tooling, refusals whose reason never reaches the user, silent slash commands, doctor output). This is the raw material for 'what the person sees' and for the explicit not-yet-demonstrated section."}
 {"file": ".trellis/tasks/10-05-whole-flow-end-to-end/readings.md", "reason": "The reading that the whole user flow in one run has never been demonstrated, and the extension's own status line including hashlineEditTools=absent. Without this the page would overclaim."}
-{"file": ".trellis/tasks/10-03-day-two-walk/readings.md", "reason": "What the second day produced and what it did not: the continuation path is measured only in part, so the loop table needs its status column."}
+{"file": ".trellis/tasks/archive/2026-10/10-03-day-two-walk/readings.md", "reason": "What the second day produced and what it did not: the continuation path is measured only in part, so the loop table needs its status column."}
 {"file": ".trellis/tasks/09-30-axi-program/prd.md", "reason": "axi's program-level definition (R1-R9, the same-repo shape decision) to be summarised as one internal-program section, and the wrong section citation this task repairs."}
 

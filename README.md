@@ -412,7 +412,7 @@ slash command 和 `state`/`stats` 是 `command-only` 步骤，不会伪造 ledge
 `cancelled`；摘要会分别统计哪些答案由场景提供（`dialogs.approved` / `declined` / `answered` / `cancelled`）、
 哪些由驱动默认给出（`dialogs.defaulted`）—— "被要求的拒绝"与"被默认的拒绝"不能读成同一件事。
 `abortDuringTools: true` 在该步的工具运行期间取消请求，这是唯一能打断飞行中工作的方式，因为步骤是串行发送的。
-`--reuse-session` 配合同一个 `--session-dir` 时，两次运行**共享同一个会话根**（`sessionDir` 相同），而不是各拿一个；它**不把上一次的对话带进这一次**——2026-10-05 实测：第二跑问"上一次我们做到哪了"，答"不确定，不猜"，而带上对话的是宿主自己的 `--continue` / `--session <file|id>`（读数见 `.trellis/tasks/10-03-day-two-walk/readings.md` 第三轮）；
+`--reuse-session` 配合同一个 `--session-dir` 时，两次运行**共享同一个会话根**（`sessionDir` 相同），而不是各拿一个；它**不把上一次的对话带进这一次**——2026-10-05 实测：第二跑问"上一次我们做到哪了"，答"不确定，不猜"，而带上对话的是宿主自己的 `--continue` / `--session <file|id>`（读数见 `.trellis/tasks/archive/2026-10/10-03-day-two-walk/readings.md` 第三轮）；
 不给它时每次运行保持隔离。`--dialog-case write` 让确定性 provider 请求一次写操作，好让声明了闸门的工作模式有东西可闸。
 
 ### 维护安装

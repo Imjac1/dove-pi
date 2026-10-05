@@ -1,3 +1,3 @@
-{"file": ".trellis/tasks/10-03-day-two-walk/readings.md", "reason": "The checker re-runs the same judgement the reading used: a real function, a real test count and a real commit id, or an explicit refusal to guess."}
+{"file": ".trellis/tasks/archive/2026-10/10-03-day-two-walk/readings.md", "reason": "The checker re-runs the same judgement the reading used: a real function, a real test count and a real commit id, or an explicit refusal to guess."}
 {"file": ".trellis/spec/guides/defect-ledger.md", "reason": "The page whose rule moved this defect into a task; the checker reads it to see that the entry left rather than stayed open."}
 {"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The patterns a fix and a case are held to, including that a check which cannot fail is not a check."}

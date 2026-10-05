@@ -47,7 +47,7 @@
 
 ## 出处
 
-- 读数：`.trellis/tasks/10-03-day-two-walk/readings.md`（第三轮）
+- 读数：`.trellis/tasks/archive/2026-10/10-03-day-two-walk/readings.md`（第三轮）
 - 前门与夹具：`README.md`、`README.en.md`、`tests/fixtures/scenarios/resume-across-runs.json`
 - 用例：`tests/real-dove-blackbox.test.ts:543`
 - 台账第 8 条已按台账自己的规则**离开台账**（有 task 接手了）。
