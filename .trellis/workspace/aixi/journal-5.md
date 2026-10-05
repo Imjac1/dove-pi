@@ -1024,3 +1024,27 @@ Two deliverables landed and one of my own claims was refuted. The product face b
 ### Status
 
 [OK] **Completed**
+
+
+## Session 240: The operator thread: what axi was always meant to implement, and the anchor door that corrected my citations
+<!-- trellis-session: v=2 fp=e9cf2a184177dacb -->
+
+**Date**: 2026-10-05
+**Task**: The operator thread: what axi was always meant to implement, and the anchor door that corrected my citations
+**Branch**: `master`
+
+### Summary
+
+The product face became two threads. The user thread already existed; this session added the operator thread: what was asked for before anything was designed, which tier of self-improvement this delivers, the three planes and the one relationship that bounds them, what the operator supplies reads and decides, the three instruments that do not exist, Experiment 0 and what its failure would mean, the cost stated before anyone builds it, and the falsifiers. The steps of a round are written once elsewhere, and this page only links to them, because that page has five bytes of budget left and a second telling would be a second source of truth. Reading the original record was the point: three requirements recorded before the design, namely carry the discipline in files, be the synthesis of the frontier by choosing which layer owns what, and a design for recursive self-improvement delivered at bounded level two. The filesystem is the API requirement now appears in all three pages instead of living only in a task document, and it is the bridge between the two threads. One new red was mine: the anchor door resolves every cited path and line from the repository root and counts a bare filename as a citation, and my first version cited two task documents by bare name, which produced twenty findings; fixed by citing full paths and checking both line counts. The archive cost zero repointing for the second time, and the scan reports exactly the three unrepairable pointers AGENTS.md now names. Gates: typecheck 0, npm test 934 pass 1 fail 2 skipped with the same pre-existing index-length failure, installer 143 OK, and the documentation doors 16 of 16.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2bf3b0e` | docs(spec): the improvement run from the operator's seat, and the citations the anchor door made me fix |
+| `570f74e` | docs(spec): the filesystem is the API, said once in each thread |
+| `cb3868d` | docs(task): the operator thread, and the two mistakes this round taught the hard way |
+
+### Status
+
+[OK] **Completed**
