@@ -1097,3 +1097,36 @@ This round was triage. The owner asked whether the rest of the open board was wo
 ### Status
 
 [OK] **Completed**
+
+
+## Session 243: Continuation, the mode rule about using what the machine has, and the archive tax's second payer
+<!-- trellis-session: v=2 fp=92b50c6c5cd6703b -->
+
+**Date**: 2026-10-05
+**Task**: Continuation, the mode rule about using what the machine has, and the archive tax's second payer
+**Branch**: `master`
+
+### Summary
+
+The reading this session owed came back positive, and it took three instruments to get it. Asked what it had done last time, a fresh session said it did not know, and a session sharing the repository's own resume flag said the same - while continuing the session with the host's own flag answered with the real function, the real test count and the real commit id in fifteen seconds. So continuation carries, and what carries it is the host's session rather than the Dove records; the repository's flag shares a session root only, and the sentence that said it continued a conversation was narrowed in both front doors and in the fixture's own description. The owner's requirement about tools landed as mode rules - run the tool the work needs and keep what it printed, and a script written for one call is written again - in three mode bodies, each held by a case that was shown to go red when its sentence is removed. The open board was triaged by two checkable criteria and fell from twenty-nine to seventeen; seven measured defects that had never been planned became one page, the defect ledger, whose entries leave it when a task takes them up. Two closures were recorded rather than assumed: the mode prerequisites question was answered by the owner as not a gap at all, and the host pin upgrade was already done, which corrected a claim this session had made from the repository's own version number. Archiving then turned two citation doors red for the first time, because specification pages cited files inside the archived task: seven citations were repointed, the tax now has two payers, and AGENTS.md carries the sixth measurement. Gates at the end: typecheck 0, npm test 943 tests with 941 passing, none failing and two skipped, installer 143 OK, and the documentation doors 21 of 21.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a02d71f` | docs(agents): the archive tax has two payers, and the doors are what names the second one |
+| `b1d11c9` | fix(docs): the citations the archive moved, repointed where a door reads them |
+| `8673df2` | chore(task): archive 10-05-mode-tool-use-rule |
+| `44806e2` | chore(task): archive 10-03-day-two-walk |
+| `52c2697` | docs(task): the flag that shares a root, owned by a task instead of the ledger |
+| `88c8fa1` | docs: the resume flag shares a session root, and now the sentence says only that |
+| `f8e6f08` | docs(spec): continuation carries the conversation, and the resume flag that only shares a root |
+| `0e8f3d6` | docs(task): the second day's plan, which is one reading it still owes |
+| `8eff33e` | docs(task): the rule in three mode bodies, the case that goes red without it, and the index red that was a task-count effect |
+| `73db7dd` | feat(modes): run the tool the work needs, and write the script that gets used twice |
+| `dd19d0d` | chore(task): archive 10-03-pi-1-upgrade |
+| `f20a4f6` | chore(task): archive 10-03-mode-prerequisites |
+
+### Status
+
+[OK] **Completed**
