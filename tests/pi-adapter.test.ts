@@ -1599,6 +1599,67 @@ describe("Pi adapter", () => {
 			rmSync(tmpDir, { recursive: true, force: true });
 		}
 	});
+
+	it("keeps every child of a parallel batch visible while the batch is in flight", async () => {
+		// **Pi runs the tool calls of one assistant message in parallel** (`pi-agent-core/dist/agent-loop.js:411-453`),
+		// so two dispatches interleave at their await points. A single last-state binding can describe only one of
+		// them, and the doctor projection has no `activeRuns` field at all - which is what this case fails on.
+		const root = mkdtempSync(join(tmpdir(), "pi-subagent-batch-"));
+		const childScript = join(root, "fake-pi-child.mjs");
+		// The child ignores argv and answers after a delay, so the batch is still in flight when it is observed.
+		writeFileSync(childScript, "setTimeout(() => { process.stdout.write(\"child answer\"); process.exit(0); }, 2500);\n", "utf8");
+		const previousExecutable = process.env.DOVE_PI_SUBAGENT_EXECUTABLE;
+		const previousPrefixArgs = process.env.DOVE_PI_SUBAGENT_PREFIX_ARGS;
+		process.env.DOVE_PI_SUBAGENT_EXECUTABLE = process.execPath;
+		process.env.DOVE_PI_SUBAGENT_PREFIX_ARGS = JSON.stringify([childScript]);
+		try {
+			// The provider is constructed once, at registration, so the environment must be set before `extension(api)`.
+			const tools = new Map<string, unknown>();
+			const api = {
+				registerCommand() {},
+				registerShortcut() {},
+				registerTool(definition: { name: string }) { tools.set(definition.name, definition); },
+				registerFlag() {},
+				appendEntry() {},
+				getAllTools() { return []; },
+				setActiveTools() {},
+				getActiveTools() { return []; },
+				getThinkingLevel() { return "max"; },
+				on() {},
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const subagent = tools.get("agent_subagent") as { execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }>; details?: { runId?: string } }> };
+			const doctor = tools.get("agent_doctor") as { execute: (...args: unknown[]) => Promise<{ details: { subagent: { activeRuns?: Array<{ runId?: string }>; lastTerminal?: { state?: string; runId?: string } } } }> };
+			const context: FakeContext = {
+				ui: { theme: { fg: (c, v) => v }, setStatus: () => {}, notify: () => {} },
+				sessionManager: { getEntries: () => [], getBranch: () => [], getSessionId: () => "session-batch" },
+			};
+			const first = subagent.execute("batch-call-1", { name: "one", prompt: "Read the first area" });
+			const second = subagent.execute("batch-call-2", { name: "two", prompt: "Read the second area" });
+			// Both have launched and neither has settled - the window a single slot cannot describe.
+			await new Promise((resolve) => setTimeout(resolve, 600));
+			const doctorResult = await doctor.execute("doctor-call", {}, undefined, undefined, context);
+			assert.equal(doctorResult.details.subagent.activeRuns?.length, 2, "a batch in flight must be reported as two runs, not one overwritten slot");
+			const [a, b] = await Promise.all([first, second]);
+			assert.match(a.content[0]?.text ?? "", /child answer/, "each dispatch keeps its own answer");
+			assert.match(b.content[0]?.text ?? "", /child answer/);
+			assert.notEqual(a.details?.runId, b.details?.runId, "and each keeps its own run id");
+			// **The other half of the same state**: a settled child leaves the in-flight set, and the terminal that
+			// survives names a run that really completed. Reading only the in-flight half would pass for a map that is
+			// never emptied, and a `lastTerminal` no child ever wrote would go unnoticed.
+			const settled = await doctor.execute("doctor-settled", {}, undefined, undefined, context);
+			assert.equal(settled.details.subagent.activeRuns?.length, 0, "a settled batch leaves nothing in flight");
+			assert.equal(settled.details.subagent.lastTerminal?.state, "succeeded");
+			assert.ok(
+				[a.details?.runId, b.details?.runId].includes(settled.details.subagent.lastTerminal?.runId ?? ""),
+				"and the terminal belongs to one of the two children rather than to a third",
+			);
+		} finally {
+			if (previousExecutable === undefined) delete process.env.DOVE_PI_SUBAGENT_EXECUTABLE; else process.env.DOVE_PI_SUBAGENT_EXECUTABLE = previousExecutable;
+			if (previousPrefixArgs === undefined) delete process.env.DOVE_PI_SUBAGENT_PREFIX_ARGS; else process.env.DOVE_PI_SUBAGENT_PREFIX_ARGS = previousPrefixArgs;
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 
 interface FakeContext {

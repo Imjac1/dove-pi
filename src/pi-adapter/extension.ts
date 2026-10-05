@@ -711,7 +711,14 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	// which is itself worth saying rather than leaving the operator to guess whether anything was checked.
 	let activeEffectsDirectory: string | undefined;
 	const subagentProvider = createConfiguredPiSubagentProvider();
-	let subagentLastState: { state: string; runId?: string; reason?: string } | undefined;
+	// **Pi runs the tool calls of one assistant message in parallel** (`pi-agent-core/dist/agent-loop.js:411-453`), so
+	// dispatches interleave at their await points. One binding cannot describe a batch: whichever call wrote last would
+	// be the only run a reader ever saw. The in-flight runs are keyed by `runId`, unique because `dispatchId` embeds the
+	// tool call id, and the terminal is the **most recently settled** run - the only definition that stays true when
+	// several are in flight. **No `await` may sit between reading this state and writing it back**: each map mutation is
+	// one synchronous step, which is what keeps a sibling from interleaving into it.
+	const activeSubagentRuns = new Map<string, { state: string; runId: string; name: string }>();
+	let subagentLastTerminal: { state: string; runId?: string; reason?: string } | undefined;
 	const stateDir = resolveDoveStateDir(cwd, { agentDir: getAgentDir() });
 	if (!process.env.DOVE_PI_STATE_DIR?.trim()) migrateLegacyDoveState(cwd, stateDir);
 	let projectProvider = createProjectProvider(cwd);
@@ -1240,8 +1247,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			const health = await subagentProvider.inspect();
-			const last = subagentLastState ? ` Last: ${subagentLastState.state}${subagentLastState.runId ? ` (${subagentLastState.runId})` : ""}${subagentLastState.reason ? ` - ${subagentLastState.reason}` : ""}.` : "";
-			ctx.ui.notify(`Subagent provider: ${health.available ? "available" : "unavailable"} (${health.provider})${health.reason ? ` - ${health.reason}` : ""}.${last} Read-only capabilities: read, grep, find, ls.`, health.available ? "info" : "warning");
+			const inFlight = activeSubagentRuns.size === 0 ? "" : ` In flight: ${String(activeSubagentRuns.size)} (${[...activeSubagentRuns.values()].map((run) => run.name).join(", ")}).`;
+			const last = subagentLastTerminal ? ` Last: ${subagentLastTerminal.state}${subagentLastTerminal.runId ? ` (${subagentLastTerminal.runId})` : ""}${subagentLastTerminal.reason ? ` - ${subagentLastTerminal.reason}` : ""}.` : "";
+			ctx.ui.notify(`Subagent provider: ${health.available ? "available" : "unavailable"} (${health.provider})${health.reason ? ` - ${health.reason}` : ""}.${inFlight}${last} Read-only capabilities: read, grep, find, ls.`, health.available ? "info" : "warning");
 		},
 	});
 
@@ -1589,9 +1597,9 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "agent_subagent",
 		label: "Read-only Subagent",
-		description: "Explicitly start one isolated read-only Pi child to inspect the current project. This never edits files, runs shell commands, uses the network, or delegates recursively.",
+		description: "Explicitly start one isolated read-only Pi child to inspect the current project. This never edits files, runs shell commands, uses the network, or delegates recursively. Several calls in one message run concurrently.",
 		promptSnippet: "Delegate a bounded read-only project investigation to an isolated Pi child",
-		promptGuidelines: ["Use only when an isolated second set of eyes is useful and the user request permits delegation. The child is read-only and may be unavailable unless DOVE_PI_SUBAGENT_EXECUTABLE is configured. Do not use this tool for edits or tests."],
+		promptGuidelines: ["Use only when an isolated second set of eyes is useful and the user request permits delegation. The child is read-only and may be unavailable unless DOVE_PI_SUBAGENT_EXECUTABLE is configured. Do not use this tool for edits or tests.", "Issue independent investigations together in one message: the host runs those calls concurrently, so a batch costs the wall time of its slowest child rather than the sum of all of them."],
 		parameters: Type.Object({
 			name: Type.String({ description: "Short human-readable investigation name" }),
 			prompt: Type.String({ description: "Bounded read-only investigation prompt" }),
@@ -1599,22 +1607,23 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		async execute(_toolCallId, params, signal) {
 			type SubagentToolDetails = { available: boolean; provider?: string; reason?: string; runId?: string; state?: string; error?: unknown };
 			if (!subagentProvider) {
-				subagentLastState = { state: "unavailable", reason: "DOVE_PI_SUBAGENT_EXECUTABLE is not configured" };
+				subagentLastTerminal = { state: "unavailable", reason: "DOVE_PI_SUBAGENT_EXECUTABLE is not configured" };
 				const details: SubagentToolDetails = { available: false, reason: "provider_not_configured" };
 				return { content: [{ type: "text", text: "Subagent unavailable: configure DOVE_PI_SUBAGENT_EXECUTABLE for an explicit isolated Pi child. No inline fallback was started by this explicit tool." }], details };
 			}
 			const typed = params as { name: string; prompt: string };
 			const health = await subagentProvider.inspect();
 			if (!health.available) {
-				subagentLastState = { state: "unavailable", reason: health.reason };
+				subagentLastTerminal = { state: "unavailable", reason: health.reason };
 				const details: SubagentToolDetails = { available: false, provider: health.provider, reason: health.reason ?? "provider is unavailable" };
 				return { content: [{ type: "text", text: `Subagent unavailable: ${details.reason}` }], details };
 			}
 			const dispatchId = `explicit-${Date.now()}-${_toolCallId}`;
 			const launch = await subagentProvider.launch({ dispatchId, name: typed.name, prompt: typed.prompt, cwd, capabilities: ["read", "grep", "find", "ls"] });
-			subagentLastState = { state: launch.state, runId: launch.runId };
+			activeSubagentRuns.set(launch.runId, { state: launch.state, runId: launch.runId, name: typed.name });
 			const terminal = await subagentProvider.collect(launch.runId, signal);
-			subagentLastState = { state: terminal.state, runId: terminal.runId, reason: terminal.error?.code };
+			activeSubagentRuns.delete(launch.runId);
+			subagentLastTerminal = { state: terminal.state, runId: terminal.runId, reason: terminal.error?.code };
 			if (terminal.state !== "succeeded") {
 				const details: SubagentToolDetails = { available: true, provider: launch.provider, runId: terminal.runId, state: terminal.state, error: terminal.error };
 				return { content: [{ type: "text", text: `Subagent ${terminal.state}: ${terminal.error?.summary ?? "no answer"}` }], details };
@@ -1947,8 +1956,8 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					configured: Boolean(subagentConfiguration),
 					available: subagentHealth.available,
 					reason: subagentHealth.reason,
-					activeRun: subagentLastState?.state === "launching" || subagentLastState?.state === "running" ? subagentLastState : undefined,
-					lastTerminal: subagentLastState && subagentLastState.state !== "launching" && subagentLastState.state !== "running" ? subagentLastState : undefined,
+					activeRuns: [...activeSubagentRuns.values()],
+					lastTerminal: subagentLastTerminal && subagentLastTerminal.state !== "launching" && subagentLastTerminal.state !== "running" ? subagentLastTerminal : undefined,
 				},
 				toolSchemaStability: {
 					expectedCount: expectedToolNames.length,

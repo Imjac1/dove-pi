@@ -59,8 +59,12 @@ describe("CLI error boundary", () => {
 				cwd: root,
 				env: { ...process.env, DOVE_PI_STATE_DIR: stateDir },
 			});
-			const payload = JSON.parse(result.stdout) as { requestDiagnostics?: { lastTerminal?: { terminal?: { code?: string } } } };
+			const payload = JSON.parse(result.stdout) as { requestDiagnostics?: { lastTerminal?: { terminal?: { code?: string } } }; subagent?: { activeRuns?: unknown } };
 			assert.equal(payload.requestDiagnostics?.lastTerminal?.terminal?.code, "provider-authorization-denied");
+			// **One key, one type.** `agent_doctor` publishes `activeRuns` as the list of runs in flight, so the machine
+			// form of the same payload must not publish a count under that name. A separate process has no child to
+			// report, and the empty list is how it says so.
+			assert.equal(Array.isArray(payload.subagent?.activeRuns), true, "the CLI reports the same type for the key the extension reports a list under");
 			assert.equal(await readFile(ledgerPath, "utf8"), beforeLedger);
 		} finally {
 			await rm(root, { recursive: true, force: true });

@@ -125,7 +125,11 @@ if (args[0] === "doctor") {
 					configured: Boolean(subagentConfiguration),
 					available: subagentHealth.available,
 					reason: subagentHealth.reason,
-					activeRuns: 0,
+					// **One key, one type, in both forms of the payload.** `agent_doctor` reports `activeRuns` as the list of
+					// runs in flight, so this projection reports a list as well - empty, because a separate process cannot
+					// have a child in flight. It was `0`: the same field name carrying a count in one reading and a list in
+					// the other, which a consumer that switched on the type would get wrong in whichever half it read first.
+					activeRuns: [],
 					lastTerminal: undefined,
 				},
 				project: {
