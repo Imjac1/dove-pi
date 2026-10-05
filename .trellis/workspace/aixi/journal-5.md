@@ -1150,3 +1150,34 @@ This session resumed the parallel-dispatch task at Phase 2 and found the working
 ### Status
 
 [OK] **Completed**
+
+
+## Session 245: The whole flow hung 22 seconds in, the launcher its own shell could not see, and a hang became a reading
+<!-- trellis-session: v=2 fp=1b5538f737334cf2 -->
+
+**Date**: 2026-10-06
+**Task**: The whole flow hung 22 seconds in, the launcher its own shell could not see, and a hang became a reading
+**Branch**: `master`
+
+### Summary
+
+The whole-flow task was put through three real runs and ended up rewriting what two of its own readings had said. The 45-minute run corrected the previous conclusion that budget was the bottleneck: it stopped on its own at 9.5 minutes with a provider error, and the harness had the cause in hand - the host recorded stopReason aborted with errorMessage terminated - while its classifier read only the error text, matched nothing, and reported provider-unknown with a next_action telling the operator to inspect a provider error the ledger did not hold. The same host event had been classified transient on the first attempt and unknown on the second, so the outward reading depended on which word the provider happened to send; the classifier now reads the host's own token, with a case observed red first. The field run's tool surface turned out not to be the operator's either: settings.json declares thirteen packages and the carrier copied only three config files, so every package was unloadable and hashlineEditTools read absent against a host that has it installed. A zero-token probe proved it by junctioning the store in, and the carrier now copies npm/ with the declaration - measured at 361 MB, 15,272 files, about ten seconds. Then the flow itself: a new scenario carries the task lifecycle, and the run it produced hung 22 seconds in on a whole-disk find the agent ran to locate the launcher, because the launcher installs only .cmd and .ps1 shims while doctor selects git-bash, where the documented name dove-pi is command-not-found and even which dove-pi.cmd fails. The installer now writes an extension-less shim, following npm's shape. That run also showed the formal task is opened by the harness's own intake from the message, in the formal lane, five milliseconds after the session starts - which is why an earlier prompt landed elsewhere and reported no formal task. Finally the hang task got its plan and its implementation: route three, record the absence, chosen because the two measured hangs were a whole-disk find and never an aggregate test command, so widening the whitelist would have had to contain every command. A tool call now writes tool.started with its timeout stance, projectExecutionDiagnostics reports unterminatedToolCalls beside unterminatedRequests, the status line and agent_doctor carry it, and the failure reading names an outstanding call before the weaker sentence. Two things the plan got wrong are recorded rather than smoothed: the reachability door did not go red for a kind with no writer, because it counts comparison sites as reaching a kind, and the writer sits behind the activeLease guard, which is why the first version of the case wrote nothing with no error. pytest -q was measured outside the timeout whitelist while pytest with a path is inside it. Gates: typecheck 0, npm test 949 of 949 with none failing, installer 143 OK, doors 48 of 48. The archive tax was zero - every curated entry pointed at a spec rather than at the task itself.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8bb3cd3` | docs(task): the whole flow ran once, the mode is in force, and the absent edit tool is the carrier's doing |
+| `a7afed4` | fix: the package store travels with the declaration, and an aborted stream is not unknown |
+| `e10c8ec` | docs(task): the budget was not the bottleneck, and the absent edit tool was the carrier's doing |
+| `fab5ad8` | test(scenarios): a scenario that carries the task lifecycle, so the flow's closing steps have somewhere to leave a trace |
+| `c375e44` | fix(installer): an extension-less launcher shim, because the selected shell cannot see the other two |
+| `560bb54` | docs(task): the flow hung 22 seconds in, and the launcher its own shell could not see |
+| `4741092` | docs(task): the hang is a reading before it is a bound, and the command that hung is finally known |
+| `145b46b` | feat(ledger): a tool call that has not returned is a reading, and the timeout stance is written down |
+| `f4fd8cc` | docs(task): the route is taken, and two things the plan got wrong are recorded rather than smoothed |
+| `ce2debe` | docs(task): each criterion settled against what was measured, including the one that was refuted |
+
+### Status
+
+[OK] **Completed**

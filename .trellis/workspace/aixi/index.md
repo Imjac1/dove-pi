@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 244
-- **Last Active**: 2026-10-05
+- **Total Sessions**: 245
+- **Last Active**: 2026-10-06
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1152 | Active |
+| `journal-5.md` | ~1183 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 245 | 2026-10-06 | The whole flow hung 22 seconds in, the launcher its own shell could not see, and a hang became a reading | `8bb3cd3`, `a7afed4`, `e10c8ec`, `fab5ad8`, `c375e44`, `560bb54`, `4741092`, `145b46b`, `f4fd8cc`, `ce2debe` | `master` |
 | 244 | 2026-10-05 | A parallel batch is a list of runs, the reading that was half-asserted, and the key the CLI already published | `24fe516`, `d160117`, `727dc19` | `master` |
 | 243 | 2026-10-05 | Continuation, the mode rule about using what the machine has, and the archive tax's second payer | `a02d71f`, `b1d11c9`, `8673df2`, `44806e2`, `52c2697`, `88c8fa1`, `f8e6f08`, `0e8f3d6`, `8eff33e`, `73db7dd`, `dd19d0d`, `f20a4f6` | `master` |
 | 242 | 2026-10-05 | The defect ledger: seven never-planned defects in one page, and two retired by re-measurement | `5525447`, `0fb8088`, `06c9e54` | `master` |
