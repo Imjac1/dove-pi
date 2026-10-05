@@ -70,7 +70,58 @@
 
 **这条也说明一件方法论上的事**：能回答这个问题的机制**一直都在**（`cachePolicyVersion=3`、逐组成摘要、`stablePrefix`），只是没有人去读它；而当时给出的"值得单独查一次"被理解成"要再花一次钱跑一遍"。先把已有的账本读完，是第一顺序。
 
+## 九、定位：那次 `error` 不是硬停，而是**记录写在分类之前**（2026-10-05）
+
+### 那次发生了什么（好消息）
+
+`read-only-audit` 那轮的第 6 个 provider round 以 `stopReason: "error"` 结束（`usage` 全 0、`durationMs=543`），**543 ms 的请求、2 ms 后 attempt 结束、2 s 后新 attempt 开始**：
+
+```
+21:24:21.093 provider.request.started    attempt #1
+21:24:21.637 provider.request.completed  stopReason=error usage=0 durationMs=543
+21:24:21.640 request.attempt.completed   outcome="transient-failure"
+21:24:23.649 request.attempt.started     number=2 trigger="provider-retry"
+21:30:32.484 request.terminal            reason="completed"
+```
+
+重试机制**工作正常**：错误被判为 transient、触发 provider 重试、第 2 次 attempt 跑完并 `completed`。所以它不是 D 级"未定位硬停"里的"整轮卡死"，而是一次**被正确处理、但无法事后解释**的失败。
+
+### 真正的缺陷：原因在写记录之后才被算出来
+
+| 位置 | 手上有什么 | 写/做了什么 |
+|---|---|---|
+| `src/pi-adapter/extension.ts:2984-3002` | `stopReason`、`observed.usage`、assistant 的 `message` | **写下** `provider.request.completed`（`stopReason`、真实 token 用量、cache、durationMs）——**没有任何失败原因字段** |
+| `src/pi-adapter/extension.ts:3008-3011` | `message` | **八行之后**才 `lastProviderFailure ??= classifyAssistantProviderFailure(message)` —— 而分类就是拿 `message.errorMessage` 里的 `ECONNRESET`/`429`/`rate limit` 等文本算出来的（`:282-296`） |
+| `src/pi-adapter/extension.ts:2519-2526` | 唯一**同时**持有 `lastProviderFailure` 的地方 | 但只写 `stopReason: "error"` + `usage: call.httpStatus === undefined ? undefined : { httpStatus: call.httpStatus }`；而且那时 `currentProviderCall` 已被 `:3006` 清空，所以它通常什么都不写 |
+
+**所以那条记录写不出原因不是"漏了一个字段"，而是顺序决定的**：写记录时分类还没发生。分类结果只被用在本轮的重试决策（`:3011` 的 `retryDecision`）和 attempt 记录（`outcome: "transient-failure"`）上，**从未落到 provider 记录里**。attempt 记录说的是"属于 transient 这一类"，provider 记录说的是"出错了"——**两者都没说是哪种**（429？socket reset？5xx？）。
+
+### 这不是孤例：全量 602 个账本，6 条错误记录，0 条带原因
+
+扫 `%TEMP%` 下**全部 602 个** `execution.jsonl`：
+
+| 读数 | 结果 |
+|---|---|
+| `stopReason: "error"` 的 provider 记录 | **6 条** |
+| 其中写了具体原因（`failure`/`reason`/`code`/`httpStatus`/`message`）的 | **0 条** |
+| 这 6 条的 `usage` 形状 | 全部是 token 形状 `('cacheRead','cacheWrite','cost','input','output','totalTokens')` |
+
+两条附加事实：
+
+- 其中一条 `durationMs = 300,010`（正好 5 分钟）、一条 `174,885`（约 3 分钟）—— **这就是 10-03 里"长静默与已死无法区分"的那种轮次**，而现在能说出它的形状：一次 5 分钟的 provider 轮，然后 `error`，原因无处可查。
+- **`usage: {httpStatus}` 这个形状出现 0 次**：`:2522` 那个"唯一持有分类"的写入点在全部 602 个账本里**从未写下过任何记录**。也就是说：`usage` 这个字段在一个写入点放 token 数、在另一个（从未触发的）写入点放 HTTP 状态码 —— **一个字段两种含义**，正是本会话一路在关的那一类；而且它唯一能记的东西（状态码）几乎从不存在。
+
+### 修法（未实施，等确认；S 号）
+
+1. **把分类提到写记录之前**（`:3008-3009` → `:2984` 之后、`:2990` 之前），让记录在写的时刻就知道原因。
+2. **给记录一个自己的字段**：`appendProviderRequestCompleted` 增加可选 `failure?: { kind, reason }`（`ProviderFailureClassification` 是既有且**封闭**的词汇表），`:2990` 与 `:2522` 两处都传。
+3. **停止把状态码塞进 `usage`**：`httpStatus` 单独成字段，让两个写入点的形状一致（否则读者无法判断 `usage` 里是 token 还是状态码）。
+4. **先红后绿**：在宿主 seam 上驱动一次带 `429`/`ECONNRESET` 文本的 provider 失败（`tests/pi-adapter.test.ts` 已有"provider status 优先于 abort 措辞"这类用例可循），断言账本记录**点出 kind/reason**；改之前它必须红在"记录里没有原因"上。
+
+**为什么值得修**：这条不是行为缺陷（重试是对的），而是**可诊断性**缺陷 —— 今天问"那次为什么重试"只能得到"出错了"。它与本会话的主题一致：一个在手的结论（分类）没有被任何读者看得见。
+
 ## 八、对"换一个 provider 再跑一次"的答复（2026-10-05）
+
 
 - 本机**只有一个 provider**（`~/.pi/agent/models.json` 里只有 `ant`，`auth.json` 是空的 `{}`），所以"换 provider"必须先由操作者提供凭据。
 - 但上面 §七 已经把我们这一侧的问题答完了：**换 provider 不会再改变关于我们的结论**，它只能再确认一遍"那家 provider 报不报缓存"。
