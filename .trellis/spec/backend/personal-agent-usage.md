@@ -37,6 +37,10 @@ of designing around it.
 | **Not designable: the loop and the tools** | 18 `pi.on(...)` mount points and no loop body; Dove observes and refuses, it does not dispatch | **Pi** |
 | **Not designable: host-side behaviour** | whether the host offers the harness's edit tools, and how it handles a slash command passed with `-p` before the extension sees it | **the host** |
 
+**The filesystem is the API on both sides.** The artifacts these four surfaces write are also what the harness's own
+improvement round reads and edits, which is the product's second thread - the operator's seat, in
+[`personal-agent-improvement-run.md`](./personal-agent-improvement-run.md).
+
 ## 3. Stage 0 - Getting it installed
 
 | | |

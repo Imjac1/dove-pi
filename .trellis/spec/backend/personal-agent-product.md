@@ -31,6 +31,11 @@ project memory, loop control, diagnostics, and recoverable updates - [demonstrat
 | An install, update, rollback, or uninstall does not delete `.dove/`, an existing `.trellis/`, or uncommitted work | `README.md:478-486` | [demonstrated] |
 | It is for people who want their own model, provider, and Pi extensions; long projects; and an update that can be repaired or rolled back | `README.md:11-16` | [demonstrated] |
 
+**The filesystem is the API.** Tasks, specifications, sessions and evidence land on disk as artifacts a reader can
+open, and the same artifacts are what the harness's improvement round mines from - which is the product's second
+thread, written from the operator's seat in
+[`personal-agent-improvement-run.md`](./personal-agent-improvement-run.md).
+
 ## 2. The design direction, as rules that can fail
 
 Five constraints decide the shape of everything below. Each is stated with the mechanism or the number that makes it
