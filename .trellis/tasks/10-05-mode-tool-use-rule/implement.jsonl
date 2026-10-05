@@ -1,0 +1,4 @@
+{"file": "modes/code-development/MODE.md", "reason": "The mode whose Method gains the rule: it writes code and scripts and runs the project verdict, so the two halves - run the tool, write the reusable script - are its own work."}
+{"file": "modes/code-audit/MODE.md", "reason": "The mode that confirms defects by meeting preconditions, where the rule says an obligation is met by running something and the script that ran belongs in the record."}
+{"file": "modes/pentest/MODE.md", "reason": "The mode whose value is invoking tools against an authorized target; the rule lands in During the run, next to the scope rules it must not be read as overriding."}
+{"file": ".trellis/spec/backend/personal-agent-mode-format.md", "reason": "What a mode file may state and how its sections are read, which is the constraint the new rules are written against."}
