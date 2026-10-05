@@ -84,6 +84,14 @@ and cannot be repaired by repointing. So the standing numbers are: the archive t
 **one broken pointer that no repointing fixes**. The scan is worth keeping for the same reason the note is: it reads a directory the reader
 of a task file never opens.
 
+**Measured a fourth time, 2026-10-05, by archiving two more tasks of one session - and the sentence above is corrected by it.** The tax was
+**zero** this time: neither archived task had curated an entry naming its own files, so the repointing helper reported *entries repointed: 0*,
+the first archive in this note's history that cost nothing. What the same scan then reported is the correction: the corpus holds **three**
+pointers no repointing can fix, not one - the module-graph test named above, plus **two** entries of the archived 09-03 task that both name
+convergence-evidence.md, a file the archived copy of that task does not have at all. Repointing those two in an earlier session fixed their
+prefix and not their existence, which is why they came back. So the standing number is a count of **genuinely absent content**, and it is
+three; the tax is not a constant either, because it is per archive and it is zero when the task curated nothing inside itself.
+
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a
 turn runs, and [`.trellis/harness-surface.yaml`](./.trellis/harness-surface.yaml) for the editable surface those turns are bounded by.
