@@ -49,3 +49,14 @@
 - **未做** ✗：真实启动与三个模式的体验（下一片 ✓）、`host-version.ts` 沉默点 ✓、`--version` 之外的 `pi:smoke` 全跑 ✓。
 - **第一次 `npm install` 的失败原因丢了** ✗（我的 PowerShell 滑手在 `ErrorRecord` 上用了 `.Trim()` ✓）；第二次成功 ✓。
 - **5 个漏洞**（3 moderate / 2 high ✓）由安装报出 ✓ —— **已记，未处理** ✗。
+
+## 收口：八条 AC 的证据归属（2026-10-05 归档）
+
+**本 task 内已有证据的六条**：AC-1（`package.json` 五个宿主包 1.0.0，独立提交 `40e0f44`，diff = `package.json`/`package-lock.json` + 本读数）✓ · AC-2（升级后的原始门禁读数就在本文件第一节：`typecheck` 1 错 / `npm test` 870 pass 2 fail / installer 141 OK）✓ · AC-3（三类红各带 `file:line`：`chinese-settings.ts(90,91)` 的 union、steer/follow-up 顺序、`systemPromptChars`）✓ · AC-4（三处修复各自指回一条红，修不动的原位降级并**开了任务**）✓ · AC-7（`--version` = `Dove Pi 0.2.0 (Pi 1.0.0)`）✓ · AC-8（三连门禁在 1.0.0 上全绿：0 / 872 pass 0 fail / 141 OK）✓。
+
+**另两条的证据在别的 task 里**（因此本 task 不再自己跑它们）：
+
+- **AC-5（真实启动、扩展被加载）** —— `.trellis/tasks/10-05-whole-flow-end-to-end/readings.md`：一次真实运行里 `/status` 的状态行由**扩展自己**产出，即扩展在 Pi 1.0 里被加载并应答。
+- **AC-6（三个模式各一个真实回合、至少一次被拒、用户侧文案可见）** —— `.trellis/tasks/10-03-first-contact-scenario/findings.md`：三个已发布模式各自加载、各自跑过真实回合，其中 `pentest` 被拒；拒绝文案经 `31f5cae` 在**没有 UI** 的终端里也到得了用户（该条已被 `tests/host-work-mode.test.ts` 的用例看着）。**那条走查仍在进行中**，所以这一条 AC 的"各一个真实回合"以它的读数为准。
+
+**带上去的保留（不随归档消失）**：本文件第一节末尾那条——3481 行的扩展、26 个宿主成员路径**没有被红覆盖**，那不是"它没事"的证据，只是套件没走到那些路径。
