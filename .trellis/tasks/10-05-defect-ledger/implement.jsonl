@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/defect-ledger.md", "reason": "The page this task lands, read back after the archives so the implementer can check that every provenance path resolves under archive/."}
+{"file": ".trellis/spec/guides/index.md", "reason": "The index that must list the ledger, and the file whose broken table row this round repairs; tests/document-drift.test.ts holds it equal to its directory."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The forbidden and required patterns: a claim names a thing rather than citing a drifting position, and no dated account of our own progress is written into a page a reader reads as a rule."}
