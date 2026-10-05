@@ -86,6 +86,10 @@ ceiling that nothing compares.
 The steps below are what a person does and sees. A step is `[demonstrated]` when a test or a reading fixes it; the
 loop **as one run** is §7.
 
+**This section is the record.** How the process is *designed* - what the product decides for the person at each
+stage, the specific failure each stage prevents, and which gaps have an owner - is
+[`personal-agent-usage.md`](./personal-agent-usage.md), which does not tell this story a second time.
+
 | # | What the person does | What they see | Mark and anchor |
 |---|---|---|---|
 | 1 | Installs, from source or the Release one-liner | the launcher path; then `dove-pi --version` and `dove-pi doctor` | [demonstrated] `README.md:30-47`, `README.md:55-93` |
