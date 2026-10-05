@@ -8,6 +8,10 @@ Dove Pi 是一个面向 Windows 的个人编程 Agent，基于
 
 简单说：你在自己的项目目录运行 `dove-pi`，然后像和开发同事说话一样直接描述需求。
 
+本文是写给用户的说明。**产品面的权威定义**在
+[`.trellis/spec/backend/personal-agent-product.md`](./.trellis/spec/backend/personal-agent-product.md)：装的是什么、用户可见的循环、
+四根设置轴、哪些是承诺（以及由什么执行）、哪些尚未被证明、明确不做什么。两者不一致时**以那份为准**，本文随之更正。
+
 ## 适合谁
 
 - 希望自由选择模型、Provider 和 Pi 扩展；
