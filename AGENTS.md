@@ -99,6 +99,14 @@ previous zero and this two are the same sentence with different inputs. Nothing 
 **three**, and the two doors that read every citation in `.trellis/spec/` stayed green across the move, because no specification names a path
 inside a task directory that this session archived.
 
+**Measured a sixth time, 2026-10-05, and this one found a second payer the note did not know about.** Archiving two tasks turned **two
+citation doors red**: a specification page and the front door had cited files *inside* an archived task by path, and the archive moved them -
+**seven citations** across two specification pages, the front door and one task document, none of which the repointing helper could see,
+because it rewrites curated entries only. The repair is the same in kind - name the file where it now is, under
+`.trellis/tasks/archive/<month>/<name>/` - and the doors then hold the new name. So the tax has **two payers**: the curated entries, and any
+page that cites a task's own files. The second payer is checkable **before** the archive, by searching for the task's path; the doors are what
+tells you afterwards.
+
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a
 turn runs, and [`.trellis/harness-surface.yaml`](./.trellis/harness-surface.yaml) for the editable surface those turns are bounded by.
