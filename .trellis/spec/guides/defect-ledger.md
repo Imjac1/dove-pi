@@ -3,7 +3,7 @@
 **What this page is**: the defects that were **measured** by a real walk and then **never planned**. Each entry is the measurement itself,
 kept verbatim from the task that recorded it, with its anchors and the path to its provenance. **Nothing on this page is being worked on.**
 
-**Why a page instead of the seven tasks it replaces.** Each of those tasks held a real measurement and nothing else: its `Requirements` and
+**Why a page instead of the eight tasks it replaces.** Seven of those tasks held a real measurement and nothing else: its `Requirements` and
 `Acceptance Criteria` were still the template's `TBD`, so it could be neither done nor read as a plan. The measurement is the valuable part,
 and it survives here - on a page the citation door walks, so a `file:line` in an entry that stops resolving is reported rather than
 remembered. Taking one up means opening a task and **removing the entry from this page**, so a settled defect cannot be left looking open.
@@ -91,6 +91,29 @@ record that would let a reader conclude something false, which is the class this
 **Provenance**: `.trellis/tasks/archive/2026-10/10-05-divergent-records-unreconciled/prd.md`
 
 **Settled by**: one reconciled number per event, or a stated reason why two records may differ.
+
+## 8. The resume flag shares the session root, and its name said it continued the conversation
+
+**As measured** (2026-10-05): with `--reuse-session` and one `--session-dir` on both runs - the condition the repository's own case asserts,
+and that case holds only that the two runs share `sessionDir` and that the second request is not a redelivery of the first
+(`tests/real-dove-blackbox.test.ts:543`) - the second run had **no trace of the first**: asked what it had done, the model answered that it
+did not know, and the session root held **two** session files rather than one continued conversation. Continuing the same conversation with
+the host's own `--session <file>`, through the launcher, answered with the real function, the real test count and the real commit id in
+**15 seconds**.
+
+**Provenance**: `.trellis/tasks/archive/2026-10/10-03-day-two-walk/readings.md` (third round) carries all four runs, their timings and their
+exit codes.
+
+**Already repaired, and that is the misleading half**: the claim was narrowed on 2026-10-05 - `README.md`, `README.en.md` and
+`tests/fixtures/scenarios/resume-across-runs.json` now say the flag **shares the root and does not carry the conversation**, which is what
+the doors and the fixture hold.
+
+**Settled by**: isolating whether the host's RPC mode refuses to continue or the script never passes a continuation flag, then either making
+the flag carry the conversation or renaming it to what it does. **Not isolated, and not guessed here.**
+
+**This entry's own history, because the page's rule is the interesting part**: it left this page on 2026-10-05 when a task took it up, and
+returned the same day when the owner judged that task not worth doing now - what remains is the repository's own **walk instrument**, the
+misleading half is already repaired, and the question upstream of it (the second day is designed by the host, not by Dove) is still open.
 
 ## How to check this page
 
