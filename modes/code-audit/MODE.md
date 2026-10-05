@@ -28,6 +28,10 @@ Audit the repository in scope for defects that a reviewer would act on. Report f
    cannot tell a vulnerability from a 404.
 6. **Disclose the gaps.** If a file could not be read, the category is not clean, and the coverage
    receipt says so.
+7. **Meet an obligation by running something, and keep what it printed.** A precondition asserted in
+   prose is not asserted; the command or script that shows it belongs in the record. Write that script
+   to be reusable - the second candidate is where its parameters earn the pass it cost, and a script
+   that can only examine the first one spends that pass for nothing.
 
 ## Output
 

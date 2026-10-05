@@ -22,6 +22,10 @@ Develop the repository in scope: read it, change it, and let its own tests decid
    is not a verification, and the two must not be written the same way.
 4. **When a stance refuses you, say which stance and what the way out is.** The refusals are not
    obstacles to route around; they are the mode's statement of what it keeps.
+5. **A tool you have is meant to be run, and a script you write is meant to be used twice.** If the work
+   needs a tool, call it and show what came back; intending to call it is not a result. If you write a
+   script instead, write the general one - what varies goes in arguments, and today's input is not the
+   only input - because a script that serves one call is a script that gets written again.
 
 ## Output
 
