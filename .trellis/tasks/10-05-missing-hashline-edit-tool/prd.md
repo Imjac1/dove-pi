@@ -4,6 +4,23 @@
 
 Measured: the extension's own status output prints that the current Pi host does not provide the hashline edit tool, and points the reader at installing it. The agent then worked on a real library without those editing tools, and its single change fixed nothing and broke a test that had been passing. The harness knows and states the fact, and continues, so the session looks the same from the outside as one that had the tools. Open question for the design: refuse the session, degrade with the degradation recorded where the reading will show it, or treat the tool as optional and say why.
 
+## 更正：**原因不是宿主**（实测 2026-10-05，故本任务的标题与前提都要改）
+
+**上面那句"当前 Pi 宿主未提供 hashline 编辑工具"是扩展的原话 ✓，而它把原因归错了** ✗✓✓：
+
+| 测的 | 读数 |
+|---|---|
+| 宿主装没装 | **装了** ✓：`~/.pi/agent/npm/node_modules/pi-hashline-edit-pro` ✓（`pi-lens` 等十二个也在 ✓） |
+| field run 带没带**声明** | **带了** ✓：运行自己的 `settings.json` 里有 `npm:pi-hashline-edit-pro@2.7.0` ✓ |
+| field run 带没带**包** | **没带** ✗：`PI_CODING_AGENT_DIR` 指向运行自己的会话目录 ✓，里面只有 4 个 json + 会话记录 ✓，**没有 `npm/`** ✗ |
+| 把 `npm/` 放进去会怎样 | **`hashlineEditTools=present`** ✓✓、`hashline=active` ✓，其余扩展一并加载 ✓（同一场景、同一克隆 ✓） |
+
+→ **机制**：**声明随 `settings.json` 走，包不走** ✓ —— Pi 从 agent 目录自己的 store 解析包 ✓，所以只有声明到场时**每一个包都加载不了** ✗。**可修面在本仓的运行器**（`scripts/real-dove-blackbox.mjs` 的携带清单 ✓），**不在 Pi** ✗。
+→ **已修** ✓：运行器现在连 `npm/` 一并拷入（拷贝 ✓，原件不会被碰 ✓；实测整库 361 MB / 15,272 文件，**约 10 秒** ✓），field-run 规范 §2 的携带清单同步更新 ✓。
+→ **而这还牵出两条与*判断*有关的** ✗✓：① **那个 agent 并不缺编辑工具** ✗ —— 它在同一轮里用宿主的 `edit` 改了 3 次 ✓，缺的只是 *hashline* 那一族 ✓，所以"没有编辑工具导致改坏了"这个说法要按这一层重写 ✓；② **历史 field run 的"工具面"读数都不是操作者的工具面** ✗✓ —— 凡是拿那些读数谈工具面的结论，都要按本条重读 ✓。
+
+**本任务还开着的部分** ✓：**要不要把"缺了哪一族编辑工具"变成读数的一个字段** ✓（本轮已由扩展状态行的 `hashlineEditTools=absent/present` 满足 ✓），以及**声明的包与包库不一致时该不该拒绝会话** ✓ —— 这条现在有了真实的判据（声明到场而包缺席 ✓），比原来的"宿主不提供"可测得多 ✓。
+
 ## Requirements
 
 - TBD

@@ -122,3 +122,77 @@ FAILED tests/test_immutable.py::TestImmutable::test_immutable_is_not_revalidated
 - **模型会漂** ✗：`same command on another day is a different experiment` ✓（§3 ✓）；
 - **判分结果可比** ✓✓：两次都是"目标仍红" ✓（**这一层是同一件事的两次独立确认** ✓✓）；
 - **未测** ✗：`tokens` 与账本累计量的**正确性**（§5：field run 不覆盖"活做得对不对" ✓）；**`summary` 的资源块**（本轮运行根本没有 `summary.json` ✓ → **这一轮不构成对它的新证据** ✗✓）。
+
+---
+
+# 读数（第三次：**预算放大到 45 分钟** ✓✗✓）与两处修复（2026-10-05 深夜 ✓）
+
+## 第 0 片：**预算不是那个瓶颈** ✗✓✓（这一条是放大后的主要读数 ✓）
+
+```text
+scenario=immutable-directive-work  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-05
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json]
+exitCode=0  settled=false  harnessTimedOut=false  scenarioFailed=true  events=2428  duration=567139ms (9.5 min, 上限给的是 45 min)
+terminal: reason=failed  detail=unknown  code=provider-unknown  origin=provider  policyAbort=true
+resources(账本事件流): toolCalls=11  providerRounds=13  runtimePhases=?  tokens: input=115989(收敛观测) 
+tools the model actually called: bash, read   —— **没有一次 `edit`** ✗
+```
+
+**上限放大了 3 倍，而这轮 9.5 分钟就结束了** ✗✓✓ —— **不是到点，是 provider 把它结束了** ✓（`harnessTimedOut=false` ✓）。所以**上一轮"预算不够"的判断被这一轮修正** ✓：**同一场景、同一克隆，两次的失败原因不同** ✓（25 min 到点 ✓ / 9.5 min provider 终止 ✓）。
+
+## 🎯 第 1 片：**同一个事件，两次分类不同** ✗✓✓（**本轮最实的一条，已修** ✓）
+
+**两次尝试，一个宿主动作** ✓：
+
+| 尝试 | outcome | failureReason |
+|---|---|---|
+| 1（`trigger=initial`） | `transient-failure` ✓ → **重试了** ✓ | — |
+| 2（`trigger=provider-retry`） | `failed` ✗ | **`unknown`** ✗✓ |
+
+**而宿主自己把这件事写清楚了** ✓✓（会话记录最后一条 ✓）：`message.stopReason = "aborted"` ✓、`message.errorMessage = "terminated"` ✓、`usage` **全 0** ✓（流在响应中途断了 ✓，thinking 也停在半句 ✓）。
+
+**根因量到了行** ✓✓：`classifyAssistantProviderFailure`（`extension.ts:282` ✓）**只读 `errorMessage`/`error` 的文本** ✗ —— 那条文本是 `"terminated"` ✓，**没有任何一条规则匹配它** ✗ → 落到 `classifyProviderFailure({ category: "unknown" })` ✓。**宿主自己的那个词（`aborted`）从头到尾没进过这次判断** ✗✓✓。
+
+**它为什么伤人** ✓✓：终态于是写成 `provider-unknown` ✓、`summary "The provider request ended with unknown."` ✓、`nextAction "Inspect the provider error and adjust the request."` ✓ —— **而账本里没有任何 provider error 可查** ✗✓。
+
+**修法** ✓（`extension.ts` ✓）：在文本规则**之后**补一条**读宿主自己的 `stopReason`** 的规则 ✓ —— `stopReason === "aborted"` → 与已识别的瞬时类同一档（`reviewed-provider-message` ✓），**因为流提前结束正是那一类** ✓。放在文本规则之后是有意的 ✓：`errorMessage` 说了 `aborted by the user` 时**仍然读作取消** ✓。
+**判据** ✓✓：新增用例 **先见红** ✓（对着未改的 `extension.ts`：`actual {kind:'terminal',reason:'unknown'}` vs `expected {kind:'transient',reason:'reviewed-provider-message'}` ✓），改了之后绿 ✓。
+
+## 第 2 片：**field run 的工具面不是操作者的** ✓✓✓（**已修** ✓）
+
+**探针实验**（零 token ✓，`/status`-only 不调模型 ✓）：把运行自己的会话目录里放一个指向操作者 store 的 **junction** ✓ → 同一条状态行立刻变成：
+
+```text
+Dove Pi: workspace=development, workMode=code-development, hashlineEditTools=present, …, hashline=active, …
+```
+
+→ **假设被证伪成事实** ✓✓：`absent` 的根因是**运行器没带包库** ✗（声明带了 ✓、宿主装了 ✓）。
+
+**修法与判据** ✓✓：运行器把 agent 目录的 `npm/` 一并拷进运行 ✓（拷贝 ✓，原件不碰 ✓）；实测 `carriedConfig = ['settings.json','models.json','auth.json','npm/']` ✓、状态行 `hashlineEditTools=present` ✓、`hashline=active` ✓；**整库 361 MB / 15,272 文件，加约 10 秒** ✓（比担心的便宜 ✓）。**判分套件不受影响** ✓：全部测试不是 `--provider faux` 就是 `--no-operator-config` ✓，都不付这份拷贝 ✓。
+field-run 规范 §2 的携带清单同步更新 ✓ —— **原文只写了三个文件，所以"工具面"这件事从来没被规范承诺过** ✗✓，而现在它被承诺了 ✓。
+
+## 第 3 片：**编辑（包含我的）会把别处的引用弄烂** ✗✓✓（**已修** ✓）
+
+我在 `extension.ts` 的 `:296` 附近加了 10 行 ✓ → **该页 18 行 mount 表的每一个引用都错位** ✗✓，**被 `tests/spec-anchors.test.ts` 当场抓住** ✓✓（`cites the declaration each mount-point row names` ✓ 红 ✓）。**这个门就是为这件事存在的** ✓。
+
+**修法与判据** ✓✓：整页按实测位移 **+10** 修正 ✓（位移是量出来的、不是猜的：`new ExecutionLedger` 页写 906 / 实为 916 ✓，18 个 mount 行逐个核对 ✓）；门转绿 ✓。
+
+**顺手量出三处*先前就*烂掉的引用** ✗✓✓（**不是我这一改弄的** ✓ —— 若它们原本正确，`+10` 之后就该落在原文所指数上，而它们没有 ✓）：
+
+| 页 | 原文 | 实测真身 | 处理 |
+|---|---|---|---|
+| `personal-agent-mode-format.md:46` | `extension.ts:3318` | **3362** `const workModeBlock = workModeInstructions(activeWorkMode);` ✓ —— 正是"拼块的同一个调用" ✓ | **已改** ✓ |
+| `personal-agent-mode-format.md:86` | `extension.ts:2256` | 2256 是 `try {` ✗；加载拒绝区在 **2247**（`modeRefusal = workModeRefusal(selection)` ✓） | **已改** ✓ |
+| `personal-agent-product.md:81` | `extension.ts:3500-3521` | 真身是 **3519-3540** `readOnlyToolBudget` ✓（表里的数正是 `fast 4/6/12`、`standard 6/10/20`、`ultra 12/16/32` ✓） | **已改** ✓ |
+
+## 第 4 片：这轮的判据与代价 ✓✓
+
+| 项 | 读数 |
+|---|---|
+| `npm run typecheck` | **0** ✓ |
+| `npm test` | **947 / 947 pass / 0 fail** ✓✓（比上轮 +1 = 新增的那条用例 ✓） |
+| 新增用例**先见红** | 是 ✓（`actual: unknown` vs `expected: reviewed-provider-message` ✓） |
+| carrier 修好后的状态行 | `hashlineEditTools=present` ✓、`hashline=active` ✓ |
+| token 代价 | run 2 ✓ + 两条探针（`/status`-only，**不调模型** ✓）|
+
+**仍未达成的** ✗✓✓：**"一条运行里走完整个流程"** 仍然**不成立** ✓ —— 而这一轮把它从"预算不够"改成了**"provider 中途终止 + 终止原因当时报成 unknown"** ✓，**后者已修** ✓（下次同样的终止会读作 `reviewed-provider-message` 的瞬时失败并重试 ✓，而不是 `provider-unknown` 的终态 ✓）。**收敛与归档仍未被走到** ✗（`task.convergence.observed` 在 run 2 里出现了 ✓，但 `convergenceSkipReason: "no-formal-native-task"` ✓ —— 克隆里那个任务早已 `archived` ✓，**流程的收尾几步需要一个在流程里新建的任务** ✓）。
