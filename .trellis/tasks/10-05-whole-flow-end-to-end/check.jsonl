@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/10-05-whole-flow-end-to-end/design.md", "reason": "the design's chosen routes and the measured anchors each step must land on"}
+{"file": ".trellis/tasks/10-05-whole-flow-end-to-end/implement.md", "reason": "the gate and the ordered checklist the verification reads against"}
