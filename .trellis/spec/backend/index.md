@@ -26,6 +26,7 @@ repository enforces.
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Active |
 | [Personal Agent Runtime](./personal-agent-runtime.md) | Stable router for ownership-scoped Agent runtime specifications | Active |
+| [Personal Agent Product Definition](./personal-agent-product.md) | What a person installs, runs and is promised: the user-visible loop, the four axes, the promises and their enforcers, what is not yet demonstrated, and the non-goals | Active |
 | [Personal Agent Request Runtime](./personal-agent-request-runtime.md) | Core, Pi adapter, request planning, and provider-budget contracts | Active |
 | [Personal Agent Capability Runtime](./personal-agent-capability-runtime.md) | Capability Protocol, adapters, and workspace contracts | Active |
 | [Personal Agent Project Context](./personal-agent-project-context.md) | Trellis context, project-provider, and skill-discovery contracts | Active |

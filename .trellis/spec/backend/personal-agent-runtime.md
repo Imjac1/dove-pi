@@ -6,6 +6,7 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 
 | Specification | Use for |
 |---|---|
+| [Product definition](./personal-agent-product.md) | What a person installs, runs and is promised: the user-visible loop, the surfaces, the four axes, the promises and their enforcers, what has not been demonstrated, axi as an internal program, and the non-goals |
 | [Request runtime](./personal-agent-request-runtime.md) | Core Agent contracts, Pi adapter coordination, request planning, stable provider schemas, provider request budgeting, and stop-reason normalization |
 | [Capability runtime](./personal-agent-capability-runtime.md) | Capability Protocol, external adapters, transactional workspace operations, and reusable development capabilities |
 | [Project context](./personal-agent-project-context.md) | Dove Native Workflow state, bounded context, and read-only legacy compatibility |
@@ -21,6 +22,7 @@ This file is the stable entry point for Dove runtime specifications. Select the 
 
 ## Selection rules
 
+- Use the product definition when the question is what the product is rather than how a runtime subject works: what a person installs and sees, what is promised and by what, what is deliberately not done, and where the internal self-improvement program sits.
 - Read this router first when the owning runtime area is not yet known.
 - Inject only the routed specification or specifications required by the task boundary.
 - Use request runtime for provider calls and Pi lifecycle behavior; use capability runtime for reusable execution and adapter protocols.

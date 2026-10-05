@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 const backendSpecDir = join(process.cwd(), ".trellis", "spec", "backend");
 const routerName = "personal-agent-runtime.md";
 const routedSpecNames = [
+	"personal-agent-product.md",
 	"personal-agent-request-runtime.md",
 	"personal-agent-capability-runtime.md",
 	"personal-agent-project-context.md",
@@ -20,6 +21,17 @@ const routedSpecNames = [
 	"personal-agent-use-time-architecture.md",
 ] as const;
 const expectedHeadingsBySpec = {
+	"personal-agent-product.md": [
+		"1. The product and the person it is for",
+		"2. The user-visible loop",
+		"3. The surfaces a person can reach",
+		"4. The axes, and which one owns what",
+		"5. What the product promises, and what enforces it",
+		"6. What the product has not yet demonstrated",
+		"7. axi, as an internal program",
+		"8. The non-goals",
+		"How to check this page",
+	],
 	"personal-agent-request-runtime.md": [
 		"1. Scope / Trigger",
 		"2. Signatures",
