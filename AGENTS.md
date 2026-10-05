@@ -92,6 +92,13 @@ convergence-evidence.md, a file the archived copy of that task does not have at 
 prefix and not their existence, which is why they came back. So the standing number is a count of **genuinely absent content**, and it is
 three; the tax is not a constant either, because it is per archive and it is zero when the task curated nothing inside itself.
 
+**Measured a fifth time, 2026-10-05, on the next archive - and this one turns the tax into a rule.** That task curated its own research file in
+both manifests, and the helper repointed exactly **two** entries: the count is not a mystery, it is the number of entries pointing inside the
+task's own directory at the moment it is archived. So the predictor is checkable before archiving rather than discovered after it, and the
+previous zero and this two are the same sentence with different inputs. Nothing new entered the list of pointers no repointing can fix: still
+**three**, and the two doors that read every citation in `.trellis/spec/` stayed green across the move, because no specification names a path
+inside a task directory that this session archived.
+
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a
 turn runs, and [`.trellis/harness-surface.yaml`](./.trellis/harness-surface.yaml) for the editable surface those turns are bounded by.
