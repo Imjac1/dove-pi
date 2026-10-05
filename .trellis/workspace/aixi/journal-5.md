@@ -1073,3 +1073,27 @@ The spec tree got the cleanup it was measured as needing. Four provable defects 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 242: The defect ledger: seven never-planned defects in one page, and two retired by re-measurement
+<!-- trellis-session: v=2 fp=940d7044ceaeb1f8 -->
+
+**Date**: 2026-10-05
+**Task**: The defect ledger: seven never-planned defects in one page, and two retired by re-measurement
+**Branch**: `master`
+
+### Summary
+
+This round was triage. The owner asked whether the rest of the open board was worth keeping, and to archive what was not. Two criteria, both checkable, decided it. First, is the defect still there: two tasks were retired because re-measurement showed the fix had landed - a constant nothing read was replaced by one table, and the third hardcoded tool list is gone, with one declaration and a test holding it. Second, was it ever planned: ten open tasks still carried the template TBD in their Requirements, and three of those are cited by specification pages, so archiving them would make a page lie. The other seven became one page, the defect ledger, under guides: each entry keeps its measurement verbatim, its anchors, its provenance and what would settle it, and the page states that nothing on it is being worked on and that taking an entry up removes it. The order matters and was chosen: the archives happened before the doors were run, because the ledger cites provenance under the archive directory. Two things were reported rather than fixed: one entry is a record rather than a task because the crash never reproduced, and two remaining TBD tasks are cited as owners by the pages, which means owned reads weaker than it looks. On the way a broken table row was repaired in the guides index. Numbers: the open board went from 29 to 19, the archive tax was zero again, the pointers no repointing can fix are still three, the documentation doors are 21 of 21, typecheck 0, npm test 937 with 934 passing and the same single pre-existing failure, installer 143 OK.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5525447` | docs(spec): the last three sections that described another codebase, found by the same criterion |
+| `0fb8088` | docs(spec): seven measured defects that were never planned, in one page the citation door walks |
+| `06c9e54` | docs(task): the triage, the two criteria, and the page that replaces seven placeholders |
+
+### Status
+
+[OK] **Completed**
