@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 236
+- **Total Sessions**: 237
 - **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~894 | Active |
+| `journal-5.md` | ~931 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 237 | 2026-10-05 | Simulating a real user's flow: four readings, three self-corrections, and two fixes judged by the extension's own words | `9921ba3`, `a46f312`, `998a17b`, `fe0e053`, `573e3e6`, `5aecb42`, `b4d02f5`, `f2ed3d1`, `ac0c356`, `2b8b3c1`, `98013cd`, `a32afb7`, `ec29b50`, `65a1723`, `dc00c6e`, `c18c375` | `master` |
 | 236 | 2026-10-05 | A real user's flow on a real project, and the four readings it produced | `f2ed3d1`, `ac0c356`, `2b8b3c1`, `98013cd`, `a32afb7`, `ec29b50`, `65a1723`, `dc00c6e`, `c18c375` | `master` |
 | 235 | 2026-10-04 | Twelve real sessions, their root cause fixed, and a plan that measurement kept correcting | `f5561a8`, `949dd42`, `e01edb6`, `74cd678`, `78dcb6e`, `9bdc1f0`, `f2b2565`, `170d2cd` | `master` |
 | 231 | 2026-10-01 | Use-time architecture page, the tree described as it is, and a time bomb found on the way | `5de9969`, `86c842a`, `b06360a`, `fb945b5`, `eceba75`, `7c4b906` | `master` |

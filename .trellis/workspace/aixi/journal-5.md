@@ -892,3 +892,40 @@ The round simulated the whole flow with the repository's own field-run runner in
 ### Status
 
 [OK] **Completed**
+
+
+## Session 237: Simulating a real user's flow: four readings, three self-corrections, and two fixes judged by the extension's own words
+<!-- trellis-session: v=2 fp=82832e29df6b2de8 -->
+
+**Date**: 2026-10-05
+**Task**: Simulating a real user's flow: four readings, three self-corrections, and two fixes judged by the extension's own words
+**Branch**: `master`
+
+### Summary
+
+The round tried to simulate a real user's whole flow on a real library, and the first thing it produced was proof that the previous attempt had not: both runs' project copies had no .dove, the summary recorded executionMode standard, and the transcript mentioned no mode or policy. Four readings followed. The summary's resource block copies one record's details while the ledger is an event stream, so its totals read zero while the transcript showed the model thinking, calling tools and answering. The same shape appeared twice more: an output against an exit code, and one exit code against another, minus one, one and zero for the same command with a control proving the method. A real project took eight steps to make its own suite run on Windows. And on a real task the effort was real and the result was wrong - sixteen provider rounds, fifteen tool observations, one changed file of 565 bytes, the target test still failing and a passing test broken. Then the corrections: the harness was mounted in every run, which the ledgers prove; the mode was the thing missing, and a declaration is read and then fails with missing-file because the mode directory sits beside the extension while the declaration belongs to the project. Two fixes landed - the declared root is preferred with the extension's own root as the fallback a project does not have, and the missing hashline tools now appear in the status line - and both are judged by the extension's own words rather than mine: workMode=code-development, hashlineEditTools=absent. The first attempt at the mode fix replaced the root instead of adding a fallback and broke twenty-eight tests, which is recorded rather than hidden. Finally a bash call was measured hanging for six minutes thirty-three seconds with nothing written anywhere and stderr empty, ended only by the outer watchdog, because the harness's two-hundred-forty-second timeout covers a whitelist of commands and the hung one was not on it.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9921ba3` | fix(mode): find the mode directory under the extension, and put the missing edit tools in the status line |
+| `a46f312` | docs(task): both gap criteria turn green, in the extension's own words |
+| `998a17b` | docs(task): the hang measured end to end, and the timeout that only covers a whitelist |
+| `fe0e053` | docs(task): requirements and acceptance for a hang a reading can see |
+| `573e3e6` | chore(task): start, with the curated context this plan actually stands on |
+| `5aecb42` | docs(task): the plan for a whole flow that actually runs end to end |
+| `b4d02f5` | docs(task): the convergence pass found a stale pointer in my own acceptance criteria |
+| `f2ed3d1` | docs(task): the project is picked and its grading source runs, and the onboarding cost is the first reading |
+| `ac0c356` | docs(task): the grading instrument for the round, red before the behaviour exists |
+| `2b8b3c1` | feat(scenario): the field-runnable scenario for one small piece of real work |
+| `98013cd` | docs(task): reading one corrected twice - the summary says zero and the transcript says it worked |
+| `a32afb7` | docs(task): the mechanism behind reading one, measured to the line |
+| `ec29b50` | docs(task): reading three - the effort was real and the result was wrong |
+| `65a1723` | docs(task): the shape delta, and what the two runs may not be compared on |
+| `dc00c6e` | docs(task): the change was one file, and that makes reading three sharper |
+| `c18c375` | docs(task): reading four - one command, three exit codes, and the same disagreement in a third layer |
+
+### Status
+
+[OK] **Completed**
