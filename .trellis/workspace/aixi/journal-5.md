@@ -929,3 +929,67 @@ The round tried to simulate a real user's whole flow on a real library, and the 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 238: The pstack audit lands: six steps, three product defects, and what the instruments caught
+<!-- trellis-session: v=2 fp=8c629aaf88903522 -->
+
+**Date**: 2026-10-05
+**Task**: The pstack audit lands: six steps, three product defects, and what the instruments caught
+**Branch**: `master`
+
+### Summary
+
+Studied pstack, took its two meta-rules (fix at the highest level that works; every check gets a fixture that must trip it), and landed the three highest-leverage disciplines it implies: mode documents that state requirements, the mode body actually reaching the model, and a rules table whose every row names what fails when it breaks. Then three A-level defects the audit had found: the documented axi-turn never reached the CLI, the release archive omitted the mode definitions its digest claimed, and nothing reported a turn's assembled prompt. Finally a fourth thing the field run exposed: a failed provider call recorded no cause.
+
+### Main Changes
+
+- S1-S6 from the audit: mode bodies stop denying their own controls; the mode body is appended to the system prompt as one labelled block with a stated ceiling; the read-only hard stop, the second budget and the second at-most-once implementation are deleted; sandbox claims, the refusal split, the network tool surface and the dispatch path each become one declaration; a four-check task-artifact linter with fixtures lands with a CI gate; AGENTS.md gains a rule-to-enforcer table with a door that holds the grammar closed.
+- Launcher: axi-turn joins the pythonCommands table, held against dove_pi.LOCAL_CLI_COMMANDS by a new check that reported exactly that one command before the fix.
+- Release: the archive assembly copies modes, and check_release_readiness refuses an archive whose modes are missing or half-copied.
+- Cost: /status full prints prompt=<n>, asserted to equal the prompt the turn returned; the field run then answered the cache question from the ledger's own prefix evidence.
+- Diagnostics: message_end classifies the provider failure before writing the record, the record carries failureKind/failureReason, and the failure reading carries them onward.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `848dd92` | docs(modes): two mode bodies that denied their own controls, and a claim naming a file that cannot hold it |
+| `147d567` | feat(prompt): the mode body an agent never read now reaches the model, in a labelled block |
+| `eefbfba` | refactor(budget): delete the read-only "hard stop" nothing compared, and the prompt-length argument nothing read |
+| `d1af4fb` | fix(sandbox): one claim table instead of a constant nobody read and an if-chain nobody shared |
+| `4a0fa6e` | refactor(harness): one refusal split instead of two byte-identical ones |
+| `1b1a8b5` | fix(network-axis): one declaration of which tools reach the network, instead of three that disagreed |
+| `cbefcfb` | refactor(dispatch): delete the dispatch path nothing reached, and the records only it wrote |
+| `784e043` | docs(spec): the capability runtime page stops describing the dispatch calibration that is gone |
+| `a8b2f51` | fix(lint): name the precedent instead of citing its line, because a citation in code drifts |
+| `41c94bf` | docs(task): eight PRDs state their criteria as boxes, one step before the linter that reads them |
+| `8166b83` | feat(lint): four task-artifact checks, each with a fixture that must trip it |
+| `a854722` | ci(lint): assert the task-artifact corpus where it is stable, not on a working copy |
+| `712d6fb` | docs(agents): a rule table with an enforcer per row, and the door that holds the pairing honest |
+| `e190771` | docs(task): the pstack audit, the plan it converged on, and the four things implementing it found |
+| `572572c` | fix(launcher): the documented axi-turn reaches the CLI, and its table is held against the CLI's own command set |
+| `2b28475` | fix(release): the archive carries the mode definitions its digest already claims |
+| `9fbe593` | feat(cost): the assembled prompt is a reading, and it is asserted against the prompt the turn returned |
+| `c275554` | docs(spec): the mount-point citations my last commit moved, and a correction to E3's cause |
+| `576920a` | docs(cost): the errored round is located - the record is written before the failure is classified |
+| `2f6a639` | docs(cost): number the two new sections in reading order |
+| `db71eb8` | docs(cost): our prefix is stable in every round, so the zero is not ours |
+| `7b50cf9` | docs(task): the cache was measured on a real provider, and the answer moves the question |
+| `25dafae` | feat(diagnostics): a failed provider call records why, and the reading carries it |
+| `cdd4765` | docs(tasks): archive the five finished tasks, and pay the cross-reference tax they came due |
+
+### Testing
+
+- [OK] Measured, not assumed, throughout: the 20,000-character index budget is red because the spec's own 50-record cap cannot fit in it (22718 characters today, ~40000 at the cap); a two-call control probe showed the configured provider does not report prefix caching at all; 15 of 15 provider rounds reported stablePrefix with one digest per cacheable component; and of 602 ledgers on this machine, six errored provider records named no cause.
+- [OK] Suites: typecheck clean, installer 143 pass, affected doors 55 and 38 pass, task-artifact corpus 54 artifacts and 0 problems. The only red is the index budget above.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Step A of the plan I stated: make the no-query project-context answer an index again by removing the duplicated records and the absolute paths, and keep the 20,000 ceiling as the requirement rather than raising it.
+- Decide 10-03-blackbox-prompt-chars (a) install the recorder on the real path, or (b) mark systemPromptChars replaced by the in-product prompt= reading.
+- Candidate: the mount-point table cites symbols rather than lines, since two sessions editing extension.ts paid that tax twice today.
