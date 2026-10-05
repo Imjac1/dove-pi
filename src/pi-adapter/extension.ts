@@ -1175,6 +1175,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const workModeText = modeRefusal !== undefined
 				? `workMode=failed, modeRefused: ${clipText(modeRefusal.split("\n")[0] ?? modeRefusal, 160)}`
 				: `workMode=${activeWorkMode?.id ?? "none"}`;
+			// **A one-off notification is not a reading.** The missing hashline tools are announced once, at session
+			// start, and a person who was not watching - or a field run, whose reading is taken from this line and
+			// not from that notification - then cannot tell a change made without those tools from a careless one.
+			// A field run on a real library had exactly that shape: one changed file, the target test still failing,
+			// and a test that had passed now broken, with nothing in the reading to say the tools were absent.
+			const hashlineEditText = `hashlineEditTools=${hashline ? "present" : "absent"}`;
 			// A count of neither: the members are listed, because a number here would be a count of what the code declares.
 			const workModeDetail = !full
 				? ""
@@ -1222,7 +1228,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const strategyText = full
 				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}.`
 				: "";
-			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${ledgerDetail}${strategyText}${workModeDetail} ${detail}`, "info");
+			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, ${hashlineEditText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${ledgerDetail}${strategyText}${workModeDetail} ${detail}`, "info");
 		},
 	});
 
@@ -2229,7 +2235,19 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				modeRefusal = `Work mode '${selection.name}' declares a framework range that cannot be checked here: DOVE_PI_FRAMEWORK_VERSION is not set. A mode that cannot be validated must not start.`;
 			} else {
 				try {
-					const loaded = loadWorkModeFromDirectory(modeRoot, selection.name, { frameworkVersion });
+					// **The mode's *directory* is not where the declaration is, and a replacement root broke 28 tests.**
+					// A user declares `.dove/mode.json` in their own project, and the modes a name can select live
+					// beside this extension; resolving both from `cwd` read the declaration and then refused every
+					// load with `missing-file`, which is what a field run measured. But a host test supplies its own
+					// root and keeps its fixture modes under it, so taking this extension's root outright stopped
+					// every one of those loads from finding its fixture. The declared root is therefore preferred and
+					// this extension's root is only the fallback a project does not have - the fallback is what makes
+					// a user's declaration reachable at all, and the preference is what keeps every existing caller
+					// working. The mode's own grant document resolves under whichever root wins, which is why the
+					// choice has to happen here rather than inside the loader.
+					const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+					const modeDirectoryRoot = existsSync(join(modeRoot, "modes", selection.name)) ? modeRoot : extensionRoot;
+					const loaded = loadWorkModeFromDirectory(modeDirectoryRoot, selection.name, { frameworkVersion });
 					activeWorkMode = loaded.mode;
 					activeAuthorityDocument = loaded.authorityDocument;
 					// The mode's own document says the run does not start until the engagement pre-flights clean. This is that
