@@ -46,10 +46,14 @@ harness **自报**：*"当前 Pi 宿主未提供 hashline 编辑工具（replace
 
 ## Acceptance Criteria
 
-- [ ] **一条运行里**：`workMode=<声明的那个 id>` ✓（**不是 `failed`** ✗）· 编辑工具在场 ✓ 或缺失被记录 ✓ · 项目自己的套件给出结果 ✓ · **账本的累计量与判分并列** ✓。
+- [x] **一条运行里**：`workMode=<声明的那个 id>` ✓（**不是 `failed`** ✗）· 编辑工具在场 ✓ 或缺失被记录 ✓ · 项目自己的套件给出结果 ✓ · **账本的累计量与判分并列** ✓。
+      **四条全成立** ✓✓（读数见 `readings.md` 第二份 ✓）：`workMode=code-development` ✓ · `hashlineEditTools=absent` 进了读数 ✓ · 副本里 `1 failed, 115 passed` ✓ · 累计量数自账本事件流 ✓。
 - [ ] **流程各步在同一次运行里都有痕** ✓（安装/绑定 ✓ mode ✓ 干活 ✓ 判分 ✓ 收敛 ✓ 归档 ✓）。
-- [ ] **两处缺口的处置各有可复现判据** ✓（定案见 `## 决定`✓ 与 `design.md`✓）：修好了是绿的 ✓，没修是红的且有原文 ✓。
-- [ ] **失败时如实记、并停下** ✓✓（上一轮的 AC 就是这么写的 ✓ 而它**被执行了** ✓：AC 失效时记下 "AC void, not failed" ✓✓）。
+      **不成立** ✗✓✓：**干活那一步被 25 分钟上限切断** ✗（`harnessTimedOut=true` ✓ `settled=false` ✓ 终态 `cancelled/user-cancelled` ✓），**收敛与归档从未到达** ✗（`task.convergence.observed = 0` ✓）。**原因量到了** ✓：截断时会话仍在 bash/edit 交替、最后三次是调试探针 ✓ —— **不是步骤坏了，是预算用完了** ✓。**这一条留开** ✗，**不写成达成** ✓。
+- [x] **两处缺口的处置各有可复现判据** ✓（定案见 `## 决定`✓ 与 `design.md`✓）：修好了是绿的 ✓，没修是红的且有原文 ✓。
+      **两处都成立** ✓✓：① `workMode` 从 `failed` ✗ 变成 `code-development` ✓；② `hashlineEditTools=absent` 在读数里 ✓。
+      而 ② **多量出一层** ✓✓：**这不是宿主不提供** ✗ —— 宿主装了 ✓、声明也带进了运行 ✓，**没带的是包** ✗（run 的 agent 目录里没有 `npm/` ✓）→ **缺口的可修面在本仓的运行器，不在 Pi** ✓。
+- [x] **失败时如实记、并停下** ✓✓（上一轮的 AC 就是这么写的 ✓ 而它**被执行了** ✓：AC 失效时记下 "AC void, not failed" ✓✓）。
 
 ## Out of Scope
 
