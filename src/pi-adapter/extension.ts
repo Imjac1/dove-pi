@@ -281,7 +281,7 @@ function isGuidanceOnlyContextMessage(message: unknown): boolean {
 
 export function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
 	if (typeof message !== "object" || message === null) return classifyProviderFailure({ category: "unknown" });
-	const value = message as { errorMessage?: unknown; error?: unknown };
+	const value = message as { errorMessage?: unknown; error?: unknown; stopReason?: unknown };
 	const text = String(value.errorMessage ?? value.error ?? "");
 	const code = text.match(/\b(?:ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_SOCKET)\b/i)?.[0];
 	if (code) return classifyProviderFailure({ code });
@@ -293,6 +293,16 @@ export function classifyAssistantProviderFailure(message: unknown): ProviderFail
 	if (/overloaded|rate.?limit|too many requests|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|connection.?refused|connection.?lost|socket hang up|fetch failed|getaddrinfo|ENOTFOUND|upstream.?connect|reset before headers|timed? out|timeout|websocket.?closed|stream ended before/i.test(text)) {
 		return { kind: "transient", reason: "reviewed-provider-message" };
 	}
+	// **The host names this event and only its text was being read.** A provider stream that ends before its response
+	// does arrives as `stopReason: "aborted"` with an uninformative `errorMessage` - `"terminated"` in the measured run
+	// of 2026-10-05 - and no rule above finds anything in that word, so it was classified `unknown`. That produced a
+	// terminal whose `nextAction` told the operator to inspect a provider error the ledger does not hold. **The same
+	// host event was classified `transient-failure` on the first attempt (and retried) and `unknown` on the second**,
+	// so what the reading said about one event depended on which word the provider happened to send. A stream that ends
+	// early is the transient class the rule above already names, and this rule sits after the text rules so a message
+	// that does say `aborted by the user` still reads as a cancellation.
+	const stopReason = String(value.stopReason ?? "").trim().toLowerCase();
+	if (stopReason === "aborted") return { kind: "transient", reason: "reviewed-provider-message" };
 	return classifyProviderFailure({ category: "unknown" });
 }
 

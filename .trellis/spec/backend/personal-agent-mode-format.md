@@ -43,7 +43,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   carried, how many characters entered, and whether it was cut are reported through the strategy snapshot, computed by the
   same call that builds the block so the reading cannot describe a block that was not sent.
   **Anchors.** `src/core/prompt-policy.ts` (`workModeInstructions`), `src/core/work-mode.ts` (`WorkMode.source`),
-  `src/pi-adapter/extension.ts:3318`, `src/core/strategy-snapshot.ts`; `tests/mode-body-prompt.test.ts` and the three host
+  `src/pi-adapter/extension.ts:3362`, `src/core/strategy-snapshot.ts`; `tests/mode-body-prompt.test.ts` and the three host
   cases in `tests/host-work-mode.test.ts`.
 - `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities` and
   `gate.semantics` (`none`/`limit`/`conformance`/`both`).
@@ -83,7 +83,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   harness's `paths`, which is how `authority`'s
   no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
-  **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2256`.
+  **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2247`.
 - **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
   and compared as locations: inside the workspace the relative form is produced first and wins, and a
   target with no relative form falls back to the canonical absolute one. So an entry may name a path

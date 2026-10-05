@@ -1096,6 +1096,18 @@ describe("Pi adapter", () => {
 		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
 	});
 
+	it("reads the host's own aborted token, which no error-message word could supply", () => {
+		// **The defect this case exists for, measured 2026-10-05 in a whole-flow field run.** The host ended a provider
+		// stream early and recorded `stopReason: "aborted"` with `errorMessage: "terminated"`. Only the text was read, no
+		// rule matched that word, and the classification fell through to `unknown` - so the ledger's terminal said
+		// `provider-unknown` and told the operator to inspect a provider error the ledger did not hold. **The same host
+		// event was `transient-failure` on the first attempt and `unknown` on the second**, so what the reading said about
+		// one event came down to which word the provider happened to send. The host's word for the event is the event.
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "terminated" }), { kind: "transient", reason: "reviewed-provider-message" });
+		// The text still wins where it says something: a person's cancellation is not this, and it is matched above.
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
+	});
+
 	it("records why a provider round failed, because the retry was decided from that classification", async () => {
 		// **The defect this case exists for.** The `message_end` handler wrote the provider record and classified the failure
 		// eight lines later, so the record could not carry the cause by construction: a ledger holding `stopReason: "error"`

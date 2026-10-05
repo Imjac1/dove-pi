@@ -40,11 +40,17 @@ node scripts/real-dove-blackbox.mjs --launcher source --provider real `
 
 Preconditions, every one of which a **person** supplies:
 
-- **Credentials.** The runner carries `settings.json`, `models.json` and `auth.json` from the operator's agent
-  directory into the run's own session directory, and records which files came in **by name** — never their
-  contents. This is why the mode is usable at all: `PI_CODING_AGENT_DIR` points the run at an isolated directory,
-  and before the carrier existed a real provider was reachable but unusable. Credentials are configured by hand;
-  nothing here manages them.
+- **Credentials, and the tool surface that comes with them.** The runner carries `settings.json`, `models.json` and
+  `auth.json` from the operator's agent directory into the run's own session directory, and records what came in **by
+  name** — never any contents. This is why the mode is usable at all: `PI_CODING_AGENT_DIR` points the run at an
+  isolated directory, and before the carrier existed a real provider was reachable but unusable. Credentials are
+  configured by hand; nothing here manages them. **The agent directory's package store (`npm/`) travels with them**,
+  because `settings.json` declares the Pi packages and Pi resolves them from that store: carrying the declaration
+  alone left every one of them unloadable, so a run's tool surface was not the operator's and `hashlineEditTools` read
+  `absent` against a host that has those tools installed. Measured 2026-10-05 on a bound clone: with the store present
+  the same status line reads `hashlineEditTools=present` and the remaining extensions load with it. It is a copy, so a
+  run still cannot touch the original, and it is the one carry that costs real time — deterministic cases are
+  `--provider faux` and pay none of it.
 - **An output path outside this repository.** A field run's raw evidence is never committed.
 - **A scenario whose `requires` field is satisfied.** See below.
 

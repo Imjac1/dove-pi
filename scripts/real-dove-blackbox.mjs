@@ -63,7 +63,8 @@ mkdirSync(sessionDir, { recursive: true });
 // reach the provider it names, because `models.json` and `auth.json` live in that same directory. That is why no real
 // run had ever happened: the mode was reachable and unusable. Copy the provider configuration in instead, and only
 // for a real provider, so the deterministic cases keep their own extension-registered provider untouched.
-// Which of the operator's provider files this run carried in. Names only - the contents are never logged.
+// Which of the operator's provider files, and which of its package directories, this run carried in. Names only - the
+// contents are never logged.
 let carriedConfig = [];
 if (providerMode !== "faux" && carryOperatorConfig) {
   const operatorAgentDir = process.env.PI_CODING_AGENT_DIR?.trim() || resolve(homedir(), ".pi", "agent");
@@ -75,6 +76,20 @@ if (providerMode !== "faux" && carryOperatorConfig) {
       return true;
     } catch { return false; }
   });
+  // **The declaration is not the package.** `settings.json` names thirteen Pi packages and Pi resolves them from the
+  // agent directory's own store, so carrying the three config files alone left every one of them unloadable: a field
+  // run's tool surface was not the operator's, and `hashlineEditTools=absent` in the status line was this rather than a
+  // host that lacks the tools - the host has them installed. Measured 2026-10-05 on the bound clone: with the store
+  // present the same status line reads `hashlineEditTools=present`, `hashline=active`, and the other extensions load
+  // with it. It is a copy, so the run still cannot touch the original; the store is the one carry that costs real time
+  // (361 MB / 15,272 files here). Only a real provider pays it - every deterministic case is `--provider faux`.
+  const operatorStore = resolve(operatorAgentDir, "npm");
+  try {
+    if (statSync(operatorStore).isDirectory()) {
+      cpSync(operatorStore, resolve(sessionDir, "npm"), { recursive: true });
+      carriedConfig.push("npm/");
+    }
+  } catch { /* a store that cannot be copied is not a failed run: the reading says what came in */ }
 }
 prepareWorkspace();
 if (progressCase === "changing") {
