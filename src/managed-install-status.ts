@@ -25,8 +25,34 @@ export interface ManagedInstallStatus {
 	readonly sourceDrift?: "in_sync" | "drifted" | "unknown";
 }
 
+/**
+ * **The roots the release digest is verified over, and they are the builder's list rather than a second one.**
+ *
+ * This list used to be a hand-kept copy that had drifted: it was missing `bin`, `modes` and `scripts/release-roots.mts`,
+ * which the builder's `RELEASE_SOURCE_ROOTS` covers. A digest computed over fewer roots can never equal one computed
+ * over more, so `sourceDrift` reported `drifted` for **every** install - including one built from the very tree it was
+ * comparing against. `README.md` sends a person to exactly that field to decide whether a source fix reached the global
+ * launcher, so the reading that exists to distinguish "your fix is not published" from "your fix is published" answered
+ * the first one always, and a true difference became indistinguishable from a false one.
+ *
+ * **The two lists are held equal in both directions** by `tests/release-manifest.test.ts`, because the comment that used
+ * to ask for them to be kept in sync is what let them drift.
+ */
+export const MANAGED_INSTALL_SOURCE_ROOTS = [
+	"bin",
+	"src",
+	"installer",
+	".pi",
+	"modes",
+	"scripts/build-release-manifest.mts",
+	"scripts/release-roots.mts",
+	"dove_pi.py",
+	"package.json",
+	"package-lock.json",
+] as const;
+
 function sourceDigest(root: string): string | undefined {
-	const included = ["src", "installer", ".pi", "scripts/build-release-manifest.mts", "dove_pi.py", "package.json", "package-lock.json"];
+	const included = MANAGED_INSTALL_SOURCE_ROOTS;
 	const files: string[] = [];
 	const collect = (relative: string): void => {
 		const path = resolve(root, relative);

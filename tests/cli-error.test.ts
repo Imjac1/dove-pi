@@ -84,4 +84,34 @@ describe("CLI error boundary", () => {
 			await rm(root, { recursive: true, force: true });
 		}
 	});
+
+	it("names an extension that is not healthy instead of stringifying the record that holds it", async () => {
+		// The line joined the array of objects the managed state holds, so every entry read `[object Object]`. The count
+		// was right and the reading was worthless, on the one line whose purpose is to show which extension degraded.
+		// The managed root is a fixture here, because reading the machine's own install would make this case pass or
+		// fail on whatever the person running the suite happens to have installed.
+		const root = await mkdtemp(join(tmpdir(), "dove-cli-doctor-extensions-"));
+		const home = join(root, "home");
+		try {
+			await mkdir(join(home, "state"), { recursive: true });
+			await writeFile(join(home, "state", "install.json"), JSON.stringify({
+				schemaVersion: 2,
+				current: { releaseId: "0.2.0+test", installPath: join(home, "app", "versions", "current") },
+				profile: "max",
+				managedExtensions: [
+					{ identity: "npm:healthy", spec: "npm:healthy@1.0.0", status: "healthy" },
+					{ identity: "npm:broken", spec: "npm:broken@1.0.0", status: "degraded" },
+				],
+			}), "utf8");
+			const result = await execFileAsync(process.execPath, ["--import", tsxLoader, cliPath, "doctor"], {
+				cwd: root,
+				env: { ...process.env, DOVE_PI_HOME: home, DOVE_PI_STATE_DIR: join(root, "state") },
+			});
+			assert.doesNotMatch(result.stdout, /\[object Object\]/u, "an object is not a name");
+			assert.match(result.stdout, /2 max extensions/u, "and the healthy ones are counted rather than listed");
+			assert.match(result.stdout, /npm:broken \(degraded\)/u, "and the one that is not healthy is named with its status");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 });

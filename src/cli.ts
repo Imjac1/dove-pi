@@ -82,6 +82,14 @@ if (args[0] === "doctor") {
 		const shellConfig = inspectShellConfig(process.cwd());
 		const policy = readWorkspacePolicy(process.cwd());
 		const missingTools = Object.entries(powershell.tools).filter(([, path]) => path === null).map(([name]) => name);
+		// **A summary, not the list.** This line used to `join` the array of objects the managed state holds, so every
+		// entry stringified to `[object Object]`: thirteen identical placeholders where the line exists to show which
+		// extension is not healthy. The identities are one flag away in the same payload, so what belongs here is the
+		// count, the profile, and every entry that is not healthy, by name.
+		const unhealthyExtensions = managedInstall.extensions.filter((extension) => extension.status !== "healthy");
+		const extensionSummary = managedInstall.extensions.length === 0
+			? "none"
+			: `${managedInstall.extensions.length}${managedInstall.profile ? ` ${managedInstall.profile}` : ""} extension${managedInstall.extensions.length === 1 ? "" : "s"}, ${unhealthyExtensions.length === 0 ? "all healthy" : `${unhealthyExtensions.length} not healthy: ${unhealthyExtensions.map((extension) => `${extension.identity} (${extension.status})`).join(", ")}`}`;
 		console.log([
 			`Dove Pi ${getPiVersion()} on node ${process.version}`,
 			`  shell           ${shellConfig.effectivePath} (${shellConfig.scope}, source ${shellConfig.source})`,
@@ -89,7 +97,7 @@ if (args[0] === "doctor") {
 			`  powershell      ${powershell.version ?? "unavailable"}${powershell.isAdministrator ? " (administrator)" : ""}`,
 			`  managed install ${managedInstall.installed ? `installed at ${managedInstall.root}` : `not installed (${managedInstall.root}) - update, repair and rollback apply after an install`}`,
 			`  missing tools   ${missingTools.length === 0 ? "none" : missingTools.join(", ")}`,
-			`  extensions      ${managedInstall.extensions.length === 0 ? "none" : managedInstall.extensions.join(", ")}`,
+			`  extensions      ${extensionSummary}`,
 			"Run `dove-pi doctor --json` for the machine-readable form.",
 		].join("\n"));
 	}

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { RELEASE_SOURCE_ROOTS } from "../scripts/release-roots.mts";
+import { MANAGED_INSTALL_SOURCE_ROOTS } from "../src/managed-install-status.ts";
 
 /**
  * **What the release digest covers, held by a test.** The builder walks these roots and nothing else, so a root missing from the list
@@ -47,5 +48,16 @@ describe("the release source roots", () => {
 			return !copied.has(root) && !copied.has(top);
 		});
 		assert.deepEqual(missing, [], "these roots are in the digest and not in the archive: " + missing.join(", "));
+	});
+
+	it("are the same roots the installed release verifies its own digest over", () => {
+		// **Two lists, one claim, and nothing compared them.** The builder writes `sourceDigest` over
+		// `RELEASE_SOURCE_ROOTS`; `doctor` recomputes it over its own list and calls the install `drifted` when the two
+		// disagree. They disagreed: the runtime list was missing `bin`, `modes` and `scripts/release-roots.mts`, so the
+		// recomputed digest could never match - every install read as `drifted`, including one built from the very tree it
+		// was comparing against. That is the field `README.md` sends a person to in order to decide whether a source fix
+		// reached the global launcher, so the reading that exists to tell "not published" from "published" always said
+		// "not published", and a true difference became indistinguishable from a false one.
+		assert.deepEqual([...MANAGED_INSTALL_SOURCE_ROOTS], [...RELEASE_SOURCE_ROOTS]);
 	});
 });
