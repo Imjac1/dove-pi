@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The forbidden and required patterns the design page is held to, including the rule that a claim names a thing rather than citing a drifting position."}
+{"file": ".trellis/spec/backend/personal-agent-use-time-architecture.md", "reason": "The shape precedent and the source of truth for 'who owns the loop' and the two blanks; the checker uses it to falsify any stage that designs Pi's or the host's behaviour."}
+{"file": ".trellis/spec/backend/personal-agent-mode-format.md", "reason": "What a mode may declare and what a declaration is allowed to claim - the checker falsifies stage 3's rows against it, since those rows are about refusals."}
+{"file": ".trellis/tasks/10-03-first-contact-scenario/findings.md", "reason": "The checker's source for every 'failure this prevents' row: if a row cannot be traced to a finding or a reading, the row is invented and the stage fails acceptance."}
