@@ -49,3 +49,30 @@
 ## 六、这次的代价
 
 - 2 次 provider 调用（对照探针，2,681-token 前缀）+ 1 次 field run（15 轮、263,705 input tokens、7.3 分钟）。都在 `%TEMP%`，仓内没有任何原始证据。
+
+## 七、把"前缀稳不稳"直接问出来：**15/15 稳，0% 不是我们这一侧的**（2026-10-05 追加）
+
+原判断（`10-03-ten-million-token-project/findings.md` 优化点 1）最后一句是"**前缀为何不稳定，值得单独查一次**"。换一个上报缓存的 provider 本来是为了回答它 —— 但这个问题**不需要 provider 就能答**：我们自己的账本每一轮都记着前缀分析。
+
+**读法**：`provider.request.started` 的 `details.cachePrefix` 带 `sequence` / `classification` / **`stablePrefix`** / `changes`（哪个组成变了、为什么），以及四个组成各自的 `digest` 与 `bytes`（`system` / `tools` / `doveContext` / `history`）。逐轮读那次真跑的账本（`%TEMP%\dove-cache-run\...\dove-state\execution.jsonl`，15 条 `provider.request.started`）：
+
+| 读数 | 结果 |
+|---|---|
+| `stablePrefix` | **`true` × 15**（第 1 轮 `cold`，其余 14 轮 `stable-prefix`） |
+| `changes` | **每轮都是空** |
+| `system` 摘要 / 字节 | **1 个取值**，8,248 B × 15 |
+| `tools` 摘要 / 字节 | **1 个取值**，9,819 B（17 个工具）× 15 |
+| `doveContext` 摘要 / 字节 | **1 个取值**，8,584 B × 15 |
+| `history` | 320 B → 91,956 B，**只追加**（`historyChange` 为 `initial` 一次、`appended` 十三次、`unchanged` 一次） |
+| input tokens | 第 1 轮 4,181 → 第 15 轮 20,944，累计 263,705 |
+
+**结论**：可缓存的三段（系统提示词、工具 schema、Dove 上下文）在整轮 15 次请求里**逐字节没动**，只有历史在追加 —— 这正是前缀缓存需要的形状。所以那个 0% **不是"我们的前缀在动"**：在这台 provider 上它由"provider 根本不上报缓存"解释（§三的对照），而 `10-03` 那次是在另一个 provider 上量的、其原始账本**不在本机**（`%TEMP%` 下最大的 12 个账本全是本日的），要复核它需要那台机器上的账本或那个 provider 的凭据。
+
+**这条也说明一件方法论上的事**：能回答这个问题的机制**一直都在**（`cachePolicyVersion=3`、逐组成摘要、`stablePrefix`），只是没有人去读它；而当时给出的"值得单独查一次"被理解成"要再花一次钱跑一遍"。先把已有的账本读完，是第一顺序。
+
+## 八、对"换一个 provider 再跑一次"的答复（2026-10-05）
+
+- 本机**只有一个 provider**（`~/.pi/agent/models.json` 里只有 `ant`，`auth.json` 是空的 `{}`），所以"换 provider"必须先由操作者提供凭据。
+- 但上面 §七 已经把我们这一侧的问题答完了：**换 provider 不会再改变关于我们的结论**，它只能再确认一遍"那家 provider 报不报缓存"。
+- 因此本次**没有**再花钱跑第二次：第二次的边际信息是 0，代价不是 0。若要**交叉验证**（用另一家上报缓存的 provider 确认 `cacheRead > 0` 确实会出现），需要操作者的凭据，那是一个明确的、可选的花钱决定。
+
