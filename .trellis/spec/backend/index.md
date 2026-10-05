@@ -28,6 +28,7 @@ repository enforces.
 | [Personal Agent Runtime](./personal-agent-runtime.md) | Stable router for ownership-scoped Agent runtime specifications | Active |
 | [Personal Agent Product Definition](./personal-agent-product.md) | What a person installs, runs and is promised: the user-visible loop, the four axes, the promises and their enforcers, what is not yet demonstrated, and the non-goals | Active |
 | [Personal Agent Usage Process](./personal-agent-usage.md) | The whole usage process as a design: each stage's steps, what the product decides for the person, the failure it prevents, and the reading or owning task | Active |
+| [Personal Agent Improvement Run](./personal-agent-improvement-run.md) | The operator's thread: what was asked for, which tier this delivers, the three planes and their bounding relationship, the missing instruments, Experiment 0, the cost and the falsifiers | Active |
 | [Personal Agent Request Runtime](./personal-agent-request-runtime.md) | Core, Pi adapter, request planning, and provider-budget contracts | Active |
 | [Personal Agent Capability Runtime](./personal-agent-capability-runtime.md) | Capability Protocol, adapters, and workspace contracts | Active |
 | [Personal Agent Project Context](./personal-agent-project-context.md) | Trellis context, project-provider, and skill-discovery contracts | Active |

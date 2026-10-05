@@ -8,6 +8,7 @@ const routerName = "personal-agent-runtime.md";
 const routedSpecNames = [
 	"personal-agent-product.md",
 	"personal-agent-usage.md",
+	"personal-agent-improvement-run.md",
 	"personal-agent-request-runtime.md",
 	"personal-agent-capability-runtime.md",
 	"personal-agent-project-context.md",
@@ -45,6 +46,19 @@ const expectedHeadingsBySpec = {
 		"8. Stage 5 - The second day",
 		"9. Stage 6 - Maintenance",
 		"10. The gaps, and who owns each",
+		"How to check this page",
+	],
+	"personal-agent-improvement-run.md": [
+		"1. What this page is, and what it is not",
+		"2. What was asked for: three requirements, and the object this is meant to become",
+		"3. Where this sits among the terms: what may move, and what must not",
+		"4. The three planes, and the one relationship that bounds them",
+		"5. What the operator supplies, reads, and decides",
+		"6. The instruments that exist, and the three that do not",
+		"7. Experiment 0, and what it decides",
+		"8. The cost, stated before anyone builds it",
+		"9. What would falsify this",
+		"10. Where this stands, and who owns each gap",
 		"How to check this page",
 	],
 	"personal-agent-request-runtime.md": [
