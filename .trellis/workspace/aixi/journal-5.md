@@ -993,3 +993,34 @@ Studied pstack, took its two meta-rules (fix at the highest level that works; ev
 - Step A of the plan I stated: make the no-query project-context answer an index again by removing the duplicated records and the absolute paths, and keep the 20,000 ceiling as the requirement rather than raising it.
 - Decide 10-03-blackbox-prompt-chars (a) install the recorder on the real path, or (b) mark systemPromptChars replaced by the in-product prompt= reading.
 - Candidate: the mount-point table cites symbols rather than lines, since two sessions editing extension.ts paid that tax twice today.
+
+
+## Session 239: The product face and the whole usage process, written down; and one attribution my own measurement refuted
+<!-- trellis-session: v=2 fp=6bbe48e1a56a5639 -->
+
+**Date**: 2026-10-05
+**Task**: The product face and the whole usage process, written down; and one attribution my own measurement refuted
+**Branch**: `master`
+
+### Summary
+
+Two deliverables landed and one of my own claims was refuted. The product face became one routed page: what a person installs and is promised, the four axes kept apart, eleven promises each with its enforcer, six things the product has not demonstrated, axi as an internal program, and a non-goal list that says it is not complete. Then the design direction became five rules with numbers and enforcers, and the whole usage process became a second page: stages 0 to 6, each naming the failure it prevents, every gap naming an owner, and stage 5 written as the stage that has a failure and no design. Corrections along the way: the axi PRD cited section 5.2 where the report is 5.1, twice; plan-v8 now marks its own voided shape; the README points at the product page and says which side is authoritative. One attribution of mine was refuted by my own measurement: the agent_project_context index length moved by 260 bytes once, then zero, then 749 when a task was created, then 260 again for a new page, and the compiler shows a budgeted render that omits documents and reports a count, which is consistent but was not isolated. The archive of this session cost zero repointing, and the same scan corrected a standing number from one unrepairable pointer to three, now recorded in AGENTS.md. Gates at the end: typecheck 0, npm test 934 pass 1 fail 2 skipped with the same pre-existing index-length failure, installer 143 OK, and 13 of 13 plus 5 of 5 on the two documentation doors.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `37012e0` | docs(spec): the product face in one page, held by the doors that already exist |
+| `16aac83` | docs(readme): point the user-facing text at the product page, and name which one is authoritative |
+| `f6b96e6` | fix(docs): the axi PRD cited section 5.2 where the report is 5.1, twice, and the voided shape was unmarked |
+| `b0915d2` | docs(task): the product page plan, its readings, and the 260 bytes it adds to an index already over its bound |
+| `cb108ed` | docs(spec): the design direction as five rules, each with its number and its enforcer |
+| `5b2e644` | docs(task): the second round, and the index attribution my own measurement refuted |
+| `f4d126f` | docs(spec): the whole usage process in one page, every stage naming the failure it prevents |
+| `38ccf22` | docs(spec): the product page record points at the design instead of standing in for it |
+| `cf624a0` | docs(task): the usage-process design, its acceptance self-check, and a fourth reading of a moving index |
+| `b08f116` | docs(agents): the archive tax measured at zero, and the unrepairable pointer count corrected to three |
+
+### Status
+
+[OK] **Completed**
