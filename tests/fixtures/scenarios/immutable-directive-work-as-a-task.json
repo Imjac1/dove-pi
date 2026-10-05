@@ -1,0 +1,22 @@
+{
+  "name": "immutable-directive-work-as-a-task",
+  "description": "The same real work as immutable-directive-work, but done under the project's own task lifecycle: a formal task is created and started before anything is edited, and verified, converged, finished and archived after the project's own suite is green. This is the scenario that can put every step of a user's flow in one run - the earlier one asks for the work alone, so the closing steps had nowhere to leave a trace.",
+  "requires": "a real provider; --cwd points at the project to work in, which is copied, so the run cannot touch the original; the project's own suite must run there before and after this scenario; the launcher has to be on PATH, and the steps call it as `dove-pi.cmd` rather than `dove-pi`, because the managed install ships only .cmd and .ps1 shims and the shell this harness selects is git-bash, which does not resolve the extension-less name (measured 2026-10-05: `dove-pi.cmd` works there, `dove-pi` is command-not-found)",
+  "steps": [
+    {
+      "kind": "prompt",
+      "message": "This project is bound to Dove, and work like this is tracked under a formal task rather than done loose. Create and start one first, with `dove-pi.cmd task create` and then `dove-pi.cmd task start` for the id it names. Both print a JSON result, and that result is what says whether they worked: the same command on this machine has been measured exiting -1, 1 and 0 while printing the same object, so the exit code is not the judge. Then do the work. This project's test suite has one failing test, tests/test_immutable.py. Make it pass by teaching the library to honour the `immutable` cache directive from RFC 8246: a response that is still fresh and marked immutable must not be revalidated, even when the client asks for a fresh copy. Work out the rest from the code and the test, and change only what the behaviour needs."
+    },
+    {
+      "kind": "prompt",
+      "message": "Now close the task out, in the same order a person would. The project's own suite is the only thing that says whether the work was done, so run `python -m pytest -q` in this project first and read the result. Then run `dove-pi.cmd task verify`, `dove-pi.cmd task convergence status`, `dove-pi.cmd task finish`, and `dove-pi.cmd task archive` for that same task id - reading the JSON each one prints, for the reason above. Report what each step printed, and say plainly whether the suite ended green."
+    },
+    {
+      "kind": "prompt",
+      "message": "/status"
+    },
+    {
+      "kind": "state"
+    }
+  ]
+}
