@@ -96,3 +96,40 @@ which dove-pi.cmd; ls -la /c/Users/Macfy/.agents 2>/dev/null; \
 **而这给本任务补上一条更硬的判据** ✓✓：**白名单之外的那类命令已经挂住过两次，两次都不是"聚合测试命令"** ✓ —— 所以"扩大名单"（第 1 条路）**要加进去的不是测试命令，而是"任何命令"** ✗✓，**这条路到此为止** ✓。
 
 **顺带一条与本任务同族的** ✓：这次的 agent 是为了**找启动器**才全盘搜索的，而启动器之所以找不到，是因为**安装的 shim 在 git-bash 里不可解析** ✓（已另修 ✓，见 `10-05-whole-flow-end-to-end/readings.md` 第四份 ✓）。**一个可见的失败，把一个 agent 推向了无限期的等待** ✓ —— 这正是"读数缺失会让后面的读数出错"的又一例 ✓。
+
+---
+
+# 落地读数（2026-10-05 ✓）—— 第 ③ 条路真的写进去了 ✓✓
+
+## 落地了什么 ✓
+
+| 处 | 内容 |
+|---|---|
+| `src/core/contracts.ts` | 闭集加 `"tool.started"` ✓（与既有的 `capability.started` / `capability.timed_out` 同形 ✓） |
+| `src/core/execution-ledger.ts` | `appendToolStarted` ✓ + 投影里 `tool.started` 的 case ✓，并给出 **`toolCallsStarted` / `toolCallsObserved` / `unterminatedToolCalls`** ✓（照 `unterminatedRequests` 的形状：有界、按账本顺序、为空则**省键**而非给空数组 ✓） |
+| `src/pi-adapter/extension.ts` | **一个写点**：在 `tool_call` 处理器的**最后一个 blocking return 之后** ✓（`toolTimings.set` 的旁边——那一行是内存版，这条是它的持久版 ✓）；**一个读点**：`/status` 行 ✓（只在**非零**时打印 ✓）。`agent_doctor` 因为整块转发投影而自动带上 ✓（`:1996` ✓） |
+| `src/core/failure-reading.ts` | "起了但没观测" 作为**更强的事实**排在"这个账本里没有 `tool.observed`"**之前** ✓ |
+| `.trellis/spec/backend/error-handling.md` | §Aggregate shell timeout contract 补上"被声明的缺席"那一半 ✓ |
+
+**判据** ✓✓：`npm run typecheck` **0** ✓；`npm test` **949 / 949 pass / 0 fail** ✓（比开工前 +2 = 新增的两条用例 ✓）。**新增两条**：`tests/pi-adapter.test.ts` 里"起了的调用与它拿没拿到超时都写下" ✓（并顺带断言**被拒绝的调用不留痕** ✓，用的是那个已有真实拒绝的用例 ✓）；`tests/execution-diagnostics.test.ts` 里"未返回 / 已返回 / 根本没起过"三种读法 ✓。
+
+**参数没落盘** ✓✓：记录只带 `tool`、`toolCallId`、`commandDigest`（sha256 前 16 位 ✓）与 `commandLength` ✓，用例里断言**那条命令的名字不出现在写下的任何内容里** ✓。
+
+## 两件计划没料到的 ✓✗✓（都记下来 ✓）
+
+**① `harness-reachability` 那道门** **没有**抓到"闭集里有种类但没有写者" ✗✓✓。计划第 1 步要求"先看它红"，实测是：把写入者的 `kind:` 暂时改成另一个既有种类（于是**没有任何东西产出** `tool.started`），那道门**仍然是绿的** ✓ —— 因为 `record.kind === "tool.started"` 这种**比较点**也算"够得着" ✓。**AGENTS.md 那一行说的是"has a writer"，比它实际守住的要强** ✗✓。**本任务不改那道门** ✗（改它会动到别的行，属于另一个决定 ✓），**但这条读数得留着** ✓。
+
+**② 那条白名单比它读起来更窄** ✗✓✓（**实测**，不是推断 ✓）：拿 `applyAdaptiveShellTimeout` 的正则逐个跑 ✓：
+
+| 命令 | 结果 |
+|---|---|
+| `pytest -q` | **不匹配** ✗✓✓ |
+| `python -m pytest -q` | **不匹配** ✗✓✓ |
+| `pytest` / `pytest tests/…` / `python -m pytest tests/… -q` | 匹配 ✓ |
+| `npm test` / `npm test -- --watch` / `npm run test` / `make test` / `make check` / `go test` / `cargo test` / `dotnet test` / `yarn test` | 匹配 ✓ |
+
+→ 原因是 `pytest(?:\s|$)` **自己吃掉了那个空格** ✓，**紧跟着的 `\b` 就不成立了** ✓ —— 所以 **`pytest` 后面跟一个 flag 就不受保护** ✗✓✓，而跟一个路径就受保护 ✓。**这条不改** ✗（第 ① 条路已被否掉 ✓），**而它现在有读数兜着** ✓：调用会写下 `timeoutApplied: false` ✓，**不必再从正则去猜** ✓。
+
+## 一条诚实的边界 ✓（不粉饰 ✓）
+
+**`/status` 在挂死*当中*是读不到的** ✗ —— 宿主正被那条调用占着 ✓，命令根本没有机会跑 ✓。所以真正会用到这条读数的场合是**事后**：`doctor --json` ✓ 与 `agent_doctor` ✓ 读的是落盘的账本 ✓ —— **而那正是两次 field run 事后缺的东西** ✓✓（当时的读数只有"超时"两个字，看不到"卡在哪条调用上" ✓）。**"挂死可读"因此是事后可读** ✓，**它不让等待变短** ✓（`design.md` 里那句代价说的是同一件事 ✓）。

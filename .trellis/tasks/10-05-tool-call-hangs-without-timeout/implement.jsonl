@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "the aggregate shell timeout contract this change extends, and the shell-selection contract beside it"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "the evidence rule: digests and bounded counters, never raw tool arguments"}
