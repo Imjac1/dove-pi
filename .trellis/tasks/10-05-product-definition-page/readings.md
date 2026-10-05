@@ -26,26 +26,44 @@
 | 新页预算 | **16 008 B / 24 576** | — |
 | router 预算 | **5 426 B / 8 192** | — |
 
-## 那条既红的读数被我推大了一点（实测，非估计）
+## 那条既红的索引读数：先报 +260 B，被同一测法当场推翻（**更正**）
 
-`agent_project_context` 索引长度：**21 032 → 21 292（+260 B）**。
+**先报的**：`agent_project_context` 索引长度 `21 032 → 21 292（+260 B）`，A/B 归因"全部来自新规格页的一行索引"。
 
-**A/B 实测的归因**（把新页临时移出目录，单跑那条测试）：
+**2026-10-05 第二次实测**（同一台机、同一测法、同一个测试）：
 
-| 条件 | 长度 |
+| 条件 | 第一次实测 | 第二次实测（本轮） |
+|---|---|---|
+| 页面**移出**目录 | 21 032 | **21 032** |
+| 页面**放回**（第一次 16 008 B，第二次 20 196 B） | 21 292 | **21 032** |
+
+**结论：那条 +260 B 的归因不再复现**（本轮页面在场时连跑三次都是 **21 032**，移出后也是 21 032）。所以"这 260 B 全是新页那一行"**只能算当时的单次读数，不能算机制**——它是**被同一测法推翻的**。
+
+**能确定的**：索引的行是 `{id, kind, sourceRef, estimatedChars}`（`src/context/interoperable.ts:31`、`:80`），一行约 260 B，**与第一次那个差值量级一致**；`estimatedChars` 是数字，所以同页从 16 008 B 长到 20 196 B 不会改变行宽。
+
+**不确定的**：为什么同一棵树上"多一行 / 少一行"这次不再改变总数。**我没有测出机制，就不写机制**——留给修这条索引长度的人，起点是 `src/context/interoperable.ts` 与 `src/pi-adapter/extension.ts:2049`。
+
+**门禁状态**：不受影响。改动前后都是 **934 pass / 1 fail / 2 skip**，同一条 fail（`tests/pi-adapter.test.ts:253` 的长度断言），本轮读数 **21 032**。
+
+## 第二轮：R9（用户要求"再写具体一点"）
+
+| 读数 | 值 |
 |---|---|
-| 页面移出（README 的改动仍在） | **21 032** |
-| 页面放回 | **21 292** |
+| 新产品页预算（LF 归一化） | **20 196 B / 24 576**（新增 §2 约 4.2 KB） |
+| 标题清单 | **10 个**（新增 `2. The design direction, as rules that can fail`，原 2–8 顺延为 3–9） |
+| 页内按编号互指的引用 | **4 处**同步改（`§6`→`§7`、`§2/§5`→`§3/§6`、`§5`→`§6`、`§6/§5`→`§7/§6`） |
+| 两道文档门 | **18 / 18 pass** |
+| `npm run typecheck` | **0** |
+| `npm test` | **934 pass / 1 fail / 2 skip**（同一条 fail，长度 21 032） |
+| `npm run test:installer` | **143 OK** |
 
-⇒ **+260 B 全部来自新规格页的一行索引**（`externalIndex`，`src/pi-adapter/extension.ts:2049`）；README 那条交叉引用对该索引贡献 **0 B**。
-
-**如实说明**：这条门禁**没有变绿变红**（改动前后都是同一条 fail），但**一个本来就超限的数字被我推大了 260 B**。它与 `10-05` 窗口记过的缺陷同源，属本轮 Out of Scope；这条读数留在原地，好让修索引的人知道它又多了一行。
+**新增的具体数字**（都从源码/文件里数出来，不是估计）：只读预算是 mode × intent 的 3×3 表 —— `fast` 4/6/12、`standard` 6/10/20、`ultra` 12/16/32，任务清单 1，chat 无（`src/pi-adapter/extension.ts:3500-3521`）；四个已发布模式的权限面：`code-development` 0 ask / 1 deny、`pentest` 1 ask / 3 deny、`trading` 1 ask / 2 deny、`code-audit` 2 ask / 3 deny，四者都写着 `unlisted: allow`（`modes/*/permissions.yaml`）。
 
 ## 落地的改动
 
 | # | 文件 | 改动 |
 |---|---|---|
-| 1 | `.trellis/spec/backend/personal-agent-product.md` | 新建（9 个 `##` 标题，每条断言带锚点 + 三选一标记） |
+| 1 | `.trellis/spec/backend/personal-agent-product.md` | 新建（初版 9 个 `##` 标题；第二轮增至 **10 个**，每条断言带锚点 + 三选一标记） |
 | 2 | `.trellis/spec/backend/personal-agent-runtime.md` | 路由表 +1 行、选择规则 +1 条（未加标题、未加代码块） |
 | 3 | `.trellis/spec/backend/index.md` | Guidelines Index +1 行 |
 | 4 | `tests/spec-context-budget.test.ts` | `routedSpecNames` 首位 + 标题清单 |
