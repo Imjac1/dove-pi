@@ -3,4 +3,4 @@
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply typed boundaries, recovery behavior, compatibility, and the full quality gate."}
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Define one event contract and decoder across core, provider, adapter, CLI, and workflow consumers."}
 {"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Centralize reducers and shared trace contracts instead of duplicating transition logic."}
-{"file":".trellis/tasks/09-03-task-convergence-control/research/convergence-evidence.md","reason":"Use the observed failure, current architecture gaps, and external termination/checkpoint patterns."}
+{"file": ".trellis/tasks/archive/2026-09/09-03-task-convergence-control/research/convergence-evidence.md", "reason": "Use the observed failure, current architecture gaps, and external termination/checkpoint patterns."}

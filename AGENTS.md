@@ -76,6 +76,13 @@ archive, and to know that a fresh archive has just done it again.
 pointing into `.trellis` that still resolved, the two broken ones being the two files that are genuinely gone. The 58 of 66 was the state
 before they were repointed, and every archive since has exercised the same breakage on its own task - which is why the entries are worth
 re-pointing after an archive and why the warning is not historical.
+**Measured again on 2026-10-05, by archiving five tasks of one session.** The tax came due exactly as described: five entries broke, all of
+them the archived task naming its own prd, design, implement and findings files, and a scan for every unresolved `{"file": ...}` entry then
+found **three** broken pointers in the whole corpus - two were the same tax left unpaid by an earlier archive (that task own entries still
+naming its pre-archive directory, repointed in the same commit) and one points at tests/module-graph.test.ts, a test that is genuinely gone
+and cannot be repaired by repointing. So the standing numbers are: the archive tax is **5 per archive, paid by hand**, and the corpus holds
+**one broken pointer that no repointing fixes**. The scan is worth keeping for the same reason the note is: it reads a directory the reader
+of a task file never opens.
 
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a

@@ -1,6 +1,0 @@
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "the forbidden/required patterns and review checklist the checker applies"}
-{"file": ".trellis/spec/backend/personal-agent-runtime.md", "reason": "the spec router whose budgets and the spec-context-budget test bound the artifacts this task edits"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "the cross-layer checks for a change that touches core, the Pi adapter, and the surface map"}
-{"file": ".trellis/tasks/10-05-pstack-reference-audit/prd.md", "reason": "the acceptance criteria the check has to verify one by one, including the ones that stay out of scope"}
-{"file": ".trellis/tasks/10-05-pstack-reference-audit/findings.md", "reason": "the ten defects with their anchors, so each closure can be re-verified rather than trusted"}
-{"file": ".trellis/tasks/10-05-pstack-reference-audit/design.md", "reason": "the decisions a check may hold the change to, including the two that were ruled on evidence"}
