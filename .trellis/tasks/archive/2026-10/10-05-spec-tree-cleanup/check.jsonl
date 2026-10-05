@@ -1,3 +1,3 @@
-{"file": ".trellis/tasks/10-05-spec-tree-cleanup/research/defects.md", "reason": "The checker re-runs these exact commands; a fix that cannot be shown by the same measurement that found the defect is not a fix."}
+{"file": ".trellis/tasks/archive/2026-10/10-05-spec-tree-cleanup/research/defects.md", "reason": "The checker re-runs these exact commands; a fix that cannot be shown by the same measurement that found the defect is not a fix."}
 {"file": ".trellis/spec/guides/index.md", "reason": "The layer's own statement of what a guide is for: the checker reads it before accepting that a deleted section did not belong here."}
 {"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The forbidden and required patterns, including that a claim names a thing rather than citing a drifting position and that no dated account of our own progress is written in."}
