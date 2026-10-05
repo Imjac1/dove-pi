@@ -196,3 +196,78 @@ field-run 规范 §2 的携带清单同步更新 ✓ —— **原文只写了三
 | token 代价 | run 2 ✓ + 两条探针（`/status`-only，**不调模型** ✓）|
 
 **仍未达成的** ✗✓✓：**"一条运行里走完整个流程"** 仍然**不成立** ✓ —— 而这一轮把它从"预算不够"改成了**"provider 中途终止 + 终止原因当时报成 unknown"** ✓，**后者已修** ✓（下次同样的终止会读作 `reviewed-provider-message` 的瞬时失败并重试 ✓，而不是 `provider-unknown` 的终态 ✓）。**收敛与归档仍未被走到** ✗（`task.convergence.observed` 在 run 2 里出现了 ✓，但 `convergenceSkipReason: "no-formal-native-task"` ✓ —— 克隆里那个任务早已 `archived` ✓，**流程的收尾几步需要一个在流程里新建的任务** ✓）。
+
+---
+
+# 读数（第四次：**给场景加了任务生命周期，然后流程在 22 秒处挂死** ✗✓✓✓）（2026-10-05 ✓）
+
+## 第 0 片：先量"要写进 prompt 的命令能不能跑" ✓✓（**这一步救了整轮** ✓）
+
+**没有直接开跑** ✓ —— 先在临时副本上把整条生命周期跑了一遍 ✓：`task create` → `start` → `verify` → `convergence status` → `finish` → `archive` 全部可用 ✓（`state.json` 最后两个 goal 都是 `archived` ✓）。
+
+**而这一量就撞上第一处** ✗✓✓：**`doctor` 选定的 shell 是 git-bash** ✓，而**启动器只装了 `.cmd` 与 `.ps1`** ✗✓✓（`installer/manager.py:231-238` ✓），于是：
+
+| 在 git-bash 里 | 读数 |
+|---|---|
+| `command -v dove-pi.cmd` | **找到** ✓（`/c/Users/Macfy/AppData/Local/DovePi/bin/dove-pi.cmd` ✓） |
+| `which dove-pi.cmd` | **exit 1 · no dove-pi.cmd** ✗✓✓（**而那个目录就在 PATH 里** ✓） |
+| `which dove-pi` / `command -v dove-pi` | **找不到** ✗✓✓ |
+| **README 第 9 行告诉用户跑的** | **`dove-pi`** ✗✓ —— **在 Dove 自己选的那个 shell 里是 command-not-found** ✗✓✓ |
+
+→ 所以场景里的步骤写成 **`dove-pi.cmd`** ✓（实测可用 ✓），**并在 `requires` 里写明为什么** ✓。
+
+## 第 1 片：这一次运行（§4 格式 ✓）
+
+```text
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-05
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]   ← 上一轮的修复在这一轮生效 ✓
+exitCode=null  settled=false  harnessTimedOut=true  scenarioFailed=false  events=5422  duration=2700270ms (45.0 min, 恰为所设上限)
+terminal: reason=cancelled  detail=user-cancelled  code=user-cancelled (origin=user)
+resources(账本): **providerRounds=1**  **toolCalls=1**  账本共 **14 行**  —— 45 分钟里就这么多 ✗✓✓
+steps: 0(prompt) tools=['bash'] 未 settle ✓ · 1/2/3 **一次都没跑** ✗
+artifactEvidence: formalTaskCount=2  convergenceFileCount=0
+```
+
+## 🎯 第 2 片：**22 秒之后就没动静了** ✗✓✓✓（**本轮最重的一条** ✓）
+
+账本第一行 **16:50:37.880** ✓，最后一行 **16:50:59.355** ✓ —— **开工 22 秒后就再没有任何事件** ✗✓✓，**一直到 45 分钟的上限把它切掉** ✓（`harnessTimedOut=true` ✓、`durationMs=2700270` ✓）。**stalled 44.5 分钟** ✓。
+
+**它卡在哪个调用上，是量到的** ✓✓（会话记录里的工具入参原文 ✓）：
+
+```
+which dove-pi.cmd; ls -la /c/Users/Macfy/.agents 2>/dev/null; \
+  find / -name "dove-pi.cmd" -maxdepth 6 2>/dev/null | head
+```
+
+→ **一次从 `/` 开始的全盘 `find`** ✗✓✓ —— **因为 `which dove-pi.cmd` 返回了失败** ✓（第 0 片量到的那个口 ✓），agent 于是改用全盘搜索 ✓。
+
+**而它为什么值得记** ✓✓✓：**整个 45 分钟的上限被*一次 shell 调用*吃光** ✗ —— 这正是**已经开着的** `10-05-tool-call-hangs-without-timeout` ✓（*"A tool call can hang forever, and the shell timeout only covers a whitelist"* ✓）**在真实流程里的第一次复现** ✓，**而且它挡在用户流程的第一步上** ✓✓。
+
+## 🎯 第 3 片：**建任务的是 harness 自己，不是用户** ✓✓（**这条改了 AC 的读法** ✓）
+
+工作副本里**确实**出现了一个新任务 ✓ —— **但它不是 agent 建的** ✓✓：`createdAt = 16:50:37.885` ✓，**比账本第一行只晚 5 毫秒** ✓，而 `request.planned` 写的是 **`intent=execution lane=formal workflow=create-task`** ✓✓。
+
+→ **harness 自己从用户的第一句话建了正式任务** ✓✓，**标题就是那条消息的全文** ✓（所以看起来很长 ✓）。
+→ **而 agent 从头到尾没跑成一次 `task create`** ✗✓ —— 它在找那个启动器 ✓，**然后就挂死了** ✓。
+→ **顺带解释了 run 2 为什么读作 `no-formal-native-task`** ✓✓：**两条 prompt 落进了不同的 lane** ✓（这一条落 `formal` → 建任务 ✓；run 2 那条落别的 lane → 不建 ✓）→ **"流程里有没有正式任务"取决于 prompt 落在哪个 lane** ✓✓，这比"克隆里的任务已归档"准得多 ✓。
+
+## 第 4 片：这一轮的判决 ✓✗
+
+| AC | 判 |
+|---|---|
+| mode 生效（`workMode=code-development`）✓ | **成立** ✓（第 1/2/3 轮都一样 ✓） |
+| 工具面进读数 ✓ | **成立** ✓，且**这一轮带的是 `npm/`** ✓（`hashlineEditTools=present` ✓） |
+| 项目自己的套件给出结果 ✓ | **未走到** ✗（判分那一步没跑 ✓） |
+| 一条运行里走完整个流程 ✗ | **不成立** ✗✓✓，**而这一轮的原因与前两轮都不同** ✓：**不是预算、不是 provider，是一次没有边界的 shell 调用** ✓ |
+
+**三轮，三个不同的原因** ✓✓（25 min 到点 ✗ / 9.5 min provider 终止 ✗ / 22 秒后无限挂死 ✗）—— **这本身就是一条读数** ✓：**"整条流程跑得完"这件事，被三件互不相同的、都在流程自己路径上的事各挡过一次** ✓✓。
+
+## 第 5 片：这一轮改掉的与仍开着的 ✓✗
+
+1. **启动器那个口 —— 已修** ✓✓。装**第三个 shim**：`bin/dove-pi`（无扩展名、`#!/bin/sh`、`chmod 0755` ✓，`installer/manager.py` ✓）—— 对 MSYS 一族先用 `cygpath` 把目录翻成 Windows 形 ✓，再交给**和其他两个同一个** PowerShell 入口 ✓（Python 发现逻辑仍只有一处 ✓）。**npm 就是以这个形状发它的 `npm` / `npm.cmd` / `npm.ps1` 三件的** ✓，这里照抄它的形 ✓。
+   **判据**（全部实测 ✓）：`chmod +x` 在 NTFS 上成立 ✓（`-rwxr-xr-x` ✓）；`which dove-pi` 与 `command -v dove-pi` **都找得到** ✓（这正是 `.cmd` 做不到的那件 ✓）；**真正跑一遍** ✓ —— shim 执行 ✓ → 转交 PowerShell ✓ → `.ps1` 找到了自己（路径换算正确 ✓）→ 只因临时布局没有 `state/install.json` 而停 ✓，**链条完整** ✓。
+   **而它是"用户第一次想收尾时就会撞上"的那堵墙** ✓：`README.md:9` 教的正是 `dove-pi` 这个名字 ✓。
+   **持有的东西** ✓：`tests/managed_installer_test.py` 现在断言它**存在、可执行**（bash 对无扩展名文件两个条件都要 ✓）、且带 `cygpath` ✓；installer 套件 **143 OK** ✓。
+   **还没生效** ✗✓：本机那份**已安装**的 launcher 仍是旧的 ✓（只有 `.cmd`/`.ps1` ✓）—— 要 `dove-pi update` / 重装才会带上第三个 ✓。所以这一轮的场景**仍写 `dove-pi.cmd`** ✓（实测可用 ✓），并在 `requires` 里写明原委 ✓。
+2. **场景里"让 agent 建任务"那一步 —— 已删** ✓✓。第 3 片量到 **harness 自己会从消息里开正式任务** ✓，所以那一步既多余、**又正是把 agent 推向启动器、推向那个 44.5 分钟挂死的那一步** ✗✓。新版本只留"干活 → 判分 → 收敛 → 归档" ✓，并在第一步里**明说不需要自己建** ✓（好挡住那次探路 ✓）。**这一轮那次运行跑的是旧版本** ✓ —— 读数按旧版本记 ✓。
+3. **仍开着的** ✗✓✓：**没有边界的 shell 调用** ✓（第 2 片 ✓）—— **整个 45 分钟的上限被一次从 `/` 开始的 `find` 吃光** ✓。它已经有主 ✓（`10-05-tool-call-hangs-without-timeout` ✓），**而这一轮给了它第一个真实流程里的复现** ✓✓；**只要它还在，任何"整条流程"的运行都可能在任何一步被无限期挂住** ✓ —— 这与启动器那个口是**两件独立的事** ✓，**修了启动器也不等于这条被修** ✗✓。
