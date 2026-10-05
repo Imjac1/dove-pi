@@ -602,6 +602,15 @@ class ManagedInstallerCommandTests(unittest.TestCase):
             self.assertIsNotNone(state.current)
             self.assertTrue((layout.bin_dir / "dove-pi.cmd").is_file())
             self.assertTrue((layout.bin_dir / "dove-pi.ps1").is_file())
+            # **The third shim, and the one the selected shell actually needs.** Measured 2026-10-05: git-bash - the
+            # shell `doctor` reports as effective - resolves neither `dove-pi` nor even `dove-pi.cmd` through `which`
+            # with that directory on PATH, and `README.md` sends a person to the bare name. An agent looking for the
+            # launcher then ran a whole-disk `find` and the run stalled on it for 44.5 minutes. The file has to be
+            # extension-less *and* executable, because bash runs it only under both conditions.
+            shim = layout.bin_dir / "dove-pi"
+            self.assertTrue(shim.is_file())
+            self.assertTrue(os.access(shim, os.X_OK), "bash runs an extension-less file only when it is executable")
+            self.assertIn("cygpath", shim.read_text(encoding="ascii"), "the MSYS family needs the directory translated")
             self.assertNotIn(str(source), (layout.bin_dir / "dove-pi.ps1").read_text(encoding="utf-8-sig"))
 
     def test_source_install_hydrates_manifest_and_reconciles_components_under_lock(self):
