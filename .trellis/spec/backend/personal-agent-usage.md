@@ -90,10 +90,10 @@ improvement round reads and edits, which is the product's second thread - the op
 
 | | |
 |---|---|
-| **What the person does** | Comes back to the same project and says "继续当前项目任务" - `README.md:230-234` |
+| **What the person does** | Comes back to the same project and says "继续当前项目任务" - `README.md:230-234` - or continues the session itself, which is what the reading for this stage used: `dove-pi --session <file\|id> -p "..."`, and the host's own `--continue` / `--resume` are the documented forms of the same thing - `.trellis/tasks/10-03-day-two-walk/readings.md` (third round) |
 | **What the product decides for them** | **Nothing yet.** This is the stage with a design and no design: what exists is only what persisted - `.dove/state.json`, the native task artifacts, the session journal, and the execution ledger - `README.md:199-228` |
 | **The failure this prevents** | Named, and not yet answered: work that was finished yesterday and never committed, so a second day can lose it or overwrite it; and a handover that has to be explained again because nothing carried it - both are the walking task's own words - `.trellis/tasks/10-03-day-two-walk/prd.md` |
-| **Where it stands** | [not yet demonstrated] continuation, in the walking task's own words - same file - gap owned by `.trellis/tasks/10-03-day-two-walk`. **This is where the design has the most to add and the least evidence to add it from**, which is why this stage is written as its failures plus a missing design rather than as a flow |
+| **Where it stands** | [demonstrated] that continuation carries the conversation, measured three ways on 2026-10-05: a **fresh session** and a **shared session root** both answered "不确定，我不猜" (correct, and with no trace of the earlier run), while **continuing the session** answered with the real function, the real test count and the real commit id in 15 seconds - `.trellis/tasks/10-03-day-two-walk/readings.md` (third round). **What carries it is the host's session, not the `.dove/` records** - and the repository's own blackbox flag `--reuse-session` shares the session **root** without carrying the conversation, so `README.md:415` reads stronger than it covers (measured, and recorded in [`defect-ledger.md`](./../guides/defect-ledger.md)) |
 
 ## 9. Stage 6 - Maintenance
 
@@ -116,7 +116,7 @@ way a person reading this page can tell "not designed yet" from "somebody is on 
 | 2 | The host's edit tools are absent, so the agent cannot change files | `.trellis/tasks/10-05-missing-hashline-edit-tool` |
 | 3 | A slash command passed with `-p` never reaches the extension | the host (reported upstream; not ours to fix) |
 | 4 | No formal task has completed a recorded round in this repository | needs a task |
-| 5 | Continuation across a real day is designed nowhere and read nowhere | `.trellis/tasks/10-03-day-two-walk` |
+| 5 | The design for a person's second day is still the host's, not Dove's: nothing in the product states the sequence or what to do when the session is gone | needs a task |
 
 ## How to check this page
 
