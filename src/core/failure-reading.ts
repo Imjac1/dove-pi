@@ -196,6 +196,12 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 	const providers = new Map<string, ProviderOutcome>();
 	let unrefused = 0;
 	let toolObservations = 0;
+	// **Started minus observed, which is the one reading a hang leaves behind.** A call that never returns writes no
+	// `tool.observed`, so before `tool.started` existed this reading could not tell "no tool ran" from "a tool ran and
+	// never came back" - measured twice: six and a half minutes, and forty-five, of a ledger that stopped one
+	// millisecond after the call started and then held nothing until the outer watchdog.
+	const startedToolCalls: string[] = [];
+	const observedToolCallIds = new Set<string>();
 	const terminals: { requestId: string; stepId: string; reason: string; mechanism: FailureMechanism }[] = [];
 
 	for (const record of records) {
@@ -257,6 +263,13 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 		}
 		if (record.kind === "tool.observed") {
 			toolObservations += 1;
+			const observedId = record.correlation?.toolCallId;
+			if (typeof observedId === "string" && observedId !== "") observedToolCallIds.add(observedId);
+			continue;
+		}
+		if (record.kind === "tool.started") {
+			const startedId = record.correlation?.toolCallId;
+			if (typeof startedId === "string" && startedId !== "") startedToolCalls.push(startedId);
 			continue;
 		}
 		if (record.kind === "task.convergence.decision" && id !== undefined) {
@@ -315,6 +328,12 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 	// **What the corpus does not contain**, so an empty reading is not mistaken for a working one - the same rule the
 	// SSM axis follows with `undefined` ratios instead of 1.0.
 	const corpus: string[] = [];
+	// **The stronger fact first.** A call that started and has no observation is a different absence from a ledger where
+	// no tool ran at all, and the weaker sentence must not be the one a reader meets while the stronger one is available.
+	const outstandingToolCalls = startedToolCalls.filter((id) => !observedToolCallIds.has(id));
+	if (outstandingToolCalls.length > 0) {
+		corpus.push(`${outstandingToolCalls.length} tool call(s) started with no tool.observed record, so the call had not returned when this ledger was read: ${outstandingToolCalls.join(", ")}`);
+	}
 	if (toolObservations === 0) corpus.push("no tool.observed record in this ledger: no tool ran, so a failure cannot name one");
 	if (failures.length === 0) corpus.push(`no request ended in a failure class across ${requestIds.size} request(s)`);
 	if (unrefused > 0) corpus.push(`${unrefused} refusal(s) carry no request id and are counted rather than attributed`);

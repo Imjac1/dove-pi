@@ -35,8 +35,28 @@ Pi's own process backend then returns `Command timed out after N seconds` with p
 commands remain unchanged. Invalid or negative overrides fall back to 240 seconds with a diagnostic
 reason rather than restoring an unbounded wait.
 
-Required tests cover aggregate/ordinary/explicit/disabled/invalid cases and one real `createBashTool`
-execution that verifies the structured timeout error.
+**What that list covers is now written at the call, not inferred from the expression.** Everything outside it gets
+no timeout at all, so the list *is* the difference between a bounded wait and an unbounded one - and until now the
+only place it existed was a regular expression. The coverage is narrower than it reads: measured against the
+expression above, `pytest -q` and `python -m pytest -q` do **not** match, because the trailing word boundary fails
+after the space the `pytest` alternative consumed, while `pytest`, `pytest tests/...`,
+`python -m pytest tests/... -q`, `npm test`, `npm test -- --watch`, `make test` and `go test` all do. A field run
+then hung twice - once for six and a half minutes, once for forty-five - against a ledger that stopped one
+millisecond after the call started and held no record saying whether a timeout had been applied or that a call was
+still running. So every shell call now writes a `tool.started` record carrying `timeoutApplied` and, when it
+applies, `timeoutSeconds` and `timeoutReason`; the refusal reason is one of the values the function returns rather
+than a sentence. **The call that has not returned is `tool.started` with no `tool.observed`**, which
+`projectExecutionDiagnostics` reports as `unterminatedToolCalls` (the shape `unterminatedRequests` already uses).
+**The command is not persisted**: a digest and a bounded length only, joined back to the host's own session
+transcript by `toolCallId`.
+
+**This makes a hang legible, not shorter.** A call outside the list can still run until the outer watchdog, and
+giving every command a timeout is a separate decision - it would change the behaviour of the ordinary commands the
+paragraph above deliberately left alone.
+
+Required tests cover aggregate/ordinary/explicit/disabled/invalid cases, the timeout stance the new record carries
+for a covered and an uncovered command, and one real `createBashTool` execution that verifies the structured
+timeout error.
 
 ## Shell selection contract
 

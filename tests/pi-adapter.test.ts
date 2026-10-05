@@ -963,6 +963,11 @@ describe("Pi adapter", () => {
 			assert.equal(blockedAfterFinish?.block, true);
 			assert.equal(blockedAfterFinish?.terminate, true);
 			assert.match(blockedAfterFinish?.reason ?? "", /ready_to_finish/);
+			// **A refused call is not an outstanding one.** The writer sits after the last blocking return, so a call the
+			// gate stopped leaves no `tool.started`: counting refusals as hangs would be worse than the silence it
+			// replaces. Asserted here because this case already drives a real refusal, and a test that constructs one
+			// from nothing would be checking the fixture rather than the ordering.
+			assert.equal(ledgerRecords().some((record) => record.kind === "tool.started" && (record.correlation as { toolCallId?: string } | undefined)?.toolCallId === "formal-write-after-finish"), false, "a blocked call must not read as a call that has not returned");
 			// **AC4: a state that will not take an event does not silently drop the observation.** The reducer refuses
 			// events after `ready_to_finish`, so the producer does not offer one - and the ledger says which state
 			// refused it, because "no observation" and "observation discarded" must not look the same.
@@ -1158,6 +1163,68 @@ describe("Pi adapter", () => {
 		assert.ok(errored, `the errored round is recorded: ${JSON.stringify(written.map((record) => record.kind))}`);
 		assert.equal(errored.details?.failureKind, "transient", "the record names the kind, which is what made the retry happen");
 		assert.equal(errored.details?.failureReason, "http_429", "and why Dove called it that, in the vocabulary the classifier already owns");
+	});
+
+	it("writes down that a tool call started, and whether the whitelist gave it a timeout", async () => {
+		// **The defect this case exists for.** A call that never returned wrote nothing at all: `tool.observed` is written
+		// at `tool_result`, and only when the call did not error, so the ledger stopped one millisecond after the call
+		// began - measured twice, six and a half minutes in one run and forty-five in another, with the outer watchdog as
+		// the only record of either. A reader could not tell a slow command from one that would never come back, and
+		// could not tell whether the whitelist had covered the command at all.
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return representativeTools.map((name) => ({ name })); },
+			setActiveTools() {},
+			getActiveTools() { return [...representativeTools]; },
+			getThinkingLevel() { return "max"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			hasUI: true,
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+			sessionManager: { getEntries: () => [], getSessionId: () => "tool-start-session" },
+			getContextUsage: () => ({ tokens: 1_000, contextWindow: 1_000_000 }),
+			model: { contextWindow: 200_000, maxTokens: 16_384, provider: "test", id: "test-model" },
+		} as FakeContext;
+		const ledgerPath = join(adapterStateDir, "execution.jsonl");
+		await events.get("session_start")?.({ type: "session_start" }, context);
+		// **A tool call has to belong to a request, or it writes nothing at all.** `tool_call` returns before doing
+		// anything when no lease is active - the `activeLease` guard at the top of that handler - and the writer this case
+		// asserts sits behind every check in that handler, which is what the case found when it first ran: two calls, an
+		// empty ledger slice, and no error, because the handler had returned long before the record could be written.
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "go", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		const before = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).length;
+		// One command the whitelist covers, and the whole-disk search that actually hung a run.
+		// The covered one is spelled the way the field run spelled it: **`pytest -q` alone does not match the regex**,
+		// because the trailing `\b` fails after the space it consumed, while `pytest <path>` does. That is the whitelist
+		// being narrower than it reads, and the point of this record is that the narrowness is now visible rather than
+		// silent - the second call below says `timeoutApplied: false` and nothing has to be inferred from a regex.
+		await events.get("tool_call")?.({ type: "tool_call", toolCallId: "listed-call", toolName: "bash", input: { command: "python -m pytest tests/test_immutable.py -q" } }, context);
+		await events.get("tool_call")?.({ type: "tool_call", toolCallId: "unlisted-call", toolName: "bash", input: { command: "find / -name dove-pi.cmd -maxdepth 6 | head" } }, context);
+		const written = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).slice(before)
+			.map((line) => JSON.parse(line) as { kind?: string; correlation?: { toolCallId?: string }; details?: Record<string, unknown> });
+		const started = written.filter((record) => record.kind === "tool.started");
+		const listed = started.find((record) => record.correlation?.toolCallId === "listed-call");
+		const unlisted = started.find((record) => record.correlation?.toolCallId === "unlisted-call");
+		assert.ok(listed, `the call's start is recorded, and the ledger says what it holds: ${JSON.stringify(written.map((record) => record.kind))}`);
+		assert.ok(unlisted, "both calls are recorded, not only the one the whitelist matched");
+		assert.equal(listed.details?.timeoutApplied, true);
+		assert.equal(listed.details?.timeoutSeconds, 240, "the whitelisted command says which timeout it was given");
+		assert.equal(unlisted.details?.timeoutApplied, false, "and the unlisted one says so rather than leaving it implicit");
+		assert.equal(unlisted.details?.timeoutReason, undefined, "no reason is invented for a command outside the whitelist");
+		// **The command travels as a digest and a length, never raw.** `quality-guidelines.md` requires evidence to hold
+		// digests and bounded counters and never tool arguments, so this asserts both halves: the digest exists, and the
+		// command it describes is nowhere in what was written.
+		assert.equal(typeof unlisted.details?.commandDigest, "string");
+		assert.equal(unlisted.details?.commandLength, "find / -name dove-pi.cmd -maxdepth 6 | head".length);
+		assert.equal(JSON.stringify(written).includes("dove-pi.cmd"), false, "the command itself is nowhere in the ledger");
 	});
 
 	it("formats task inventory as a bounded no-tool projection", () => {

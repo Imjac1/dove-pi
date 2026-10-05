@@ -80,6 +80,30 @@ describe("the execution diagnostics projection", () => {
 		assert.equal(projection.lastRefusals?.[0]?.action, "unknown");
 		assert.equal(projection.lastRefusals?.[0]?.reason, "no reason recorded");
 	});
+
+	it("separates a call that has not returned from one that did, and from a ledger where no call started", () => {
+		// **The reading a hang leaves.** `tool.observed` is written at `tool_result` and only when the call did not error,
+		// so before `tool.started` existed a call that never returned was indistinguishable from one that was never
+		// made - measured twice, six and a half minutes in one run and forty-five in another, with the outer watchdog as
+		// the only record of either. The relation is the one `unterminatedRequests` already states for requests, and the
+		// absence case follows the rule this file already owns: a ledger where nothing started must not read as one
+		// whose calls were dropped.
+		const outstanding = projectExecutionDiagnostics([toolStarted("call-a")]);
+		assert.equal(outstanding.toolCallsStarted, 1);
+		assert.equal(outstanding.toolCallsObserved, 0);
+		assert.deepEqual(outstanding.unterminatedToolCalls, ["call-a"], "a call with no observation is the call that has not returned");
+
+		const settled = projectExecutionDiagnostics([toolStarted("call-a"), toolObserved("call-a")]);
+		assert.equal(settled.toolCallsStarted, 1);
+		assert.equal(settled.toolCallsObserved, 1);
+		assert.equal("unterminatedToolCalls" in settled, false, "a call that returned leaves the key out rather than emptying it");
+
+		const startedAndAnother = projectExecutionDiagnostics([toolStarted("call-a"), toolStarted("call-b"), toolObserved("call-a")]);
+		assert.deepEqual(startedAndAnother.unterminatedToolCalls, ["call-b"], "only the call still outstanding is named");
+
+		const none = projectExecutionDiagnostics([]);
+		assert.equal("toolCallsStarted" in none, false, "a ledger where no call started must not read as one whose calls were dropped");
+	});
 });
 
 function refusal(
@@ -106,5 +130,31 @@ function refusal(
 			reason: overrides.reason ?? `reason-${index}`,
 			remediation: "do something else",
 		},
+	} as ExecutionRecord;
+}
+
+/** A call that began. The pair with `toolObserved` is what the projection reads as outstanding or returned. */
+function toolStarted(id: string): ExecutionRecord {
+	return {
+		taskId: "task",
+		stepId: `tool:${id}`,
+		kind: "tool.started",
+		timestamp: "2026-09-29T00:00:01.000Z",
+		mode: "standard",
+		correlation: { requestId: "req-1", toolCallId: id, taskId: "task" },
+		details: { tool: "bash", timeoutApplied: false, toolCallId: id },
+	} as ExecutionRecord;
+}
+
+/** A call the harness saw return. Written at `tool_result`, so its absence is what a hang looks like. */
+function toolObserved(id: string): ExecutionRecord {
+	return {
+		taskId: "task",
+		stepId: `tool:${id}`,
+		kind: "tool.observed",
+		timestamp: "2026-09-29T00:00:02.000Z",
+		mode: "standard",
+		correlation: { requestId: "req-1", toolCallId: id, taskId: "task" },
+		details: { tool: "bash", isError: false, toolCallId: id },
 	} as ExecutionRecord;
 }

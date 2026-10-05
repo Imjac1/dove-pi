@@ -81,6 +81,19 @@ export interface ExecutionDiagnosticsProjection {
 	readonly requestsReceived?: number;
 	readonly requestsTerminated?: number;
 	readonly unterminatedRequests?: readonly string[];
+	/**
+	 * **A call that has not returned is a reading, not a silence.** `tool.observed` is written at `tool_result` and only
+	 * when the call did not error, so a call that never returns used to write nothing at all: the record of a hang was
+	 * whatever came before it, and the only thing that ever named it was the outer watchdog - measured twice, six and a
+	 * half minutes and forty-five minutes of a ledger that stopped one millisecond after the call started.
+	 *
+	 * These three fields are the relation `unterminatedRequests` already states one level down: started minus observed,
+	 * in ledger order and bounded. Omitted when the ledger recorded no call at all, by the same rule the fields above
+	 * follow - "nothing arrived" must not read as "arrivals were dropped".
+	 */
+	readonly toolCallsStarted?: number;
+	readonly toolCallsObserved?: number;
+	readonly unterminatedToolCalls?: readonly string[];
 }
 
 /**
@@ -179,6 +192,12 @@ export function projectExecutionDiagnostics(
 	const received = matching.filter((record) => record.kind === "request.received").map((record) => stringValue(record.correlation?.requestId)).filter((id): id is string => id !== undefined);
 	const terminated = new Set(matching.filter((record) => record.kind === "request.terminal").map((record) => stringValue(record.correlation?.requestId)));
 	const unterminated = received.filter((id) => !terminated.has(id)).slice(-MAX_LAST_REFUSALS);
+	// The same relation for tool calls, and the same shape: the ids are the join key, so a reader who wants to know
+	// *which* command is outstanding looks the id up in the host's own session transcript rather than in this ledger -
+	// which deliberately persists no tool arguments (`quality-guidelines.md`).
+	const toolStarts = matching.filter((record) => record.kind === "tool.started").map((record) => stringValue(record.correlation?.toolCallId)).filter((id): id is string => id !== undefined);
+	const toolObservations = new Set(matching.filter((record) => record.kind === "tool.observed").map((record) => stringValue(record.correlation?.toolCallId)));
+	const unterminatedToolCalls = toolStarts.filter((id) => !toolObservations.has(id)).slice(-MAX_LAST_REFUSALS);
 	return {
 		schemaVersion: 1,
 		...(strategy ? { strategy } : {}),
@@ -192,6 +211,8 @@ export function projectExecutionDiagnostics(
 		// "arrivals were dropped". A ledger that did record requests always carries both counts, equal or not.
 		...(received.length > 0 ? { requestsReceived: received.length, requestsTerminated: terminated.size } : {}),
 		...(unterminated.length > 0 ? { unterminatedRequests: unterminated } : {}),
+		...(toolStarts.length > 0 ? { toolCallsStarted: toolStarts.length, toolCallsObserved: toolObservations.size } : {}),
+		...(unterminatedToolCalls.length > 0 ? { unterminatedToolCalls } : {}),
 	};
 }
 
@@ -594,6 +615,22 @@ export class ExecutionLedger {
 	 */
 	public async appendToolObserved(input: { taskId: string; stepId: string; mode: AgentMode; tool: string; isError: boolean; requestId?: string; sessionId?: string; attemptId?: string; toolCallId: string }): Promise<void> {
 		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "tool.observed", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { tool: input.tool, isError: input.isError, toolCallId: input.toolCallId } });
+	}
+
+	/**
+	 * A tool call that is about to run, recorded so that a call which never returns leaves a trace.
+	 *
+	 * **The gap this closes, measured twice.** `tool.observed` is written at `tool_result`, so before this record a call
+	 * that hung wrote nothing: the ledger stopped one millisecond after the call started and the next record was the
+	 * outer watchdog's, six and a half minutes later in one run and forty-five in another. A reader could see that a run
+	 * had timed out and not that a call was outstanding, which is the difference between "slow" and "hung".
+	 *
+	 * **No arguments, deliberately.** The command's identity is carried as a digest and a bounded length, because
+	 * `quality-guidelines.md` requires evidence to retain digests and bounded counters and never raw tool arguments.
+	 * The join to what actually ran is the `toolCallId`, which the host's own session transcript holds.
+	 */
+	public async appendToolStarted(input: { taskId: string; stepId: string; mode: AgentMode; tool: string; timeoutApplied?: boolean; timeoutSeconds?: number; timeoutReason?: string; commandDigest?: string; commandLength?: number; requestId?: string; sessionId?: string; attemptId?: string; toolCallId: string }): Promise<void> {
+		await this.append({ taskId: input.taskId, stepId: input.stepId, kind: "tool.started", timestamp: new Date().toISOString(), mode: input.mode, correlation: { requestId: input.requestId, sessionId: input.sessionId, attemptId: input.attemptId, toolCallId: input.toolCallId, taskId: input.taskId }, details: { tool: input.tool, ...(input.timeoutApplied === undefined ? {} : { timeoutApplied: input.timeoutApplied }), ...(input.timeoutSeconds === undefined ? {} : { timeoutSeconds: input.timeoutSeconds }), ...(input.timeoutReason === undefined ? {} : { timeoutReason: input.timeoutReason }), ...(input.commandDigest === undefined ? {} : { commandDigest: input.commandDigest }), ...(input.commandLength === undefined ? {} : { commandLength: input.commandLength }), toolCallId: input.toolCallId } });
 	}
 
 	public async appendProjectMutationStarted(taskId: string, stepId: string, mode: AgentMode, mutationId: string, operation: string, provider: string, revision: string, args: readonly string[] = [], beforeTaskIds: readonly string[] = [], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<void> {

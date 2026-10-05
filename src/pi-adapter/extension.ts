@@ -1231,7 +1231,16 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					const refused = refusals === undefined
 						? "none recorded for this session"
 						: refusals.map((refusal) => `${refusal.action}/${refusal.gate}/${clipText(refusal.reason, 200)}`).join("; ");
-					return ` LastPlan: ${lastPlan}. LastTerminal: ${lastTerminal}. Refused: ${refused}.`;
+					// **A call that has not returned, said out loud.** This is the reading that was missing at the moment
+					// it mattered most: a hung call wrote nothing at all, so a person watching a session that had stopped
+					// could not tell a slow command from one that would never come back, and the only record was the outer
+					// watchdog's. Printed **only when the ledger holds one**, so an ordinary session's line does not grow
+					// a field that is always zero.
+					const outstanding = diagnostics.unterminatedToolCalls ?? [];
+					const outstandingText = outstanding.length === 0
+						? ""
+						: ` UnterminatedToolCalls: ${outstanding.length} (${outstanding.map((id) => clipText(id, 64)).join(", ")}).`;
+					return ` LastPlan: ${lastPlan}. LastTerminal: ${lastTerminal}. Refused: ${refused}.${outstandingText}`;
 				})();
 			// **The cache line is always shown; the two ledger lines wait for `full`.** The halves cost differently: the cache
 			// text is formatted from diagnostics already inspected above, while the goal arithmetic and the request diagnostics
@@ -2910,6 +2919,42 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		currentRequestToolCalls += 1;
 		requestLifecycle.markEffectStarted({ effectId: event.toolCallId, idempotent });
 		toolTimings.set(event.toolCallId, { startedAt: Date.now(), toolName: event.toolName });
+		// **The durable half of the line above.** `toolTimings` records the start in memory, where it dies with the
+		// process and is invisible to every reading; this records it in the ledger, so a call that never returns leaves a
+		// `tool.started` with no `tool.observed` and the projection can say the call is outstanding instead of leaving a
+		// reader to infer a hang from a watchdog message. It is written **here, after the last blocking return**, so a
+		// refused call is never counted as an outstanding one - the progress guard above is the last place this handler
+		// can refuse, and counting refusals as hangs would be worse than the silence this replaces.
+		//
+		// **The command travels as a digest and a length, never raw.** `quality-guidelines.md` requires evidence to hold
+		// digests and bounded counters and never tool arguments; the join back to what ran is `event.toolCallId`, which
+		// the host's own session transcript holds. **The timeout decision is written for shell tools either way** -
+		// applied or not - which is what turns "a command outside the whitelist has no timeout" from something a reader
+		// infers from the regex into something the record states. For any other tool the question does not apply, so the
+		// field is absent rather than false.
+		const startingCommand = typeof (event.input as { command?: unknown }).command === "string"
+			? String((event.input as { command?: unknown }).command)
+			: typeof (event.input as { script?: unknown }).script === "string" ? String((event.input as { script?: unknown }).script) : "";
+		const shellTool = event.toolName === "bash" || event.toolName === "powershell";
+		try {
+			await ledger.appendToolStarted({
+				taskId: currentRequestTaskId ?? "pi-session",
+				stepId: `tool:${event.toolCallId}`,
+				mode: currentRequestPlan?.mode ?? mode.current,
+				tool: event.toolName,
+				...(shellTool ? { timeoutApplied: adaptiveTimeout.applied } : {}),
+				...(shellTool && adaptiveTimeout.timeoutSeconds !== undefined ? { timeoutSeconds: adaptiveTimeout.timeoutSeconds } : {}),
+				...(shellTool && adaptiveTimeout.reason !== undefined ? { timeoutReason: adaptiveTimeout.reason } : {}),
+				...(startingCommand === "" ? {} : { commandDigest: createHash("sha256").update(startingCommand).digest("hex").slice(0, 16), commandLength: startingCommand.length }),
+				requestId: currentRequestPlan?.requestId,
+				sessionId: (ctx.sessionManager as unknown as { getSessionId?: () => string } | undefined)?.getSessionId?.(),
+				attemptId: requestLifecycle.currentAttempt()?.attemptId,
+				toolCallId: event.toolCallId,
+			});
+		} catch {
+			// A ledger that cannot be written must not refuse the call it was describing: this record is a reading, and
+			// the gate above is the only thing here that decides whether anything runs.
+		}
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
