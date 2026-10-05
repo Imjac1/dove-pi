@@ -1,6 +1,6 @@
 # Frontend Development Guidelines
 
-> Best practices for frontend development in this project.
+> The specifications for the terminal UI and the Pi command and tool surface.
 
 ---
 

@@ -4,13 +4,13 @@
 
 The first release has no database or ORM. Compact project goals belong to `.dove/state.json`, while execution records are append-only user-level JSONL/artifacts. Legacy Trellis files are read-only compatibility input.
 
-## Query Patterns
+## How Project State Is Read
 
 - Read project state through the normalized `ProjectProvider` interface.
 - Use provider revisions, file hashes, and mtimes to invalidate stale projections.
 - Keep raw provider output outside model context; pass normalized records and source references.
 
-## Migrations
+## Versioning and Atomic Replacement
 
 Native state uses a versioned decoder and atomic temp-file rename. Unknown or malformed versions are preserved and reported; legacy project files are never migrated in place.
 

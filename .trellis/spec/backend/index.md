@@ -1,6 +1,6 @@
 # Backend Development Guidelines
 
-> Best practices for backend development in this project.
+> The specifications in this directory, and what each one owns.
 
 ---
 
