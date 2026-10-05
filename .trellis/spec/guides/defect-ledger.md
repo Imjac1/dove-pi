@@ -92,22 +92,6 @@ record that would let a reader conclude something false, which is the class this
 
 **Settled by**: one reconciled number per event, or a stated reason why two records may differ.
 
-## 8. The resume flag shares the session root, and the sentence says it continues the conversation
-
-**As measured**: on 2026-10-05, with `--reuse-session` and one `--session-dir` on both runs - which is the condition the repository's own
-case asserts (`tests/real-dove-blackbox.test.ts:543`, and that case holds only that the two runs share `sessionDir` and that the second
-request is not a redelivery of the first) - the second run had **no trace of the first**: asked what it had done, the model said it did not
-know, twice, and the session root held **two** session files rather than one continued conversation. Continuing the session with the host's
-own `--session <file>` answered the same question with the real function, the real test count and the real commit id, in 15 seconds.
-
-**Where the claim is**: `README.md:415` ("第二次运行会继续第一次的会话"), the fixture's own description in
-`tests/fixtures/scenarios/resume-across-runs.json` ("a user comes back to a session in a second run and continues it"), and the
-measurement itself in `.trellis/tasks/10-03-day-two-walk/readings.md` (third round).
-
-**Settled by**: either the sentence and the fixture's description narrowed to what the flag does - it shares the session root - or the flag
-made to pass the host's own continuation through. **Not isolated**: whether the cause is the host's RPC-mode session semantics or the
-arguments the script builds. The fact is measured; the cause is not, and this entry does not guess it.
-
 ## How to check this page
 
 - **One door walks it.** `tests/spec-anchors.test.ts` resolves every `path:line` on this page from the repository root and refuses a

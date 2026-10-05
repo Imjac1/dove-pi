@@ -1,7 +1,7 @@
 {
   "name": "resume-across-runs",
-  "description": "A user comes back to a session in a second run and continues it.",
-  "requires": "--reuse-session with the same --session-dir on both runs; the test drives both",
+  "description": "A second run opens in the same session root as the first. It shares the root; it does not carry the first conversation into the second - measured 2026-10-05: asked what it had done, the second run answered that it did not know. The host's own --continue / --session is what carries a conversation.",
+  "requires": "--reuse-session with the same --session-dir on both runs; the test drives both, and it holds the shared root rather than the conversation",
   "steps": [
     {
       "kind": "prompt",

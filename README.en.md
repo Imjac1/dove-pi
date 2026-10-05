@@ -475,7 +475,9 @@ A step may declare `dialogs`: the answers the host receives, consumed in order. 
 (`dialogs.defaulted`) - a refusal that was asked for and a refusal that was supplied must not read the same.
 `abortDuringTools: true` cancels the request while its tool is running, which is the only way to interrupt work in
 flight, because steps are sent sequentially. `--reuse-session` with the same `--session-dir` makes a second run
-continue the first instead of getting a session root of its own; without it every run stays isolated.
+share the first session **root** instead of getting one of its own; it does **not** carry the first conversation into
+the second - measured 2026-10-05, the second run answered that it did not know what the first had done, while the
+host's own `--continue` / `--session <file|id>` does carry it - without it every run stays isolated.
 `--dialog-case write` makes the deterministic provider request a write, so a work mode that gates one has something
 to gate.
 
