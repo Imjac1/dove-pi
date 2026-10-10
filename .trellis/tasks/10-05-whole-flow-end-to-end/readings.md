@@ -271,3 +271,144 @@ which dove-pi.cmd; ls -la /c/Users/Macfy/.agents 2>/dev/null; \
    **还没生效** ✗✓：本机那份**已安装**的 launcher 仍是旧的 ✓（只有 `.cmd`/`.ps1` ✓）—— 要 `dove-pi update` / 重装才会带上第三个 ✓。所以这一轮的场景**仍写 `dove-pi.cmd`** ✓（实测可用 ✓），并在 `requires` 里写明原委 ✓。
 2. **场景里"让 agent 建任务"那一步 —— 已删** ✓✓。第 3 片量到 **harness 自己会从消息里开正式任务** ✓，所以那一步既多余、**又正是把 agent 推向启动器、推向那个 44.5 分钟挂死的那一步** ✗✓。新版本只留"干活 → 判分 → 收敛 → 归档" ✓，并在第一步里**明说不需要自己建** ✓（好挡住那次探路 ✓）。**这一轮那次运行跑的是旧版本** ✓ —— 读数按旧版本记 ✓。
 3. **仍开着的** ✗✓✓：**没有边界的 shell 调用** ✓（第 2 片 ✓）—— **整个 45 分钟的上限被一次从 `/` 开始的 `find` 吃光** ✓。它已经有主 ✓（`10-05-tool-call-hangs-without-timeout` ✓），**而这一轮给了它第一个真实流程里的复现** ✓✓；**只要它还在，任何"整条流程"的运行都可能在任何一步被无限期挂住** ✓ —— 这与启动器那个口是**两件独立的事** ✓，**修了启动器也不等于这条被修** ✗✓。
+
+---
+
+# 读数（第五次：夹具重建、收尾序列实测、便宜判据先取）（2026-10-11 ✓）
+
+**这一轮先量前提，不先花预算** ✓✓ —— 而第一个前提就是断的 ✓。
+
+## 第 0 片：被判分项目不在这台机器上 ✗✓✓
+
+**实测** ✓✓：`$env:TEMP` ✓ · 用户目录 depth 5 ✓ · `C:\` depth 4 ✓ · `D:\` depth 6 ✓ —— **都没有 `tests/test_immutable.py`** ✗✓；
+**也没有任何绑定过的 `.dove/mode.json`** ✗（搜到的全是测试夹具的 ✓）；`D:\path` 只有 java17 / python3.11 / TDM-GCC / vcpkg / zig ✓。
+**而任务记录里没写它在哪、怎么造的** ✗✓ → **前三轮那条读数的"判分那一半"，到这一刻是不可复现的** ✗✓✓。
+按 owner 的决定 **重建，并把配方写进 `research/graded-project-recipe.md`** ✓✓。
+
+## 第 1 片：重建 —— 基线逐字复现 ✓✓✓
+
+| 项 | 实测（2026-10-11） | 记录（2026-10-05） |
+|---|---|---|
+| `cachecontrol/controller.py` | **20,090 B** ✓✓ | **20,090 B** ✓ —— 逐字节相同 |
+| 套件 | **`1 failed, 115 passed in 2.43s`** ✓✓ | `1 failed, 115 passed in 2.36s` ✓ |
+| 红的那条 | `tests/test_immutable.py::TestImmutable::test_immutable_is_not_revalidated_while_fresh` ✓✓ | 同名 ✓ |
+| 失败原文 | `assert False is True` · `where False = <Response [200]>.from_cache` ✓✓ | 逐字相同 ✓ |
+| `.dove/mode.json` | **55 B · 无 BOM · LF** ✓✓ | 55 B · 无 BOM ✓ |
+| 上游提交 | `2627d9b`（HEAD）✓ | 未记 ✗ |
+| `tests/conftest.py` | 5,971 B ✗ | 5,876 B ✗ —— 差 95 B（路由 + 2 行注释） |
+
+**而 `tests/test_immutable.py` 上游并不存在** ✗✓✓：`git show HEAD:tests/test_immutable.py` 失败 ✓，`controller.py` 里 `immutable` 出现 **0 次** ✓。
+→ **夹具 = 上游这一版 + 一颗加装的测试** ✓✓；`conftest.py` 那个 281 B 差额也来自它要用的路由 ✓。
+**必须写明**：**我写的那颗测试是重建、不是原始字节** ✗✓ —— 判据**同形**（同名、同断言、同失败原文 ✓），**字节不是** ✗。
+
+## 第 2 片：收尾序列在它自己的 shell 里实测 ✗✓✓✓（**本轮的实质发现** ✓）
+
+**harness 选的 shell 实测是 git-bash** ✓（`shell status` 给 `C:\Program Files\Git\bin\bash.exe` ✓）——
+**所以在同一把 shell 里跑** ✓。副本上按场景第 2 步的顺序 ✓：
+
+| 命令 | 读数 |
+|---|---|
+| `python -m pytest -q` | `1 failed, 115 passed` ✓ —— **同一台机器的原生 python 3.11.5** ✓；裸 `pytest` 不给这个保证 ✓（`python -m pytest` 才把 CWD 放 `sys.path` 最前 ✓） |
+| `dove-pi.cmd task create / verify / convergence status / finish` | **全部 exit 0** ✓✓ |
+| **`dove-pi.cmd task archive`（无选择器）** | **`{"ok":false,"error":{"code":"CLI_ERROR","message":"No current task."}}`** ✗✓✓ |
+| `dove-pi.cmd task archive <stableId>`（finish 之后、已无 current） | **exit 0** ✓✓，goal `completed` → `archived` ✓ |
+
+**为什么** ✓✓：`finish` 把**唯一的** goal 置为 `completed` 并**清掉 `currentGoalId`** ✓（`state.json` 实测已无该字段 ✓）
+→ 无选择器的 `archive` **没有对象** ✓。**这是场景的缺陷，不是产品的** ✓（CLI 契约本就是 `task archive <task>` ✓）。
+**它伤在哪** ✓✓✓：这堵墙**正好立在流程的最后一步** ✓，而 AC 要的恰恰是"归档到达" ✓ ——
+**上一轮若走到那里，45 分钟会花在收尾的最后一条命令上** ✓✓。
+
+**顺带量到两条** ✓：
+- **`task archive` 的输出形状是 `{operation, projectRoot}`，不含 `task`** ✗✓ —— **它不报告结果状态**（`state.json` 才报 ✓）；
+- **`task verify` 在 intake 阶段给 `ready:false`** ✓（无证据 ✓，符合预期 ✓）。
+
+**改法** ✓✓：场景第 2 步改为**点名的归档** ✓，并把**实测原因写进 prompt** ✓
+（`dove-pi.cmd task archive <the stableId the earlier JSON printed>` + "finishing this project's only goal clears the
+current-task pointer, and an archive that names nothing then answers `No current task.`" ✓）。
+
+**量具本身也修了一次** ✗✓：第一版把中间产物写进 `/tmp` ✓ —— **而 bash 的 `/tmp` 与原生 Windows python 的 `C:\tmp` 不是同一个地方** ✗✓，
+于是 `$id` 为空、量到的是"空选择器"而不是 archive ✓。**改成项目内相对路径 + 先打原始输出再解析** ✓，第 2 片的两条读数才成立 ✓。
+
+## 第 3 片：便宜判据先取 ✓✓✓（round 3 的教训 ✓）
+
+`status-line-only` ✓ · 真 provider 载体 ✓ · `--cwd` = 重建后的克隆 ✓ · 输出在仓外 ✓：
+
+```text
+exitCode=0  settled=true  harnessTimedOut=false  events=18  duration=13128ms
+carriedConfig=[settings.json, models.json, auth.json, npm/]
+Dove Pi: workspace=development, workMode=code-development, hashlineEditTools=present, lens=on-next-session,
+         mode=◆ Standard, thinking=high (auto:standard), tools=auto, hashline=active, operation=idle, progress=idle.
+[Dove mode] code-development loaded from modes<path> (none, no authority document: this mode declares no conformance):
+            1 denied action(s) are refused, and 0 action(s) run only after you confirm them.
+```
+
+→ `workMode=code-development` ✓✓ · `hashlineEditTools=present` ✓✓ · **模式真的在生效**（1 条 deny ✓）✓
+→ **重建后的绑定被读到了** ✓ → P4 的前提成立 ✓。顺带：`artifactEvidence.doveState=false` ✓ —— `/status` 不建状态 ✓。
+
+## 第 4 片：P4（45 分钟真跑）—— **第四次是新的死因** ✗✓✓
+
+**这一次跑的是"改过第 2 步、未改第 0 步"的场景** ✓（第 0 步的措辞于运行开始后才改，见第 5 片 ✓）。
+
+```text
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-11
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]
+exitCode=0  settled=false  harnessTimedOut=false  scenarioFailed=true  events=10429  duration=1669890ms (27.8 min；上限给的是 45.0 min)
+terminal: reason=failed  detail=attempt-limit  code=provider-attempt-limit (origin=provider, retryable=true)
+         nextAction="Check provider availability, then submit the request again."
+resources(账本事件流): toolCalls=48  providerRounds=44  toolDurationMs=28296
+tokens: input=2032686  cacheRead=0  cacheWrite=0  output=17779  reasoning=14619
+stopReasons: 41×tool_call + 3×error
+tools the model actually called: bash, read, insert, replace, lens_diagnostics   ← hashline 那一族在场且被用了 ✓
+steps: 0 failed/未 settle（10424 事件）→ 1、2、3 **一次都没发**（各 0 事件）✗
+terminalConsistency=completed-ledger-only  closeWaitMs=282
+dialogs: approved=0 declined=0 answered=0 cancelled=0 defaulted=0 mismatch=0 unused=0
+```
+
+**它不是被预算切断的** ✗✓✓：45 分钟的上限给足 ✓，而它在 **27.8 分钟**自己结束 ✓ —— 死因是
+**provider 连续瞬时失败把 Dove 的瞬时重试预算用尽** ✓（`stopReasons` 里有 **3 条 `error`** ✓）。
+**而这件事本身是 D4 的正面读数** ✓✓：终态不是通用的 *Operation aborted* ✓，而是
+`provider-attempt-limit` + `retryable=true` + 一条 nextAction ✓ —— **上一次同类终止曾被报成 `provider-unknown` 并让人去查一条账本里不存在的 provider error**（round 3 已修 ✓），**这一次报对了** ✓。
+
+**流程仍没走完** ✗✓✓：step 0 未 settle → **runner 按序发送，步骤 1–3 从未发出** ✗ → 收敛、归档、判分那一步**都没到达** ✗。
+**四轮，四个互不相同的死因** ✓✓：25 min 预算到点 ✗ · 9.5 min provider 终止 ✗ · 22 s 后无限挂死 ✗ · **27.8 min 瞬时重试预算用尽** ✗。
+
+## 第 5 片：**"流程里有没有正式任务"取决于 prompt 落在哪个 lane** ✗✓✓✓（**本轮第二个实质发现** ✓）
+
+**活体读数** ✓：这次请求的 `request.planned` 写的是 **`lane: "fast"`** ✗ → **`formalTaskCount=0`** ✗ —— **harness 没有开正式任务** ✓。
+**而收敛与归档都以"存在正式任务"为前提** ✓✓ → **这一步的结局在请求被规划的那一刻就已经定了** ✗✓✓。
+
+**根因量到了行** ✓✓：`src/core/request-plan.ts:178` 的守卫 ——
+**`EXPLANATORY_QUERY_PATTERN`（`:77`，无词边界的子串匹配）命中 `what`，而逃逸名单里一个词都没有** →
+早退 `return false` → `isFormalTaskRequest=false` → `fast`。
+而命中的那个 `what` 来自我（上一轮）写的这句：`change only what the behaviour needs` ✗✓。
+
+**这是自己造成的** ✓✓✓：round 4 为了躲开那次挂死，把"让 agent 建任务"那一步**删掉**了 ✓ ——
+**而恰恰是那一步的措辞（`create a task`）把请求送进 formal** ✓（`:173`：`workflowAction === "create-task"` 直接 `return true` ✓）。
+**一个修复抵消了另一个修复的效果** ✗✓ —— 上一轮的读数早就写下过这句：*"「流程里有没有正式任务」取决于 prompt 落在哪个 lane"* ✓。
+
+**判据可确定性复现** ✓✓（用仓里真实的判定函数，不靠推断 ✓）：拿场景原文调 `createRequestPlan` →
+`lane=fast  intent=execution  formalTaskRequest=false` ✓（与运行里的 `request.planned` 逐字一致 ✓）。
+**改法并复核** ✓✓：第 0 步改写成"请求本来就该是 formal 的那种"（带 `implement` ✓、`acceptance criteria` ✓、去掉 `what` ✓）→
+同一个函数给出 **`lane=formal`** ✓✓；而第 1 步（收尾那一步）**仍是 `fast`** ✓✓ —— 正是想要的：
+**收尾作用于已存在的那个任务，而不是再造一个** ✓。
+
+## 第 6 片：判分那一半 —— **红了五天的仪器被修绿，且仪器未被触碰** ✓✓✓
+
+**跑运行自己的副本** ✓（runner 拷出来那份，不是原件 ✓）：
+
+| 项 | 读数 |
+|---|---|
+| 运行副本里项目自己的套件 | **`118 passed in 2.21s`** ✓✓（基线 **116**：115 绿 + 1 红 ✓） |
+| `cachecontrol/controller.py` | **20,090 → 20,844 B** ✓（修复本体 ✓） |
+| `tests/test_cache_control.py` | **14,784 → 16,065 B** ✓（它自己补了 ~2 条 ✓ → 116 → 118 ✓） |
+| **`tests/test_immutable.py`** | **1,305 B，字节未变** ✓✓✓ |
+| **`tests/conftest.py`** | **5,971 B，字节未变** ✓✓✓ |
+| 新增文件 | **只有缓存目录**（`.mypy_cache` / `.ruff_cache`）✓，无新源码 ✓ |
+
+→ **判分仪器没有被改** ✓✓（round 2 那个 agent **动过 conftest** ✗ → 那一次"改测试"与"改代码"在读数上分不开 ✓；
+这一次分开了 ✓✓）。**而"通过"这件事仍然只是 118 条里的 118 条** ✗ —— 一条仪器只决定一个行为 ✓（配方第 4 节 ✓）。
+
+**这一轮证明了什么、没证明什么** ✓✓：
+- **证明了**：夹具可复现 ✓（基线逐字回来 ✓）· 收尾序列在 git-bash 里可用 ✓ · 便宜判据（mode 生效 + 工具面在场）绿 ✓ ·
+  活真的做了且判分仪器保持干净 ✓ · 请求被判成哪个 lane **决定了**整条流程能不能收尾 ✓✓；
+- **没证明**：**"一条运行里走完整个流程"** ✗✓ —— 仍未达成 ✓，而**原因换了第四次** ✓。
