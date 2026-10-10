@@ -412,3 +412,88 @@ dialogs: approved=0 declined=0 answered=0 cancelled=0 defaulted=0 mismatch=0 unu
 - **证明了**：夹具可复现 ✓（基线逐字回来 ✓）· 收尾序列在 git-bash 里可用 ✓ · 便宜判据（mode 生效 + 工具面在场）绿 ✓ ·
   活真的做了且判分仪器保持干净 ✓ · 请求被判成哪个 lane **决定了**整条流程能不能收尾 ✓✓；
 - **没证明**：**"一条运行里走完整个流程"** ✗✓ —— 仍未达成 ✓，而**原因换了第四次** ✓。
+
+---
+
+# 读数（第六次：lane 修好之后重跑 —— **三道门都真的动了，而 AC 仍未达成，原因第五次不同**）（2026-10-11 ✓）
+
+**这一轮跑的是修好的场景** ✓（step 0 改写为落 formal ✓、step 1 点名归档 ✓），原件先量过仍是 `1 failed, 115 passed` ✓。
+
+## 第 0 片：lane 修复**在真实运行里成立** ✓✓✓
+
+`request.planned` → **`lane: "formal"`** ✓✓（上一轮是 `fast` ✗），且项目 `.dove/` 里 04:53:25 就出现了
+`state.json` + `tasks/goal-25b1762c…/` ✓ → **正式任务被开出来了** ✓✓：
+`artifactEvidence {doveState:true, doveFileCount:6, formalTaskCount:1, formalArtifactCount:5}` ✓
+（上一轮 `formalTaskCount=0` ✗）。**题目的标题就是那条消息的全文** ✓（与 round 4 量到的同形 ✓）。
+
+## 第 1 片：**引擎里两道门真的动了** ✓✓✓（本轮最实的读数 ✓）
+
+**① 收敛门拦住了一次产品变更，并让请求中止** ✓✓：
+
+```
+task.convergence.decision  {eventKind:"product_mutation.blocked", state:"missing", snapshotRevision:0, acceptanceRevision:"unknown"}
+request.terminal           {reason:"failed", detail:"convergence-missing", policyAbort:true,
+                            terminal:{origin:"convergence", code:"convergence-missing", retryable:false,
+                            nextAction:"Resume the active acceptance criterion before mutating product files."}}
+```
+
+→ **"先把验收标准冻结，再改产品文件"这条规则在真跑里被执行了** ✓✓，**且拒绝带 nextAction** ✓（D2/D4 的承诺 ✓）。
+**而这也正是 step 0 的死因** ✗✓✓：**不是 provider，是本仓自己的门** ✓。
+
+**② 沙箱门拦了一次网络取数** ✓：
+
+```
+gate.refused {tool:"fetch_content", action:"fetch_content", gate:"sandbox",
+              reason:"[sandbox] Mode 'code-development' declares 'san…"}
+```
+
+→ **mode 的声明在工具边界上真的生效**（不只是状态行里好看 ✓）。
+
+## 第 2 片：**落进 formal 反而挡住了"干活"** ✗✓✓（本轮最该记的一条 ✓）
+
+**两轮对照，同一个场景、同一份夹具** ✓：
+
+| | 上一轮（`fast`） | 这一轮（`formal`） |
+|---|---|---|
+| 门 | **没有门**（fast 不建任务 ⇒ 无收敛门 ✓） | **有门，且拦了** ✓ |
+| 干活 | **把红的那条修绿了** ✓✓（`118 passed` ✓） | **没修好，还弄坏一条** ✗（`2 failed, 114 passed` ✗） |
+| 收尾 | 到不了（无任务）✗ | 到不了（**请求被自己的门中止**）✗ |
+
+→ **"干活"与"冻结验收"在场景里的顺序是错的** ✗✓✓：门要求**先冻结验收标准再改产品文件** ✓，
+**而场景的第 0 步从来没说要先冻结** ✗ —— 于是 agent 一头撞在门上，请求 `convergence-missing` 中止 ✓。
+**这是场景的缺陷，不是门的缺陷** ✓（门按声明做了它该做的 ✓）；**而修法是把顺序写进 prompt** ✓：
+冻结 → 干活 → 判分 → 收敛 → finish → 归档 ✓。
+
+## 第 3 片：**provider 又用同一种方式杀掉了收尾** ✗✓
+
+step 1（收尾那步，`lane=fast` ✓ `workflowAction=archive-task` ✓）跑了 **10 次工具调用 / 9.7 min** ✓ 后：
+
+```
+request.terminal {reason:"failed", detail:"attempt-limit", terminal:{origin:"provider", code:"provider-attempt-limit", retryable:true}}
+stopReasons: 11×tool_call + 3×error
+```
+
+→ **两次真跑，两次死在同一个 provider 瞬时配额上** ✗✓（45 分钟的预算两次都没用上 ✓：一次 27.8 min ✓、一次更早 ✓）。
+**这是 provider 侧的读数，不是 Dove 的** ✓，而 Dove **如实报出了它** ✓✓。
+
+## 第 4 片：终态与判分那一半 ✓✗
+
+| 项 | 读数 |
+|---|---|
+| 任务终态 | **`status: active`, `phase: intake`** ✗ → **finish / archive 都没到** ✗ |
+| 收敛记录 | **`convergence.json` 不存在** ✗（decision 里也写着 `state:"missing"` ✓）—— 说明 `freeze` **从未被执行** ✗ |
+| 运行副本里项目自己的套件 | **`2 failed, 114 passed`** ✗ —— 目标仍红 ✗，**且 `tests/test_redirects.py::TestPermanentRedirects::test_bust_cache_on_redirect` 被弄坏** ✗ |
+| 判分仪器 | 未被触碰 ✓（与上一轮同 ✓） |
+
+**"努力是真的、结果是错的"第二次出现** ✓（round 2 是它的第一次 ✓）—— 而这一次**能看出为什么** ✓：
+**它没被允许（也没有被告知要先）冻结验收标准**，于是在门口撞停；收尾那一步再由 provider 收场 ✓。
+
+## 第 5 片：两轮合起来，五个阻断各自的处置 ✓✗
+
+| # | 阻断 | 状态 |
+|---|---|---|
+| 1 | 夹具不在这台机器上（不可复现） | **已修** ✓（重建 + 配方 ✓） |
+| 2 | 收尾 `task archive` 无选择器 | **已修** ✓（场景点名 ✓） |
+| 3 | 请求落 `fast` ⇒ 无正式任务 | **已修并复核** ✓（改写 + 定性复现 + 真跑验证 ✓） |
+| 4 | **prompt 没说要先冻结验收标准** | **待修** ✗（下一件要做的事 ✓） |
+| 5 | provider 瞬时配额两次杀场 | **不是本仓的** ✗（读数如实 ✓；换一个稳的 provider 或等它稳 ✓） |
