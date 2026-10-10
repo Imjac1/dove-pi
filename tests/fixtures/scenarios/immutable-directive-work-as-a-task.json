@@ -5,7 +5,7 @@
   "steps": [
     {
       "kind": "prompt",
-      "message": "This project is bound to Dove, and work like this is tracked under a formal task rather than done loose - Dove opens that task from this message, so there is no task for you to create. Do the work: this project's test suite has one failing test, tests/test_immutable.py, and it names the acceptance criteria for this task. Implement the `immutable` cache directive from RFC 8246, so that a response which is still fresh and marked immutable is not revalidated even when the client asks for a fresh copy. Work the rest out from the code and from the test, and change only the behaviour the test names."
+      "message": "This project is bound to Dove, and work like this is tracked under a formal task rather than done loose - Dove opens that task from this message, so there is no task for you to create. Freeze this task's acceptance criteria first, using the task's own convergence tool: a product file mutation that no active criterion stands behind is refused, and the harness refuses it at the tool boundary, so a change attempted before the freeze never runs. Then do the work: this project's test suite has one failing test, tests/test_immutable.py, and it names the acceptance criteria for this task. Implement the `immutable` cache directive from RFC 8246, so that a response which is still fresh and marked immutable is not revalidated even when the client asks for a fresh copy. Work the rest out from the code and from the test, and change only the behaviour the test names."
     },
     {
       "kind": "prompt",
