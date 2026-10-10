@@ -50,6 +50,13 @@ interface NativeGoal {
   names include a UUID and failed writes clean up only their own temporary file.
 - State keeps at most 100 goals and each free-text field/list is bounded. IDs
   are validated before normalization so truncation cannot create collisions.
+- At the bound, a creation retires the oldest **archived** goal, whose task
+  directory stays where it is; when nothing is archived the creation is refused
+  with the bound and the way out. No goal is dropped, and a write that would
+  exceed the bound fails rather than trimming the list.
+- Automatic goal establishment is idempotent under concurrency: the current goal
+  is re-read inside the project mutation lock, so two callers arriving together
+  resolve one goal instead of creating one each.
 - `currentGoalId` must resolve to exactly one active goal. Dangling, duplicate,
   overlong, or terminal-current identities make the state malformed instead of
   being silently repaired.
@@ -67,6 +74,12 @@ interface NativeGoal {
   background continuity, not a prerequisite or confirmation flow.
 - Formal tasks also own `.dove/tasks/<id>/task.json`, `prd.md`, `design.md`,
   `implement.md`, `acceptance.md`, and optional append-only `evidence.jsonl`.
+- A goal's convergence projection is written beside the goal in `state.json` as
+  well as to `convergence.json`, and the projection a reader sees travels with
+  the goal. The **current** goal's own file is still read on every projection, so
+  a corrupt or absent record is reported rather than smoothed over; reading every
+  goal's file rebuilt a few hundred bytes per goal from tens of kilobytes, on the
+  path that compiles a request's context.
 - A legacy import sets `source="legacy-trellis"` and `sourceRef` to the
   provider-qualified task identity, then copies matching public formal files
   only when the native artifact is absent. The source files remain unchanged.
@@ -86,11 +99,15 @@ The local launcher exposes the same provider boundary through explicit
 commands: `dove-pi task list|current|status|continue|verify|create|start|finish|archive`.
 Task commands emit JSON, resolve provider-qualified identities, and delegate
 all mutations to `ProjectProvider.runTaskOperation`; they do not execute
-`.trellis/scripts/task.py`. `task verify` is a structural artifact check only
-and must not claim that tests or acceptance passed.
+`.trellis/scripts/task.py`. `task verify` checks artifact structure, planning
+fields, whether a ticked criterion is named in the evidence, and whether the
+convergence copy stored with the goal is behind the record on disk; it must not
+claim that tests or acceptance passed.
 
-`dove-pi session record` writes a bounded append-only `.dove/sessions.jsonl`
-record and `session list` reads it back. Native session records are also
+`dove-pi session record` writes a bounded `.dove/sessions.jsonl` record,
+retaining the newest entries and written through a temporary file and a rename
+like every other record this provider keeps; `session list` reads it back.
+Native session records are also
 available through `ProjectProvider.readMemory()` as journal documents. The
 record is an optional developer journal, not a request-time workflow gate.
 
@@ -130,10 +147,16 @@ archaeology, private runtime probing, or workflow-skill recommendations.
 
 `recordTaskProgress(taskId, progress)` is the only request-level formal
 progress writer. When `progress.evidence` exists, it appends one bounded JSONL
-record, retaining at most the newest 100 records and 32,000 characters, then
-rewrites only the generated `## Dove Evidence Projection` section of native
-`acceptance.md`; user-authored criteria remain intact. The projection uses
-`observed outcome` wording and never marks a criterion passed without an
+record: the newest records up to a count and a character bound, **plus one record
+per acceptance id the newest window would otherwise drop**, so a ticked criterion
+is not read as unbacked because its evidence aged out. It then
+rewrites only the generated section of native `acceptance.md`: the region
+between the section's own markers, migrated once from the trailing
+heading-plus-timestamp shape written before them. **That rewrite carries no
+length bound of its own** - the artifact ceiling belongs where a document is
+generated from a template, and a document a person maintains keeps its own
+length and its own text, whatever prose it happens to contain. The projection
+uses `observed outcome` wording and never marks a criterion passed without an
 observed result.
 
 | Input | Required result |
@@ -195,7 +218,20 @@ component or instruct the user to initialize it.
 - CLI task lifecycle and continuation commands round-trip through the public
   launcher without requiring a Trellis runtime.
 - Session records round-trip through the CLI and native memory reader.
-- Automatic goal establishment is idempotent.
+- Automatic goal establishment is idempotent, including when two callers arrive
+  at once.
+- The project mutation lock re-enters within one call stack and stays exclusive
+  between concurrent ones, and an action's own `EEXIST` reaches its caller
+  instead of being read as contention.
+- The goal bound retires an archived goal, or refuses with the reason, and never
+  drops a live one in silence.
+- A user's `acceptance.md` keeps its own length and its own text.
+- A non-current goal's convergence is projected from the record beside it, and
+  the current goal still reports a corrupt one.
+- An acceptance id whose evidence aged out of the newest window is still named,
+  and every surviving evidence line is whole.
+- A convergence copy behind the record it was taken from is reported as stale,
+  and agreement is reported as nothing.
 - Malformed native state is never overwritten.
 - A legacy fixture containing an executable `task.py` never creates its marker
   and remains unchanged after reads/import.

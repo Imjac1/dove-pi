@@ -54,3 +54,24 @@ export function findUnsupportedCriteria(markdown: string, evidence: string): rea
 		.filter((criterion) => criterion.ticked && !mentioned.has(criterion.id))
 		.map((criterion) => ({ id: criterion.id }));
 }
+
+/**
+ * Whether the projection a goal carries is behind the record it was copied from.
+ *
+ * **What this is for.** A convergence write stores the authoritative `convergence.json` first and the copy `state.json`
+ * carries second, and the same shape holds for progress. An interrupted write therefore leaves the copy behind - and
+ * measured, that heals itself: the next snapshot is reduced from the **file**, so its revision is the file's plus one,
+ * and the copy stored with it is current again.
+ *
+ * What does not heal on its own is the reading taken in between. An ordinary task is projected from the copy beside it
+ * rather than from its file, so for that window a stale snapshot is reported as if it were current, and nothing says so.
+ * That report is the defect this function exists to make visible, and it is the only one left in the sequence:
+ * the write order is already record-first, and the replay back to agreement is already the next write.
+ *
+ * A missing revision on either side is **not** behind: a task with no convergence record has no projection to be
+ * behind, and this answers one question rather than guessing at another.
+ */
+export function projectionIsBehind(projectionRevision: number | undefined, recordRevision: number | undefined): boolean {
+	if (projectionRevision === undefined || recordRevision === undefined) return false;
+	return projectionRevision < recordRevision;
+}

@@ -29,6 +29,11 @@ const commandCapability = (definition: Omit<CapabilityDefinition, "execute"> & {
 	idempotent: definition.idempotent,
 	status: definition.status,
 	hintCommands: [definition.command],
+	// Carried through rather than dropped by this factory, and declared rather than left to the attempt:
+	// `dove-pi capability list` prints preconditions, so a reader meets a dependency before running the command
+	// instead of inferring it from a failure. Nothing enforces them - the same stance `windows.host_info` takes with
+	// its PowerShell precondition - which is why each one names what the command needs, not what this runtime checked.
+	...(definition.preconditions ? { preconditions: definition.preconditions } : {}),
 	async execute(_args, context): Promise<DevelopmentCommandResult> {
 		const result = await runPowerShell(definition.command, { cwd: context.cwd, signal: context.signal, timeoutMs: definition.timeoutMs });
 		// The verdict goes through the ladder rather than being read off the exit status alone: the status and the
@@ -66,6 +71,7 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "git status --short --branch",
 		timeoutMs: 15_000,
+		preconditions: [{ id: "git", description: "A git executable is on PATH, and the directory is inside a working tree.", required: true }],
 	}),
 	commandCapability({
 		name: "dev.node_version",
@@ -77,6 +83,7 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "node --version",
 		timeoutMs: 15_000,
+		preconditions: [{ id: "node", description: "A Node.js runtime is on PATH.", required: true }],
 	}),
 	commandCapability({
 		name: "dev.python_version",
@@ -88,6 +95,7 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "python --version",
 		timeoutMs: 15_000,
+		preconditions: [{ id: "python", description: "A Python runtime is on PATH under the name this command uses.", required: true }],
 	}),
 	commandCapability({
 		name: "dev.project_test",
@@ -99,6 +107,10 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "npm test",
 		timeoutMs: 10 * 60 * 1_000,
+		preconditions: [
+			{ id: "package_json", description: "The project declares a test script in package.json.", required: true },
+			{ id: "npm", description: "npm is on PATH.", required: true },
+		],
 	}),
 	commandCapability({
 		name: "dev.npm_install",
@@ -110,6 +122,10 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "npm install",
 		timeoutMs: 10 * 60 * 1_000,
+		preconditions: [
+			{ id: "package_json", description: "The project has a package.json to install from.", required: true },
+			{ id: "npm", description: "npm is on PATH.", required: true },
+		],
 	}),
 	commandCapability({
 		name: "dev.npm_build",
@@ -121,6 +137,10 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "npm run build",
 		timeoutMs: 10 * 60 * 1_000,
+		preconditions: [
+			{ id: "package_json", description: "The project declares a build script in package.json.", required: true },
+			{ id: "npm", description: "npm is on PATH.", required: true },
+		],
 	}),
 	commandCapability({
 		name: "dev.typecheck",
@@ -132,6 +152,10 @@ export const developmentCapabilities: readonly CapabilityDefinition[] = [
 		status: "stable",
 		command: "npm run typecheck",
 		timeoutMs: 10 * 60 * 1_000,
+		preconditions: [
+			{ id: "package_json", description: "The project declares a typecheck script in package.json.", required: true },
+			{ id: "npm", description: "npm is on PATH.", required: true },
+		],
 	}),
 ];
 

@@ -34,6 +34,28 @@ gate:
       tools: [order.submit]
   # No `approval`: nothing read it (see the note in pentest).
 
+# Which effects a retry may repeat. An undeclared tool is non-idempotent, so this map grants rather than denies:
+# everything below only reads, so a second run leaves the state the first one left.
+#
+# **This block was absent, and that was measured rather than suspected** (see the longer note in
+# `modes/pentest/governance.yaml`): with no `effects.classes`, every tool here - including `read` and the four
+# read-only Dove project tools - fell to the non-idempotent default, so a retry of a read was refused.
+#
+# `market.read` and `order.submit` are not listed. `order.submit` writes the venue: a second submission is not the
+# state one submission produced, and the venue-side de-duplication is a separate control in MODE.md rather than an
+# idempotency this mode may claim. `market.read` reads, but it is this mode's own action name and does not resolve
+# against the capability registry, so a class for it would be a grant nothing consults.
+effects:
+  classes:
+    read: idempotent
+    grep: idempotent
+    find: idempotent
+    ls: idempotent
+    agent_project_status: idempotent
+    agent_project_context: idempotent
+    agent_list_capabilities: idempotent
+    agent_doctor: idempotent
+
 sandbox:
   # Only what this runtime can honour. Paper trading needs the market feed, so the network stays
   # unrestricted; the containment that matters is that nothing here touches a production venue, which is

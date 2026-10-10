@@ -124,10 +124,24 @@ export interface ProjectProvider {
 	ensureFormalTask?(title: string, description?: string): Promise<ProjectTask>;
 	recordTaskProgress?(taskId: string, progress: ProjectTaskProgress): Promise<void>;
 	readTaskConvergence?(taskId: string): ProjectTaskConvergenceRead;
+	/**
+	 * The convergence projection **stored beside the goal**, which is what an ordinary task is read from.
+	 *
+	 * This is not `ProjectTask.convergence`: for the **current** goal that field is read from the goal's own record
+	 * rather than from this copy, so a caller asking "is the copy current" needs the copy and would otherwise be answered
+	 * about the record. The two are the same value whenever no write has been interrupted, which is the point.
+	 */
+	readConvergenceProjection?(taskId: string): NativeGoalConvergenceProjection | undefined;
 	mutateTaskConvergence?(taskId: string, operation: ProjectTaskConvergenceOperation): Promise<TaskConvergenceSnapshot>;
 	runTaskOperation(operation: ProjectTaskOperation, args: readonly string[]): Promise<string>;
-	/** Read-only reconciliation of an interrupted mutation intent. */
-	reconcileTaskOperation?(operation: ProjectTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds?: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;
+	/**
+	 * Read-only reconciliation of an interrupted mutation intent.
+	 *
+	 * `beforeTaskIds` is required rather than optional: the reconciler's answer rests on the baseline it is given, and an
+	 * optional field makes "the caller supplied no baseline" and "the caller supplied an empty one" the same value. That
+	 * is how a caller with no baseline was answered `observed` for work it had not measured.
+	 */
+	reconcileTaskOperation?(operation: ProjectTaskOperation, args: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[], targetTaskId?: string, beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown">;
 }
 
 /** Resolve a selector only when it identifies one task. */

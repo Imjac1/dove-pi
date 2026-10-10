@@ -8,6 +8,13 @@ kept verbatim from the task that recorded it, with its anchors and the path to i
 and it survives here - on a page the citation door walks, so a `file:line` in an entry that stops resolving is reported rather than
 remembered. Taking one up means opening a task and **removing the entry from this page**, so a settled defect cannot be left looking open.
 
+**Two entries left this page on 2026-10-05**, when a batch took them up. The first asked for a precondition to be declared where the agent meets
+it rather than at the failure: `agent_task_convergence` refuses without a native formal task and that refusal was the first place the
+requirement was stated, and `agent_project_task` creates a goal whose `acceptance.md` is a placeholder the agent had to discover by reading -
+both now say so in their own guidelines, and the shipped `dev.*` and `code-audit.seed` capabilities carry `preconditions`, which
+`dove-pi capability list` prints (measured, not assumed). The second: `modes/pentest` and `modes/trading` now carry an `effects.classes`
+block. Neither defect remains, so neither entry can stay here looking open.
+
 **Marks**: the same three the other pages use - `[demonstrated]` (the entry carries a measurement or a reading),
 `[not yet demonstrated]` (a reading exists showing it has not been shown), `[unverified]` (no instrument). Every entry here is
 `[demonstrated]` at the moment it was measured; **whether it is still true was not re-measured**, and that is what a reader has to check first.
@@ -33,19 +40,7 @@ door to see them.
 the citation door now resolves every `path:line` from the repository root and counts a bare filename as a citation - which is stricter than
 the entry assumed, and which was walked on 2026-10-05 when a page of this repository was corrected by it.
 
-## 3. Capability preconditions and follow-ups, discoverable only by attempting
-
-**As measured**: measured three times in real runs. A mode that cannot pre-flight stops every tool until the engagement is fixed.
-`agent_task_convergence` refuses unless a native formal task exists, and the refusal is the first place that is stated. `agent_project_task`
-creates a task whose `acceptance.md` is a placeholder, which the agent had to discover by reading the file. `windows.host_info` already
-declares preconditions in the registry, so the field exists and the native project capabilities do not use it; the fix is to declare them
-where the agent reads before it attempts.
-
-**Provenance**: `.trellis/tasks/archive/2026-10/10-03-capability-preconditions/prd.md`
-
-**Settled by**: the preconditions declared on the native project capabilities, where a reader meets them before the attempt.
-
-## 4. A host engine crash nobody can explain
+## 3. A host engine crash nobody can explain
 
 **As measured**: measured during the real-project walk: the first non-interactive turn under a declared mode exited 1 with
 `EngineCore encountered an issue, See stack trace above`, and the stack was not captured. Two further runs with a narrower prompt did not
@@ -56,7 +51,7 @@ reproduce it. Root cause unlocated - recorded rather than explained, which is th
 **Settled by**: a reproduction, or a capture that survives the crash. Until then this entry is a **record, not a task**: there is nothing to
 fix that anyone can point at.
 
-## 5. Action names a mode declares that nothing can produce
+## 4. Action names a mode declares that nothing can produce
 
 **As measured**: measured: `code-development`'s `source.read`/`source.write` and `code-audit`'s `repo.read`/`report.write` appear only in
 their own files, are not in the capability registry and are not host tools, so they grant nothing; a capability call using them is refused by
@@ -68,20 +63,13 @@ whether a mode's own action names should be declared somewhere the loader resolv
 **Settled by**: an answer to the question the entry ends on - declared where the loader resolves them, or struck from the mode files. **Kept
 reading**: on 2026-10-05 the four names were still absent from what `dove-pi capability list` prints, while the mode files had begun
 describing them as the mode's own action names with effect classes; whether that is the answer or a spelling of the question is the decision.
+**Measured again on 2026-10-05, and two shipped modes now disagree with each other**: the `effects.classes` blocks added to `modes/pentest` and
+`modes/trading` deliberately **omit** those modes' own unresolvable names (`net.scan`, `exploit.run`, `market.read`), each saying a class
+declared for a name nothing reads would be a grant that is never consulted - while `modes/code-development/governance.yaml` still lists
+`source.read` and `source.write`, the two names this entry measured as granting nothing. One file family, opposite rules: the decision this
+entry waits for is now also what makes the shipped modes consistent with each other.
 
-## 6. Two shipped modes declare no effect classes, so every tool in them is non-idempotent
-
-**As measured**: measured while planning the twelve-session fixes: `pentest` and `trading` have no `effects.classes` at all, so under them
-every tool - including read-only ones - is the non-idempotent default, and a retry of any of them is refused. `code-development` had the same
-omission for its four read-only project tools and was fixed there; this belongs in its own task because the scope is every tool in two modes
-rather than four names in one.
-
-**Provenance**: `.trellis/tasks/archive/2026-10/10-04-empty-effect-classes-pentest-trading/prd.md`
-
-**Settled by**: an `effects.classes` block in both modes' governance documents. **Re-measured 2026-10-05**: still absent from both - the
-defect stands.
-
-## 7. Two records of one event disagree, and nothing reconciles them
+## 5. Two records of one event disagree, and nothing reconciles them
 
 **As measured**: three instances measured in one round: a field run's summary block reports zero tokens and zero tool calls while its
 transcript and its ledger show sixteen provider rounds and fifteen tool observations; project bind prints status healthy and exits minus one;
@@ -92,7 +80,7 @@ record that would let a reader conclude something false, which is the class this
 
 **Settled by**: one reconciled number per event, or a stated reason why two records may differ.
 
-## 8. The resume flag shares the session root, and its name said it continued the conversation
+## 6. The resume flag shares the session root, and its name said it continued the conversation
 
 **As measured** (2026-10-05): with `--reuse-session` and one `--session-dir` on both runs - the condition the repository's own case asserts,
 and that case holds only that the two runs share `sessionDir` and that the second request is not a redelivery of the first

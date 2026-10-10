@@ -1541,7 +1541,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		label: "Dove Goal",
 		description: "Optionally record or update a Dove project goal when the user explicitly asks. Ordinary coding does not require this tool.",
 		promptSnippet: "Manage a project task when the user explicitly asks to track or finish work",
-		promptGuidelines: ["Use only for explicit goal tracking. Never call this before ordinary inspection, editing, or testing, and never ask for a separate confirmation."],
+		promptGuidelines: [
+			"Use only for explicit goal tracking. Never call this before ordinary inspection, editing, or testing, and never ask for a separate confirmation.",
+			// Measured in real runs: an agent that created a goal and then read `acceptance.md` found the template
+			// placeholder and had to discover from the file that nothing had been accepted yet. A precondition declared
+			// where the tool is read is what the defect ledger asks for, and this is that place.
+			"The created goal's acceptance.md is the template placeholder, not a criterion set. Freeze its criteria with agent_task_convergence before product work, or the file reads as an acceptance contract nobody wrote.",
+		],
 		parameters: Type.Object({
 			operation: Type.Union([Type.Literal("create"), Type.Literal("start"), Type.Literal("finish"), Type.Literal("archive")]),
 			title: Type.Optional(Type.String()),
@@ -1699,7 +1705,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		label: "Dove Task Convergence",
 		description: "Record formal-task acceptance progress, findings, finding evidence updates, checkpoints, resume decisions, and change manifests for the current native task. operation=status is read-only and returns the audited verification vector and every change verdict; use operation=update_finding with an existing findingId to append evidenceRefs or nextAction. operation=change records a manifest whose predicted movements are checked against the next round observed ones.",
 		promptSnippet: "Use only for a formal task when recording evidence or a convergence decision tied to an existing AC-* criterion",
-		promptGuidelines: ["Select an existing acceptanceId before product work. To mark work started, call operation=progress with acceptanceId and status=started; operation=status only reads the snapshot and must not carry mutation fields. Follow-up findings are recorded without fixing them in the current task. If a finding already exists, use update_finding with the same findingId instead of repeating finding. Resource observations never decide convergence."],
+		// The defect ledger's third entry, other half: without a native formal task this tool refuses, and that refusal was
+		// the first place the requirement was stated. A precondition belongs where a reader meets it before the attempt.
+		promptGuidelines: [
+			"Select an existing acceptanceId before product work. To mark work started, call operation=progress with acceptanceId and status=started; operation=status only reads the snapshot and must not carry mutation fields. Follow-up findings are recorded without fixing them in the current task. If a finding already exists, use update_finding with the same findingId instead of repeating finding. Resource observations never decide convergence.",
+			"Requires an existing native formal task, created or selected with agent_project_task; freeze its criteria with operation=freeze once it exists. Without one, this call refuses.",
+		],
 		parameters: Type.Object({
 			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume"), Type.Literal("change"), Type.Literal("applied")]),
 			acceptanceId: Type.Optional(Type.String()),

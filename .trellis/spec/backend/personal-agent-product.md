@@ -78,7 +78,7 @@ fails.
 
 **D5 · No guessed numbers, and one number per row.**
 The read-only budget is exactly one threshold per strength × intent — `fast` 4/6/12, `standard` 6/10/20, `ultra`
-12/16/32, 1 for a task inventory, and none for chat — [demonstrated] `src/pi-adapter/extension.ts:3519-3540`. The
+12/16/32, 1 for a task inventory, and none for chat — [demonstrated] `src/pi-adapter/extension.ts:3575-3595`. The
 pair that used to sit beside it was carried all the way to `/status` and compared by nothing, which is why the row
 holds one number — same lines, and `README.md:326`. The shell watchdog is **240 s**, names the aggregate commands it
 covers, yields to an explicit `timeout`, and falls back to 240 on a malformed value — [demonstrated]

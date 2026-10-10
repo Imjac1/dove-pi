@@ -29,6 +29,19 @@ const MAX_EVIDENCE_RECORDS = 100;
 const MAX_CONVERGENCE_FILE_CHARS = 2_000_000;
 const MAX_CONVERGENCE_FILE_BYTES = 6_000_000;
 
+/**
+ * The generated section of `acceptance.md`, delimited by markers of its own rather than by its heading.
+ *
+ * A heading is a string a person can write. The first version of this section was found again by matching its heading
+ * to the end of the file, so a document whose own prose contained that heading had everything after it deleted by the
+ * next progress record - and nothing said so. The markers are what makes "the section this module wrote" a fact rather
+ * than a guess.
+ */
+const PROJECTION_HEADING = "## Dove Evidence Projection";
+const PROJECTION_START = "<!-- dove:evidence-projection:start -->";
+const PROJECTION_END = "<!-- dove:evidence-projection:end -->";
+const LEGACY_PROJECTION_TAIL = /\n*## Dove Evidence Projection\n+- \d{4}-\d{2}-\d{2}T[^\n]*\n[\s\S]*$/u;
+
 export function nativeTaskDirectory(projectRoot: string, taskId: string): string {
 	if (!taskId.trim() || taskId === "." || taskId === ".." || /[\\/\0]/.test(taskId)) throw new Error("Native formal task ID cannot be used as a task directory name.");
 	return join(resolve(projectRoot), ".dove", "tasks", taskId);
@@ -121,34 +134,91 @@ export async function appendNativeTaskEvidence(projectRoot: string, goalId: stri
 		: { schemaVersion: 1, timestamp: new Date().toISOString(), truncated: true, details: serialized.slice(0, MAX_EVIDENCE_RECORD_CHARS - 80) };
 	const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
 	const lines = [...existing.split(/\r?\n/).filter(Boolean), JSON.stringify(record)];
-	const retained: string[] = [];
-	let retainedChars = 0;
-	for (let index = lines.length - 1; index >= 0 && retained.length < MAX_EVIDENCE_RECORDS; index--) {
-		const line = lines[index];
-		if (retainedChars + line.length + 1 > MAX_EVIDENCE_FILE_CHARS) break;
-		retained.unshift(line);
-		retainedChars += line.length + 1;
-	}
-	await writeNativeArtifact(path, `${retained.join("\n")}\n`, MAX_EVIDENCE_FILE_CHARS);
+	// Written without the artifact bound: the selection below already decided the content, and slicing JSONL afterwards
+	// would leave a half-written line rather than a smaller file.
+	await writeNativeArtifact(path, `${selectEvidenceRecords(lines).join("\n")}\n`, null);
 	return path;
+}
+
+/**
+ * Which evidence records survive, and why the rule has two halves.
+ *
+ * **The newest records, bounded by count and characters** - what a reader wants when they ask what happened lately.
+ *
+ * **Plus one record per acceptance id the newest window would otherwise drop.** `findUnsupportedCriteria` asks whether a
+ * ticked criterion is named anywhere in this file, so a criterion whose only mention aged out of the window read as
+ * unsupported *although it had been supported* - and a check that starts reporting backed work as unbacked whenever a
+ * task runs long enough is a check people stop reading, which is the failure that check exists to prevent. The
+ * comparison is on the id, so the id is reserved for.
+ *
+ * The count bound is the hard one: the reservation is computed first, so reserved and newest records together cannot
+ * exceed it. The character bound applies to the newest-first fill alone, because a reservation that did not fit would
+ * defeat the rule it exists for, and the count bound already caps how large the file can get.
+ */
+function selectEvidenceRecords(lines: readonly string[]): readonly string[] {
+	const reserved = new Set<number>();
+	const reservedIds = new Set<string>();
+	for (let index = lines.length - 1; index >= 0 && reserved.size < MAX_EVIDENCE_RECORDS; index--) {
+		const id = acceptanceIdOf(lines[index]!);
+		if (id === undefined || reservedIds.has(id)) continue;
+		reservedIds.add(id);
+		reserved.add(index);
+	}
+	const selected = new Set<number>(reserved);
+	let selectedChars = [...reserved].reduce((total, index) => total + lines[index]!.length + 1, 0);
+	for (let index = lines.length - 1; index >= 0 && selected.size < MAX_EVIDENCE_RECORDS; index--) {
+		if (selected.has(index)) continue;
+		const length = lines[index]!.length + 1;
+		if (selectedChars + length > MAX_EVIDENCE_FILE_CHARS) break;
+		selected.add(index);
+		selectedChars += length;
+	}
+	return [...selected].sort((left, right) => left - right).map((index) => lines[index]!);
+}
+
+function acceptanceIdOf(line: string): string | undefined {
+	return /"acceptanceId"\s*:\s*"([^"]+)"/u.exec(line)?.[1];
 }
 
 export async function updateNativeAcceptanceProjection(projectRoot: string, goal: NativeGoal, evidence: Readonly<Record<string, unknown>>): Promise<void> {
 	const path = nativeTaskArtifactPath(projectRoot, goal.id, "acceptance.md");
 	if (!existsSync(path)) return;
 	const existing = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
-	const base = existing.replace(/\n*## Dove Evidence Projection[\s\S]*$/i, "").trimEnd();
+	const base = withoutEvidenceProjection(existing);
 	const timestamp = typeof evidence.timestamp === "string" ? evidence.timestamp : new Date().toISOString();
 	const phase = typeof evidence.phase === "string" ? evidence.phase : goal.phase ?? "unknown";
 	const outcome = typeof evidence.outcome === "string" ? evidence.outcome : "unknown";
 	const verification = typeof evidence.verification === "string" ? evidence.verification : "No verification summary recorded.";
-	await writeNativeArtifact(path, `${base}\n\n## Dove Evidence Projection\n\n- ${timestamp} | phase: ${phase} | observed outcome: ${outcome}\n- ${verification}\n`);
+	// **Two ways this one call used to delete a person's writing, both measured.**
+	//
+	// The write went through `writeNativeArtifact`'s artifact ceiling, so a 20,056-character `acceptance.md` came back
+	// as 16,000: the file's own criteria, cut off by an action named "record progress". The artifact bound belongs where
+	// a document is first generated from a template; rewriting one section this module owns is no reason to shorten the
+	// rest of the file, so the bound is passed as `null` here and stays where it was.
+	//
+	// And the section was found again by matching its heading to the end of the file. A heading is a string a person may
+	// write, and everything after theirs went with it. The markers are the fix; `withoutEvidenceProjection` migrates a
+	// document written before them exactly once, by the trailing shape this module used to produce.
+	await writeNativeArtifact(path, `${base}\n\n${PROJECTION_START}\n${PROJECTION_HEADING}\n\n- ${timestamp} | phase: ${phase} | observed outcome: ${outcome}\n- ${verification}\n${PROJECTION_END}\n`, null);
 }
 
-async function writeNativeArtifact(path: string, content: string, maxChars = MAX_ARTIFACT_CHARS): Promise<void> {
+/** The document without the generated section: by its markers when they are there, by the old trailing shape when they are not. */
+function withoutEvidenceProjection(existing: string): string {
+	const marked = existing.indexOf(PROJECTION_START);
+	if (marked >= 0) return existing.slice(0, marked).trimEnd();
+	return existing.replace(LEGACY_PROJECTION_TAIL, "").trimEnd();
+}
+
+/**
+ * Write one artifact through a temporary file and a rename.
+ *
+ * `maxChars` bounds the payload, and `null` means the caller owns the document's length rather than this module: that is
+ * the case for a rewrite of a section inside a file a person maintains, where a bound would silently shorten their text.
+ */
+async function writeNativeArtifact(path: string, content: string, maxChars: number | null = MAX_ARTIFACT_CHARS): Promise<void> {
 	const temporary = `${path}.tmp-${process.pid}-${Date.now()}`;
 	try {
-		await writeFile(temporary, content.slice(0, maxChars), "utf8");
+		await writeFile(temporary, maxChars === null ? content : content.slice(0, maxChars), "utf8");
 		await rename(temporary, path);
 	} finally {
 		await rm(temporary, { force: true });

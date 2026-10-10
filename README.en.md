@@ -320,9 +320,10 @@ provider - the other scenarios assert against scripted responses. The contract, 
 what such a run does and does not prove, is in `.trellis/spec/backend/personal-agent-field-run.md`.
 
 `--offline` and `--skip-version-check` may prefix a known local CLI command; they never turn the
-CLI words into a Pi prompt. `task verify` checks artifact structure and planning fields only: it
-does not run tests or claim acceptance. Formal work freezes acceptance criteria, records evidence,
-and is finished/archived explicitly.
+CLI words into a Pi prompt. `task verify` checks artifact structure, planning fields, whether a ticked
+criterion is named in the evidence, and whether the convergence copy `state.json` carries is behind the
+record on disk: it does not run tests or claim acceptance. Formal work freezes acceptance criteria,
+records evidence, and is finished/archived explicitly.
 
 An explicit task selector that is missing or ambiguous returns a non-zero error, and unknown
 task/session options are rejected instead of being ignored. After finishing the current task,

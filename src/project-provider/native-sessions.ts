@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { withProjectMutationLock } from "./lock.ts";
 
@@ -65,7 +65,17 @@ export async function appendNativeSession(projectRoot: string, input: NativeSess
 			retained.unshift(line);
 			retainedChars += line.length + 1;
 		}
-		await writeFile(path, `${retained.join("\n")}\n`, "utf8");
+		// Written to a temporary file and renamed, the way every other record in this provider is written.
+		// The project lock gives exclusion, not durability: a `writeFile` interrupted part-way leaves a
+		// short file, `readNativeSessions` skips the damaged line without saying so, and the session is
+		// gone in silence - which is the failure a record is kept to avoid.
+		const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+		try {
+			await writeFile(temporary, `${retained.join("\n")}\n`, "utf8");
+			await rename(temporary, path);
+		} finally {
+			await rm(temporary, { force: true });
+		}
 	});
 	return record;
 }

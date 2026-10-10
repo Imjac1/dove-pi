@@ -149,6 +149,7 @@ export const codeAuditCapabilities: readonly CapabilityDefinition[] = [
 		idempotent: true,
 		status: "tested",
 		requiredArgs: ["category", "roots"],
+		preconditions: [{ id: "catalog", description: "The sink catalog named by catalogPath, or the shipped TypeScript catalog under modes/code-audit/catalog, is readable.", required: true }],
 		parameterSchema: {
 			type: "object",
 			required: ["category", "roots"],

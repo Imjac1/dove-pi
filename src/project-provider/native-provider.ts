@@ -6,8 +6,8 @@ import { computeAcceptanceRevision, reduceTaskConvergence, type TaskConvergenceE
 import { readTrellisSnapshot, readTrellisText } from "../trellis-adapter/index.ts";
 import { withProjectMutationLock } from "./lock.ts";
 import { appendNativeTaskEvidence, ensureNativeFormalArtifacts, nativeTaskFiles, nativeTaskArtifactPaths, readNativeFormalDocuments, readNativeTaskConvergence, updateNativeAcceptanceProjection, writeNativeTaskConvergence, writeNativeTaskManifest, type NativeFormalArtifact } from "./native-artifacts.ts";
-import { MAX_NATIVE_GOALS, nativeProjectStatePath, projectNativeGoalConvergence, readNativeProjectState, writeNativeProjectState, type NativeGoal, type NativeProjectState } from "./native-state.ts";
-import { PROJECT_PROVIDER_CONTRACT, resolveProjectTask, toProjectTask, type ProjectContextSnapshot, type ProjectDocument, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskConvergenceRead, type ProjectTaskOperation, type ProjectTaskProgress, type ProviderHealth } from "./contracts.ts";
+import { MAX_NATIVE_GOALS, nativeProjectStatePath, projectNativeGoalConvergence, readNativeProjectState, writeNativeProjectState, type NativeGoal, type NativeGoalConvergenceProjection, type NativeProjectState } from "./native-state.ts";
+import { PROJECT_PROVIDER_CONTRACT, resolveProjectTask, toProjectTask, type ProjectContextSnapshot, type ProjectDocument, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskConvergenceRead, type ProjectTaskConvergenceStatus, type ProjectTaskOperation, type ProjectTaskProgress, type ProviderHealth } from "./contracts.ts";
 import { nativeSessionPath, readNativeSessions } from "./native-sessions.ts";
 
 const ACTIVE_STATUSES = new Set(["active", "in_progress", "in-progress", "started", "working"]);
@@ -45,7 +45,7 @@ export class NativeProvider implements ProjectProvider {
 	public getContext(): ProjectContextSnapshot {
 		const native = readNativeProjectState(this.projectRoot);
 		const state = native.state;
-		const nativeTasks = state.goals.filter((goal) => goal.status !== "archived").map((goal) => nativeGoalTask(this.projectRoot, goal));
+		const nativeTasks = state.goals.filter((goal) => goal.status !== "archived").map((goal) => nativeGoalTask(this.projectRoot, goal, goal.id === state.currentGoalId));
 		const legacy = readLegacyProjection(this.projectRoot);
 		const importedRefs = new Set(state.goals.filter((goal) => goal.status !== "archived" && goal.source === "legacy-trellis" && goal.sourceRef).map((goal) => goal.sourceRef!));
 		const tasks = [...nativeTasks, ...legacy.tasks.filter((task) => !importedRefs.has(task.stableId))];
@@ -79,7 +79,7 @@ export class NativeProvider implements ProjectProvider {
 		const read = readNativeProjectState(this.projectRoot);
 		if (read.kind !== "valid") return undefined;
 		const imported = read.state.goals.find((goal) => goal.status !== "archived" && goal.source === "legacy-trellis" && goal.sourceRef === sourceRef);
-		return imported ? nativeGoalTask(this.projectRoot, imported) : undefined;
+		return imported ? nativeGoalTask(this.projectRoot, imported, imported.id === read.state.currentGoalId) : undefined;
 	}
 	public readMemory(query?: string): readonly ProjectDocument[] {
 		const nativeSessions: ProjectDocument[] = readNativeSessions(this.projectRoot).map((session) => ({
@@ -94,9 +94,25 @@ export class NativeProvider implements ProjectProvider {
 	}
 
 	public async ensureCurrentGoal(title: string, description?: string): Promise<ProjectTask> {
-		const existing = this.getContext().currentTask;
-		if (existing?.provider === "native") return existing;
-		if (existing) await this.runTaskOperation("start", [existing.stableId]);
+		return withProjectMutationLock(this.projectRoot, () => this.ensureCurrentGoalLocked(title, description));
+	}
+
+	/**
+	 * The goal-establishing half, for callers that already hold this project's lock.
+	 *
+	 * **Reading the state again inside the lock is the fix, not a redundancy.** The check used to happen before the lock
+	 * was taken, so two callers could both see no current goal and both create one - measured: two goals titled by the two
+	 * callers, each of which believed it had established the single current goal, and the "idempotent automatic goal
+	 * establishment" the specification requires was true only when the calls did not overlap. Inside the same lock as the
+	 * write, the second caller finds the first one's goal and reuses it.
+	 */
+	private async ensureCurrentGoalLocked(title: string, description?: string): Promise<ProjectTask> {
+		const read = readNativeProjectState(this.projectRoot);
+		if (read.kind === "invalid") throw new Error(read.issue);
+		const nativeGoal = read.state.goals.find((goal) => goal.id === read.state.currentGoalId);
+		if (nativeGoal) return nativeGoalTask(this.projectRoot, nativeGoal, true);
+		const legacy = onlyContinuable(this.getContext().tasks.filter((task) => task.provider === "trellis"));
+		if (legacy) await this.runTaskOperation("start", [legacy.stableId]);
 		else await this.runTaskOperation("create", [title, ...(description ? ["--description", description] : [])]);
 		const current = this.getContext().currentTask;
 		if (!current) throw new Error("Dove created native goal state but could not resolve the current goal.");
@@ -104,28 +120,23 @@ export class NativeProvider implements ProjectProvider {
 	}
 
 	public async ensureFormalTask(title: string, description?: string): Promise<ProjectTask> {
-		const existing = this.getContext().currentTask;
-		if (existing?.provider === "native") {
+		return withProjectMutationLock(this.projectRoot, async () => {
 			const read = readNativeProjectState(this.projectRoot);
-			const goal = read.kind === "valid" ? read.state.goals.find((candidate) => candidate.id === existing.providerTaskId) : undefined;
-			if (goal && !goal.formal) {
-				await withProjectMutationLock(this.projectRoot, async () => {
-					const current = readNativeProjectState(this.projectRoot);
-					if (current.kind === "invalid") throw new Error(current.issue);
-					const nativeGoal = current.state.goals.find((candidate) => candidate.id === existing.providerTaskId);
-					if (!nativeGoal) return;
-					const upgraded: NativeGoal = { ...nativeGoal, formal: true, phase: nativeGoal.phase ?? "intake", updatedAt: new Date().toISOString() };
-					await ensureNativeFormalArtifacts(this.projectRoot, upgraded);
-					await writeNativeProjectState(this.projectRoot, nextState(current.state, current.state.goals.map((candidate) => candidate.id === upgraded.id ? upgraded : candidate), upgraded.id));
-				});
-				return this.getContext().currentTask!;
-			}
-			if (goal) {
+			if (read.kind === "invalid") throw new Error(read.issue);
+			const goal = read.state.goals.find((candidate) => candidate.id === read.state.currentGoalId);
+			if (!goal) return await this.ensureCurrentGoalLocked(title, description);
+			if (goal.formal) {
+				// Reached under the lock, unlike the write this used to make: `ensureNativeFormalArtifacts` writes the
+				// manifest unconditionally, so on an unlocked path it could put an older goal snapshot back over a newer
+				// one written by whoever held the lock.
 				await ensureNativeFormalArtifacts(this.projectRoot, goal);
-				return this.getContext().currentTask!;
+				return nativeGoalTask(this.projectRoot, goal, true);
 			}
-		}
-		return this.ensureCurrentGoal(title, description);
+			const upgraded: NativeGoal = { ...goal, formal: true, phase: goal.phase ?? "intake", updatedAt: new Date().toISOString() };
+			await ensureNativeFormalArtifacts(this.projectRoot, upgraded);
+			await writeNativeProjectState(this.projectRoot, nextState(read.state, read.state.goals.map((candidate) => candidate.id === upgraded.id ? upgraded : candidate), upgraded.id));
+			return nativeGoalTask(this.projectRoot, upgraded, true);
+		});
 	}
 
 	public async recordTaskProgress(taskId: string, progress: ProjectTaskProgress): Promise<void> {
@@ -164,6 +175,12 @@ export class NativeProvider implements ProjectProvider {
 		if (convergence.kind !== "valid") return convergence;
 		if (convergence.snapshot.taskId !== goal.id) return { kind: "invalid", issue: "Dove task convergence state belongs to a different task." };
 		return convergence;
+	}
+
+	public readConvergenceProjection(taskId: string): NativeGoalConvergenceProjection | undefined {
+		const read = readNativeProjectState(this.projectRoot);
+		if (read.kind !== "valid") return undefined;
+		return findNativeGoal(read.state, taskId)?.convergence;
 	}
 
 	public async mutateTaskConvergence(taskId: string, operation: ProjectTaskConvergenceOperation): Promise<TaskConvergenceSnapshot> {
@@ -205,8 +222,9 @@ export class NativeProvider implements ProjectProvider {
 					const descriptionIndex = args.indexOf("--description");
 					const description = descriptionIndex >= 0 ? args[descriptionIndex + 1]?.trim() : undefined;
 					const goal: NativeGoal = { id: `goal-${randomUUID()}`, title: title.slice(0, 240), ...(description ? { description: description.slice(0, 2_000) } : {}), status: "active", createdAt: now, updatedAt: now, decisions: [], verification: [], formal: true, phase: "intake" };
+					const room = makeRoomForGoal(state.goals);
 					await ensureNativeFormalArtifacts(this.projectRoot, goal);
-					state = nextState(state, [...state.goals, goal], goal.id);
+					state = nextState(state, [...room, goal], goal.id);
 					break;
 				}
 				case "start": {
@@ -228,9 +246,10 @@ export class NativeProvider implements ProjectProvider {
 							break;
 						}
 						const imported: NativeGoal = { id: `goal-${randomUUID()}`, title: task.title, description: `Imported read-only legacy task ${task.stableId}.`, status: "active", createdAt: now, updatedAt: now, decisions: [], verification: [], formal: true, phase: "intake", source: "legacy-trellis", sourceRef: task.stableId };
+						const room = makeRoomForGoal(state.goals);
 						await ensureNativeFormalArtifacts(this.projectRoot, imported, readLegacyFormalArtifacts(task));
 						manifestGoal = imported;
-						state = nextState(state, [...state.goals, imported], imported.id);
+						state = nextState(state, [...room, imported], imported.id);
 					}
 					break;
 				}
@@ -264,7 +283,7 @@ export class NativeProvider implements ProjectProvider {
 		});
 	}
 
-	public async reconcileTaskOperation(operation: ProjectTaskOperation, _args: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[] = [], targetTaskId?: string, _beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown"> {
+	public async reconcileTaskOperation(operation: ProjectTaskOperation, _args: readonly string[], beforeRevision: string, beforeTaskIds: readonly string[], targetTaskId?: string, _beforeTargetStatus?: string, beforeCurrentTaskId?: string): Promise<"observed" | "unknown"> {
 		const context = this.getContext();
 		if (context.revision === beforeRevision) return "unknown";
 		if (operation === "create") return context.tasks.some((task) => task.provider === "native" && !beforeTaskIds.includes(task.stableId)) ? "observed" : "unknown";
@@ -276,13 +295,47 @@ export class NativeProvider implements ProjectProvider {
 			if (targetTaskId?.startsWith("native:")) return context.currentTask?.stableId === targetTaskId ? "observed" : "unknown";
 			return context.currentTask?.provider === "native" && !beforeTaskIds.includes(context.currentTask.stableId) ? "observed" : "unknown";
 		}
-		if (operation === "archive") return !context.tasks.some((task) => task.stableId === targetTaskId) ? "observed" : "unknown";
+		if (operation === "archive") {
+			// **An unnamed target cannot be confirmed by absence, and that is the shape the default produced.** With
+			// `targetTaskId` undefined the comparison was false for every task - no `stableId` equals `undefined` - and
+			// `!false` reads as "the task is gone". Measured on an untouched project whose revision had moved for an
+			// unrelated reason: an archive of nothing reported `observed`. Declining to answer is the honest reading, and
+			// `beforeTaskIds` is required rather than defaulted for the same reason - a caller that supplied no baseline
+			// and a caller that supplied an empty one used to arrive as the same value.
+			if (!targetTaskId?.trim()) return "unknown";
+			return !context.tasks.some((task) => task.stableId === targetTaskId) ? "observed" : "unknown";
+		}
 		return "unknown";
 	}
 }
 
 function nextState(previous: NativeProjectState, goals: readonly NativeGoal[], currentGoalId: string | undefined): NativeProjectState {
-	return { schemaVersion: 1, revision: previous.revision + 1, ...(currentGoalId ? { currentGoalId } : {}), goals: goals.slice(-MAX_NATIVE_GOALS) };
+	// A write that would exceed the bound is refused rather than trimmed. The bound is a published one
+	// (`native-state.ts` states it, and `personal-agent-project-context.md` repeats it), so it stays; what changed is
+	// that reaching it is no longer answered by dropping the oldest goal in silence. That answer discarded live work and
+	// left the goal's `.dove/tasks/<id>/` directory on disk with no goal to resolve it - `resolveTask` could not find it
+	// and neither finish nor archive could reach it. A creation now pays for its place through `makeRoomForGoal`, before
+	// this point, and any other path that would exceed the bound fails here with the number instead of losing a goal.
+	if (goals.length > MAX_NATIVE_GOALS) throw new Error(`Dove state may hold at most ${MAX_NATIVE_GOALS} goals, and this write would hold ${goals.length}; no goal is dropped silently.`);
+	return { schemaVersion: 1, revision: previous.revision + 1, ...(currentGoalId ? { currentGoalId } : {}), goals };
+}
+
+/**
+ * Make room for one more goal, or refuse with the reason.
+ *
+ * Archived goals go first: they are records a person has already closed, and their task directories stay where they are,
+ * which is what an archive means. If nothing is archived the refusal names the bound and the way out rather than
+ * discarding live work.
+ */
+function makeRoomForGoal(goals: readonly NativeGoal[]): readonly NativeGoal[] {
+	if (goals.length < MAX_NATIVE_GOALS) return goals;
+	const archived = goals.filter((goal) => goal.status === "archived").sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+	const needed = goals.length - MAX_NATIVE_GOALS + 1;
+	if (archived.length < needed) {
+		throw new Error(`Dove keeps at most ${MAX_NATIVE_GOALS} goals in .dove/state.json, and ${goals.length} are already there with ${archived.length} archived. Archive or remove a goal before creating another.`);
+	}
+	const retired = new Set(archived.slice(0, needed).map((goal) => goal.id));
+	return goals.filter((goal) => !retired.has(goal.id));
 }
 
 function findNativeGoal(state: NativeProjectState, taskId: string): NativeGoal | undefined {
@@ -342,16 +395,32 @@ function convergenceEvidence(event: TaskConvergenceEvent, snapshot: TaskConverge
 	};
 }
 
-function nativeGoalTask(projectRoot: string, goal: NativeGoal): ProjectTask {
+/**
+ * Project one goal as a task.
+ *
+ * **The authoritative read is kept for the current goal, and only for it.** Reading every goal's `convergence.json` to
+ * rebuild a projection that `state.json` already carries beside the goal was measured at a median of 98 ms for a hundred
+ * goals - 3.2 MB read and parsed on the path that compiles a request's context, to reconstruct a few hundred bytes per
+ * goal. The current task is the one a reader acts on, so it keeps the file read and with it the ability to report a
+ * corrupt record; every other goal is reported from the projection the last successful write stored with it.
+ */
+function nativeGoalTask(projectRoot: string, goal: NativeGoal, authoritative: boolean): ProjectTask {
 	const path = nativeProjectStatePath(projectRoot);
-	const convergence = goal.formal ? readNativeTaskConvergence(projectRoot, goal.id) : undefined;
-	const convergenceStatus = convergence?.kind === "valid" && convergence.snapshot.taskId !== goal.id
-		? { health: "invalid" as const, issue: "Dove task convergence state belongs to a different task." }
-		: convergence?.kind === "valid"
-		? { health: "valid" as const, ...projectNativeGoalConvergence(convergence.snapshot) }
-		: convergence?.kind === "invalid"
-			? { health: "invalid" as const, issue: convergence.issue }
-			: goal.formal ? { health: "missing" as const } : undefined;
+	const convergence = goal.formal && authoritative ? readNativeTaskConvergence(projectRoot, goal.id) : undefined;
+	let convergenceStatus: ProjectTaskConvergenceStatus | undefined;
+	if (goal.formal) {
+		if (convergence === undefined) {
+			convergenceStatus = goal.convergence ? { health: "valid" as const, ...goal.convergence } : { health: "missing" as const };
+		} else if (convergence.kind === "valid") {
+			convergenceStatus = convergence.snapshot.taskId !== goal.id
+				? { health: "invalid" as const, issue: "Dove task convergence state belongs to a different task." }
+				: { health: "valid" as const, ...projectNativeGoalConvergence(convergence.snapshot) };
+		} else if (convergence.kind === "invalid") {
+			convergenceStatus = { health: "invalid" as const, issue: convergence.issue };
+		} else {
+			convergenceStatus = { health: "missing" as const };
+		}
+	}
 	return { stableId: `native:${goal.id}`, provider: "native", providerTaskId: goal.id, path, title: goal.title, status: goal.status, files: [path, ...(goal.formal ? nativeTaskFiles(projectRoot, goal) : [])], ...(goal.formal ? { formal: true } : {}), ...(goal.phase ? { phase: goal.phase } : {}), ...(convergenceStatus ? { convergence: convergenceStatus } : {}) };
 }
 

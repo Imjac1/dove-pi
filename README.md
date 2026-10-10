@@ -290,7 +290,7 @@ node scripts/real-dove-blackbox.mjs --launcher source --provider real `
 是对脚本化响应写的。契约（读数格式，以及这样一次运行证明与不证明什么）在
 `.trellis/spec/backend/personal-agent-field-run.md`。
 
-`--offline` 和 `--skip-version-check` 可以放在已知本地 CLI 前面；它们不会把 CLI 单词当成 Pi prompt。`task verify` 只检查产物结构和规划字段，不会运行测试，也不代表验收通过。正式任务需要先冻结 acceptance，再记录 evidence，最后由用户决定 finish/archive。
+`--offline` 和 `--skip-version-check` 可以放在已知本地 CLI 前面；它们不会把 CLI 单词当成 Pi prompt。`task verify` 只检查产物结构、规划字段、勾选项是否有证据点名，以及 `state.json` 里的收敛副本是否落后于磁盘记录；它不会运行测试，也不代表验收通过。正式任务需要先冻结 acceptance，再记录 evidence，最后由用户决定 finish/archive。
 
 任务命令如果显式传入不存在或不唯一的任务选择器会返回非零错误；未知的 task/session 参数也会被拒绝，不会静默忽略。完成当前任务后，如果恰好只剩一个 active 任务，Dove 会自动把它设为 current；剩余多个任务时仍需显式选择。
 

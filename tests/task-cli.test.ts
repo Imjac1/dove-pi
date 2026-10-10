@@ -76,6 +76,31 @@ describe("Dove task and session CLI", () => {
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
+	it("reports a convergence projection that is behind the record on disk", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-task-cli-stale-"));
+		try {
+			const task = (await runCli(root, "task", "create", "Stale projection") as { task: { stableId: string } }).task;
+			const provider = createProjectProvider(root);
+			await provider.mutateTaskConvergence!(task.stableId, { action: "freeze", criteria: [{ id: "AC-001", text: "The criterion." }] });
+			await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "evidence", evidenceRef: "evidence:first" } });
+
+			// The record lands first and the copy beside the goal second, so this is the one state an interrupted write
+			// leaves: record at revision 2, projection at 1. Measured, the next write heals the copy - so the window is
+			// readable rather than permanent, and reading it is what this command now does instead of reporting the copy
+			// as if it were current.
+			const statePath = join(root, ".dove", "state.json");
+			const state = JSON.parse(await readFile(statePath, "utf8")) as { goals: Array<{ convergence: { snapshotRevision: number } }> };
+			state.goals[0]!.convergence.snapshotRevision = 1;
+			await writeFile(statePath, JSON.stringify(state), "utf8");
+
+			const verification = (await runCli(root, "task", "verify", task.stableId) as { verification: { ready: boolean; projectionReady: boolean; projectionIssues: string[] } }).verification;
+			assert.equal(verification.projectionReady, false, "the projection is behind the record, and that is reported");
+			assert.match(verification.projectionIssues.join(" "), /behind the record on disk/);
+			assert.equal(verification.ready, false, "and a stale reading is not ready");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 	it("exposes task lifecycle, continuation, and structural verification", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-task-cli-"));
 		try {

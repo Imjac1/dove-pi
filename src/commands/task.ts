@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createProjectProvider, summarizeProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskConvergenceProgress, type ProjectTaskOperation } from "../project-provider/index.ts";
 import type { FindingKind } from "../core/task-convergence.ts";
 import { NATIVE_FORMAL_ARTIFACTS, nativeTaskArtifactPath, nativeTaskDirectory } from "../project-provider/native-artifacts.ts";
-import { findUnsupportedCriteria } from "../project-provider/record-freshness.ts";
+import { findUnsupportedCriteria, projectionIsBehind } from "../project-provider/record-freshness.ts";
 
 export async function runTaskCommand(commandArgs: readonly string[]): Promise<void> {
 	const provider = createProjectProvider(process.cwd());
@@ -170,8 +170,19 @@ function verifyTask(provider: ProjectProvider, task: ProjectTask): Record<string
 	// A record is only as good as what backs it. `acceptance.md` can tick a criterion the ledger never mentions -
 	// measured on a real task, five ticked and four named nowhere - and until this read existed nothing noticed.
 	const unsupportedRecord = task.provider === "native" && task.formal ? inspectUnsupportedCriteria(provider, task) : [];
+	// The projection is stored after the record it copies, so an interrupted write leaves it behind. Measured, that
+	// heals itself: the next snapshot is reduced from the file and the copy is stored current again. What does not heal
+	// is the reading taken in between - an ordinary task is projected from that copy - so this is the check that says a
+	// reading is stale rather than reporting it as current.
+	const record = task.provider === "native" && task.formal ? provider.readTaskConvergence?.(task.stableId) : undefined;
+	const stored = task.provider === "native" && task.formal ? provider.readConvergenceProjection?.(task.stableId) : undefined;
+	const projectionRevision = stored?.snapshotRevision;
+	const recordRevision = record?.kind === "valid" ? record.snapshot.revision : undefined;
+	const projectionIssues = projectionIsBehind(projectionRevision, recordRevision)
+		? [`The convergence copy in .dove/state.json is at revision ${projectionRevision}, behind the record on disk at ${recordRevision}; the next convergence write stores the record's own revision and heals this.`]
+		: [];
 	const structuralReady = missing.length === 0;
-	return { ready: structuralReady && planningIssues.length === 0 && unsupportedRecord.length === 0, structuralReady, planningReady: planningIssues.length === 0, planningIssues, recordReady: unsupportedRecord.length === 0, unsupportedCriteria: unsupportedRecord, taskStatus: task.status, phase: task.phase, convergence: task.convergence ?? { health: "missing" }, files, missing, ...(evidencePath ? { evidencePath, evidenceExists: existsSync(evidencePath) } : {}), note: "Structural and planning check only; convergence state is reported separately and this command does not run tests or claim acceptance." };
+	return { ready: structuralReady && planningIssues.length === 0 && unsupportedRecord.length === 0 && projectionIssues.length === 0, structuralReady, planningReady: planningIssues.length === 0, planningIssues, recordReady: unsupportedRecord.length === 0, unsupportedCriteria: unsupportedRecord, projectionReady: projectionIssues.length === 0, projectionIssues, taskStatus: task.status, phase: task.phase, convergence: task.convergence ?? { health: "missing" }, files, missing, ...(evidencePath ? { evidencePath, evidenceExists: existsSync(evidencePath) } : {}), note: "Structural, planning and record check only, plus whether the convergence projection is current; convergence state is reported separately and this command does not run tests or claim acceptance." };
 }
 
 /**

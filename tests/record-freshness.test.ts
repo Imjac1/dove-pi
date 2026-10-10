@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acceptanceIdsMentioned, findUnsupportedCriteria, parseAcceptanceCriteria } from "../src/project-provider/record-freshness.ts";
+import { acceptanceIdsMentioned, findUnsupportedCriteria, parseAcceptanceCriteria, projectionIsBehind } from "../src/project-provider/record-freshness.ts";
 
 /**
  * The shapes here are copied from a real task in a real session, not invented: `acceptance.md` writes
@@ -68,4 +68,22 @@ test("a record whose ticks are all backed reports nothing, so the check is not v
 	const backed = ['{"kind":"convergence.decision","acceptanceId":"AC-001"}', '{"kind":"convergence.decision","acceptanceId":"AC-002"}'].join("\n");
 	const unsupported = findUnsupportedCriteria("- [x] **AC-001** — a\n- [x] **AC-002** — b\n", backed);
 	assert.deepEqual(unsupported, [], "every tick has an event, so there is nothing to report");
+});
+
+/**
+ * The other half of the same subject: not what a record claims, but whether the copy a goal carries still agrees with
+ * the record it was copied from.
+ *
+ * Measured against a real pair of writes: the record lands first and the copy beside the goal second, so the only
+ * state an interrupted write can leave is a copy that is **behind** - and the next convergence write heals it, because
+ * the next snapshot is reduced from the file and its revision is the file's plus one. The reading taken in between is
+ * the part that does not heal by itself, which is what this answers.
+ */
+test("a projection behind its record is reported, and agreement is not", () => {
+	assert.equal(projectionIsBehind(1, 2), true, "a copy one revision behind is behind");
+	assert.equal(projectionIsBehind(2, 2), false, "equal revisions agree, so there is nothing to report");
+	assert.equal(projectionIsBehind(3, 2), false, "this answers one question rather than guessing at a copy being ahead");
+	assert.equal(projectionIsBehind(undefined, 2), false, "a goal with no convergence record has no projection to be behind");
+	assert.equal(projectionIsBehind(2, undefined), false, "and an unreadable record is not a reason to call the copy stale");
+	assert.equal(projectionIsBehind(undefined, undefined), false, "nor is a missing pair");
 });

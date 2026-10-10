@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createProjectProvider, discoverProject, initializeNativeProject, nativeProjectStatePath, nativeTaskArtifactPath, nativeTaskConvergencePath, readNativeProjectState, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
@@ -428,6 +428,179 @@ describe("Dove native project provider", () => {
 			const second = withProjectMutationLock(root, async () => { events.push("second"); });
 			await Promise.all([first, second]);
 			assert.deepEqual(events, ["first-start", "first-end", "second"]);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	// **The lock's own error handling, which a probe measured rather than a reading.** The acquisition and the action
+	// used to share one `try`, so an action whose own error carried `EEXIST` was read as contention: it was handed the
+	// lock again and ran a second time (four runs in the measurement), and an error that kept carrying `EEXIST` never
+	// returned at all, because the deleted lock directory reads as stale and the stale branch skipped the deadline.
+	it("does not read an action's own EEXIST as lock contention", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-lock-eexist-"));
+		try {
+			let runs = 0;
+			await assert.rejects(
+				withProjectMutationLock(root, async () => {
+					runs++;
+					const error = new Error("the action's own path already existed") as Error & { code?: string };
+					error.code = "EEXIST";
+					throw error;
+				}, { timeoutMs: 500, retryMs: 5 }),
+				/the action's own path already existed/,
+			);
+			assert.equal(runs, 1, "the action ran once: its own EEXIST belongs to the caller, not to the lock");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("re-enters this project's lock instead of waiting on itself", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-lock-reentrant-"));
+		try {
+			const order: string[] = [];
+			await withProjectMutationLock(root, async () => {
+				order.push("outer");
+				await withProjectMutationLock(root, async () => { order.push("inner"); }, { timeoutMs: 1_000, retryMs: 5 });
+				order.push("outer-end");
+			}, { timeoutMs: 1_000, retryMs: 5 });
+			assert.deepEqual(order, ["outer", "inner", "outer-end"], "a nested acquisition passes through rather than deadlocking");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	const storedGoal = (id: string, status = "active", createdAt = "2026-01-01T00:00:00.000Z") => ({ id, title: id, status, createdAt, updatedAt: createdAt, decisions: [], verification: [], formal: true, phase: "intake" });
+
+	// The bound is published, so it stays. What changed is what reaching it costs: the provider used to keep the newest
+	// hundred goals and drop the rest in silence, leaving the dropped goal's `.dove/tasks/<id>/` directory on disk with
+	// nothing able to resolve, finish or archive it.
+	it("refuses a new goal at the bound instead of dropping live work", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-goal-bound-refuse-"));
+		try {
+			await mkdir(join(root, ".dove"), { recursive: true });
+			const goals = Array.from({ length: 100 }, (_, index) => storedGoal(`goal-${String(index).padStart(3, "0")}`));
+			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals }), "utf8");
+			const provider = createProjectProvider(root);
+			await assert.rejects(() => provider.runTaskOperation("create", ["One too many"]), /at most 100 goals/);
+			const state = readNativeProjectState(root);
+			assert.equal(state.kind === "valid" ? state.state.goals.length : -1, 100, "and the refusal wrote nothing");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("retires the oldest archived goal to make room for a new one", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-goal-bound-retire-"));
+		try {
+			await mkdir(join(root, ".dove"), { recursive: true });
+			const goals = [storedGoal("goal-oldest", "archived", "2025-01-01T00:00:00.000Z"), ...Array.from({ length: 99 }, (_, index) => storedGoal(`goal-${String(index).padStart(3, "0")}`))];
+			await writeFile(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, goals }), "utf8");
+			const provider = createProjectProvider(root);
+			await provider.runTaskOperation("create", ["The new one"]);
+			const state = readNativeProjectState(root);
+			const titles = state.kind === "valid" ? state.state.goals.map((goal) => goal.title) : [];
+			assert.equal(titles.length, 100, "the bound still holds");
+			assert.ok(!titles.includes("goal-oldest"), "the closed record paid for the new goal");
+			assert.ok(titles.includes("The new one"), "and the new goal is there");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("establishes one goal when two callers arrive at once", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-concurrent-goal-"));
+		try {
+			const first = createProjectProvider(root);
+			const second = createProjectProvider(root);
+			const [alpha, beta] = await Promise.all([first.ensureCurrentGoal!("Alpha"), second.ensureCurrentGoal!("Beta")]);
+			assert.equal(alpha.stableId, beta.stableId, "both callers resolve the same goal");
+			const state = readNativeProjectState(root);
+			assert.equal(state.kind === "valid" ? state.state.goals.length : -1, 1, "and only one goal was created");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("answers unknown rather than observed when an archive names no target", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-reconcile-archive-"));
+		try {
+			const provider = createProjectProvider(root);
+			await provider.runTaskOperation("create", ["Kept"]);
+			const staleRevision = provider.getContext().revision;
+			await provider.runTaskOperation("create", ["Second"]);
+			assert.equal(await provider.reconcileTaskOperation!("archive", ["nothing"], staleRevision, [], undefined), "unknown", "an operation with no target cannot be confirmed by absence");
+			assert.equal(await provider.reconcileTaskOperation!("archive", ["nothing"], staleRevision, [], "native:not-there"), "observed", "a named target that is gone is still observable");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("keeps a user's long acceptance document instead of trimming it to the artifact bound", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-acceptance-length-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Long acceptance");
+			const path = nativeTaskArtifactPath(root, task.providerTaskId, "acceptance.md");
+			const authored = "# Acceptance\n\n## Criteria\n\n- [ ] **AC-001** something\n\n" + "Z".repeat(20_000) + "\n";
+			await writeFile(path, authored, "utf8");
+			await provider.recordTaskProgress!(task.stableId, { phase: "verifying", evidence: { kind: "test", outcome: "passed" } });
+			const after = await readFile(path, "utf8");
+			assert.ok(after.startsWith("# Acceptance"), "the authored text is still the head of the file");
+			assert.ok(after.includes("Z".repeat(20_000)), "and none of it was cut to the artifact bound");
+			assert.match(after, /observed outcome: passed/, "while the projection this module owns is still appended");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("keeps a user's prose when it carries the heading of the generated section", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-acceptance-heading-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Heading collision");
+			const path = nativeTaskArtifactPath(root, task.providerTaskId, "acceptance.md");
+			await writeFile(path, "# Acceptance\n\n## Dove Evidence Projection\n\nMy own notes about the projection.\n", "utf8");
+			await provider.recordTaskProgress!(task.stableId, { phase: "verifying", evidence: { kind: "test", outcome: "failed" } });
+			const after = await readFile(path, "utf8");
+			assert.match(after, /My own notes about the projection\./, "a heading a person wrote is not the section this module owns");
+			assert.match(after, /observed outcome: failed/);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("leaves no temporary file behind when it records a session", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-session-atomic-"));
+		try {
+			const { appendNativeSession } = await import("../src/project-provider/native-sessions.ts");
+			await appendNativeSession(root, { title: "Atomic", summary: "Written through a temporary file" });
+			const entries = await readdir(join(root, ".dove"));
+			assert.deepEqual(entries.filter((name) => name.includes(".tmp-")), [], "the write leaves the target and nothing else");
+			const { readNativeSessions } = await import("../src/project-provider/native-sessions.ts");
+			assert.equal(readNativeSessions(root).length, 1);
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	// Reading every goal's convergence file rebuilt a projection that `state.json` already carries: measured at a median
+	// of 98 ms for a hundred goals, 3.2 MB read and parsed on the path that compiles a request's context. The current
+	// goal keeps the authoritative read; this case is what that split is worth, in both directions.
+	it("projects a non-current task from the record kept beside its goal, and still verifies the current one", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-convergence-projection-"));
+		try {
+			const provider = createProjectProvider(root);
+			const first = await provider.ensureFormalTask!("First");
+			await provider.mutateTaskConvergence!(first.stableId, { action: "freeze", criteria: [{ id: "AC-001", text: "The first criterion." }] });
+			await provider.runTaskOperation("create", ["Second"]);
+			await rm(nativeTaskConvergencePath(root, first.providerTaskId));
+
+			const projected = createProjectProvider(root).getContext().tasks.find((task) => task.stableId === first.stableId);
+			assert.equal(projected?.convergence?.health, "valid", "the projection travels in state.json, so the task is still readable without its file");
+
+			const current = createProjectProvider(root).getContext().currentTask;
+			assert.ok(current, "the second goal is current");
+			await writeFile(nativeTaskConvergencePath(root, current.providerTaskId), "{broken", "utf8");
+			assert.equal(createProjectProvider(root).getContext().currentTask?.convergence?.health, "invalid", "and the current goal still reads its own file, so a corrupt record is reported rather than smoothed over");
+		} finally { await rm(root, { recursive: true, force: true }); }
+	});
+
+	it("keeps one record per acceptance id when the newest window would drop it", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dove-native-evidence-reserve-"));
+		try {
+			const provider = createProjectProvider(root);
+			const task = await provider.ensureFormalTask!("Evidence reservation");
+			await provider.mutateTaskConvergence!(task.stableId, { action: "freeze", criteria: [{ id: "AC-001", text: "The first criterion." }] });
+			await provider.mutateTaskConvergence!(task.stableId, { action: "progress", acceptanceId: "AC-001", progress: { kind: "started" } });
+			for (let index = 0; index < 120; index++) await provider.recordTaskProgress!(task.stableId, { phase: "verifying", evidence: { index, payload: "x".repeat(500) } });
+
+			const evidence = await readFile(join(root, ".dove", "tasks", task.providerTaskId, "evidence.jsonl"), "utf8");
+			const lines = evidence.trim().split(/\r?\n/);
+			assert.ok(lines.length <= 100, "the record count still holds");
+			assert.ok(evidence.includes('"acceptanceId":"AC-001"'), "and the id the unsupported-criterion check compares on is still named");
+			for (const line of lines) assert.doesNotThrow(() => JSON.parse(line), "every surviving line is still whole, because the file is not sliced after selection");
 		} finally { await rm(root, { recursive: true, force: true }); }
 	});
 });

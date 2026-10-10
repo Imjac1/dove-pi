@@ -9,6 +9,18 @@ import { buildProjectContext } from "../trellis-adapter/context.ts";
 
 const MAX_SOURCE_CHARS = 256_000;
 
+/**
+ * The one document a general question about skills receives.
+ *
+ * A skill body is a procedure, and a procedure handed over unasked is context spent on work the request did not ask
+ * for. The index is what lets a request discover that a skill exists without paying for every body it might want, and
+ * it is a document rather than a diagnostic field so that the model can actually see it - `projection.index` had carried
+ * the same names since the beginning, and nothing ever put one in front of a reader.
+ */
+const SKILL_INDEX_ID = "skills/index";
+const SKILL_INDEX_TITLE = "# Agent Skills index (技能索引)";
+const SKILL_INDEX_NOTE = "Each entry is a skill in `.agents/skills/<name>/SKILL.md`; name one to receive its full text.";
+
 export interface McpContextResource {
 	readonly uri: string;
 	readonly text: string;
@@ -48,12 +60,19 @@ export function readInteroperableContextProjection(provider: ProjectProvider, mc
 	}
 	if (instructionSources.length > 1) conflicts.push(`Multiple project instruction authorities are present: ${instructionSources.join(", ")}. They remain separately labeled and are not silently merged.`);
 
+	const skillIndex: string[] = [];
 	for (const skill of discoverAllSkills(snapshot.projectRoot)) {
 		const content = readBoundedText(skill.path);
 		if (content === undefined) continue;
+		skillIndex.push(`- ${skill.name}${skill.description ? `: ${skill.description}` : ""}`);
 		const id = `skill/${skill.name}`;
 		authorities.push({ id, kind: "skill", sourceRef: skill.path });
 		documents.push({ id, kind: "skill", content, sourceRef: skill.path, priority: 40 });
+	}
+	// Built here rather than in the selector because a description is known here and gone by then: the selector sees
+	// documents, and a document carries its own text and nothing else.
+	if (skillIndex.length > 0) {
+		documents.push({ id: SKILL_INDEX_ID, kind: "skill", sourceRef: snapshot.projectRoot, priority: 40, content: `${SKILL_INDEX_TITLE}\n\n${SKILL_INDEX_NOTE}\n\n${skillIndex.join("\n")}\n` });
 	}
 
 	const seenResources = new Set<string>();
@@ -95,15 +114,45 @@ export function buildInteroperableProjectContext(
 	};
 }
 
+/**
+ * Which external documents a request asks for, in the two orders the contract names: "Ordinary context requests receive
+ * the index and estimates. Full external text is added only for a targeted instruction, skill, or MCP-resource query,
+ * then remains subject to the shared context compiler's relevance and size bounds."
+ *
+ * - A request that **names** a skill gets that skill's body, and only that one. It travels marked `required` so the
+ *   compiler's bag of words does not decide the same question a second time. Measured before this: a real `SKILL.md`
+ *   whose prose never contains the string `skill` was selected here and then dropped by `score()` as irrelevant, and a
+ *   document that did survive was rendered through the 4,000-character optional ceiling - "full external text" cut to
+ *   its first lines and its last, with the middle of the procedure gone.
+ * - A request that uses a **generic word** ("skills", "技能", "SKILL.md") gets the index: the names and the
+ *   descriptions. A body waits for a request that names one. Handing over every body on a generic word was what made
+ *   the order nominal - the whole corpus went in, and the compiler then kept whichever documents happened to contain
+ *   that word, which is a property of the writing rather than of the request.
+ */
 function selectExternalDocuments(documents: readonly ContextDocument[], query: string): readonly ContextDocument[] {
 	const normalized = query.toLowerCase();
 	const wantsInstructions = /agents\.md|claude\.md|project instruction|项目指令|项目规则/.test(normalized);
 	const wantsSkills = /\bskills?\b|skill\.md|技能/.test(normalized);
 	const wantsResources = /mcp resource|resource uri|mcp 资源|资源地址/.test(normalized);
+	const namedSkills = documents.filter((document) => document.kind === "skill" && document.id !== SKILL_INDEX_ID && mentionsSkillName(normalized, document.id));
+	if (namedSkills.length > 0) return namedSkills.map((document) => ({ ...document, required: true }));
 	return documents.filter((document) =>
 		(document.kind === "instruction" && wantsInstructions)
-		|| (document.kind === "skill" && wantsSkills)
+		|| (document.id === SKILL_INDEX_ID && wantsSkills)
 		|| (document.kind === "resource" && wantsResources));
+}
+
+/**
+ * True when the request names this skill, on a boundary a hyphenated or nested name still satisfies.
+ *
+ * A bare substring test would let a two-letter skill name fire inside an ordinary word, and `\b` is not enough on its
+ * own here: a skill may be called `trellis-check` or `nested:custom`, and neither hyphen nor colon is a word boundary.
+ */
+function mentionsSkillName(query: string, documentId: string): boolean {
+	const name = documentId.startsWith("skill/") ? documentId.slice("skill/".length) : "";
+	if (!name) return false;
+	const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`(^|[^\\p{L}\\p{N}_.:-])${escaped}([^\\p{L}\\p{N}_.:-]|$)`, "iu").test(query);
 }
 
 function readBoundedText(path: string): string | undefined {

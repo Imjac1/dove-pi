@@ -103,6 +103,11 @@ and evidence contracts still apply to Dove-owned executors.
   text is added only for a targeted instruction, skill, or MCP-resource query,
   then remains subject to the shared context compiler's relevance and size
   bounds.
+- A targeted **skill** query names the skill, and that body arrives marked
+  required, so the compiler's term matching does not decide the same question a
+  second time and the body is not cut to the optional-document ceiling. A
+  generic word receives the Agent Skills index - the names and their
+  descriptions - and no body: a body waits for a request that names one.
 - Context and evidence references exclude `.env*`, credential/secret/token/API
   key names, private-key names, and key/certificate/keystore extensions by
   default. Evidence filtering is defense in depth at the shared execution

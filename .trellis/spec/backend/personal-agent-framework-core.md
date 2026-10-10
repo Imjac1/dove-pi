@@ -58,7 +58,7 @@ function normalizeGateDecision(decision: unknown, gateId: string): GateDecision;
   `sed 'w out.txt'`) change something and read as read-only.
 - **The boundary is consulted in two halves, and the host decides which can run.** `denyDecision` reads a tool
   name and nothing else, so `src/pi-adapter/extension.ts` runs it *before* its lease check; `evaluate` reads the
-  arguments, so it runs only when `requestLifecycle.activeLease()` is active (`:2651`) - inside a request, where
+  arguments, so it runs only when `requestLifecycle.activeLease()` is active (`:2721`) - inside a request, where
   the arguments are final. State the consequence rather than discover it: **a tool call outside an active request
   is checked by the name-only half alone**, so an argument-reading control (a `sandbox` claim, an excluded
   technique, a mode's `fence`) does not run there.
