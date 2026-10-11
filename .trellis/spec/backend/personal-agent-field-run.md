@@ -48,9 +48,18 @@ Preconditions, every one of which a **person** supplies:
   because `settings.json` declares the Pi packages and Pi resolves them from that store: carrying the declaration
   alone left every one of them unloadable, so a run's tool surface was not the operator's and `hashlineEditTools` read
   `absent` against a host that has those tools installed. Measured 2026-10-05 on a bound clone: with the store present
-  the same status line reads `hashlineEditTools=present` and the remaining extensions load with it. It is a copy, so a
-  run still cannot touch the original, and it is the one carry that costs real time — deterministic cases are
-  `--provider faux` and pay none of it.
+  the same status line reads `hashlineEditTools=present` and the remaining extensions load with it. It is a copy, and it
+  is the one carry that costs real time — deterministic cases are `--provider faux` and pay none of it.
+- **The copy of the project is a convenience, not a fence.** `--cwd` names the project to work in and the runner copies
+  it, and that sentence used to stand here as "a run still cannot touch the original". Measured 2026-10-11, one did:
+  a run's agent learned the source clone's absolute path from a `__pycache__` file in its own copy — bytecode embeds the
+  source path — and ran 23 commands against the original, `git stash` among them. The carrier was there because
+  **measuring the baseline in place** writes exactly those caches, so the leak is a step in the recipe rather than an
+  accident of one clone. The clone was restored and re-verified by its three pinned byte counts, and the mechanism, the
+  repair and what is deliberately not being fixed are in
+  `.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/research/the-copy-is-not-a-fence.md`. **Read that file
+  before treating `--cwd` as isolation**: cleaning the measured carriers is a real fix and a small one, and fencing an
+  agent inside its workspace is a different and larger question.
 - **An output path outside this repository.** A field run's raw evidence is never committed.
 - **Room for the retries a long run needs.** `DOVE_PI_MAX_REQUEST_ATTEMPTS` is the operator's own knob - published in
   `dove-pi --help`, read by the extension, and forwarded because the runner passes the parent environment through - so

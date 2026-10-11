@@ -77,3 +77,13 @@ this task says `python -m pytest -q`.
   source and installed both settle at exit 0 with 18 events and the same status line - `workMode=code-development`,
   `hashlineEditTools=present`. The plumbing is what that shows; the extension's own new sentence is not in either
   reading, because a `/status` turn never lands in the formal lane.
+
+
+**Clean the caches after every baseline measurement, or the next run escapes the copy.** Added 2026-10-11, after one did.
+The baseline above is measured by running the clone's own suite in place, and that writes `__pycache__/`, `.pytest_cache`,
+`.mypy_cache` and `.ruff_cache` — every one of which embeds the clone's **absolute path**, because that is what bytecode
+and cache metadata carry. The field runner copies the project as it finds it, so those bytes travel into the run, an agent
+that reads one learns where the source lives, and it can then work there instead. Measured on the first of three
+customer-path passes: the agent ran 23 commands against the source clone, `git stash` among them, and left
+`cachecontrol/controller.py` at 21,168 B where this recipe pins 20,090. **The predictor is one command** — search the clone
+for its own path and expect nothing — and the account is in `the-copy-is-not-a-fence.md` beside this file.
