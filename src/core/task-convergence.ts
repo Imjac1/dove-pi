@@ -798,7 +798,13 @@ function requirePattern(value: unknown, path: string, pattern: RegExp, maximum: 
 }
 
 function requireAcceptanceId(value: unknown, path = "event.acceptanceId"): string {
-	return requirePattern(value, path, ACCEPTANCE_ID_PATTERN, 35);
+	// **What the value must be, not how it failed.** Measured 2026-10-11 in the fourteenth field run: the model passed
+	// the task's id, thirty-six characters long, and the two refusals this call could produce name a length limit and an
+	// invalid format - so the value's *kind*, which is the whole mistake, was the one thing neither said. A criterion id
+	// is `AC-`-prefixed, and that pattern already carries the ceiling, so the kind is what to state.
+	const text = typeof value === "string" ? value.trim() : "";
+	if (!ACCEPTANCE_ID_PATTERN.test(text)) throw invalid(`${path} must be a criterion id as the freeze recorded it, like AC-001 - not the task's id`);
+	return text;
 }
 
 function requireEvidenceRef(value: unknown, path: string): string {

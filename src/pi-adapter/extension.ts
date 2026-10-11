@@ -407,8 +407,13 @@ export function convergenceOperationFromPiInput(input: {
 	readonly unblockCondition?: string;
 }, runtimeBaseline?: Readonly<Record<string, string | number>>): ProjectTaskConvergenceOperation {
 	if (input.operation === "status") throw new Error("status is read-only.");
+	// **A missing field's refusal says what the field wants, where the name alone is ambiguous.** Measured 2026-10-11 in
+	// the fourteenth field run: told only that `acceptanceId` was required, the model reached for the task's id - the one
+	// id it had in hand - and the layer below then answered with a length limit. Two ids, two kinds, and only one of them
+	// is the criterion this field is named after.
+	const REQUIRED_FIELD_HINTS: Record<string, string> = { acceptanceId: " - one of this task's criterion ids, 'AC-001' style, as operation=status prints them, not the task's id" };
 	const required = (value: string | undefined, field: string): string => {
-		if (!value?.trim()) throw new Error(`agent_task_convergence requires ${field}.`);
+		if (!value?.trim()) throw new Error(`agent_task_convergence requires ${field}${REQUIRED_FIELD_HINTS[field] ?? ""}.`);
 		return value.trim();
 	};
 	if (input.operation === "change") {
@@ -1725,7 +1730,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		],
 		parameters: Type.Object({
 			operation: Type.Union([Type.Literal("status"), Type.Literal("freeze"), Type.Literal("progress"), Type.Literal("finding"), Type.Literal("update_finding"), Type.Literal("resolve_finding"), Type.Literal("decide"), Type.Literal("checkpoint"), Type.Literal("resume"), Type.Literal("change"), Type.Literal("applied")]),
-			acceptanceId: Type.Optional(Type.String()),
+			// **The sibling of the `task` parameter below, and fixed for the same reading one run later.** This parameter
+			// carried no description while its neighbours did, so its bare name reads as any id the task has: measured
+			// 2026-10-11, the model passed the task's own id, and the two refusals that could answer it name a length
+			// limit and an invalid format - neither of which says the value's kind, which is the whole mistake.
+			acceptanceId: Type.Optional(Type.String({ description: "A criterion id as operation=freeze recorded it - 'AC-001', not the task's own id. operation=status prints the ids this task carries." })),
 			acceptanceRevision: Type.Optional(Type.String()),
 			criteria: Type.Optional(Type.Array(Type.Object({ id: Type.String(), text: Type.String() }))),
 			status: Type.Optional(Type.Union([Type.Literal("started"), Type.Literal("evidence"), Type.Literal("passed"), Type.Literal("failed"), Type.Literal("waived"), Type.Literal("step_completed"), Type.Literal("verification_started")])),

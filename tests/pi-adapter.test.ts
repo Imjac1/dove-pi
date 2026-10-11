@@ -819,6 +819,78 @@ describe("Pi adapter", () => {
 		}
 	});
 
+	it("says what a criterion id is, for the argument the model filled with the task's own id", async () => {
+		// **The fourteenth field run's own input, replayed.** That run completed the flow on the shipped default budget
+		// and spent three of its rounds on this. The model had no criterion id to hand, called `operation: "progress"`,
+		// and was told only that `acceptanceId` was required; it then passed the *task's* id - thirty-six characters -
+		// and got back `event.acceptanceId must contain 1-35 characters`, a sentence about a length limit that never
+		// says the value's kind, which is the whole mistake. The parameter carried no description while its neighbours
+		// did, and it sits fifteen lines from the `task` parameter fixed for exactly this one run earlier.
+		// **The rounds were not free**: that request used all three attempts the default allows.
+		const root = mkdtempSync(join(tmpdir(), "pi-convergence-acceptance-id-"));
+		mkdirSync(join(root, ".dove"), { recursive: true });
+		const goalId = "goal-e6b6ed2f-57aa-4a9f-94d9-a54f38e77cca";
+		const goal = { id: goalId, title: "The immutable directive", status: "active", formal: true, phase: "intake", createdAt: "2026-10-11T00:00:00.000Z", updatedAt: "2026-10-11T00:00:00.000Z", decisions: [], verification: [] };
+		writeFileSync(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, currentGoalId: goal.id, goals: [goal] }), "utf8");
+		const previousCwd = process.cwd();
+		const previousStateDir = process.env.DOVE_PI_STATE_DIR;
+		process.chdir(root);
+		process.env.DOVE_PI_STATE_DIR = join(root, "state");
+		try {
+			const tools = new Map<string, { parameters?: { properties?: Record<string, { description?: string } | undefined> }; execute: (...args: any[]) => Promise<any> }>();
+			const api = {
+				registerCommand() {}, registerShortcut() {}, registerFlag() {}, appendEntry() {},
+				registerTool(definition: { name: string; execute: (...args: any[]) => Promise<any> }) { tools.set(definition.name, definition); },
+				getAllTools() { return representativeTools.map((name) => ({ name })); },
+				setActiveTools() {}, getActiveTools() { return [...representativeTools]; },
+				getThinkingLevel() { return "high"; },
+				on() {},
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const tool = tools.get("agent_task_convergence");
+			assert.ok(tool, "the convergence tool is registered");
+			// **A criterion id and a task id do not look alike, and the name alone does not say which is wanted.** Both
+			// were available to the model - the goal's id is in the state file it had read - so the parameter has to
+			// say which one it takes.
+			assert.match(tool.parameters?.properties?.acceptanceId?.description ?? "", /criterion/i, "the parameter says it takes a criterion id, because `acceptanceId` alone reads as any id the task has");
+			assert.match(tool.parameters?.properties?.acceptanceId?.description ?? "", /AC-001/, "and shows the shape, because that is the part a bare name leaves out");
+			const context: FakeContext = {
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+				sessionManager: { getEntries: () => [], getSessionId: () => "acceptance-id-session" },
+			};
+			await tool.execute("freeze", { operation: "freeze", criteria: [{ id: "AC-001", text: "The suite is green." }] }, undefined, undefined, context);
+			// The first of the three wasted rounds: the argument is missing, and the refusal has to carry what the
+			// argument wants, because "required" is what sent the model looking for an id to put there.
+			await assert.rejects(
+				() => tool.execute("no-acceptance", { operation: "progress", status: "started" }, undefined, undefined, context),
+				(error: Error) => {
+					assert.match(error.message, /acceptanceId/, "the refusal names the missing argument");
+					assert.match(error.message, /criterion/i, "and says which kind of id it takes");
+					return true;
+				},
+			);
+			// The second and third, in one call: a real id from this task, of the wrong kind.
+			await assert.rejects(
+				() => tool.execute("task-id-as-acceptance", { operation: "progress", acceptanceId: goalId, status: "started" }, undefined, undefined, context),
+				(error: Error) => {
+					assert.match(error.message, /criterion/i, "the refusal says the value must be a criterion id");
+					assert.match(error.message, /AC-001/, "and shows the shape it wants");
+					assert.doesNotMatch(error.message, /1-35 characters/, "it does not present the failure as a length limit, which is what sent the model looking for a shorter id");
+					return true;
+				},
+			);
+			// **The control, and it is what makes the kind of id the cause rather than the progress call**: the same
+			// call with the criterion the freeze recorded is accepted.
+			await tool.execute("criterion-id", { operation: "progress", acceptanceId: "AC-001", status: "started" }, undefined, undefined, context);
+			assert.equal(existsSync(nativeTaskConvergencePath(root, goal.id)), true, "the criterion id is accepted, so progress itself was never the problem");
+		} finally {
+			process.chdir(previousCwd);
+			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
+			else process.env.DOVE_PI_STATE_DIR = previousStateDir;
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("records an optional native goal directly without planning questions or legacy script execution", async () => {
 		const root = mkdtempSync(join(tmpdir(), "pi-planning-replay-"));
 		const stateDir = join(root, "state");
