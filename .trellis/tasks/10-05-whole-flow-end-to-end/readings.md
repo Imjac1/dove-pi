@@ -644,6 +644,40 @@ provider.request.completed  stopReason="error"  failureKind="transient"  failure
 按算术，失败率 10% 时 ~40 轮的请求约 **25%** 能过、5% 时约 **50%** ✓ —— **重试是真策略，只是不保证** ✓。
 **每次失败 ~20–100 秒** ✓，而窗口好坏 30 秒内可见 ✓，所以试错成本低 ✓。**每次尝试的读数照旧入档**（不挑好看的记 ✓）。
 
+---
+
+# 读数（第十一次：**阻断被定位到本仓可修处** —— 工具在、模型不调它）（2026-10-11 ✓✓✓）
+
+**第九次真跑**（`…-i`，本会话走得最远 ✓）：**8 轮 provider ✓ · 7 次工具调用 ✓ · `2 request.received` / `2 request.planned`** ✓✓
+（**step 1 第一次被送达** ✓），并产生 **1 条 `task.convergence.decision`** ✓。然后两个请求都以 `attempt-limit` 收场 ✗。
+
+## 那条决定说的是什么，以及 agent 调了什么 ✓✓
+
+```text
+task.convergence.decision  {eventKind:"product_mutation.blocked", state:"missing", snapshotRevision:0, acceptanceRevision:"unknown"}
+工具调用                     bash ×2 · read ×4 · grep ×1        ← agent_task_convergence 一次都没有 ✗
+```
+
+⇒ **门因为"没有冻结的验收标准"挡住了它的第一次产品变更** ✓（与第五次同形 ✓），**而它从未调用那个工具** ✗。
+
+## 这是"接线缺陷"还是"模型没照做"？——量了，是后者 ✗✓✓
+
+| 检查 | 读数 |
+|---|---|
+| 工具是否注册 | ✓（`extension.ts` 里它的校验与指南都在 ✓） |
+| **工具是否发给了模型** | **✓✓** —— 会话里 100 KB 的 tools 数组 ✓，15 个 `agent_*` 全在，**`agent_task_convergence` 在列** ✓ |
+| 模型是否调用 | **✗ 一次都没有** ✓（账本里只有 bash/read/grep ✓） |
+| prompt 是否说了要先冻结 | **✓ 说了**（场景第 0 步 ✓），工具自己的指南也说了 ✓ |
+
+⇒ **"先冻结再改"这条规则，今天只靠"告诉模型"来执行，而它两次都没照做** ✗✓✓。
+这正是本仓自己那条纪律说的形态：**只靠散文/提示的规则，是没人守的规则** ✓ ——
+而它的修法也在本仓手里 ✓✓：**intake 既然已经从那条消息里开出正式任务、并写出了 `acceptance.md`（判据的文本 ✓）**，
+**"冻结"这一步就该由 harness 自己做** ✓，而不是等模型记得调一次工具 ✗。
+（判据文本已经在场 ✓；缺的只是把它记成 **frozen** 的那条记录 —— `convergence.json` 至今不存在 ✗ ✓。）
+
+**这一步的改动边界**（下一轮的规划，需你点头 ✓）：`src/core/task-convergence.ts`（verifier-embedded ✗ ⇒ 改动要按本仓对 verifier 的规矩来 ✓）
++ intake 的那处调用点 + 一条用例（"开正式任务后，第一次产品变更不再因 `state: missing` 被挡" ✓）+ 相关规格页 ✓。
+
 > **同一个 URL、同一个 key、同一份载荷、同一个 Node 栈** —— 我构造的请求全部成功，**Pi 的请求 18–76 ms 内失败** ✓。
 > 差别只能在 **Pi 自己构造/处理那一次请求的路径里**（它加的 header、它的重试/中止逻辑、它的连接池状态），
 > 而 **provider 通道属于 Pi**（D1：本仓不实现它 ✓）。**故不写成"原因已找到"** ✗ —— 剩下的可能一个都没量到 ✓。
