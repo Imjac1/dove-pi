@@ -37,6 +37,17 @@
    - **未定位** ✗：`doveContext`（3,708 B ✓，`cache-prefix.ts` 里单列为一类 ✓）—— **它才是"Dove 自己写的话"那条通道** ✓，
      而我**没找到把哪些文本拼进去的那处** ✗（`cache-prefix.ts` 不在 `src/pi-adapter/` 下 ✓，本轮上下文预算不足 ✓）。
    **没找到之前不动手** ✗。
+
+   **已解决（2026-10-11 ✓）**：那条通道的识别标记在 `src/core/cache-prefix.ts:141-148` ✓ 原文：
+   ```ts
+   if (object.customType === "personal-agent-context") return true;
+   const beginning = text.trimStart();
+   return beginning.startsWith("[PERSONAL AGENT REQUEST CONTEXT]") || beginning.startsWith("[PERSONAL AGENT REQUEST GUIDANCE]");
+   ```
+   ⇒ **目标组装点是 `[PERSONAL AGENT REQUEST GUIDANCE]` 那块** ✓✓ ——
+   它就是"harness 自己写的、每个请求都在"的指导块 ✓（这正是需要的那条通道 ✓，不是模式块 ✓、不是工具指南 ✓）。
+   **下一步**：在这块里加一句**由事实驱动**的话 ✓（只在"本请求开了正式任务且尚无冻结快照"时出现 ✓）；
+   找到它的组装处 → 改 → 一条看住"出现/不出现"的用例 ✓。
 2. 找到后：在该块里加一句**由事实驱动**的话 ✓（只在"本请求开了正式任务且尚无冻结快照"时出现 ✓，否则不出现 ✗ ——
    一句永远在的话会变成噪声 ✓）。
 3. 用例：一条**看住那句话出现/不出现的条件** ✓（这是"规则要有机制"的那一半 ✓）。
