@@ -94,6 +94,21 @@ harness **自报**：*"当前 Pi 宿主未提供 hashline 编辑工具（replace
       判据：`typecheck 0` ✓ · `npm test 978/978` ✓ · 零 mount 表位移 ✓。
       **这一条仍留开** ✗✓：step 0 settled ✓、step 1 failed ✗、step 2/3 一次没发 ✗、任务 `active/intake` ✗ ⇒ **finish/archive 未到达** ✓，
       **但与前五次不同**：活干成了、冻结成了、终态如实 ✓，缺的只是收尾几步 ✓。
+      **（2026-10-11 第十六次读数：第十二次真跑 ✓✓✓ —— **不要拐杖，模型自己先冻结了** ✓✓✓）**：
+      **预注册在先** ✓（`research/run-12-preregistration.md` ✓）。它问的比上一轮干净 ✓：上一轮模型是被门教会之后才冻结的 ✓，
+      而那个假阳性已经拿掉 ⇒ **没有东西挡它了，那句话本身够不够** ✓。
+      12.8 分钟 ✗（上限 45 ✓），`attempt-limit` ✓ `retryable=true` ✓。按 `toolCallId` 对齐 ✓✓：
+      `python -m pytest …` **跑过且没有被任何 decision 指过** ✓✓（**文法修复在真跑里成立** ✓，上一轮就是它杀掉请求的 ✓）→
+      **`agent_task_convergence freeze` → `freeze / state=working`** ✓✓✓ → `insert controller.py` → `product_mutation.blocked / state=working` ✓ → `progress status=started` ✓ → provider 502 ✗。
+      ⇒ **冻结在第一次产品编辑之前，且没有任何东西先拦过它** ✓✓✓ —— **第十二次读数那条"只靠散文的规则没人守"的疑虑，在这一层上被实测否掉** ✓✓；
+      **本任务的 A（守则改变行为）成立** ✓✓。
+      **而紧随其后的拦截是门在做它该做的事** ✓：`state=working`（不是 `missing` ✓）⇒ 走的是"没有在进行的判据"那条分支 ✓
+      —— **冻结 ≠ 开始** ✓，模型随后立刻补上 ✓（**门把它教会了** ✓）。
+      **死因完全在门外** ✗✓：会话最后一条是 **网关自己的 502，带 `trace_id`** ✓✓；三次瞬时失败全部是 provider 的 ✓ ⇒ 有界、fail-closed、如实 ✓。
+      **门对、分类对、守则有效、终态如实** ✓✓ —— **剩下的唯一阻断是 provider 的 502** ✗✓。
+      **场景第 0 步已补上第二步** ✓（"冻结判据，然后把你在做的那一条标成 started" ✓），**lane 复核未变** ✓（step 0 formal ✓ step 1 fast/archive-task ✓）。
+      **Claim B 第三次没被走到** ✗✓（两次运行里每个 `error` 都带文本 ⇒ 全走文本规则 ✓）。
+      **这一条仍留开** ✗✓：AC#2 ✗ —— step 0 failed ✗、step 1/2/3 一次没发 ✗、任务未归档 ✗；副本字节未变 ⇒ 套件仍是基线 ✓。
 - [x] **两处缺口的处置各有可复现判据** ✓（定案见 `## 决定`✓ 与 `design.md`✓）：修好了是绿的 ✓，没修是红的且有原文 ✓。
       **两处都成立** ✓✓：① `workMode` 从 `failed` ✗ 变成 `code-development` ✓；② `hashlineEditTools=absent` 在读数里 ✓。
       而 ② **多量出一层** ✓✓：**这不是宿主不提供** ✗ —— 宿主装了 ✓、声明也带进了运行 ✓，**没带的是包** ✗（run 的 agent 目录里没有 `npm/` ✓）→ **缺口的可修面在本仓的运行器，不在 Pi** ✓。

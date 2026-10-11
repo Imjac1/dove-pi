@@ -1160,5 +1160,123 @@ project/.dove/tasks/goal-c09ec8b9-…/convergence.json   ← 真的写出来了 
 - **下一步最有价值的一件** ✓：**再跑一次** —— 文法修复之后，门不会再为"跑测试"开火 ✓，
   step 0 应当能在同一个请求里读完、冻结、改完 ✓，step 1 的收尾序列才有可能跑到 archive ✓。
 
+---
+
+# 读数（第十六次：**第十二次真跑 —— 不要拐杖，模型自己先冻结了**）（2026-10-11 ✓✓✓）
+
+**预注册在先** ✓（`research/run-12-preregistration.md` ✓，先提交再开跑 ✓）。**这一轮问的是一个比上一轮干净的问题** ✓：
+上一轮模型是被门**教会**之后才冻结的 ✓；现在那个假阳性拿掉了，**没有东西挡它了** ——
+**那句话本身够不够让它先冻结** ✓。
+
+## 第 0 片：这次运行（§4 格式 ✓）
+
+```text
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-11
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]
+exitCode=0  settled=false  harnessTimedOut=false  scenarioFailed=true  events=7335  duration=12.8 min（上限给的是 45.0 min）
+terminal: reason=failed  detail=attempt-limit  code=provider-attempt-limit  retryable=true  origin=provider
+resources(账本): toolCalls=16  providerRounds=17  toolDurationMs=1994  stopReasons=2×error + 14×tool_call + 1×error
+tokens: input=508,244  output=14,713  reasoning=13,695
+artifactEvidence {doveState:true, doveFileCount:8, formalTaskCount:1, formalArtifactCount:7, convergenceFileCount=1}
+steps: 0 failed=true(7330 ev, agent_task_convergence/bash/grep/insert/read) · 1、2、3 **一次都没发**
+```
+
+## 🎯 第 1 片：**预注册那个问题的答案：成立** ✓✓✓
+
+按 `toolCallId` 把账本、决策与会话逐条对齐 ✓✓（**顺序就是答案** ✓）：
+
+```text
+88d8590c  bash  python -m pytest tests/test_immutable.py -q 2>&1 | tail -25    ← 门没有拦它 ✓✓
+（6 次 read）
+ab28434e  agent_task_convergence  operation=freeze    →  freeze / state=working        ← 14:09:03 ✓✓✓
+aabfe851  insert  cachecontrol/controller.py          →  product_mutation.blocked / state=working
+afa15d36  agent_task_convergence  progress status=started  →  progress / state=working
+（provider 给了 502，请求结束）
+```
+
+⇒ **冻结在第一次产品编辑之前** ✓✓✓，**而且没有任何东西先拦过它** ✓ ——
+**第十二次读数那条"只靠散文的规则没人守"的疑虑，在这一层上被实测否掉** ✓✓：
+那句话在**只在为真时出现**的通道里 ✓，模型**照着做了** ✓。
+
+**这是本任务要验的那一条** ✓：`A`（守则改变行为）**成立** ✓✓。
+
+## 第 2 片：**文法修复在真跑里成立** ✓✓ ✓，**而紧随其后的拦截是对的** ✓
+
+**判据表第 1 行** ✓：`python -m pytest …` 跑过了 ✓，账本里**没有任何 `task.convergence.decision` 指着它** ✓ ——
+上一轮就是这一条杀掉了请求 ✓。**假阳性没有复现** ✓。
+
+**判据表第 2 行**（"被拦的是 shell 命令 ⇒ 还有假阳性"）**没有出现** ✓：唯一一次拦截指向 `insert` ✓，
+**是一个真正的变更工具** ✓。
+
+**而那次拦截是门在做它该做的事** ✓✓，理由是它自己写下的那一条：
+`{"eventKind":"product_mutation.blocked","state":"working","snapshotRevision":1,"acceptanceRevision":"7f4ee70b…"}` ✓
+—— `state` 是 **`working`** 而不是 `missing` ✓ ⇒ 走的是"**没有在进行的判据**"那条分支 ✓
+（`extension.ts:2780-2782`：`Select an active acceptance criterion before mutating product files.` ✓）。
+**冻结 ≠ 开始** ✓：模型冻了判据 ✓，但**没有把正在做的那一条标成 started** ✓，于是第一次编辑被拒 ✓。
+它随后**立刻补上了那一步**（`progress status=started` ✓）—— **门把它教会了** ✓。
+
+## 第 3 片：**这一次的死在门外** ✓✗（**终态原文** ✓）
+
+会话最后一条 ✓：
+
+```text
+stopReason=aborted   errorMessage='502: {"message":"upstream failure","type":"bad_gateway_error","param":null,"code":"upstream_failure","trace_id":"8f96aea356e35c536013ded274670281"}'
+```
+
+⇒ **网关自己的 502，带 trace_id** ✓✓ —— 与第九次读数（12 连发里第 9 发 502 ✓）**同形** ✓，
+而这次它**带回了可交给上游的编号** ✓✓。
+
+**三次瞬时失败全部是 provider 的** ✓✓：2 次 `Connection error.` ✓（文本规则 ✓）· 1 次 `502` ✓（文本规则 ✓）
+⇒ `attempt-limit` ✓ `retryable=true` ✓ —— **有界、fail-closed、如实** ✓。
+
+**所以这一次的运行里，没有任何一处是 Dove 的错** ✓✓：门做对了（拦的是真变更、理由对、随后被补上 ✓），
+分类做对了 ✓，终态如实 ✓，**而它死在一条 502 上** ✗。
+
+## 第 4 片：判据表逐行 ✓✓（**预注册的价值** ✓）
+
+| 预注册的可观测 | 实测 | 判 |
+|---|---|---|
+| 测试命令**没有**被 `task.convergence.decision` 指过 | `python -m pytest …` 跑过 ✓，没有 decision ✓ | **文法修复成立** ✓✓ |
+| 拦截指向 **shell 命令** ⇒ 还有假阳性 | 唯一一次指向 `insert` ✓ | **未复现** ✓ |
+| `freeze` 在第一次 `insert`/`write`/`replace` **之前** | freeze 14:09:03 ✓ < insert ✓ | **守则不要拐杖也成立** ✓✓✓ |
+| 拦截指向**变更工具** ⇒ 模型先改了 | 是变更工具 ✓，**但在 freeze 之后** ✓，且理由是"无进行中的判据" ✓ | **门履职，不是模型抢跑** ✓ |
+| 一次变更都没有 | 有 `insert` ✓ | — |
+
+**上一轮那两处过度概括的判据行，这一轮都识破了同一个值里的两种机制** ✓✓ —— **判据表现是真的在起作用** ✓。
+
+## 第 5 片：**场景第 0 步现在把两步都说出来了** ✓✓
+
+实测的代价是**一个来回** ✓：模型按 prompt 只冻了判据 ✓，第一次编辑被拒 ✓，它再补 `progress` ✓。
+**而 prompt 从没说过还有第二步** ✗✓（工具自己的指南 `:1723` 说了 ✓、`:1549` 那句也说了 freeze ✓）。
+
+**改法** ✓：第 0 步写明"**冻结判据，然后把你在做的那一条标成 started**" ✓。**lane 复核过** ✓
+（第五次读数的教训：加一个词就能把请求从 formal 翻成 fast ✗）：`step 0 lane=formal` ✓ · `step 1 lane=fast, workflow=archive-task` ✓ · `step 2 fast/lookup` ✓ —— **与改前逐字相同** ✓。
+
+## 第 6 片：AC 逐条 ✓✗（**不粉饰** ✓）
+
+| AC | 判 |
+|---|---|
+| mode 生效 / 工具面进读数 | **成立** ✓ |
+| 项目自己的套件给出结果 | **这次没走到** ✗ —— 第一次编辑被拒 ✓，补完 `progress` 之后 provider 就断了 ✗；副本**字节未变**（`controller.py` 20090 B ✓）而套件仍是 `1 failed, 115 passed` ✓（即**基线原样** ✓） |
+| 账本累计量与判分并列 | **成立** ✓ |
+| **一条运行里走完整个流程** | **仍不成立** ✗✓✓：step 0 failed ✓，step 1/2/3 **一次都没发** ✗；任务未归档 ✗ |
+
+**七次跑，六个死因** ✓✓，而**这一次把"我们这一侧"几乎全部清干净了** ✓✓：
+门对、分类对、守则有效、终态如实 ✓ —— **剩下的唯一阻断是 provider 的 502** ✗✓。
+
+## 第 7 片：两条真跑里都没有被走到的那个修复 ✓✗（**照实记** ✓）
+
+**Claim B（裸标记重试）第三次没被走到** ✗✓：两次运行里**每一次** `error` 都带文本 ✓
+（`Connection error.` ×4 ✓、`502: …` ×1 ✓）⇒ 全都命中**文本规则** ✓ ⇒ **跨行那条规则在这条通道上没被触发过** ✓。
+**现在只有用例看着它** ✓（分类 + 走真实处理器路径两条 ✓）。**这是关于这个 endpoint 的读数** ✓，不是关于那条修复的 ✓。
+
+## 仍未达成的 ✗✓
+
+- **AC#2 仍不成立** ✗✓，而**这次的缺是纯粹的 provider** ✗（第 3 片 ✓），且**缺的东西现在只剩收尾几步的轮数** ✓。
+- **两个改策略的选项 (a)/(b) 仍原样开着** ✗✓ —— 第十次读数那条算术仍然成立 ✓：
+  一个 ~17 轮的请求，3 次瞬时失败就结束 ✓；要让收尾序列（判分 → verify → convergence status → finish → archive ✓）
+  在同一次运行里跑完，**要么换一个好窗口、要么由你决定把那个上限从"每请求累计"改成"连续"** ✓。
+- **Claim B 仍未在真跑里被走到** ✗（第 7 片 ✓）。
+
 
 
