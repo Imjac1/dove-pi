@@ -1,4 +1,5 @@
 import { describe, it } from "node:test";
+import { temporaryDirectory } from "./temporary-directory.ts";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,7 +32,7 @@ const FRAMEWORK = "0.1.0";
 
 /** A throwaway workspace root, used by everything that reads a declaration or a mode directory off disk. */
 function freshRoot(): string {
-	return mkdtempSync(join(tmpdir(), "dove-mode-"));
+	return temporaryDirectory("dove-mode-");
 }
 
 function files(overrides: Partial<WorkModeFiles> = {}): WorkModeFiles {

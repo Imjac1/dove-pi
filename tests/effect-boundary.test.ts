@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { temporaryDirectory } from "./temporary-directory.ts";
 import assert from "node:assert/strict";
 import { argumentsDigest, createEffectBoundary } from "../src/core/effect-boundary.ts";
 import { deriveEffectKey } from "../src/core/effect-ledger.ts";
@@ -27,7 +27,7 @@ function mode(effectClasses: WorkMode["effectClasses"]): WorkMode {
 }
 
 function boundary(effectClasses: WorkMode["effectClasses"] = { read: "idempotent", "code-audit.diff": "idempotent" }) {
-	const directory = join(mkdtempSync(join(tmpdir(), "dove-boundary-")), "effects");
+	const directory = join(temporaryDirectory("dove-boundary-"), "effects");
 	const store = createFileEffectStore({ directory });
 	return { boundary: createEffectBoundary({ engagement: "eng-1", mode: mode(effectClasses), store, now: () => NOW }), directory, mode: mode(effectClasses) };
 }

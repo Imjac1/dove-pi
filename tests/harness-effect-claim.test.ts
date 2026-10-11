@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
+import { temporaryDirectory } from "./temporary-directory.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createAgentLoop } from "../src/core/loop-runner.ts";
 import { createScriptedProvider } from "../src/adapters/loop-scripted.ts";
@@ -20,7 +20,7 @@ const MODE = { id: "code-audit", version: "1.0.0", governanceVersion: "1" };
 const SECOND_PROCESS = join(process.cwd(), "tests", "fixtures", "harness", "claim-in-second-process.ts");
 
 function freshDirectory(): string {
-	return mkdtempSync(join(tmpdir(), "dove-effect-"));
+	return temporaryDirectory("dove-effect-");
 }
 
 function keyFor(digest = "d1", explicitKey?: string): string {

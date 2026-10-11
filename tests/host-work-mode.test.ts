@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { temporaryDirectory } from "./temporary-directory.ts";
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "../src/pi-adapter/extension.ts";
@@ -96,7 +97,7 @@ function startHost(root: string) {
 }
 
 function freshRoot(): string {
-	return mkdtempSync(join(tmpdir(), "dove-mode-root-"));
+	return temporaryDirectory("dove-mode-root-");
 }
 
 function declareMode(root: string, value: string): void {

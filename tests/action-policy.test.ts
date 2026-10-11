@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { temporaryDirectory } from "./temporary-directory.ts";
 import assert from "node:assert/strict";
 import { createActionPolicy, type ActionPolicy, type ActionPolicyOptions } from "../src/core/action-policy.ts";
 import type { AuthorityDocument } from "../src/core/authority.ts";
@@ -18,7 +19,7 @@ const sha256 = (text: string): string => createHash("sha256").update(Buffer.from
 
 /** A workspace with the two evidence files the document below names, and their real digests. */
 function workspace(): { root: string; permission: string; inventory: string } {
-	const root = mkdtempSync(join(tmpdir(), "dove-policy-"));
+	const root = temporaryDirectory("dove-policy-");
 	mkdirSync(join(root, "engagements"), { recursive: true });
 	const permission = sha256("permission-to-test");
 	const inventory = sha256("asset-inventory");
