@@ -1000,5 +1000,163 @@ artifactEvidence {doveState:true, doveFileCount:7, formalTaskCount:1, formalArti
 - **那句话能否改变模型行为仍未验证** ✗（第 1 片 ✓）。
 - **笔记里两个改策略的选项 (a)/(b) 仍原样开着** ✗✓。
 
+---
+
+# 读数（第十五次：**第十一次真跑 —— 活第一次干成了，而第一道门拦的是"测量"**）（2026-10-11 ✓✓✓）
+
+**这一轮按预注册跑** ✓（判据先写成文件、先提交，再开跑 ✓，见 `research/run-11-preregistration.md` ✓）。
+
+## 第 0 片：这次运行（§4 格式 ✓）
+
+```text
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-11
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]
+exitCode=0  settled=true  harnessTimedOut=false  scenarioFailed=true  events=8668  duration=20.5 min（上限给的是 45.0 min）
+terminal: reason=failed  detail=attempt-limit  code=provider-attempt-limit  retryable=true  origin=provider
+         nextAction="Check provider availability, then submit the request again."
+resources(账本): toolCalls=25  providerRounds=26  toolDurationMs=193599  stopReasons=22×tool_call + 3×error
+tokens: input=1,029,836  output=12,235  reasoning=9,397
+artifactEvidence {doveState:true, doveFileCount:8, formalTaskCount:1, formalArtifactCount:7, convergenceFileCount=1}
+dialogs: approved=0 declined=0 answered=0 cancelled=0 defaulted=0 mismatch=0 unused=0
+steps: 0 settled=true(2223 ev, bash/read) · 1 failed=true(6440 ev, replace/agent_*/bash/read) · 2 与 3 **一次都没发**
+```
+
+## 🎯 第 1 片：**判分第一次绿** ✓✓✓
+
+**跑运行自己的副本** ✓（runner 拷出来那份 ✓，不是原件 ✓）：
+
+```text
+116 passed in 2.34s        ← 基线：1 failed, 115 passed
+```
+
+**目标从红变绿，且一条都没弄坏** ✓✓✓。**而且判分仪器字节未变** ✓✓：
+`tests/test_immutable.py` **1305 B** ✓ · `tests/conftest.py` **5971 B** ✓（与配方逐字节相同 ✓）；
+改的只有 `cachecontrol/controller.py` **20090 → 21039 B** ✓。**这是十一次跑里第一次把活干成** ✓✓。
+（这同时满足 **R4/AC 的"项目自己的套件给出结果"** ✓ 与 §5 的"判分只在项目自己的套件里" ✓。）
+
+## 🎯 第 2 片：**第一道门拦下的不是变更，是跑测试** ✗✓✓✓（**本轮最重的一条** ✓）
+
+按 `toolCallId` 把账本与被拦的那次调用对齐 ✓✓：
+
+```text
+chatcmpl-tool-a2305208788ac36e  bash  python -m pytest tests/test_immutable.py -q 2>&1 | tail -20
+→ task.convergence.decision  {eventKind:"product_mutation.blocked", state:"missing", snapshotRevision:0, acceptanceRevision:"unknown"}
+→ request.terminal           {reason:"failed", detail:"convergence-missing"}
+```
+
+⇒ **门把"跑项目自己的测试"读成了产品变更** ✗✓✓，**并在模型做第一件事的时候结束了那个请求** ✗。
+
+**根因量到了行** ✓✓：`src/core/invocation-disposition.ts:112` 的 `READ_ONLY_SHELL_SEGMENT` 是**闭集文法** ✓，
+里面**有 `go (test|vet|list|version|env)`** ✓，**没有任何 Python 条目** ✗✓✓。实测（改之前 ✓）：
+
+```text
+true   go test ./... 2>&1 | tail -20
+false  python -m pytest tests/test_immutable.py -q 2>&1 | tail -20
+false  python -m pytest -q
+false  pytest -q
+false  npm test
+```
+
+⇒ **同一种命令，Go 放行、Python 拒绝** ✗✓ —— 而**这个被判分的项目是 Python** ✓。
+**这不是保守，是任意** ✓：文法自己的文档写着要放行"read-only inspection and **verification** commands" ✓，
+`go test` 就是为这个进去的 ✓ ⇒ **Python 的缺席违背它自己的意图** ✓✓。
+
+**这一条改写了本任务的中心叙事** ✗✓✓：此前第五、六、九次读数把 `product_mutation.blocked` 读成
+"**模型在冻结之前就改了产品文件**" ✗ —— 而这一次能对齐，被拦的是**测量** ✓。
+即：**模型没有在改文件，它在看测试怎么失败** ✓，而那正是验收标准要被读出来的那一步 ✓。
+
+**改法与判据** ✓✓：文法补上 Python 测试运行器（`python -m pytest` / `python3 -m unittest` / 裸 `pytest` ✓），
+**只放行测试运行器** ✓ —— `-m` 点名模块且集合封闭 ✓，所以 `python -m http.server` 与 `python -c "…"` **仍是变更** ✓；
+`npm test` **故意不在内** ✓（npm 脚本是任意的 ✓）。用例**先见红** ✓，并把 Go 那条一起断言 ✓（**是对等，不是新许可** ✓）。
+**代价：零 mount 表位移** ✓（改动在 `src/core/`，不在 `extension.ts` ✓）。
+
+## 第 3 片：**模型冻结了** ✓✓（**十一次跑里第一次** ✓）
+
+```text
+task.convergence.decision  {eventKind:"freeze", state:"working"}
+project/.dove/tasks/goal-c09ec8b9-…/convergence.json   ← 真的写出来了 ✓
+```
+
+**而且它是在产品编辑之前冻的** ✓✓：会话里 `replace cachecontrol/controller.py` ×2 **出现在冻结之后** ✓。
+
+**而它是自己摸索出来的** ✗✓✓：三次调用、两次被拒 ✓（见下），然后才成功。三次的原文：
+
+| 模型传的 | 工具回的 |
+|---|---|
+| `operation:"freeze"` + 3 条很好的判据 + **`task`: 一段散文** | `Task convergence requires the current native formal task.` |
+| `operation:"start"` | 一串裸 schema 校验失败 |
+| `operation:"freeze"`（同样带散文 `task`） | 同一条报错 |
+
+**根因量到了行** ✓✓：`extension.ts:1767-1768` —— 非空的 `task` 被当成**选择器** ✓（`resolveTask(散文)` → undefined ✓），
+而**两个不同的原因共用一条消息** ✗✓；且 `task` 参数在同样有描述的邻居之间**是唯一没有描述的** ✗（`:1740` ✓）。
+⇒ **模型不知道该改哪个参数** ✓ —— 于是它 **`grep -rn "requires the current native formal task" "C:/…/DovePi/"`** ✓，
+**对整份托管安装做递归 grep（含 361 MB 的 `node_modules`）** ✗✓✓，而**该命令不在超时白名单里**（`timeoutApplied:false` ✓），
+**运行在那里停了 1.5–4 分钟**（两次探针之间的窗口 ✓，不是精确值 ✓）。
+
+**改法与判据** ✓✓：`task` 现在**有描述**（"a task selector … the stableId agent_project_task printed …" ✓）；
+拒绝**点名参数** ✓、**引回它收到的值**（截到 120 字符 ✓，因为被误读的值可以是一段话 ✓）、并**说该传什么** ✓；
+"选到了但不是原生正式任务"单独一条 ✓，所以两个方向都不会说错 ✓。用例**先见红** ✓（红在缺少描述 ✓），
+**并且带一个对照**：不带选择器的那次调用成功冻结 ✓ ⇒ **是选择器的问题，不是冻结本身的问题** ✓。
+
+## 第 4 片：**预注册自己的两处缺陷** ✗✓✓（**规划也是被测的东西** ✓）
+
+预注册是我写的，而**有一行差点让我把重试读成"修复生效了"** ✗✓：
+
+| 候选 | 实测 | 说明 |
+|---|---|---|
+| 那两轮 `error`（28 ms / 7 ms）后面跟着成功的一轮 | 一度被我读成**修复生效** ✗ | **查了会话才发现**：它们带 `errorMessage:"Connection error."` ✓，命中 `:293` 的**文本规则** ✓ ⇒ **旧规则下同样判瞬时** ✗ |
+
+⇒ **Claim B 的判据行写得不够** ✗✓✓：`failureKind: transient` + 后面还有一轮 ✓ **区分不出是哪条规则产生的** ✓。
+**本次运行里三个 `error` 全部带 `Connection error.`** ✓（会话原文 ✓）⇒ **Claim B 又一次没被量到** ✗✓。
+**这是关于这个 endpoint 的读数** ✓：它总是带那条文本，所以**跨行标记那条修复在这条通道上不会被走到** ✗✓。
+
+**Claim A 的判据行同样太宽** ✗✓：它把 `product_mutation.blocked / state: missing` 读作"在冻结之前改了产品文件" ✓，
+**而门把 shell 命令也判成变更** ✓ ⇒ **那一行可以为一个测量而开火** ✓。第 2 片的对齐就是它的反例 ✓。
+
+**教训一句话** ✓✓：**判据要能认出"是谁产生的这个值"** ✓，而不只是"这个值出现了" ✓。
+
+## 第 5 片：逐条判（预注册的判据表 ✓）
+
+| 预注册的可观测 | 实测 | 判 |
+|---|---|---|
+| `convergence.json` 存在 / `state` 不是 `missing` | 存在 ✓，`freeze / state=working` ✓ | **冻结了** ✓ |
+| `product_mutation.blocked / state: missing` | 开火了 ✓，**但对象是 `python -m pytest`** ✓ | **这一行没说出它以为的那件事** ✗✓ |
+| `request.terminal detail: convergence-missing` | 13:38 出现过一次 ✓ | 门结束过一个请求 ✓ |
+| 一次变更工具都没有 | 有 `replace` ×2 ✓，**在冻结之后** ✓ | 模型走到了岔路口 ✓ |
+| `failureKind: transient` + 后面还有一轮 | 两次 ✓，**但都来自文本规则** ✓ | **Claim B 未量到** ✗ |
+| `failureKind: terminal / unknown` | **没出现** ✓ | — |
+| `request.terminal detail: attempt-limit` | **就是它** ✓ `retryable=true` ✓ | 有界重试用尽后停下 ✓（**设计行为** ✓） |
+
+## 第 6 片：AC 逐条 ✓✗（**不粉饰** ✓）
+
+| AC | 判 |
+|---|---|
+| mode 生效 / 工具面进读数 | **成立** ✓（与前几轮同 ✓） |
+| 项目自己的套件给出结果 | **成立，而且是绿的** ✓✓（`116 passed` ✓） |
+| 账本累计量与判分并列 | **成立** ✓（第 0 片全部数自事件流 ✓） |
+| **一条运行里走完整个流程** | **仍不成立** ✗✓✓：step 0 **settled** ✓、step 1 **failed** ✗（`attempt-limit` ✓）、**step 2/3 一次都没发** ✗；任务终态 `status=active phase=intake` ✗ ⇒ **finish/archive 未到达** ✗ |
+
+**六个死因** ✓✓（25 min 到点 ✗ / 9.5 min provider 终止 ✗ / 22 s 后无限挂死 ✗ / 27.8 min 瞬时预算用尽 ✗ /
+176 s 的流被读成 unknown ✗ / **20.5 min 瞬时预算用尽，而活已经干完** ✗✓）——
+**而这一次与前五次不同** ✓：**工作成功、冻结成功、终态如实** ✓，缺的只是把收尾那几步跑完 ✓。
+
+## 第 7 片：本轮改的与代价 ✓✓
+
+| 项 | 读数 |
+|---|---|
+| `npm run typecheck` | **0** ✓ |
+| `npm test` | **978 / 978 pass / 0 fail** ✓✓（+2 = 两条新用例 ✓） |
+| 两处修复的用例**先见红** | 是 ✓（选择器那条红在缺描述 ✓；文法那条红在第一条 Python 断言 ✓） |
+| mount 表税 | **零** ✓（选择器修复付过一次 +18 ✓，文法修复在 `src/core/` 不付 ✓） |
+| 托管安装 | 仍是 `0.2.0+source.cbd52bea5c7b` ✓，**不含本轮三处修复** ✗（要再装一次 ✓） |
+
+## 仍未达成的 ✗✓
+
+- **AC#2 仍不成立** ✗✓，但**第一次**：活干成了、验收冻结了、终态如实 ✓ ⇒ 剩下的**只是收尾那几步** ✓。
+- **Claim B（裸标记重试）两次真跑都没被走到** ✗✓（这个 endpoint 总是带文本 ✓）—— 它现在只有用例看着 ✓。
+- **两个改策略的选项 (a)/(b) 仍原样开着** ✗✓。
+- **下一步最有价值的一件** ✓：**再跑一次** —— 文法修复之后，门不会再为"跑测试"开火 ✓，
+  step 0 应当能在同一个请求里读完、冻结、改完 ✓，step 1 的收尾序列才有可能跑到 archive ✓。
+
 
 

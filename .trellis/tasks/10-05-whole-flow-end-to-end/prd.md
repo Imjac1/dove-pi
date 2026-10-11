@@ -75,6 +75,25 @@ harness **自报**：*"当前 Pi 宿主未提供 hashline 编辑工具（replace
       —— 即"会重试"不再只是散文 ✓），登记进 `AGENTS.md` ✓。
       判据：`typecheck 0` ✓ · `npm test 976/976` ✓ · `spec-anchors` 绿 ✓（mount 表第三次为同一件事付税 ✓）。
       **仍未达成** ✗✓：AC#2 ✗（死因换成第 5 个形状 ✓）· 那句话能否改变行为未验证 ✗ · 两个改策略的选项仍未定 ✗。
+      **（2026-10-11 第十五次读数：第十一次真跑 ✓✓✓ —— 活第一次干成，而第一道门拦的是"测量" ✗✓✓✓）**：
+      **预注册先写、先提交，再开跑** ✓。20.5 分钟 ✗（上限 45 ✓），终态 **`attempt-limit` / `retryable=true`** ✓ ——
+      **不是 `provider-unknown`，是设计好的有界 fail-closed** ✓。**判分第一次绿** ✓✓✓：副本里 **`116 passed`** ✓
+      （基线 `1 failed, 115 passed` ✓），**且判分仪器字节未变** ✓（`test_immutable.py` 1305 B ✓ `conftest.py` 5971 B ✓），
+      只动了 `cachecontrol/controller.py` ✓。**模型冻结了** ✓✓（`convergence.json` ✓ `freeze/state=working` ✓，**在产品编辑之前** ✓）。
+      **本轮最重的一条** ✗✓✓：门拦下的那一次调用**是 `python -m pytest`** ✗ ——
+      根因在 `invocation-disposition.ts:112` 的闭集文法：**有 `go test|vet`，没有任何 Python 条目** ✓
+      （实测 `go test ./...` → true ✓，`python -m pytest …` → false ✗）⇒ **同一种命令 Go 放行、Python 拒绝，而这个被判分的项目是 Python** ✗✓，
+      **即门把"测量"读成了产品变更** ✓，并在模型做第一件事时结束了请求 ✓。
+      **这改写了本任务的中心叙事** ✗✓✓：第五、六、九次读数把 `product_mutation.blocked` 读作"模型在冻结前改了产品文件" ✗，
+      而这次能按 `toolCallId` 对齐，被拦的是测量 ✓。
+      **已修** ✓：文法补上 Python 测试运行器（只放行测试运行器 ✓；`npm test` 故意不在内 ✓），用例先见红 ✓，登记进 `AGENTS.md` ✓，**零 mount 表位移** ✓。
+      **第二处修复** ✓：模型三次冻结中两次被拒，因为它把 `task` 当散文传 ✓，而那个参数**没有描述**、且两个原因共用一条报错 ✓ ⇒
+      它去源码里 grep 那条消息、命令不在超时白名单里、运行停了 1.5–4 分钟 ✗✓；现在参数有描述 ✓、拒绝点名参数并引回原值 ✓。
+      **预注册自己有两处缺陷** ✗✓✓：Claim B 的判据行认不出是**哪条规则**产生的 `transient` ✓（那次差点被我读成"修复生效" ✗，
+      查了会话才发现是文本规则 ✓），Claim A 的行认不出被拦的是不是产品文件 ✓。**Claim B 两次真跑都没被走到** ✗（这个 endpoint 总带文本 ✓）。
+      判据：`typecheck 0` ✓ · `npm test 978/978` ✓ · 零 mount 表位移 ✓。
+      **这一条仍留开** ✗✓：step 0 settled ✓、step 1 failed ✗、step 2/3 一次没发 ✗、任务 `active/intake` ✗ ⇒ **finish/archive 未到达** ✓，
+      **但与前五次不同**：活干成了、冻结成了、终态如实 ✓，缺的只是收尾几步 ✓。
 - [x] **两处缺口的处置各有可复现判据** ✓（定案见 `## 决定`✓ 与 `design.md`✓）：修好了是绿的 ✓，没修是红的且有原文 ✓。
       **两处都成立** ✓✓：① `workMode` 从 `failed` ✗ 变成 `code-development` ✓；② `hashlineEditTools=absent` 在读数里 ✓。
       而 ② **多量出一层** ✓✓：**这不是宿主不提供** ✗ —— 宿主装了 ✓、声明也带进了运行 ✓，**没带的是包** ✗（run 的 agent 目录里没有 `npm/` ✓）→ **缺口的可修面在本仓的运行器，不在 Pi** ✓。
