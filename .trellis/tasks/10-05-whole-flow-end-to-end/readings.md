@@ -497,3 +497,55 @@ stopReasons: 11×tool_call + 3×error
 | 3 | 请求落 `fast` ⇒ 无正式任务 | **已修并复核** ✓（改写 + 定性复现 + 真跑验证 ✓） |
 | 4 | **prompt 没说要先冻结验收标准** | **待修** ✗（下一件要做的事 ✓） |
 | 5 | provider 瞬时配额两次杀场 | **不是本仓的** ✗（读数如实 ✓；换一个稳的 provider 或等它稳 ✓） |
+
+---
+
+# 读数（第七次：provider 侧变成"每次第一次调用就被拒"—— 四种解释逐一排除，仍不可从 host 外复现）（2026-10-11 ✓）
+
+**第三、四次真跑同形** ✗✓✓：**20.4 s / 16.9 s** ✓ · `providerRounds=3` ✓ · `stopReasons=["error","error","error"]` ✓ ·
+**零 token、模型一个字都没答** ✓（`toolCalls=0` ✗）。**而 intake 仍然工作** ✓：`lane=formal` ✓、
+正式任务 + **6 份产物（含 `evidence.jsonl`）** 已建 ✓（两次都 ✓）。
+
+## provider 原文（**取自运行自己的会话，不是推断**）✓✓
+
+```text
+attempt 1  assistant  stopReason="error"    usage 全 0
+attempt 2  assistant  stopReason="error"    usage 全 0
+attempt 3  assistant  stopReason="aborted"  errorMessage="Connection error."  usage 全 0
+```
+
+Dove 自己的记录（账本）✓：
+
+```text
+provider.request.completed  stopReason="error"  failureKind="transient"  failureReason="reviewed-provider-message"  durationMs=76/18/52
+```
+
+→ **失败只用 18–76 ms** ✓ —— **不是超时，是当场被拒或断连** ✓；而 **Dove 把它归为瞬时并如实停了** ✓（`provider-attempt-limit` ✓ `retryable=true` ✓ nextAction ✓）。
+
+## 四种解释，逐一实测排除 ✗✓
+
+| 假设 | 实测 | 判 |
+|---|---|---|
+| 端点/网络不通 | DNS ✓ 解析到 aliyun ALB ✓；`/v1/models` **连续三次 401**（未认证即为"服务在"）✓ | **排除** ✗ |
+| 凭据失效（我提示过轮换 key） | 用**运行自己携带的那份 key** 发最小请求 → **HTTP 200** ✓（key 长度 36、前缀 `atr_`，未回显） | **排除** ✗ |
+| 流式被拒（Pi 是流式的，我先前的是非流式） | `stream=true` → **200** ✓（2,467 B SSE）；`stream=false` → 200 ✓ | **排除** ✗ |
+| payload 体积（host 发 49 tools / 74,402 B 工具 schema） | 合成 49 tools / **40.5 KB** → **200** ✓ | **排除** ✗ |
+
+**而两次成功与两次失败，payload 逐项相同** ✓✓：
+
+| 运行 | tools | schemaBytes | sysBytes | 结果 |
+|---|---|---|---|---|
+| 第 1 次（27.8 min） | 49 | 74,402 | 8,280 | 多次成功调用 ✓ |
+| 第 2 次（9.7 min） | 49 | 74,402 | 8,280 | 多次成功调用 ✓ |
+| 第 3 / 4 次 | 49 | 74,402 | 8,280 | **三次全拒** ✗ |
+
+→ **同一个 host、同一份配置、同一个 payload，今晨（02:54–05:06）可用，15:00 起每次第一次调用就被拒** ✗✓✓。
+**我从 host 外面构造的每一种请求都被接受** ✓ —— 所以**这个失败无法从 host 外复现** ✓，
+而 **provider 通道是 Pi 的**（D1 ✓）**不是本仓能改的** ✓。**不猜原因、不写成已知** ✗：剩下的可能（网关对 Pi 那组 header 的规则、
+该 key 的配额窗口、provider 当天的灰度）**一个都没量到** ✓。
+
+## 对目标的影响 ✓✗
+
+**AC#2 仍未达成** ✗，而**它现在缺的不是任何本仓的东西** ✓：四个场景侧阻断全部修好并各自验证过 ✓，
+两次真跑都走到了"正式任务已开、门已执行"这一步 ✓ —— **缺的是一个不被打断的 provider 窗口** ✗。
+**所以本轮起转向问题③**（`src/jailer` 接线：纯本地、可离线验证）✓。
