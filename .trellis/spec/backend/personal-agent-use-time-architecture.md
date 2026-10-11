@@ -8,7 +8,7 @@
 
 | Role | Who | Evidence |
 |---|---|---|
-| **Owner of the loop** | **the Pi host**: it runs "call the model, run the tools, repeat", and owns the session, the TUI and the provider channel | the extension attaches handlers and nothing else: **18 `pi.on(...)` calls, no loop body** (`src/pi-adapter/extension.ts:2167`-`:3523`) |
+| **Owner of the loop** | **the Pi host**: it runs "call the model, run the tools, repeat", and owns the session, the TUI and the provider channel | the extension attaches handlers and nothing else: **18 `pi.on(...)` calls, no loop body** (`src/pi-adapter/extension.ts:2167`-`:3548`) |
 | **Contract** of the loop | `src/core/loop.ts`: the contract's `interface` / `type` declarations - `GateInvocation`, `GateDecision`, `ActionGate`, `AgentLoop` - and **two functions**: `normalizeGateDecision`, the guard every loop applies, and `gateLabelOf`, which reads the refusal class a decision carries | `src/core/loop.ts:81`, `:117`, `:135`, `:175`, `:190`, `:284` |
 | **Reference implementation** (reachable, and not the loop the Pi host runs) | `src/core/loop-runner.ts` | reached by `src/commands/axi-turn.ts`, which `src/cli.ts` dispatches; the allow-list entry was removed when that wiring landed |
 
@@ -32,7 +32,7 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 | `before_provider_request` | `:3168` | keepalive observation (every provider call counts), provider budgeting against the model window (`model-gateway`), and the request plan when one is due |
 | `after_provider_response` | `:3270` | record the HTTP status; at 400 and above classify the failure (`classifyProviderFailure`) |
 | `thinking_level_select` | `:3137` | **only when the policy is `off`** (fully manual) is the user's choice written back to the default baseline |
-| `context` | `:3523` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
+| `context` | `:3548` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
 | `session_before_compact` | `:2617` | **the one replay still refused**: compaction replaces the surrounding context with a summary, so the model's record that the tool already ran is weaker |
 | `session_compact` | `:2631` | if the compaction will retry, mark the trigger `compaction-retry` |
 | `agent_end` | `:2415` | close the progress guard (`progressGuard.end()`), project cancellation into the request state, take the last assistant message |
