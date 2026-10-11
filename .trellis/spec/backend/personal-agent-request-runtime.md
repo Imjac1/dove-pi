@@ -326,7 +326,10 @@ separately, so `agent_settled` records `authorization-denied`,
 Effect classification uses the reviewed read-only tool allowlist, Core
 capability idempotency, and recipe steps; unknown plugin tools fail closed as
 non-idempotent. Classify provider errors by status/code/auth before generic
-abort wording; 401/429 markers outrank cancellation.
+abort wording; 401/429 markers outrank cancellation. A stream that ends before
+its response is that transient class too, and the host spells the event
+`aborted`, `error`, `failed` or `failure` - so the rule reads the whole failed
+set, not one spelling of the four.
 Events
 `request.received`, `request.redelivery.coalesced`,
 `request.attempt.started`, `request.attempt.completed`, and `request.terminal`

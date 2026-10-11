@@ -52,6 +52,13 @@ Preconditions, every one of which a **person** supplies:
   run still cannot touch the original, and it is the one carry that costs real time — deterministic cases are
   `--provider faux` and pay none of it.
 - **An output path outside this repository.** A field run's raw evidence is never committed.
+- **Room for the retries a long run needs.** `DOVE_PI_MAX_REQUEST_ATTEMPTS` is the operator's own knob - published in
+  `dove-pi --help`, read by the extension, and forwarded because the runner passes the parent environment through - so
+  a run can be given more attempts without changing a line of this repository. **It is a precondition and not a detail**,
+  because it is the binding constraint on any run long enough to finish real work: measured 2026-10-11, the whole-flow
+  run that completed used **four** attempts in its first request against a default of three, and the two runs before it
+  had died on `provider-attempt-limit` with the work already done. Set it, and record it as the run's setting; what it
+  does to the reading is a contract below.
 - **A scenario whose `requires` field is satisfied.** See below.
 
 `--scenario` selects what the user does. A field run reads the same scenario files the deterministic cases read,
@@ -72,6 +79,10 @@ written against **scripted** events, so pointing a real model at them does not t
   and which relations hold between them — for example, that the goal line's provider count, the resource
   observation's `providerRounds` and the length of `stopReasons` agree with each other. They are not comparable in
   the numbers themselves.
+- **A raised attempt budget shows the flow, not the default.** A run given ten attempts is evidence that the flow can
+  complete, and says nothing about whether it completes under the shipped three. Both numbers go in the reading and
+  neither stands for the other. What that bound protects is unchanged either way: the non-idempotent effect refusal does
+  not consult the attempt count, so a started effect stays refused however this is set.
 - **Declaring a scenario field-runnable is a claim about its assertions.** A scenario is field-runnable when its
   `requires` names a real provider **and** its steps assert nothing about scripted events. A scenario whose
   assertions count deterministic provider responses is not field-runnable at any wording.
