@@ -109,7 +109,13 @@ export function declaredNetworkToolNames(): readonly string[] {
 	return [...declared, ...NETWORK_BRIDGE_TOOLS.map((bridge) => bridge.name)];
 }
 
-const READ_ONLY_SHELL_SEGMENT = /^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+))|(?:env\s+)?(?:git(?:\s+-C\s+(?:"[^"]*"|'[^']*'|\S+))?\s+(?:status|log|diff|show|ls-files|rev-parse|branch|describe|remote|tag|blame|shortlog|cat-file)\b|go\s+(?:test|vet|list|version|env)\b|(?:ls|dir|find|rg|grep|sed|awk|cat|head|tail|wc|pwd|echo|env|printenv)\b|(?:Get-ChildItem|Get-Content|Select-String|Test-Path)\b).*)$/i;
+// **The verification half of the list, and it was one language wide.** `go test` / `go vet` are here because
+// verification has to be able to run before an acceptance contract is frozen, which is the intent the function's own
+// doc states. Measured 2026-10-11, eleventh field run: the graded project is Python, the model's first act was to run
+// its suite, and there was no Python entry - so the gate refused a *measurement* as a product mutation and ended the
+// request, while the same command in Go would have been allowed. Only a test runner is admitted: `-m` names a module
+// and the set is closed, so a server or a `-c` program stays a mutation.
+const READ_ONLY_SHELL_SEGMENT = /^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+))|(?:env\s+)?(?:git(?:\s+-C\s+(?:"[^"]*"|'[^']*'|\S+))?\s+(?:status|log|diff|show|ls-files|rev-parse|branch|describe|remote|tag|blame|shortlog|cat-file)\b|go\s+(?:test|vet|list|version|env)\b|pytest\b|(?:python3?|py)\s+-m\s+(?:pytest|unittest)\b|(?:ls|dir|find|rg|grep|sed|awk|cat|head|tail|wc|pwd|echo|env|printenv)\b|(?:Get-ChildItem|Get-Content|Select-String|Test-Path)\b).*)$/i;
 const READ_ONLY_SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:\$\?|\d+)$/;
 
 /**

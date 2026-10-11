@@ -103,6 +103,29 @@ describe("what an invocation is, and what that answer rests on", () => {
 		assert.equal(isReadOnlyShellCommand("bash", { command: "npm install" }), false);
 	});
 
+	it("lets a project's own test command run before the freeze, in more than one language", () => {
+		// **The predicate's own doc states the intent** - it allows "common read-only inspection and verification
+		// commands to run before an acceptance contract is frozen" - and `go test` / `go vet` are in the grammar for
+		// exactly that. Measured 2026-10-11, eleventh field run: the graded project is Python, the model's first act was
+		// to run its suite, and the grammar had no Python entry, so the convergence gate refused a **measurement** as a
+		// product mutation and ended the request. The same command in Go is allowed. A grammar that admits one
+		// ecosystem's test runner and refuses another's is not conservative, it is arbitrary - and this one blocked the
+		// step the acceptance criteria are read from.
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python -m pytest -q 2>&1 | tail -30" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python -m pytest tests/test_immutable.py -q" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "pytest -q" }), true);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python3 -m unittest discover" }), true);
+		// The parity, stated as parity rather than as a new permission: this is the entry that was already there.
+		assert.equal(isReadOnlyShellCommand("bash", { command: "go test ./... 2>&1 | tail -20" }), true);
+		// **It is the runner that is allowed, not Python.** `-m` names a module and only a test module is in the set, and
+		// a bare `pytest` has to be the whole word - so a server, a `-c` program, and a name that merely starts with the
+		// runner all stay mutations, because the text cannot tell what they will do.
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python -m http.server 8000" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python -c \"open('f','w').write('x')\"" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "python -m pytest_cache_filler" }), false);
+		assert.equal(isReadOnlyShellCommand("bash", { command: "npm test" }), false, "an npm script is arbitrary, so it is not admitted by this change");
+	});
+
 	it("names every host tool that reaches the network, and nothing that does not", () => {
 		// **The list is written here on purpose.** The sandbox's `network: none` is a boundary claim, so the set of tools it
 		// covers is a decision rather than a detail: a ninth name is a change to what that mode refuses, and the point of
