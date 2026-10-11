@@ -587,6 +587,12 @@ provider.request.completed  stopReason="error"  failureKind="transient"  failure
 **第六次真跑把线索交出来的** ✓：它在 **6 轮 provider 调用 / 约 85 秒**里正常干活（**5 次工具调用 ✓**、3 条收敛观察 ✓、
 正式任务 6 份产物 ✓、**目标 phase 到达 `blocked`** ✗✓ —— 收敛机制真的推了它 ✓），然后是 `attempt-limit` / `policyAbort: true` ✗。
 
+**而它的资源读数把"间歇"两个字写实了** ✓✓（runner 自己的汇总 ✓）：`durationMs 88113` ✓ · **`toolCalls 5`** ✓ · **`providerRounds 6`** ✓ ·
+`inputTokens 73082` ✓ · `outputTokens 581` ✓ · `toolNames [bash, read]` ✓ ——
+而 **`stopReasons` = `["error","error","tool_call","tool_call","tool_call","error"]`** ✓✓：
+**两次错误 → 三轮成功（真的调用了工具）→ 又一次错误** ⇒ **失败是间歇的，不是"某次之后永久坏掉"** ✓ ——
+这与下面的 12 连发读数同形 ✓。
+
 **由它得出的假设** ✓：**每 key 的速率限制** —— host 在 85 秒里发 6 次 ⇒ 被拒；而**我先前每一次探针都是稀疏的** ⇒ 全部通过 ✓。
 
 **12 连发实测**（`probe-burst.mjs`，同一 key、同一端点 ✓）：
