@@ -54,6 +54,7 @@ and the two doors are the ones that catch what no case is looking for.
 | The task-artifact corpus is asserted where it is stable | gate | `gate:.github/workflows/compatibility.yml#Lint task artifacts in the repository corpus` | the corpus step leaves CI, so the fixture suite is the only thing left checking |
 | A record kind in the closed set has a writer | test | `test:tests/harness-reachability.test.ts#reaches every record kind from a writer, so a kind nothing produces cannot stay in the set` | a kind is declared that nothing produces, so a reader sees a mechanism where there is none |
 | A module nothing reaches is declared with a reason, or deleted | architecture | `suite:tests/harness-reachability.test.ts` | an unreachable module is added without a reason, or an allow-list entry goes stale after the module is wired |
+| An errand a gate implies is said only while the gate would refuse it, and never in the block that is constant for the session | test | `test:tests/pi-adapter.test.ts#says a formal task's acceptance record is unfrozen only while it is, and keeps the errand out of the stable prompt` | the errand is written into the session-constant system prompt, or the sentence stays after the acceptance record is frozen, so it reads as noise a model learns to skip |
 
 ## Where this harness is documented
 
