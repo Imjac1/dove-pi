@@ -11,13 +11,15 @@ authority:
   # a name that resolves to nothing reads as authority nobody granted, so the loader refuses one now. An internal
   # review has no external grantor to write a document, which is why this mode's gate is `none`: the two facts are the
   # same fact, and the second is now stated instead of implied by a dangling name.
-  # **Two namespaces, and this list holds both on purpose.** `code-audit.seed`, `code-audit.disposition` and `code-audit.diff` are
-  # capability names: they are in the registry `dove-pi capability list` prints. `repo.read` and `report.write` are this mode own
-  # action names, named here and given an idempotency class below. **They are not declared in permissions.yaml and cannot be**: that
-  # file accepts only `unlisted`, `always_allow`, `ask_before` and `never_allow`, so this file does not claim otherwise - naming a
-  # field a reader would go looking for is the same defect as naming a grant that resolves to nothing. A grant covers what the mode
-  # may do, which is both kinds, and the loader does not resolve them against the registry - measured, and it is why a reader should
-  # not assume every dotted name here is a capability.
+  # **Two namespaces, and only one of them is resolvable.** `code-audit.seed`, `code-audit.disposition` and `code-audit.diff` are
+  # capability names: they are in the registry `dove-pi capability list` prints. `repo.read` and `report.write` are this mode's own
+  # vocabulary rather than actions that can occur - an action name is a raw host tool's name, or a capability's name when the call goes
+  # through `agent_run_capability`, and these two are neither, so they match no action and grant nothing. They are listed as intent, and
+  # no block indexed by an action may treat them as resolvable - the effect map below does not. **They are not declared in
+  # permissions.yaml and cannot be**: that file accepts only `unlisted`, `always_allow`, `ask_before` and `never_allow`, so this file
+  # does not claim otherwise - naming a field a reader would go looking for is the same defect as naming a grant that resolves to
+  # nothing. Whether a name in this position belongs in this list at all, or should be declared somewhere the loader resolves it, is the
+  # open question the defect ledger carries.
   capabilities: [repo.read, report.write, code-audit.seed, code-audit.disposition, code-audit.diff]
   # No `expires`: the runtime refuses it as unenforceable - see the note in `modes/pentest/governance.yaml`.
 
@@ -39,6 +41,11 @@ gate:
 # Which effects a retry may repeat. An undeclared tool is non-idempotent, so this map grants rather than
 # denies: it names only what a second run genuinely cannot duplicate. The claim at the dispatch line reads
 # it through effectClassOf, which reports an undeclared tool as a default rather than as a declaration.
+#
+# **Every key is an action the runtime can produce** - a host tool's own name, a capability's name, or a tool
+# this extension registers. A class declared for a name nothing resolves is a grant that is never consulted,
+# which reads as a control while being none: `repo.read` and `report.write` are this mode's own vocabulary
+# rather than actions, they appear in `authority.capabilities` as intent, and they are deliberately absent here.
 effects:
   classes:
     # The audit spine is reproducible by construction - the same receipt produces the same findings, and the
@@ -46,8 +53,6 @@ effects:
     code-audit.seed: idempotent
     code-audit.disposition: idempotent
     code-audit.diff: idempotent
-    repo.read: idempotent
-    report.write: idempotent
     # A second read of the same path is the same read.
     read: idempotent
     grep: idempotent

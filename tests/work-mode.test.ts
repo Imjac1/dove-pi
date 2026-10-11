@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import personalAgentExtension from "../src/pi-adapter/extension.ts";
+import { createDoveRuntime } from "../src/runtime.ts";
 import {
 	loadWorkMode,
 	loadWorkModeFromDirectory,
@@ -607,6 +610,62 @@ describe("every entry in a shipped mode's permission list names an action that c
 				);
 			}
 			assert.equal(typeof mode.permissions.unlisted, "string", name + " states what an action on no list gets");
+		});
+	}
+});
+
+describe("every effect class a shipped mode declares names an action that can occur", () => {
+	// **The permission door above decides shape, and this one decides the registry.** A dotted entry reads as a
+	// capability name whether or not the registry holds it, which is how `source.read` and `source.write` sat in
+	// `code-development`'s `authority.capabilities` and its effect map at once: harmless in the first, a control that
+	// could never fire in the second. An effect class is indexed by the action the boundary resolved - a host tool's
+	// own name, or a capability's name - so a class for a name nothing resolves is never consulted, and it reads as a
+	// grant while being none. That is the rule `modes/pentest` and `modes/trading` state in prose; this case is what
+	// keeps it, and it is checked against the product's own composition root rather than a copy of the names.
+	const HOST_TOOLS = new Set(["bash", "powershell", "read", "edit", "write", "grep", "find", "ls"]);
+	const REGISTERED = new Set(createDoveRuntime().capabilities.list().map((capability) => capability.name));
+	// **The third vocabulary, and the one a shape check cannot see**: the tools this extension registers on the host
+	// (`agent_*`). They are neither Pi's tools nor capabilities, so a door that knew only those two would report every
+	// mode that declares one - which is how this case first failed, on all four modes at once. Collected by calling the
+	// extension with a recording host, for the reason `tests/pi-adapter.test.ts` does the same for its own assertions:
+	// what registration produces is the list, and a copy of it would agree with itself.
+	const DOVE_TOOLS = (() => {
+		const tools = new Map<string, unknown>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool(definition: { name: string }) { tools.set(definition.name, definition); },
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return []; },
+			setActiveTools() {},
+			getActiveTools() { return []; },
+			getThinkingLevel() { return "max"; },
+			on() {},
+		} as unknown as ExtensionAPI;
+		personalAgentExtension(api);
+		return new Set(tools.keys());
+	})();
+
+	for (const name of ["code-audit", "code-development", "pentest", "trading"]) {
+		it(name + " declares classes only for host tools and registered capabilities", () => {
+			const directory = join(process.cwd(), "modes", name);
+			const mode = loadWorkMode(
+				{
+					mode: readFileSync(join(directory, "MODE.md"), "utf8"),
+					governance: readFileSync(join(directory, "governance.yaml"), "utf8"),
+					permissions: readFileSync(join(directory, "permissions.yaml"), "utf8"),
+				},
+				{ frameworkVersion: "0.2.0" },
+			);
+			const keys = Object.keys(mode.effectClasses);
+			assert.ok(keys.length > 0, name + " declares at least one class, so this check is not vacuous");
+			for (const key of keys) {
+				assert.ok(
+					HOST_TOOLS.has(key) || REGISTERED.has(key) || DOVE_TOOLS.has(key),
+					name + " declares a class for '" + key + "', which is not a host tool, a registered capability, or a tool this extension registers, so no action resolves to it and the class is never consulted",
+				);
+			}
 		});
 	}
 });
