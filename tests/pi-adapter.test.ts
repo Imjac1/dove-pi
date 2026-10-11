@@ -15,7 +15,7 @@ import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
-import { createProjectProvider, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../src/project-provider/index.ts";
+import { createProjectProvider, nativeProjectStatePath, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../src/project-provider/index.ts";
 import { SEPT1_QUESTION_VARIANTS, sept1QuestionInput } from "./fixtures/sept1-question-loop.ts";
 import { restoreLatestContextSnapshot } from "../src/pi-adapter/context-snapshot.ts";
 
@@ -699,6 +699,66 @@ describe("Pi adapter", () => {
 		assert.equal(restoreLatestContextSnapshot([
 			{ type: "custom_message", customType: "personal-agent-context", content: "malformed", details: { schemaVersion: 2, epoch: "bad", revision: "bad", segments: [{ ...segment, trust: "trusted" }] } },
 		]), undefined);
+	});
+
+	it("says a formal task's acceptance record is unfrozen only while it is, and keeps the errand out of the stable prompt", async () => {
+		// **Two halves of one correction.** The stable prompt used to deny that anything gates a product mutation; it now
+		// names the record that does. The errand that follows from it - freeze before the first mutation - is not there,
+		// because that block is byte-for-byte constant for a whole session where an errand is a sentence a model learns to
+		// skip. It rides the guidance channel instead, which is compiled per request, and it is a function of the record:
+		// present while a formal task has no frozen acceptance record, gone the moment one exists. This case holds both
+		// halves, and it holds the condition in both directions, because a sentence that is always present is the failure
+		// this shape exists to avoid.
+		const root = mkdtempSync(join(tmpdir(), "pi-unfrozen-acceptance-"));
+		const stateDir = join(root, "state");
+		mkdirSync(join(root, ".dove"), { recursive: true });
+		const goal = { id: "goal-guidance", title: "Frozen or not", status: "active", formal: true, phase: "intake", createdAt: "2026-10-11T00:00:00.000Z", updatedAt: "2026-10-11T00:00:00.000Z", decisions: [], verification: [] };
+		writeFileSync(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, currentGoalId: goal.id, goals: [goal] }), "utf8");
+		const previousCwd = process.cwd();
+		const previousStateDir = process.env.DOVE_PI_STATE_DIR;
+		process.chdir(root);
+		process.env.DOVE_PI_STATE_DIR = stateDir;
+		try {
+			const events = new Map<string, (event: any, ctx: any) => Promise<any>>();
+			const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+			const api = {
+				registerCommand() {}, registerShortcut() {}, registerFlag() {}, appendEntry() {},
+				registerTool(definition: { name: string; execute: (...args: any[]) => Promise<any> }) { tools.set(definition.name, definition); },
+				getAllTools() { return representativeTools.map((name) => ({ name })); },
+				setActiveTools() {},
+				getActiveTools() { return [...representativeTools]; },
+				getThinkingLevel() { return "high"; },
+				on(name: string, handler: (event: any, ctx: any) => Promise<any>) { events.set(name, handler); },
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const context: FakeContext = {
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+				sessionManager: { getEntries: () => [], getSessionId: () => "unfrozen-acceptance" },
+			};
+			const turn = async (prompt: string) => await events.get("before_agent_start")?.({ type: "before_agent_start", prompt, systemPrompt: "" }, context) as { systemPrompt?: string; message?: { content?: string } } | undefined;
+
+			// **The prompt names a formal marker on purpose**: the lane is what decides whether intake opens a task at all,
+			// and that is measured, not incidental - a run whose prompt landed in the fast lane had no formal task to
+			// freeze and no gate to answer to.
+			const unfrozen = await turn("implement the cache fix and run the project's own suite; the acceptance criteria are already written in the task");
+			assert.match(unfrozen?.systemPrompt ?? "", /what a formal task gates is its frozen acceptance record/, "the stable prompt names the gate rather than denying that one exists");
+			assert.doesNotMatch(unfrozen?.systemPrompt ?? "", /so freeze the criteria/, "and it does not carry the errand, which would then be constant for the whole session");
+			assert.match(unfrozen?.message?.content ?? "", /\[PERSONAL AGENT REQUEST GUIDANCE\]/, "the errand rides the guidance channel, which is the one that already carries harness text into every request");
+			assert.match(unfrozen?.message?.content ?? "", /no acceptance criteria are frozen/, "an open formal task with no frozen record is said out loud, because intake opened it and the model was never told");
+
+			const convergenceTool = tools.get("agent_task_convergence");
+			assert.ok(convergenceTool);
+			await convergenceTool.execute("freeze-acceptance", { operation: "freeze", criteria: [{ id: "AC-001", text: "The formal request completes without a product regression." }] }, undefined, undefined, context);
+
+			const frozen = await turn("now change the file named in the acceptance criteria");
+			assert.match(frozen?.systemPrompt ?? "", /\[PERSONAL AGENT\]/, "the second turn really ran, so the absence below is an absence of the sentence rather than of the turn");
+			assert.doesNotMatch(frozen?.message?.content ?? "", /no acceptance criteria are frozen/, "once the record exists the sentence is gone, because a sentence that is always present is noise");
+		} finally {
+			process.chdir(previousCwd);
+			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
+			else process.env.DOVE_PI_STATE_DIR = previousStateDir;
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("records an optional native goal directly without planning questions or legacy script execution", async () => {

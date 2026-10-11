@@ -3420,8 +3420,23 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				requestContextText = undefined;
 			}
 		}
+		// **The one fact the model cannot read for itself, said only while it is true.** Intake opens the formal task from
+		// the request's own first line (`ensureFormalTask` above), so a run's first product mutation is refused by the
+		// convergence gate while the model has never been told the task exists. Measured on the ninth real run: its route
+		// was read, grep, then write, and the refusal ended the request before the model could answer it - it never called
+		// `agent_task_convergence`, though the tool was in the tools array it was handed. The guidance channel is not new
+		// machinery: it already carries harness text into every request. What is new is that its sentence here is a
+		// function of the record rather than a constant. It appears for a formal task whose acceptance record is not
+		// frozen yet, and disappears the moment one is, because a sentence that is always present is noise, and noise is
+		// what a model learns to skip. The condition is read through the same call the gate makes, so the two cannot
+		// drift apart: wherever this sentence is silent, the gate has nothing to refuse.
+		const unfrozenAcceptanceGuidance = requestLease.isNewRequest && requestPlan.lane === "formal" && projectProvider.readTaskConvergence
+			? projectProvider.readTaskConvergence(requestTaskId).kind === "missing"
+				? "A formal task is open for this work and no acceptance criteria are frozen for it yet. Freeze stable criteria with agent_task_convergence (operation=freeze) before the first product mutation: until that record exists, a product mutation is refused and the request ends there."
+				: undefined
+			: undefined;
 		const requestGuidance = requestLease.isNewRequest
-			? [continuationGuidance, taskInventoryGuidance, contextGuard.compactAdvised ? contextGuard.hint : undefined].filter((value): value is string => Boolean(value))
+			? [continuationGuidance, taskInventoryGuidance, unfrozenAcceptanceGuidance, contextGuard.compactAdvised ? contextGuard.hint : undefined].filter((value): value is string => Boolean(value))
 			: [];
 		const guidanceForTurn = requestGuidance.length > 0 ? `[PERSONAL AGENT REQUEST GUIDANCE]\n${requestGuidance.join("\n")}` : undefined;
 		let messageForTurn = [snapshotForTurn, guidanceForTurn].filter((value): value is string => Boolean(value)).join("\n\n") || undefined;
@@ -3434,7 +3449,17 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const modeClause = workModeBlock.text === ""
 			? "Dove execution mode and adaptive project context are supplied separately at request time."
 			: "Dove execution mode's structured fields (permissions, sandbox, effect classes) and adaptive project context are supplied separately at request time; this mode's own instructions are in the block below.";
-		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} ${modeClause} Formal task artifacts organize work but never gate Pi tools.${reasoningVoiceInstruction}${workModeBlock.text === "" ? "" : `\n\n${workModeBlock.text}`}`;
+		// **What gates, said accurately.** This clause read "Formal task artifacts organize work but never gate Pi
+		// tools", which is literally true of the `.md` files and misleading about everything else: measured, a run's
+		// first product mutation *was* refused - by the task's frozen acceptance record, which is not an artifact. The
+		// model's route through that run (read, grep, then write) is what this sentence invites, and the refusal then
+		// ended the request before it could be answered. So the clause now names the thing that gates instead of denying
+		// that anything does: the same correction the terminal's `nextAction` needed, for the same reason.
+		// **It states the fact and not the errand.** The instruction that follows from it - freeze before the first
+		// mutation - is deliberately *not* here: this block is byte-for-byte constant for the whole session, so an
+		// errand written into it is an errand a model learns to skip. The errand rides the guidance channel below,
+		// where it appears only while it is true.
+		const builtSystemPrompt = `${event.systemPrompt}\n\n[PERSONAL AGENT]\n${stablePromptPolicy(buildCapabilityIndex(registry, recipes))} ${modeClause} Formal task artifacts organize work and never gate Pi tools themselves; what a formal task gates is its frozen acceptance record.${reasoningVoiceInstruction}${workModeBlock.text === "" ? "" : `\n\n${workModeBlock.text}`}`;
 		// Preflight the newly compiled request fragment against the active model
 		// window. Historical conversation usage is accounted for by Pi's own
 		// context usage API; this gate prevents Dove's additions from consuming
