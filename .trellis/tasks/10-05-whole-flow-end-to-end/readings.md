@@ -879,4 +879,110 @@ source 与安装两份**一模一样** ✓。**记为观察，没动** ✓。
 **顺带纠正一条** ✗✓：配方 §4 原写"这台机器的托管安装还没有那个无扩展名的 shim" ✓ ——
 **那句话量于当时为真、现在是假的** ✓，已就地改成当前状态 ✓（并写明"field runner 托管路径仍拼 `dove-pi.cmd`" ✓ 所以场景不变 ✓）。
 
+---
+
+# 读数（第十四次：**第十次真跑 —— 那句话发出去了，而它要防的那条规则一直是死的**）（2026-10-11 ✓✓✓）
+
+**这一轮是"试一下"** ✓：按 45 分钟预算、`--launcher source` 跑了一次整条流程 ✓。
+
+## 第 0 片：这次运行（§4 格式 ✓）
+
+```text
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-11
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]
+exitCode=0  settled=false  harnessTimedOut=false  scenarioFailed=true  events=?  duration=5.8 min（上限给的是 45.0 min）
+terminal: reason=failed  detail=unknown  code=provider-unknown  retryable=false  origin=provider
+resources(账本): toolCalls=7  providerRounds=6  stopReasons=["tool_call","tool_call","tool_call","tool_call","tool_call","error"]
+tokens(6 次调用逐条 usage 求和): input=134,098  output=1,854  reasoning=1,484
+tools the model actually called: bash, read, fetch_content(gate 拒)
+artifactEvidence {doveState:true, doveFileCount:7, formalTaskCount:1, formalArtifactCount:6, convergenceFileCount:0}
+```
+
+## 🎯 第 1 片：**那句话确实发出去了** ✓✓（**本轮第一次在真跑里看到它** ✓）
+
+会话原文（运行自己的 `pi-session/*.jsonl` ✓）第 7 行里有 `no acceptance criteria are frozen` ✓，
+`[PERSONAL AGENT REQUEST GUIDANCE]` 标记也在 ✓ —— 第十二次读数做的那个机制**在真跑里成立** ✓✓。
+
+**而模型仍然没有冻结** ✗✓：6 轮 provider 全部成功（13.4 / 12.5 / 16.8 / 24.6 / 94.5 s ✓，全 `tool_call` ✓），
+工具只有 `bash` / `read` ✓，还试了一次 `fetch_content` ✓ —— **被沙箱门当场拒了** ✓（`gate.refused sandbox` ✓，与第五次同形 ✓）；
+`agent_task_convergence` **一次都没调** ✗，`convergenceFileCount: 0` ✗。
+
+⇒ **这次跑没有走到第一次产品变更** ✓（它 6 轮都在读 `tests/test_immutable.py` 与 `cachecontrol/controller.py` ✓），
+所以**收束门从没开火** ✓，而**那次运行也不是门杀的** ✓ —— **关于那句话能否改变行为，这次既没证明有效也没证明无效** ✗✓。
+**不写成达成** ✓。
+
+## 🎯 第 2 片：**五天的"修好了"其实到不了** ✗✓✓（**本轮最实的一条** ✓）
+
+死因是一条 **176.0 s** 的 provider 轮 ✓，`stopReason=error` ✓，归类 `terminal/unknown` ✓，**一次都没重试** ✓。
+终态给出 `nextAction = "Inspect the provider error and adjust the request."` ✗ —— **账本里没有任何 provider error 文本** ✗✓。
+
+**而这条伤口正是第三次读数写下理由、并"修好过"的那一条** ✓✗。诊断链，每一环都是量的、不是推的 ✓✓：
+
+| # | 事实 | 怎么量的 |
+|---|---|---|
+| 1 | 那条记录是 `message_end` 写的，不是 `agent_end` 兜底写的 | `appendProviderRequestCompleted` 只有两个调用点（`:2573` / `:3095` ✓）；`usage` 是零值 token 对象而不是 `{httpStatus}` ✓ |
+| 2 | 因此 `stopReason` 来自 `normalizeStopReason(宿主原值)` ✓ | `:3083` ✓ |
+| 3 | 所以宿主原值属于失败集（`error`/`failed`/`failure`）✓，**不是 `aborted`** ✗ | `model-gateway.ts:62` ✓ |
+| 4 | `aborted` 被归一化成 **`cancelled`** ✗ | `model-gateway.ts:61` ✓ |
+| 5 | 两个调用点**只在归一化结果为 `error` 时**才分类 ✓ | `:2429` ✓ `:3091` ✓ |
+| 6 | ⇒ `stopReason === "aborted"` 那条比较**永远不成立** ✗✓✓ | 由 3+5 直接推出 ✓ |
+| 7 | ⇒ 这条改动**读起来像控制，实际没人走到** ✗✓✓ | 正是 AGENTS.md 规则表在治的那一类 ✓ |
+
+**而且第 7 条被函数自己的输出证实** ✓✓（改之前跑真函数 ✓）：
+
+```text
+{"stopReason":"error"}                                  -> {"kind":"terminal","reason":"unknown"}   ← 与账本逐字相同
+{"stopReason":"failed"}                                 -> {"kind":"terminal","reason":"unknown"}
+{"stopReason":"aborted","errorMessage":"terminated"}     -> {"kind":"transient","reason":"reviewed-provider-message"}
+{"stopReason":"error","errorMessage":"HTTP 502"}         -> {"kind":"transient","reason":"http_502"}
+```
+
+**第一行给出的两个字段就是账本里的那两个** ✓✓ —— **诊断是函数的输出，不是关于它的推断** ✓。
+
+**形状一句话** ✓：**同一件事，看宿主用哪个词，读出来就不同** ✓ —— `error` 读作终态、不可重试、且指去查一条不存在的错误 ✓；
+`aborted` 读作瞬时 ✓。
+
+## 第 3 片：改法与它会改变的行为 ✓✓（**写清楚是为了可被有意改回** ✓）
+
+规则改成读**整个失败集**（`aborted`/`error`/`failed`/`failure` ✓），**仍然放在文本规则之后** ✓ ——
+说了 `429`、`Connection error.`、`aborted by the user` 的消息在上面就被分掉了 ✓，到不了这里 ✓。
+
+**改变了什么行为** ✗✓：一次只有失败集裸标记的 provider 轮，现在算瞬时、会被重试，而不是当场结束请求 ✓。
+**有界且 fail-closed，两道守卫都没动** ✓✓：
+`retryDecision`（`request-lifecycle.ts:295-300` ✓）只在 `attemptCount < maxAttempts` 时重试 ✓，到限时的终态是
+`provider-attempt-limit` + `retryable: true` + 一条能照做的 nextAction ✓；
+非幂等 effect 守卫（`extension.ts:2626-2627` ✓）**与分类无关**地拒绝重放 ✓，所以这不让已发生的 effect 变成可重放 ✓。
+
+**用例先见红，且红在正是账本那个值上** ✓✓：
+`actual: {kind:'terminal', reason:'unknown'}` vs `expected: {kind:'transient', reason:'reviewed-provider-message'}` ✓。
+改后绿 ✓，typecheck 0 ✓。**已登记进 `AGENTS.md` 规则表** ✓。
+
+## 第 4 片：这一轮自己付的税 ✓✗（**第三次** ✓）
+
+改动落在所有 mount 点**之上** ✓ ⇒ **18 行 mount 表整体 +12** ✓，
+**`cites the declaration each mount-point row names` 当场红** ✓✓ —— **这个门第三次为同一件事存在** ✓（第一次是 `:296` 附近那 10 行 ✓，
+第二次是第十二次读数那 16 行 ✓）。整页按实测位移 ✓，并把区间 `:2179`-`:3560` 一起改准 ✓。
+
+**而顺带量出一处不是位移、是*本来就不对*的引用** ✗✓：§3 那句"读参数的那一半"引的是 `:2797`-`:2801` ✓，
+而那五行是**门块的结尾加大超时那几行** ✗ —— 真身是 `:2734` 的 `classifyInvocation({toolName, input, registry, recipes})` ✓，
+即**真正读 `event.input` 的那一行** ✓。**已改成 `:2734`** ✓（并写进 `research/failed-stream-token.md` ✓）。
+
+## 第 5 片：这一轮的判据 ✓✓
+
+| 项 | 读数 |
+|---|---|
+| `npm run typecheck` | **0** ✓ |
+| `npm test` | **975 / 975 pass / 0 fail** ✓✓（比上一轮 +1 = 新用例 ✓） |
+| 新用例**先见红** | 是 ✓（actual 就是账本值 ✓） |
+| `spec-anchors`（mount 表那条） | 绿 ✓ |
+| 托管安装 | 上一轮装的 `0.2.0+source.35cc36f24c9d` **不含本轮** ✗（要再装一次才带上 ✓） |
+
+## 仍未达成的 ✗✓（**不粉饰** ✓）
+
+- **AC#2 仍不成立** ✗✓：这次跑连第一次产品变更都没走到 ✓，死于一条 176 秒的流 ✓。**死因第 5 个形状** ✓
+  （25 min 到点 ✗ / 9.5 min provider 终止 ✗ / 22 s 后无限挂死 ✗ / 27.8 min 瞬时预算用尽 ✗ / **176 s 的流被读成 unknown** ✗✓）。
+- **那句话能否改变模型行为仍未验证** ✗（第 1 片 ✓）。
+- **笔记里两个改策略的选项 (a)/(b) 仍原样开着** ✗✓。
+
+
 
