@@ -157,10 +157,21 @@ Each row is a promise a user can rely on, and the thing that fails when it break
 These are not defects of the reading; they are the readings. Stating them is what keeps §3 and §6 from becoming
 advertising.
 
+**Two rows left this page on 2026-10-11**, when the whole-flow task's field runs settled them, so neither can stay here
+looking open. **The loop has run in one go**: on a bound Python project whose own suite read `1 failed, 115 passed`, a
+single run walked every step - the acceptance record was frozen, the criteria started, the library edited, the suite read
+`116 passed` with the judging test byte-identical, and the formal task was archived - and all four scenario steps settled
+with the run's own verdict `scenarioFailed: false` -
+`.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/readings.md`, the seventeenth reading. **One caveat travels
+with it and is not a footnote**: that run set the operator's `DOVE_PI_MAX_REQUEST_ATTEMPTS` to ten and used four attempts
+where the default allows three, so it shows the flow completes rather than that it completes under the shipped budget -
+[`personal-agent-field-run.md`](./personal-agent-field-run.md). **And the host's editing tools are present**: the `absent`
+reading came from the field runner's carried copy, which shipped the declaration without the agent directory's package
+store, not from the host, which has them installed - same file, readings 4 and 13 - and `hashlineEditTools=present`, with
+`replace` and `insert` actually called, is what the runs that finished the work show.
+
 | Not yet demonstrated | The reading that says so |
 |---|---|
-| **The whole loop in one run.** Steps 1-9 have never been walked end to end inside a single session: the last attempt ran only `/status`, and the attempt before it spent its 15-minute timeout at step 1 and was cancelled | `.trellis/tasks/10-05-whole-flow-end-to-end/readings.md` |
-| **The host's editing tools present.** The extension's own status line reports `hashlineEditTools=absent`, so the agent that ran had no harness edit tools; the reading is about the host, not about the model being careless | `.trellis/tasks/10-05-whole-flow-end-to-end/readings.md` |
 | **The second day.** Returning to the same project and continuing is written down, not read: the walking task says so itself | `.trellis/tasks/archive/2026-10/10-03-day-two-walk/prd.md` |
 | **A refusal a user can read without a UI.** The first-contact walk found the gate's reason not reaching the person, and that a model's own retelling is the only explanation available in a non-interactive run | `.trellis/tasks/10-03-first-contact-scenario/findings.md` |
 | **A formal task that completed a recorded round in this repository.** This repository has no `.dove/`, so "the record reports, the person decides" is untested in place rather than proven | [`personal-agent-use-time-architecture.md`](./personal-agent-use-time-architecture.md) §7 |

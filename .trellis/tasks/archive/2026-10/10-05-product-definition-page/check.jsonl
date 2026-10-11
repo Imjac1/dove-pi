@@ -1,4 +1,4 @@
 {"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The repository's forbidden and required patterns, including the rule that a claim must name a thing rather than cite a drifting position, which the new page's anchors are held to."}
 {"file": ".trellis/spec/backend/personal-agent-use-time-architecture.md", "reason": "The shape precedent for the check: numbered sections, file:line anchors, a stated blank, and 'this page describes the present'."}
 {"file": ".trellis/spec/backend/directory-structure.md", "reason": "The layering and the measured file/import counts the page repeats; the checker should falsify the page's numbers against this page rather than trusting either."}
-{"file": ".trellis/tasks/10-05-whole-flow-end-to-end/readings.md", "reason": "The checker's source for the honesty claim: if the page says the whole flow has not been demonstrated, this file is what makes that true or false."}
+{"file": ".trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/readings.md", "reason": "The checker's source for the honesty claim: if the page says the whole flow has not been demonstrated, this file is what makes that true or false."}

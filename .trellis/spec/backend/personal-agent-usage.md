@@ -66,7 +66,7 @@ improvement round reads and edits, which is the product's second thread - the op
 | **What the person does** | Describes the need in the words of the task - `README.md:136-146` |
 | **What the product decides for them** | That ordinary and small work runs without ceremony, while a planning, architecture, cross-module or multi-file request creates a formal task in the background; and how much context and budget the request gets, which `/mode` and `/dove-mode` can override but do not have to - `README.md:199-204`, `README.md:148-176`, `README.md:322-326` |
 | **The failure this prevents** | Two opposite ones: ceremony imposed on small work, which is how a person stops using the thing; and large work treated as small work, which leaves no frozen acceptance and therefore nobody who can say when it is done |
-| **Where it stands** | [not yet demonstrated] that the loop runs in one go: the last attempt ran only `/status`, and the attempt before it spent its 15-minute budget at the first step and was cancelled - `.trellis/tasks/10-05-whole-flow-end-to-end/readings.md`. The same reading reports the extension's own status line as `hashlineEditTools=absent`: **the agent that ran had no edit tools**, which is a host-side fact rather than a model's carelessness - same file - gap owned by `.trellis/tasks/10-05-missing-hashline-edit-tool` |
+| **Where it stands** | **[demonstrated] that the loop runs in one go**: one run walked every step on a bound project - the acceptance record frozen, the criterion started, the library edited, the project's own suite read `116 passed` against a baseline of `1 failed, 115 passed` with the judging test byte-identical, the formal task archived, and all four scenario steps settled - `.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/readings.md`. **The reading carries its own limit and it is not a footnote**: that run set the operator's `DOVE_PI_MAX_REQUEST_ATTEMPTS` to ten and used four attempts where the default allows three, so it shows the flow completes rather than that it completes under the shipped budget - [`personal-agent-field-run.md`](./personal-agent-field-run.md). The `hashlineEditTools=absent` this row used to report was the field runner's **carried copy** missing the agent directory's package store, not the host: the same file's fourth and thirteenth readings measure both, and the runs that finished the work called `replace` and `insert` with the status line reading `present` |
 
 ## 6. Stage 3 - When it refuses or asks
 
@@ -112,11 +112,16 @@ way a person reading this page can tell "not designed yet" from "somebody is on 
 | Stage | Gap | Owner |
 |---|---|---|
 | 1 | The first message when no provider is configured has no reading | needs a task |
-| 2 | The loop has never run in one go | `.trellis/tasks/10-05-whole-flow-end-to-end` |
-| 2 | The host's edit tools are absent, so the agent cannot change files | `.trellis/tasks/10-05-missing-hashline-edit-tool` |
 | 3 | A slash command passed with `-p` never reaches the extension | the host (reported upstream; not ours to fix) |
 | 4 | No formal task has completed a recorded round in this repository | needs a task |
 | 5 | The design for a person's second day is still the host's, not Dove's: nothing in the product states the sequence or what to do when the session is gone | needs a task |
+
+**One gap left this table on 2026-10-11**, and it was two rows that turned out to be one cause and no gap at all. The loop
+has now run in one go, and the `hashlineEditTools=absent` both rows rested on was measured as the field runner's carried
+copy shipping the declaration without the agent directory's package store - not the host, which has the tools installed.
+The cause, the fix and the reading that shows `present` are in `.trellis/tasks/10-05-missing-hashline-edit-tool`, whose
+own remaining question - whether the missing tool family should be a reading field - is answered by the status line that
+now reports `hashlineEditTools=absent/present`.
 
 ## How to check this page
 
