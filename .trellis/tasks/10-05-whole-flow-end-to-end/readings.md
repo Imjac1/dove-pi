@@ -549,3 +549,41 @@ provider.request.completed  stopReason="error"  failureKind="transient"  failure
 **AC#2 仍未达成** ✗，而**它现在缺的不是任何本仓的东西** ✓：四个场景侧阻断全部修好并各自验证过 ✓，
 两次真跑都走到了"正式任务已开、门已执行"这一步 ✓ —— **缺的是一个不被打断的 provider 窗口** ✗。
 **所以本轮起转向问题③**（`src/jailer` 接线：纯本地、可离线验证）✓。
+
+---
+
+# 读数（第八次：把 provider 侧失败逼到边界 —— 六种解释全部排除，失败的只在 Pi 那条通道里）（2026-10-11 ✓✓）
+
+**第五次真跑同形** ✗✓：**20.6 s** ✓ · `providerRounds=3` ✓ · `stopReasons=["error","error","error"]` ✓ · 零 token ✓ · intake 仍工作 ✓
+（`lane=formal` ✓、正式任务 + 6 份产物 ✓）。**已是连续第三次**（c/d/e）⇒ 是**持续条件**，不是抖动 ✓。
+
+## 全部排除项（每一条都是实测，不是推断 ✓✓）
+
+| 假设 | 怎么测的 | 读数 | 判 |
+|---|---|---|---|
+| 端点不通 | DNS + 连续三次未认证请求 | 解析到 aliyun ALB ✓；**连续三次 401** | **排除** |
+| 凭据失效 | 用运行自己携带的 key 请求 | **200** ✓（`/v1/models` 与 `/v1/chat/completions` 都是） | **排除** |
+| 栈差异（PowerShell vs Node） | **用 Node 自己的 undici** 重发 | **200** ✓ | **排除** |
+| 流式被拒 | `stream=true` / `false` | 都 **200** ✓ | **排除** |
+| 载荷体积 | 合成到 **host 真正的尺寸**（49 tools；40.5 KB → 67.4 KB → **112.2 KB**） | 全部 **200** ✓（含流式 ✓） | **排除** |
+| 配置指错地方 | 读运行携带的 `models.json` 字段 | `baseUrl = https://api.atria-asi.ai/v1/` ✓、`api = openai-completions` ✓、与我所测**完全一致** ✓ | **排除** |
+
+**而 host 的请求**：运行自己的会话原文是 `stopReason="error","error"` 然后 `"aborted"` + `errorMessage="Connection error."` ✓；
+账本是 `failureKind="transient"` / `failureReason="reviewed-provider-message"` / **18–76 ms** ✗ —— **当场失败**，
+而我手工构造的每一种请求（两种栈、四种体积、流式与非流式）都成功，只是**慢**（3.0–30.0 s ✓，provider 现在很慢 ✓）。
+
+## 结论：边界画在这里（不猜原因 ✓）
+
+> **同一个 URL、同一个 key、同一份载荷、同一个 Node 栈** —— 我构造的请求全部成功，**Pi 的请求 18–76 ms 内失败** ✓。
+> 差别只能在 **Pi 自己构造/处理那一次请求的路径里**（它加的 header、它的重试/中止逻辑、它的连接池状态），
+> 而 **provider 通道属于 Pi**（D1：本仓不实现它 ✓）。**故不写成"原因已找到"** ✗ —— 剩下的可能一个都没量到 ✓。
+
+**留给运维/上游的一步**（本仓做不到的一步）：开 Pi 自己的调试日志，或在同一台机上换一个 provider/模型试一次；
+两者任一即可把"Pi 的通道"与"这台机的路径"分开 ✓。
+
+## 这段条件里 Dove 自己的行为是**对的** ✓✓（值得单独记）
+
+- 三次瞬时失败 → **如实归为 `transient`** ✓（`failureReason: "reviewed-provider-message"` ✓，读的是宿主自己的 `stopReason` ✓）；
+- 停场时给出 **`provider-attempt-limit` + `retryable: true` + nextAction** ✓，且**不把重试伪装成新请求** ✓；
+- **intake 不受影响** ✓：正式任务与 6 份产物照常建立 ✓（`lane=formal` ✓），
+  即"模型一个字没答"与"作业没被登记"被分开了 ✓ —— 这正是 AC#2 里"工具面与登记"那一半 ✓。
