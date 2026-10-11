@@ -70,8 +70,10 @@ harness **自报**：*"当前 Pi 宿主未提供 hashline 编辑工具（replace
       **本轮最实的一条** ✓✓：第三次读数给那条分类规则写的修法**到不了** ✗ —— 两个调用点只在归一化结果为 `error` 时分类 ✓，
       而 `aborted` 归一化成 `cancelled` ✓，所以那条比较**永远不成立** ✓；真函数在改动前对 `{stopReason:"error"}` 给出
       `{kind:"terminal",reason:"unknown"}` ✓ —— **与账本逐字相同** ✓✓，诊断由函数的输出证实 ✓。
-      **已修并按本仓纪律落地** ✓：规则改读整个失败集、仍在文本规则之后 ✓，用例**先见红且红在账本那个值上** ✓，登记进 `AGENTS.md` ✓。
-      判据：`typecheck 0` ✓ · `npm test 975/975` ✓ · `spec-anchors` 绿 ✓（mount 表第三次为同一件事付税 ✓）。
+      **已修并按本仓纪律落地** ✓：规则改读整个失败集、仍在文本规则之后 ✓，两条用例**先见红** ✓
+      （分类那条红在账本那个值上 ✓；**行为那条走真实处理器路径**、旧规则下 `actual: 'terminal'` ✓，断言 `outcome: transient-failure` ✓
+      —— 即"会重试"不再只是散文 ✓），登记进 `AGENTS.md` ✓。
+      判据：`typecheck 0` ✓ · `npm test 976/976` ✓ · `spec-anchors` 绿 ✓（mount 表第三次为同一件事付税 ✓）。
       **仍未达成** ✗✓：AC#2 ✗（死因换成第 5 个形状 ✓）· 那句话能否改变行为未验证 ✗ · 两个改策略的选项仍未定 ✗。
 - [x] **两处缺口的处置各有可复现判据** ✓（定案见 `## 决定`✓ 与 `design.md`✓）：修好了是绿的 ✓，没修是红的且有原文 ✓。
       **两处都成立** ✓✓：① `workMode` 从 `failed` ✗ 变成 `code-development` ✓；② `hashlineEditTools=absent` 在读数里 ✓。

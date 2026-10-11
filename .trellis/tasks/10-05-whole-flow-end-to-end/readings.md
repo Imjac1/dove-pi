@@ -957,6 +957,21 @@ artifactEvidence {doveState:true, doveFileCount:7, formalTaskCount:1, formalArti
 `actual: {kind:'terminal', reason:'unknown'}` vs `expected: {kind:'transient', reason:'reviewed-provider-message'}` ✓。
 改后绿 ✓，typecheck 0 ✓。**已登记进 `AGENTS.md` 规则表** ✓。
 
+**而"会重试"这句话不能只用散文说** ✓✓ —— 那条用例量的是**分类** ✓，而改动真正宣称的是**行为**（会重试而不是结束请求 ✓）。
+所以补了第二条用例，把**真跑那个形状**（`stopReason: "error"`、**没有任何 message 文本** ✓）**走一遍真实处理器路径** ✓：
+`before_agent_start` → `agent_start` → `before_provider_request` → `message_end` → `agent_end` ✓，然后读账本 ✓，断言整条链 ✓：
+
+| 断言 | 看住什么 |
+|---|---|
+| `provider.request.completed.failureKind === "transient"` | 分类改了 ✓（旧规则下红：`actual: 'terminal'` ✓） |
+| `failureReason === "reviewed-provider-message"` | 由读宿主标记的那条规则命名 ✓ |
+| `request.attempt.completed.outcome === "transient-failure"` | **重试真的发生了** ✓✓（这是承诺的那一条 ✓） |
+| 没有 `request.terminal` | 重试的尝试不写终态 ✓ |
+| `abort` 调用次数 = 0 | 它不再中止请求 ✓（旧的终态会中止 ✓） |
+
+**旧规则下它红在第一条断言上** ✓✓（`actual: 'terminal'` vs `expected: 'transient'` ✓）——
+即**这条用例量的是同一条链，而不是另写一遍散文** ✓。
+
 ## 第 4 片：这一轮自己付的税 ✓✗（**第三次** ✓）
 
 改动落在所有 mount 点**之上** ✓ ⇒ **18 行 mount 表整体 +12** ✓，
@@ -972,7 +987,7 @@ artifactEvidence {doveState:true, doveFileCount:7, formalTaskCount:1, formalArti
 | 项 | 读数 |
 |---|---|
 | `npm run typecheck` | **0** ✓ |
-| `npm test` | **975 / 975 pass / 0 fail** ✓✓（比上一轮 +1 = 新用例 ✓） |
+| `npm test` | **976 / 976 pass / 0 fail** ✓✓（比上一轮 +2 = 两条新用例 ✓） |
 | 新用例**先见红** | 是 ✓（actual 就是账本值 ✓） |
 | `spec-anchors`（mount 表那条） | 绿 ✓ |
 | 托管安装 | 上一轮装的 `0.2.0+source.35cc36f24c9d` **不含本轮** ✗（要再装一次才带上 ✓） |

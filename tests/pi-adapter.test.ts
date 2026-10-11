@@ -1245,6 +1245,62 @@ describe("Pi adapter", () => {
 		assert.equal(errored.details?.failureReason, "http_429", "and why Dove called it that, in the vocabulary the classifier already owns");
 	});
 
+	it("turns the run's bare failed-stream token into a retry rather than a terminal", async () => {
+		// **The field run's own shape, driven through the handler rather than asserted on the classifier.** The tenth
+		// whole-flow run's failing round ended with `stopReason: "error"` and **no message text at all** - not the `429`
+		// the case above stages, and not the `aborted` the fix before that one reads - and it was classified `unknown`,
+		// which ended the request with `provider-unknown`, `retryable: false`, and a next action pointing at a provider
+		// error the ledger does not hold. What this case holds is the behaviour, not only the classification: the same
+		// round is now a transient failure, so the attempt closes `transient-failure` and the request is retried.
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return representativeTools.map((name) => ({ name })); },
+			setActiveTools() {},
+			getActiveTools() { return [...representativeTools]; },
+			getThinkingLevel() { return "max"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		let aborted = 0;
+		const context: FakeContext = {
+			hasUI: true,
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+			sessionManager: { getEntries: () => [], getSessionId: () => "bare-failed-stream-session" },
+			getContextUsage: () => ({ tokens: 1_000, contextWindow: 1_000_000 }),
+			model: { contextWindow: 200_000, maxTokens: 16_384, provider: "test", id: "test-model" },
+			// A retried attempt must not abort the request; a terminal one does, and counting the calls keeps that
+			// difference visible instead of letting an optional field swallow it.
+			abort: () => { aborted += 1; },
+		} as FakeContext;
+		const ledgerPath = join(adapterStateDir, "execution.jsonl");
+		const before = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).length;
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "go", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		await events.get("before_provider_request")?.({ type: "before_provider_request", payload: { messages: [{ role: "user", content: "go" }] } }, context);
+		const failure = { role: "assistant", stopReason: "error", content: [] };
+		await events.get("message_end")?.({ type: "message_end", message: failure }, context);
+		await events.get("agent_end")?.({ type: "agent_end", messages: [failure] }, context);
+		const written = readFileSync(ledgerPath, "utf8")
+			.split(/\r?\n/)
+			.filter(Boolean)
+			.slice(before)
+			.map((line) => JSON.parse(line) as { kind?: string; details?: Record<string, unknown> });
+		const errored = written.find((record) => record.kind === "provider.request.completed" && record.details?.stopReason === "error");
+		assert.ok(errored, `the errored round is recorded: ${JSON.stringify(written.map((record) => record.kind))}`);
+		assert.equal(errored.details?.failureKind, "transient", "a bare failed-stream token is the transient class, not `unknown`");
+		assert.equal(errored.details?.failureReason, "reviewed-provider-message", "and it is named by the rule that reads the host's own token");
+		const attempt = written.find((record) => record.kind === "request.attempt.completed");
+		assert.ok(attempt, "the attempt is closed");
+		assert.equal(attempt.details?.outcome, "transient-failure", "and it is retried, which is the whole point of the classification");
+		assert.equal(written.some((record) => record.kind === "request.terminal"), false, "a retried attempt reaches no terminal");
+		assert.equal(aborted, 0, "and it does not abort the request, which is what the terminal it used to produce did");
+	});
+
 	it("writes down that a tool call started, and whether the whitelist gave it a timeout", async () => {
 		// **The defect this case exists for.** A call that never returned wrote nothing at all: `tool.observed` is written
 		// at `tool_result`, and only when the call did not error, so the ledger stopped one millisecond after the call
