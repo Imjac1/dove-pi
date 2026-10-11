@@ -56,6 +56,7 @@ and the two doors are the ones that catch what no case is looking for.
 | A module nothing reaches is declared with a reason, or deleted | architecture | `suite:tests/harness-reachability.test.ts` | an unreachable module is added without a reason, or an allow-list entry goes stale after the module is wired |
 | An errand a gate implies is said only while the gate would refuse it, and never in the block that is constant for the session | test | `test:tests/pi-adapter.test.ts#says a formal task's acceptance record is unfrozen only while it is, and keeps the errand out of the stable prompt` | the errand is written into the session-constant system prompt, or the sentence stays after the acceptance record is frozen, so it reads as noise a model learns to skip |
 | A provider stream that ends before its response is transient, whichever of the host's words spells it | test | `test:tests/pi-adapter.test.ts#reads the host's failed-stream token, which the aborted spelling never reached` | the classification keys on a spelling the call sites cannot deliver, which is how the first version read as a control while nothing reached it |
+| A refusal names the argument that failed, and what to pass instead | test | `test:tests/pi-adapter.test.ts#names the argument when a convergence call's task selector resolves to nothing` | a parameter carries no description so its bare name invites the wrong value, and one refusal sentence covers two different causes, so the caller cannot tell which argument it got wrong |
 
 ## Where this harness is documented
 
