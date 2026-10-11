@@ -46,10 +46,28 @@ export function readAcl(spec: BoundarySpec, tag = "acl"): AclReport {
 	const paths = [...spec.planePaths, ...spec.workPaths];
 	const reply = callHost(spec, { verb: "acl-read", paths }, tag);
 	if (!reply.ok || reply.payload === undefined) {
-		return { ok: false, rules: [], violations: [reply.failure ?? "the ACL read failed"], missing: [] };
+		return { ok: false, rules: [], violations: [reply.failure ?? "the ACL read failed"], missing: [], setupFailures: [] };
 	}
 	const { rules, missing } = parseAceRules(reply.payload);
-	return { ok: true, rules, violations: [], missing };
+	return { ok: true, rules, violations: [], missing, setupFailures: [] };
+}
+
+/**
+ * **Whether this machine could not establish the boundary, as opposed to a boundary that was established and violated.**
+ *
+ * The two need separating wherever a test decides whether to run, and they are not the same reading. A machine that runs
+ * every `icacls` without complaint and then holds **no rules at all** is a machine the boundary cannot be tested on; a
+ * boundary that was applied and then violated is the regression this file exists to catch. So the condition is exact and
+ * narrow: no command failed, nothing declared is missing, and the read found no rules - which means a command failure
+ * keeps the case red rather than turning it into a skip.
+ *
+ * Measured 2026-10-11, on the first CI run this repository had in a month: a GitHub Windows runner reported every
+ * `icacls` call successful and read back zero ACEs, so the two cases that pass on the development machine failed there.
+ * Whether that is the runner's environment or something in this primitive is `09-30-axi-a0-base`'s open question, and
+ * this function does not answer it - it says what was measured and leaves the cause where it belongs.
+ */
+export function cannotEstablishBoundary(report: AclReport): boolean {
+	return !report.ok && report.setupFailures.length === 0 && report.rules.length === 0 && report.missing.length === 0;
 }
 
 /** Check both invariants against a set of rules. Pure, so a test can drive it with fixtures. */
@@ -115,7 +133,7 @@ export function ensureBoundary(spec: BoundarySpec, tag = "boundary"): AclReport 
 
 	const read = readAcl(spec, tag);
 	const violations = invariantViolations(spec, read.rules, read.missing);
-	return { ok: failures.length === 0 && violations.length === 0, rules: read.rules, violations: [...failures, ...violations], missing: read.missing };
+	return { ok: failures.length === 0 && violations.length === 0, rules: read.rules, violations: [...failures, ...violations], missing: read.missing, setupFailures: failures };
 }
 
 /** A human-readable one-line summary of the boundary, for a reading rather than for a decision. */

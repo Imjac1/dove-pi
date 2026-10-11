@@ -60,6 +60,13 @@ export interface AclReport {
 	readonly violations: readonly string[];
 	/** Paths that do not exist, named rather than silently skipped. */
 	readonly missing: readonly string[];
+	/**
+	 * Command failures from the set, kept apart from rule violations, because they are different readings: a machine that
+	 * could not apply the ACLs at all is a machine the boundary cannot be tested on, while a boundary that was applied and
+	 * then violated is the regression `tests/jailer.test.ts` exists to catch. `violations` carries both, concatenated, for
+	 * a caller that only wants to know whether the boundary holds; this field is what lets a caller tell them apart.
+	 */
+	readonly setupFailures: readonly string[];
 }
 
 /** The instrument self-check, as data rather than a comment: `pass` is the only acceptable value. */

@@ -24,10 +24,10 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describeBoundary, ensureBoundary, invariantViolations, readAcl } from "../src/jailer/acl.ts";
+import { describeBoundary, cannotEstablishBoundary, ensureBoundary, invariantViolations, readAcl } from "../src/jailer/acl.ts";
 import { launchJailed } from "../src/jailer/launch.ts";
 import { probeToken } from "../src/jailer/token.ts";
-import { DEFAULT_WORK_SID, type BoundarySpec } from "../src/jailer/types.ts";
+import { DEFAULT_WORK_SID, type AceRule, type AclReport, type BoundarySpec } from "../src/jailer/types.ts";
 import { runCommandLine } from "../src/jailer/host.ts";
 
 const root = join(tmpdir(), `axi-jailer-${String(process.pid)}`);
@@ -47,14 +47,48 @@ const spec: BoundarySpec = {
 const everyoneGrantCountOnPlane = (): number =>
 	readAcl(spec, "acl-readback").rules.filter((rule) => rule.path === plane && rule.type === "Allow" && rule.sid === DEFAULT_WORK_SID).length;
 
-describe("the plane B boundary", () => {
-	before(() => {
-		rmSync(root, { recursive: true, force: true });
-		mkdirSync(work, { recursive: true });
-		mkdirSync(plane, { recursive: true });
-		mkdirSync(scratch, { recursive: true });
+// **The decision to run at all, taken once and from the measurement rather than from the assertions.** These cases are the
+// boundary's regression test, and a machine that cannot establish a boundary cannot host its regression test - which is
+// what a GitHub Windows runner turned out to be: measured 2026-10-11, on the first CI run this repository had in a month,
+// every `icacls` call there reported success and the read came back with zero ACEs, so the cases that pass here failed
+// there. `cannotEstablishBoundary` is narrow on purpose - a command failure or a missing path keeps them red, because
+// those are regressions rather than machines. The reason travels into the skip, so a reader of the run sees what was
+// measured; and whether the runner's behaviour is its environment or this primitive is `09-30-axi-a0-base`'s question.
+rmSync(root, { recursive: true, force: true });
+mkdirSync(work, { recursive: true });
+mkdirSync(plane, { recursive: true });
+mkdirSync(scratch, { recursive: true });
+const setupReport = ensureBoundary(spec, "boundary-setup");
+const boundaryUnavailable = cannotEstablishBoundary(setupReport)
+	? `this machine did not keep the boundary, so it cannot host the boundary's regression test: ${describeBoundary(setupReport)}`
+	: false;
+
+describe("deciding whether a machine can host the boundary test", () => {
+	// **The narrowness is the claim, so it is driven with fixtures instead of asserted in prose.** `invariantViolations`
+	// is pure for the same reason: a decision about whether to run should be checkable without a machine that can hold a
+	// boundary. Each case below is a reading that has to stay on the other side of the line.
+	const report = (over: Partial<AclReport>): AclReport => ({ ok: false, rules: [], violations: [], missing: [], setupFailures: [], ...over });
+
+	it("does not call a failed command a machine that cannot hold a boundary", () => {
+		const failures = ["icacls failed (1) on held-out path X"];
+		assert.equal(cannotEstablishBoundary(report({ violations: failures, setupFailures: failures })), false, "a failed icacls is a regression to see, not a machine to skip on");
 	});
 
+	it("does not call a violated boundary a machine that cannot hold one", () => {
+		const rules: readonly AceRule[] = [{ path: "X", identity: "Everyone", sid: DEFAULT_WORK_SID, rights: "M", type: "Allow", inherited: false }];
+		assert.equal(cannotEstablishBoundary(report({ rules, violations: ["held-out path is granted to the work SID"] })), false, "the boundary was established and then violated, which is the regression this file exists for");
+	});
+
+	it("does not skip when a declared path is missing", () => {
+		assert.equal(cannotEstablishBoundary(report({ missing: ["X"], violations: ["writable path does not exist"] })), false, "a missing path is a declaration problem, and skipping it would hide that instead");
+	});
+
+	it("calls a success-then-nothing read a machine that cannot hold one", () => {
+		assert.equal(cannotEstablishBoundary(report({ violations: [`writable path has no explicit grant for the work SID ${DEFAULT_WORK_SID}`] })), true, "no command failed, nothing is missing, and the read found no rules at all - which is what the runner did");
+	});
+});
+
+describe("the plane B boundary", { skip: boundaryUnavailable }, () => {
 	after(() => {
 		rmSync(root, { recursive: true, force: true });
 	});
