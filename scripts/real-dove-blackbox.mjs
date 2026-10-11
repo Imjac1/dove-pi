@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, cpSync, createWriteStream, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
@@ -406,9 +406,30 @@ function prepareWorkspace() {
   } });
 }
 
+function resolveFauxFixture() {
+  const candidates = [
+    resolve(repoRoot, "node_modules/@earendil-works/pi-ai/dist/providers/faux.js"),
+    resolve(repoRoot, "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/providers/faux.js"),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) throw new Error(`the faux provider fixture is in neither place Node would look: ${candidates.join(", ")}`);
+  return found;
+}
+
 function writeFauxProvider() {
   const path = resolve(workspaceRoot, ".pi", "extensions", "blackbox-faux-provider.mjs");
-  const fauxModule = pathToFileURL(resolve(repoRoot, "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/providers/faux.js")).href;
+  // **The two places Node itself would look, in Node's own order.** This path used to be spelled out as the nested one
+  // alone - `pi-coding-agent/node_modules/pi-ai/...` - which is the shape a machine that installed once and kept the tree
+  // leaves, and is *not* the shape a clean `npm ci` leaves, where `pi-ai` is hoisted to the top level. Measured
+  // 2026-10-11, on the first CI run after a month of local work: every scenario test failed with "Cannot find module",
+  // because the extension written below imported a file that path only sometimes points at, so the provider never
+  // registered and the run died with Unknown provider "dove-blackbox".
+  //
+  // It cannot be reached with `require.resolve` instead: `pi-ai`'s `exports` map declares only the `import` condition, so
+  // CommonJS resolution refuses the subpath outright (ERR_PACKAGE_PATH_NOT_EXPORTED) - tried, and that is the message it
+  // gave. So the two candidates are named, in the order Node resolves them, and a miss is loud rather than a provider
+  // that silently fails to register.
+  const fauxModule = pathToFileURL(resolveFauxFixture()).href;
   const window = Number.isFinite(parsedContextWindow) && parsedContextWindow > 0 ? Math.floor(parsedContextWindow) : 128000;
   const mode = JSON.stringify(progressCase === "midstream" ? "repeated" : progressCase);
   const subagent = JSON.stringify(subagentCase);
