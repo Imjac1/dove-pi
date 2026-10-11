@@ -1173,6 +1173,26 @@ describe("Pi adapter", () => {
 		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
 	});
 
+	it("reads the host's failed-stream token, which the aborted spelling never reached", () => {
+		// **The defect the neighbouring case aimed at, and it stayed open.** Both call sites classify an assistant message
+		// only when `normalizeStopReason` reports `error`, and that normalizer maps `aborted` to `cancelled` - so the raw
+		// token handed to this function is always from the failed set, and the neighbouring case's `aborted` comparison
+		// could never be true. It read as a control while nothing reached it.
+		// **Measured 2026-10-11, tenth whole-flow run**: a provider round lasted 176 s, ended with the bare token and no
+		// message text, and was classified `unknown`. The ledger holds `failureKind: "terminal"`, `failureReason:
+		// "unknown"`, and the terminal says `retryable: false` with `nextAction: "Inspect the provider error and adjust
+		// the request."` against a ledger that holds no provider error. A stream that ends before its response is the
+		// transient class whether the host spells the event `aborted`, `error`, `failed` or `failure`.
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error" }), { kind: "transient", reason: "reviewed-provider-message" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "failed" }), { kind: "transient", reason: "reviewed-provider-message" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "failure", errorMessage: "   " }), { kind: "transient", reason: "reviewed-provider-message" });
+		// The spelling the neighbouring case names is kept, for a caller that hands over a message it did not normalize.
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "terminated" }), { kind: "transient", reason: "reviewed-provider-message" });
+		// **The text still wins where there is text**, which is what keeps a bare token from swallowing a real cause.
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "HTTP 503" }), { kind: "transient", reason: "http_503" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
+	});
+
 	it("records why a provider round failed, because the retry was decided from that classification", async () => {
 		// **The defect this case exists for.** The `message_end` handler wrote the provider record and classified the failure
 		// eight lines later, so the record could not carry the cause by construction: a ledger holding `stopReason: "error"`

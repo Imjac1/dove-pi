@@ -279,6 +279,13 @@ function isGuidanceOnlyContextMessage(message: unknown): boolean {
 		&& (!Array.isArray(details.segments) || details.segments.length === 0);
 }
 
+/**
+ * **The host's spellings for a stream that ended before its response**, which is the transient class. `normalizeStopReason`
+ * collapses all of them to `error`, and that is why the classifier's two call sites can hand it only one of them:
+ * `aborted` is here for a caller that passes a message it did not normalize, and because it is the same event.
+ */
+const FAILED_STREAM_STOP_REASONS = new Set(["aborted", "error", "failed", "failure"]);
+
 export function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
 	if (typeof message !== "object" || message === null) return classifyProviderFailure({ category: "unknown" });
 	const value = message as { errorMessage?: unknown; error?: unknown; stopReason?: unknown };
@@ -294,15 +301,20 @@ export function classifyAssistantProviderFailure(message: unknown): ProviderFail
 		return { kind: "transient", reason: "reviewed-provider-message" };
 	}
 	// **The host names this event and only its text was being read.** A provider stream that ends before its response
-	// does arrives as `stopReason: "aborted"` with an uninformative `errorMessage` - `"terminated"` in the measured run
-	// of 2026-10-05 - and no rule above finds anything in that word, so it was classified `unknown`. That produced a
-	// terminal whose `nextAction` told the operator to inspect a provider error the ledger does not hold. **The same
-	// host event was classified `transient-failure` on the first attempt (and retried) and `unknown` on the second**,
-	// so what the reading said about one event depended on which word the provider happened to send. A stream that ends
-	// early is the transient class the rule above already names, and this rule sits after the text rules so a message
-	// that does say `aborted by the user` still reads as a cancellation.
-	const stopReason = String(value.stopReason ?? "").trim().toLowerCase();
-	if (stopReason === "aborted") return { kind: "transient", reason: "reviewed-provider-message" };
+	// arrives is the transient class the rules above already name, and the host says so in the message's own
+	// `stopReason`. Measured 2026-10-05: the token carried an uninformative `errorMessage` (`"terminated"`), no text rule
+	// matched it, and the classification fell through to `unknown` - a terminal whose `nextAction` told the operator to
+	// inspect a provider error the ledger does not hold.
+	// **And the spelling this rule was first written for could not reach it.** Both call sites classify only when
+	// `normalizeStopReason` reports `error`, and that normalizer maps `aborted` to `cancelled`, so the raw token is always
+	// from the failed set and an `aborted` comparison was never true: it read as a control while nothing reached it.
+	// Measured again 2026-10-11, tenth whole-flow run: a provider round lasted 176 s, ended with the bare token and no
+	// message text, and was classified `unknown` - the ledger holds `failureKind: "terminal"`, `failureReason: "unknown"`,
+	// `retryable: false`, and a next action pointing at nothing. The host's word for the event is the event, whichever of
+	// its words it is, so the rule reads the whole failed set. It stays after the text rules on purpose: a message that
+	// says `429`, `Connection error.` or `aborted by the user` is classified above and never reaches here.
+	const stopReason = String(value.stopReason ?? "").trim().toLowerCase().replace(/[ -]/g, "_");
+	if (FAILED_STREAM_STOP_REASONS.has(stopReason)) return { kind: "transient", reason: "reviewed-provider-message" };
 	return classifyProviderFailure({ category: "unknown" });
 }
 
