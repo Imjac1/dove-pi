@@ -206,13 +206,23 @@ function matchLeading(normalized: string, hintNorm: string): boolean {
 }
 
 /**
- * Keep aggregate verification commands from being killed by the Pi host's
- * outer operation watchdog.  Pi's bash tool intentionally has no default
- * timeout; on Windows a package-wide test command can therefore sit behind a
- * Git-Bash pipe until the host cancels the whole request and reports only
- * "This operation was aborted".  This is an escape hatch, not a global tool
- * limit: ordinary commands are untouched, an explicit timeout always wins,
- * and users can raise/disable it with DOVE_PI_SHELL_TIMEOUT_SECONDS (0 = off).
+ * Give every shell command a lifetime, tight for the ones that fan out and generous for the rest.
+ *
+ * Pi's bash tool intentionally has no default timeout, so a command can sit behind a Git-Bash pipe until the host cancels
+ * the whole request and reports only "This operation was aborted". Two rules answer that, and they are different rules.
+ * **Aggregate verification** - `npm test`, `pytest`, `go test` and their like - gets a purposeful 240 seconds, because
+ * those are the commands that fan out and hide an early failure behind a pipe; `DOVE_PI_SHELL_TIMEOUT_SECONDS` raises or
+ * disables that one. **Everything else** gets the ceiling, 900 seconds by default, and `DOVE_PI_SHELL_CEILING_SECONDS`
+ * raises or disables it.
+ *
+ * **The ceiling is not a courtesy, it is a repair.** This comment used to say "ordinary commands are untouched", and one
+ * of them cost a whole run: measured 2026-10-12, an agent that could not tell pre-existing lint errors from its own ran
+ * `find / -name "controller.py" -path "*cachecontrol*"`, `timeoutApplied: false` went into the ledger, and the run sat
+ * there until the harness killed it at its budget. The record was accurate and the run was still lost.
+ *
+ * An explicit `timeout` on the call always wins, and turning the aggregate rule off means its commands fall to the
+ * ceiling rather than becoming unbounded - one command must not be able to hang a run, and that should not depend on
+ * remembering a second variable.
  */
 export function applyAdaptiveShellTimeout(
 	toolName: string,
@@ -225,19 +235,46 @@ export function applyAdaptiveShellTimeout(
 	if (!command.trim()) return { applied: false };
 	// These commands commonly fan out to many packages/tests and, when piped,
 	// can hide an early failure until every child has released its stdio handle.
-	if (!/(?:\b(?:go\s+(?:test|vet)|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|yarn\s+test|pytest(?:\s|$)|cargo\s+test|dotnet\s+test|make\s+(?:test|check))\b)/i.test(command)) return { applied: false };
-	const raw = env.DOVE_PI_SHELL_TIMEOUT_SECONDS;
-	const configured = raw === undefined || raw.trim() === "" ? 240 : Number(raw);
-	// A malformed override must not silently restore the host-level abort. Keep
-	// the protective default and make the reason visible to diagnostics/UI.
-	if (!Number.isFinite(configured) || configured < 0) {
-		input.timeout = 240;
-		return { applied: true, timeoutSeconds: 240, reason: "invalid-configuration-defaulted" };
+	if (/(?:\b(?:go\s+(?:test|vet)|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|yarn\s+test|pytest(?:\s|$)|cargo\s+test|dotnet\s+test|make\s+(?:test|check))\b)/i.test(command)) {
+		const raw = env.DOVE_PI_SHELL_TIMEOUT_SECONDS;
+		const configured = raw === undefined || raw.trim() === "" ? 240 : Number(raw);
+		// A malformed override must not silently restore the host-level abort. Keep
+		// the protective default and make the reason visible to diagnostics/UI.
+		if (!Number.isFinite(configured) || configured < 0) {
+			input.timeout = 240;
+			return { applied: true, timeoutSeconds: 240, reason: "invalid-configuration-defaulted" };
+		}
+		// `0` turns this rule off and **falls through to the ceiling** rather than returning: the sentence below explains
+		// why "unbounded" is not one of the options.
+		if (configured > 0) {
+			const aggregateSeconds = Math.max(1, Math.floor(configured));
+			input.timeout = aggregateSeconds;
+			return { applied: true, timeoutSeconds: aggregateSeconds, reason: "aggregate-verification" };
+		}
 	}
-	if (configured === 0) return { applied: false, reason: "disabled" };
-	const timeoutSeconds = Math.max(1, Math.floor(configured));
-	input.timeout = timeoutSeconds;
-	return { applied: true, timeoutSeconds, reason: "aggregate-verification" };
+	// **The ceiling: the outer bound every other shell command gets.** The paragraph above used to end "ordinary commands
+	// are untouched", and one of them cost a whole run. Measured 2026-10-12, on the first customer-path pass: the agent
+	// wanted to separate pre-existing lint errors from ones it had introduced, `git` was unusable in its own copy, and it
+	// searched the whole filesystem for the project - `find / -name "controller.py" -path "*cachecontrol*"`. That command
+	// is not shaped like aggregate verification, so nothing bounded it, and the ledger recorded `timeoutApplied: false`
+	// while the run sat there until the harness killed it at its budget. **The record was accurate and the run was still
+	// lost**, which is the difference between documenting a hazard and removing it.
+	//
+	// The two rules stay distinct in the ledger because they answer different questions: the aggregate bound is a
+	// purposeful 240 seconds for commands that fan out, and this is a generous ceiling for everything else. Turning the
+	// aggregate rule off now means "this command gets the ceiling instead" rather than "this command is unbounded" - a run
+	// that one command can hang should not be defeatable by forgetting the other variable. An explicit `timeout` on the
+	// call still wins, above.
+	const ceilingRaw = env.DOVE_PI_SHELL_CEILING_SECONDS;
+	const ceilingConfigured = ceilingRaw === undefined || ceilingRaw.trim() === "" ? 900 : Number(ceilingRaw);
+	if (!Number.isFinite(ceilingConfigured) || ceilingConfigured < 0) {
+		input.timeout = 900;
+		return { applied: true, timeoutSeconds: 900, reason: "ceiling-invalid-configuration-defaulted" };
+	}
+	if (ceilingConfigured === 0) return { applied: false, reason: "ceiling-disabled" };
+	const ceilingSeconds = Math.max(1, Math.floor(ceilingConfigured));
+	input.timeout = ceilingSeconds;
+	return { applied: true, timeoutSeconds: ceilingSeconds, reason: "command-ceiling" };
 }
 
 function runtimeReadOnly(): boolean {
@@ -2835,8 +2872,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			}
 		}
 		const adaptiveTimeout = applyAdaptiveShellTimeout(event.toolName, event.input);
-		if (adaptiveTimeout.applied && ctx.hasUI) {
-			ctx.ui.notify(`Dove 为聚合验证命令设置 ${adaptiveTimeout.timeoutSeconds}s 超时；可用 DOVE_PI_SHELL_TIMEOUT_SECONDS 调整，但仍受 Pi 宿主外层 watchdog 约束，设为 0 可关闭此兜底。`, "info");
+		// **Only the tight rule is announced.** The ceiling applies to nearly every shell command, so notifying for it would
+		// be noise on every call; the aggregate bound is the one a person may want to raise, and it keeps its own variable
+		// named here. A misconfiguration still speaks, because its reason is not the plain ceiling. Which rule answered is
+		// in the ledger either way.
+		if (adaptiveTimeout.applied && adaptiveTimeout.reason !== "command-ceiling" && ctx.hasUI) {
+			ctx.ui.notify(`Dove 为聚合验证命令设置 ${adaptiveTimeout.timeoutSeconds}s 超时；可用 DOVE_PI_SHELL_TIMEOUT_SECONDS 调整，设为 0 则它落到命令上限（DOVE_PI_SHELL_CEILING_SECONDS，设为 0 可完全关闭超时）。两者都仍受 Pi 宿主外层 watchdog 约束。`, "info");
 		}
 		if (event.toolName === "ask_user_question") {
 			if (currentRequestPlan?.continuedFromRequestId) {

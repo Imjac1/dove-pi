@@ -33,7 +33,13 @@ after(() => {
 });
 
 describe("Pi adapter", () => {
-	it("bounds aggregate shell verification without changing ordinary commands", () => {
+	it("bounds every shell command, tightly for aggregate verification and at a ceiling for the rest", () => {
+		// **The ceiling is here because a run was lost without one.** Measured 2026-10-12, on the first of three
+		// customer-path passes: the agent wanted to tell pre-existing lint errors from ones it had introduced, `git` was
+		// unusable in the run's own copy, and it searched the whole filesystem for the project instead -
+		// `find / -name "controller.py" -path "*cachecontrol*"`. Pi's bash tool has no default timeout, that command is
+		// not shaped like aggregate verification, and `timeoutApplied: false` is what the ledger recorded while the run
+		// sat there until the harness killed it at its budget. The record was right and the run was still lost.
 		const aggregate: Record<string, unknown> = { command: "go test -count=1 ./server/... 2>&1 | tail -60" };
 		assert.deepEqual(applyAdaptiveShellTimeout("bash", aggregate, {}), { applied: true, timeoutSeconds: 240, reason: "aggregate-verification" });
 		assert.equal(aggregate.timeout, 240);
@@ -41,10 +47,23 @@ describe("Pi adapter", () => {
 		assert.deepEqual(applyAdaptiveShellTimeout("bash", explicit, {}), { applied: false, reason: "explicit-timeout" });
 		assert.equal(explicit.timeout, 900);
 		const ordinary: Record<string, unknown> = { command: "git status --short" };
-		assert.deepEqual(applyAdaptiveShellTimeout("bash", ordinary, {}), { applied: false });
-		const disabled: Record<string, unknown> = { command: "npm test" };
-		assert.deepEqual(applyAdaptiveShellTimeout("bash", disabled, { DOVE_PI_SHELL_TIMEOUT_SECONDS: "0" }), { applied: false, reason: "disabled" });
-		assert.equal(disabled.timeout, undefined);
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", ordinary, {}), { applied: true, timeoutSeconds: 900, reason: "command-ceiling" });
+		assert.equal(ordinary.timeout, 900);
+		// The command that hung that run, kept as a fixture so the ceiling is checked against the shape that needed it.
+		const wholeDiskSearch: Record<string, unknown> = { command: 'find / -name "controller.py" -path "*cachecontrol*" -not -path "*/dove-check/*" 2>/dev/null | head' };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", wholeDiskSearch, {}), { applied: true, timeoutSeconds: 900, reason: "command-ceiling" });
+		assert.equal(wholeDiskSearch.timeout, 900);
+		// **The control, and it is what keeps the old sentence true as an option rather than as a claim**: `0` turns the
+		// ceiling off for an operator who wants ordinary commands untouched.
+		const untouched: Record<string, unknown> = { command: "git status --short" };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", untouched, { DOVE_PI_SHELL_CEILING_SECONDS: "0" }), { applied: false, reason: "ceiling-disabled" });
+		assert.equal(untouched.timeout, undefined);
+		// **Turning the aggregate rule off no longer means "unbounded".** The command falls to the ceiling, because the
+		// reason the ceiling exists is that one command must not be able to hang a run, and that should not depend on
+		// remembering a second variable. The opt-out is the ceiling's own knob, checked just above.
+		const aggregateOff: Record<string, unknown> = { command: "npm test" };
+		assert.deepEqual(applyAdaptiveShellTimeout("bash", aggregateOff, { DOVE_PI_SHELL_TIMEOUT_SECONDS: "0" }), { applied: true, timeoutSeconds: 900, reason: "command-ceiling" });
+		assert.equal(aggregateOff.timeout, 900);
 		const invalid: Record<string, unknown> = { command: "npm test" };
 		assert.deepEqual(applyAdaptiveShellTimeout("bash", invalid, { DOVE_PI_SHELL_TIMEOUT_SECONDS: "not-a-number" }), { applied: true, timeoutSeconds: 240, reason: "invalid-configuration-defaulted" });
 		assert.equal(invalid.timeout, 240);
@@ -1467,11 +1486,11 @@ describe("Pi adapter", () => {
 		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "go", systemPrompt: "" }, context);
 		await events.get("agent_start")?.({ type: "agent_start" }, context);
 		const before = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).length;
-		// One command the whitelist covers, and the whole-disk search that actually hung a run.
+		// One command the aggregate rule covers, and the whole-disk search that actually hung a run.
 		// The covered one is spelled the way the field run spelled it: **`pytest -q` alone does not match the regex**,
-		// because the trailing `\b` fails after the space it consumed, while `pytest <path>` does. That is the whitelist
-		// being narrower than it reads, and the point of this record is that the narrowness is now visible rather than
-		// silent - the second call below says `timeoutApplied: false` and nothing has to be inferred from a regex.
+		// because the trailing `\b` fails after the space it consumed, while `pytest <path>` does. That is the rule being
+		// narrower than it reads, and this record is where the difference shows - as two different reasons now, rather
+		// than as bounded and unbounded.
 		await events.get("tool_call")?.({ type: "tool_call", toolCallId: "listed-call", toolName: "bash", input: { command: "python -m pytest tests/test_immutable.py -q" } }, context);
 		await events.get("tool_call")?.({ type: "tool_call", toolCallId: "unlisted-call", toolName: "bash", input: { command: "find / -name dove-pi.cmd -maxdepth 6 | head" } }, context);
 		const written = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).slice(before)
@@ -1480,11 +1499,17 @@ describe("Pi adapter", () => {
 		const listed = started.find((record) => record.correlation?.toolCallId === "listed-call");
 		const unlisted = started.find((record) => record.correlation?.toolCallId === "unlisted-call");
 		assert.ok(listed, `the call's start is recorded, and the ledger says what it holds: ${JSON.stringify(written.map((record) => record.kind))}`);
-		assert.ok(unlisted, "both calls are recorded, not only the one the whitelist matched");
+		assert.ok(unlisted, "both calls are recorded, not only the one the aggregate rule matched");
 		assert.equal(listed.details?.timeoutApplied, true);
-		assert.equal(listed.details?.timeoutSeconds, 240, "the whitelisted command says which timeout it was given");
-		assert.equal(unlisted.details?.timeoutApplied, false, "and the unlisted one says so rather than leaving it implicit");
-		assert.equal(unlisted.details?.timeoutReason, undefined, "no reason is invented for a command outside the whitelist");
+		assert.equal(listed.details?.timeoutSeconds, 240, "the aggregate command says it got the tight bound");
+		assert.equal(listed.details?.timeoutReason, "aggregate-verification");
+		// **This assertion used to read `false`, and the run it described is the reason the ceiling exists.** The record
+		// was honest - the command really had no timeout - and the run was still lost to it. Now the case outside the
+		// aggregate rule is bounded too, and the two rules are told apart by the reason rather than by one of them having
+		// no bound at all.
+		assert.equal(unlisted.details?.timeoutApplied, true, "the command outside the aggregate rule is bounded as well, at the ceiling");
+		assert.equal(unlisted.details?.timeoutSeconds, 900, "the ceiling, which is generous on purpose");
+		assert.equal(unlisted.details?.timeoutReason, "command-ceiling", "and the record says which of the two rules answered");
 		// **The command travels as a digest and a length, never raw.** `quality-guidelines.md` requires evidence to hold
 		// digests and bounded counters and never tool arguments, so this asserts both halves: the digest exists, and the
 		// command it describes is nowhere in what was written.
