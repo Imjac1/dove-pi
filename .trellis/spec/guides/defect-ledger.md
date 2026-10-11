@@ -68,6 +68,16 @@ describing them as the mode's own action names with effect classes; whether that
 declared for a name nothing reads would be a grant that is never consulted - while `modes/code-development/governance.yaml` still lists
 `source.read` and `source.write`, the two names this entry measured as granting nothing. One file family, opposite rules: the decision this
 entry waits for is now also what makes the shipped modes consistent with each other.
+**Acted on in part, 2026-10-11, and the halves are now separable.** The four names are gone from the map the runtime indexes by:
+`code-development`'s `source.read`/`source.write` and `code-audit`'s `repo.read`/`report.write` are no longer `effects.classes` keys -
+an action name is a host tool's own name, a capability's name, or a tool this extension registers (`resolveActionIdentity`,
+`src/pi-adapter/action-identity.ts:33`), and these four are none of those, so the class could never be looked up. The rule now has a
+door rather than a paragraph: `tests/work-mode.test.ts` holds it for all four modes against the product's own composition root, and
+**the door is not decorative** - it reported all four modes while its third vocabulary was missing, and named `repo.read` once that was
+added. What has **not** moved is the half this entry actually ends on: the names stay in `authority.capabilities`, and the permission
+door beside it is still **shape**-based - `isCapabilityShaped("repo.read")` is true - so a dotted name no registry holds reads to that
+door as a capability, and only a reader with the registry in hand sees it. Striking the names from the two mode files is therefore not
+the answer to this entry; the question it ends on is still open, and the authority-and-permission half is now the only half left.
 
 ## 5. Two records of one event disagree, and nothing reconciles them
 
