@@ -15,7 +15,7 @@ import { ExecutionLedger } from "../src/core/execution-ledger.ts";
 import { hasHashlineEditTools, selectDoveToolNames } from "../src/pi-adapter/tool-profile.ts";
 import { formatProgressSnapshot, progressFingerprint, ProgressGuard } from "../src/pi-adapter/progress-guard.ts";
 import { representativeTools } from "./fixtures/representative-tool-catalog.ts";
-import { createProjectProvider, nativeProjectStatePath, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../src/project-provider/index.ts";
+import { createProjectProvider, nativeProjectStatePath, nativeTaskConvergencePath, type ProjectContextSnapshot, type ProjectProvider, type ProjectTask } from "../src/project-provider/index.ts";
 import { SEPT1_QUESTION_VARIANTS, sept1QuestionInput } from "./fixtures/sept1-question-loop.ts";
 import { restoreLatestContextSnapshot } from "../src/pi-adapter/context-snapshot.ts";
 
@@ -753,6 +753,64 @@ describe("Pi adapter", () => {
 			const frozen = await turn("now change the file named in the acceptance criteria");
 			assert.match(frozen?.systemPrompt ?? "", /\[PERSONAL AGENT\]/, "the second turn really ran, so the absence below is an absence of the sentence rather than of the turn");
 			assert.doesNotMatch(frozen?.message?.content ?? "", /no acceptance criteria are frozen/, "once the record exists the sentence is gone, because a sentence that is always present is noise");
+		} finally {
+			process.chdir(previousCwd);
+			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
+			else process.env.DOVE_PI_STATE_DIR = previousStateDir;
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("names the argument when a convergence call's task selector resolves to nothing", async () => {
+		// **The eleventh field run's own input, replayed.** The model called `operation: "freeze"` with three well-formed
+		// criteria and passed `task` as the task's *description* - the reading the bare parameter name invites, and the
+		// schema said nothing about it because that parameter carried no description while its neighbours did. Resolution
+		// failed and the refusal said only "Task convergence requires the current native formal task", which names neither
+		// of the two reasons it is used for. The model could not tell which argument was wrong: it grepped the whole
+		// managed install for that sentence, that command was outside the timeout whitelist, and the run hung there for
+		// the rest of its budget. **A refusal a caller cannot act on costs the caller the round.**
+		const root = mkdtempSync(join(tmpdir(), "pi-convergence-selector-"));
+		mkdirSync(join(root, ".dove"), { recursive: true });
+		const goal = { id: "goal-selector", title: "Selector or description", status: "active", formal: true, phase: "intake", createdAt: "2026-10-11T00:00:00.000Z", updatedAt: "2026-10-11T00:00:00.000Z", decisions: [], verification: [] };
+		writeFileSync(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, currentGoalId: goal.id, goals: [goal] }), "utf8");
+		const previousCwd = process.cwd();
+		const previousStateDir = process.env.DOVE_PI_STATE_DIR;
+		process.chdir(root);
+		process.env.DOVE_PI_STATE_DIR = join(root, "state");
+		try {
+			const tools = new Map<string, { parameters?: { properties?: Record<string, { description?: string } | undefined> }; execute: (...args: any[]) => Promise<any> }>();
+			const api = {
+				registerCommand() {}, registerShortcut() {}, registerFlag() {}, appendEntry() {},
+				registerTool(definition: { name: string; execute: (...args: any[]) => Promise<any> }) { tools.set(definition.name, definition); },
+				getAllTools() { return representativeTools.map((name) => ({ name })); },
+				setActiveTools() {}, getActiveTools() { return [...representativeTools]; },
+				getThinkingLevel() { return "high"; },
+				on() {},
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const tool = tools.get("agent_task_convergence");
+			assert.ok(tool, "the convergence tool is registered");
+			// **The contract a caller has to read before it can use the argument at all.** A bare name reads as the task's
+			// description - which is how it was used - so the schema has to say otherwise.
+			assert.match(tool.parameters?.properties?.task?.description ?? "", /selector/i, "the parameter says it is a selector, because a bare name reads as the task's description");
+			const context: FakeContext = {
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+				sessionManager: { getEntries: () => [], getSessionId: () => "selector-session" },
+			};
+			const prose = "Implement the RFC 8246 `immutable` response directive: a fresh cached response marked immutable is not revalidated even when the request asks for a fresh copy.";
+			await assert.rejects(
+				() => tool.execute("prose-task", { operation: "freeze", task: prose, criteria: [{ id: "AC-001", text: "The suite is green." }] }, undefined, undefined, context),
+				(error: Error) => {
+					assert.match(error.message, /does not know a task named/i, "the refusal names the argument that failed");
+					assert.match(error.message, /selector/i, "and says what the argument is");
+					assert.ok(error.message.includes(prose.slice(0, 60)), "it quotes back what it was given, so a caller can see what it sent");
+					return true;
+				},
+			);
+			// **The control, and it is what makes the selector the cause rather than the freeze**: the same call without
+			// the argument reaches the current native formal task.
+			await tool.execute("no-selector", { operation: "freeze", criteria: [{ id: "AC-001", text: "The suite is green." }] }, undefined, undefined, context);
+			assert.equal(existsSync(nativeTaskConvergencePath(root, goal.id)), true, "omitting the selector freezes the current task, so the freeze itself was never the problem");
 		} finally {
 			process.chdir(previousCwd);
 			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;

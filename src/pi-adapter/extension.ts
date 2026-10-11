@@ -1737,7 +1737,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			summary: Type.Optional(Type.String()),
 			nextAction: Type.Optional(Type.String()),
 			unblockCondition: Type.Optional(Type.String()),
-			task: Type.Optional(Type.String()),
+			// **A selector, and the schema says so.** This parameter carried no description while its neighbours did, and
+			// its bare name reads as the task's own text: measured 2026-10-11, the model passed a full sentence here, the
+			// resolution failed, and the refusal named neither the argument nor what it should have carried instead.
+			task: Type.Optional(Type.String({ description: "A task selector: the stableId agent_project_task printed, not this task's title or description. Omit it to use the current task." })),
 			// A change manifest. Predictions are one compact string each: `<observable>:<subject>=<target>`, with the
 			// observable in {criterion-status, verification-state, gate-refusals}. A typebox union of those three shapes
 			// would grow the largest schema this extension registers, and the parser's refusal names the set anyway.
@@ -1764,8 +1767,23 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				predictedFixes?: readonly string[]; predictedRegressions?: readonly string[]; commit?: string;
 			};
 			if (!projectProvider.readTaskConvergence || !projectProvider.mutateTaskConvergence) throw new Error("Dove task convergence is unavailable for this provider.");
-			const target = typed.task?.trim() ? projectProvider.resolveTask(typed.task.trim()) : projectProvider.getCurrentTask();
-			if (!target?.formal || target.provider !== "native") throw new Error("Task convergence requires the current native formal task.");
+			const selector = typed.task?.trim();
+			const target = selector ? projectProvider.resolveTask(selector) : projectProvider.getCurrentTask();
+			if (!target?.formal || target.provider !== "native") {
+				// **Two reasons, one message, and the message named neither.** Measured 2026-10-11 in the eleventh field
+				// run: the model passed this parameter as a sentence about the work, resolution failed, and the refusal
+				// said only that the call requires the current native formal task. It could not tell which argument was
+				// wrong, so it grepped the whole managed install for that sentence - and that command is outside the shell
+				// timeout whitelist, so the run hung there for the rest of its budget. A refusal a caller cannot act on
+				// costs the caller the round, and what it owed the caller is the argument's name and what to pass instead.
+				if (selector) {
+					const shown = selector.length > 120 ? `${selector.slice(0, 120)}...` : selector;
+					throw new Error(target
+						? `agent_task_convergence resolved '${shown}' to a task that is not a native formal task. 'task' is a selector: pass the stableId agent_project_task printed, or omit it to use the current task.`
+						: `agent_task_convergence does not know a task named '${shown}'. 'task' is a selector: pass the stableId agent_project_task printed, or omit it to use the current task.`);
+				}
+				throw new Error("Task convergence requires the current native formal task.");
+			}
 			if (typed.operation === "status") {
 				const mutationFields = ["acceptanceId", "acceptanceRevision", "criteria", "status", "evidenceRef", "evidenceRefs", "stepId", "findingId", "findingKind", "summary", "nextAction", "unblockCondition", "changeId", "surface", "failureEvidenceRef", "rootCause", "fix", "predictedFixes", "predictedRegressions"] as const;
 				const suppliedMutationField = mutationFields.find((field) => typed[field] !== undefined);
