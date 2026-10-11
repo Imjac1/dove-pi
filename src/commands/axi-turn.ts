@@ -158,7 +158,9 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 	// instead of being reported next to it. The order is the one the mechanism asks for: set and re-read the ACL
 	// invariants, verify the token's restricting list, and only then start the child under it.
 	let boundary: BoundaryReading | undefined;
+	const ledger = new ExecutionLedger(options.ledgerPath);
 	if (options.boundary !== undefined) {
+		const boundaryStartedAt = Date.now();
 		const port = options.boundary.port ?? realBoundaryPort;
 		const { spec } = options.boundary;
 		const acl = port.ensure(spec);
@@ -197,6 +199,26 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 			childCreateProcessError: launched.createProcessError,
 			childDiag: launched.diag,
 		};
+		// **The readings go to the ledger, not only to the report.** A report is this call's return value and lives
+		// until a person scrolls past it; the ledger is the record a later reader starts from, and "was a boundary
+		// established for that turn, and what did it report" has to be answerable from the file rather than from a
+		// transcript. The existing `request-prepare` phase carries it - establishing the boundary *is* preparation,
+		// and `metrics` takes numbers and booleans, which is exactly what these codes are - so no record kind is
+		// invented for it: the kind set is a closed vocabulary, and a new kind would owe a writer, a reader and a case.
+		await ledger.appendRuntimePhase({
+			taskId: "axi-turn",
+			stepId: "boundary",
+			mode: "standard",
+			phase: "request-prepare",
+			name: "plane-b-boundary",
+			durationMs: Date.now() - boundaryStartedAt,
+			metrics: {
+				aclInvariantsAsDeclared: true,
+				tokenSelfCheckPass: token.selfCheck === "pass",
+				childExitCode: launched.exitCode,
+				childCreateProcessError: launched.createProcessError,
+			},
+		});
 	}
 
 	const { mode } = loadWorkModeFromDirectory(options.workspaceRoot, options.modeName, { frameworkVersion: "0.2.0" });
@@ -219,7 +241,6 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 		evaluate: (invocation: GateInvocation): GateDecision => policy.evaluate(invocation, { viaCapability: false }),
 	};
 
-	const ledger = new ExecutionLedger(options.ledgerPath);
 	const decisions: { tool: string; decision: GateDecision }[] = [];
 	let ledgerRecords = 0;
 

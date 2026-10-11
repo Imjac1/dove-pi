@@ -15,10 +15,10 @@
 3. [x] **派发走 helper** ✓：改进者的工作由 `launchJailed(spec, { command, cwd, tag })` 启动 ✓；宿主没有可传递的令牌 ✓。
        **判据成立** ✓：`selfCheck: "pass"` + `createProcessError: 0` ✓。
 4. [x] **`ok` 的读法写进调用点** ✓：契约写在 `BoundaryPort.launch` 与 `BoundaryReading` 的注释里 ✓；孩子非零退出码**如实记录、不判失败** ✓（两处独立用例 ✓）。
-5. [ ] **读数进账本** ✗ —— **未达成，已量**：读数进了 `AxiTurnReport.boundary` ✓，但 **`ledger.jsonl` 里没有它们** ✓
-       （那次真跑一个 gate 记录都没写，因为脚本化的 turn 没有工具调用 ✓）。修法是一个小决定，下一轮做 ✓：
-       账本的种类是**封闭词汇表**，新增一种要连它的 writer 与门一起加（`tests/harness-reachability.test.ts` 要求每个种类都有 writer ✓），
-       或者复用既有的 `runtime.phase.completed` ✓ —— 两种都可，但不能只是"把报告留着" ✓。
+5. [x] **读数进账本** ✓（2026-10-11，第二轮补上）：复用既有阶段（`runtime.phase.completed`，`name: "plane-b-boundary"` ✓）
+       —— 账本的种类是**封闭词汇表**，所以**没有新增种类** ✓：建边界**本就是准备**（`phase: "request-prepare"` ✓），
+       而 `metrics` 收数字与布尔，正好是这几个码 ✓。**判据成立** ✓：真跑两次的读数都能从文件里读出
+       （held-out 写：`childExitCode: 1` ✓；可写侧写：`childExitCode: 0` ✓，两者 `aclInvariantsAsDeclared: true` ✓）。
 6. [x] **删掉白名单六条** ✓：`tests/harness-reachability.test.ts` 绿 ✓ —— 而且它是**自己变红并点名六个模块**之后我才删的 ✓。
 7. [x] **`axi-turn` 的文档段更新** ✓：*"Writing, isolation and the improvement loop belong to later milestones"* 已改为实测后的现状 ✓（isolation 已在场 ✓）。
 8. [x] **规格两页各改一次** ✓：`use-time-architecture.md` §7 三处 + `improvement-run.md` §10 那一行（缺口没关掉，只是**移动**了 ✓）。
