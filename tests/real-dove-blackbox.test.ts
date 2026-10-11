@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, rmdir, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
@@ -374,6 +374,7 @@ describe("real Dove Pi black-box harness", () => {
 
 	it("keeps an output path inside the source project from breaking workspace copy", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dove-blackbox-nested-output-"));
+		let deliberateScenarioRoot: string | undefined;
 		try {
 			const project = join(root, "project");
 			const output = join(project, ".dove", "run.jsonl");
@@ -385,8 +386,25 @@ describe("real Dove Pi black-box harness", () => {
 			assert.equal(summary.signal, null);
 			assert.ok(summary.scenarioRoot && !summary.scenarioRoot.startsWith(project));
 			assert.ok(summary.cwd && !summary.cwd.startsWith(project));
+			// **This case asks the runner for the one thing that leaves a directory in the temp root.** An output path
+			// inside the copied project makes the runner put the authoritative scenario root under
+			// `tmpdir()/dove-pi-blackbox`, so its own `cpSync` cannot copy into its destination - which is what the two
+			// assertions above pin. The summary names that root, so this case removes it rather than leaving it: measured
+			// 2026-10-11, it was the single directory a full suite run still left behind, once per run, after the six
+			// leaky fixtures were fixed.
+			deliberateScenarioRoot = summary.scenarioRoot;
 		} finally {
 			await rm(root, { recursive: true, force: true });
+			if (deliberateScenarioRoot) {
+				await rm(deliberateScenarioRoot, { recursive: true, force: true });
+				// The runner's fallback parent outlives its only child, and this case is the only thing in the suite that
+				// makes it. `rmdir` removes a directory **only when it is empty**, which is exactly the condition: a person
+				// running a blackbox field run of their own would have a scenario root there, and that one is not ours to
+				// delete. So the rejection from a non-empty directory is the condition being checked, not an error hidden -
+				// and it has to be `rmdir` rather than `rm`, whose refusal to touch a directory without `recursive` sent the
+				// first version of this line into the catch while the empty directory stayed.
+				await rmdir(dirname(deliberateScenarioRoot)).catch(() => undefined);
+			}
 		}
 	});
 
