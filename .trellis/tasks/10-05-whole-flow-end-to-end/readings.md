@@ -735,3 +735,95 @@ task.convergence.decision  {eventKind:"product_mutation.blocked", state:"missing
 - 停场时给出 **`provider-attempt-limit` + `retryable: true` + nextAction** ✓，且**不把重试伪装成新请求** ✓；
 - **intake 不受影响** ✓：正式任务与 6 份产物照常建立 ✓（`lane=formal` ✓），
   即"模型一个字没答"与"作业没被登记"被分开了 ✓ —— 这正是 AC#2 里"工具面与登记"那一半 ✓。
+
+---
+
+# 读数（第十二次：**把"先冻结"从散文搬进事实驱动的通道，并用两个方向看住它**）（2026-10-11 ✓✓）
+
+**这一轮不花 provider 预算** ✓✓ —— 它做的是第十一次读数最后那条**已定的修法** ✓（操作者选定方案 A ✓），
+判据**全在本地、可确定性复现** ✓。
+
+## 第 0 片：两句分开，各归各的通道 ✓✓（**这是本轮的形状** ✓）
+
+| 话 | 落在哪 | 为什么 |
+|---|---|---|
+| **"有门，门是什么"**（事实） | **稳定系统提示** `[PERSONAL AGENT]` 从句 ✓（`extension.ts:3462` ✓） | 它在整个会话里**逐字节恒定** ✓，事实是恒定的 ✓ |
+| **"先冻结"**（催促） | **`[PERSONAL AGENT REQUEST GUIDANCE]`** ✓（`extension.ts:3433-3437` / 组装点 `:3441` ✓） | 它是**每请求编译**的 ✓，且只有"开了正式任务且尚无冻结快照"时才在 ✓ |
+
+**改前那一句是假的** ✗✓✓：`Formal task artifacts organize work but never gate Pi tools` ✓ ——
+对那四个 `.md` **字面为真** ✓，对别的**全部误导** ✗：实测里**第一次产品变更确实被拒了** ✓，
+拒它的是**任务的冻结验收记录** ✓，那不是 artifact ✗。改成：
+*"…never gate Pi tools themselves; what a formal task gates is its frozen acceptance record."* ✓
+（**同一处更正**是 `3743fc0` 给终态 `nextAction` 做的那一次 ✓，理由相同 ✓：一份记录的两半不能对"下一步做什么"各说一套 ✓。）
+
+**催促语**不进稳定块 ✓ —— 写进去它就成了**每个请求都在**的一句 ✓，而那正是第十一次读数自己写下的"噪声" ✗。
+
+## 第 1 片：条件是**门的条件**，不是新判据 ✓✓
+
+```ts
+requestLease.isNewRequest && requestPlan.lane === "formal"
+  && projectProvider.readTaskConvergence(requestTaskId).kind === "missing"
+```
+
+`missing` ✓ —— **这正是门自己用的那一次读** ✓（`:2750`：`currentRequestPlan?.lane === "formal"` + `readTaskConvergence(currentRequestTaskId)` ✓；
+`:2770`：`kind !== "valid"` ⇒ `Freeze stable acceptance criteria with agent_task_convergence…` ✓）。
+⇒ **门沉默的地方，这句话也沉默** ✓✓，两者不会被各自改动漂开 ✓。
+**判据文本**是"no acceptance criteria are frozen for it yet" ✓ —— **它不声称"本请求开了任务"** ✗✓：
+任务早于本请求存在时那句话就是假的 ✓，而**这正是本任务在治的那类毛病** ✓。
+
+## 第 2 片：用例**两个方向都实测见红** ✓✓（**本轮的机制** ✓）
+
+`says a formal task's acceptance record is unfrozen only while it is, and keeps the errand out of the stable prompt`
+（`tests/pi-adapter.test.ts` ✓）—— 它同时看住四件事 ✓：
+
+| 断言 | 看住什么 |
+|---|---|
+| 系统提示含 `what a formal task gates is its frozen acceptance record` | 那处**不再说谎** ✓ |
+| 系统提示**不含** `so freeze the criteria` | 催促语**没被写回恒定块** ✓ |
+| 消息体含 `[PERSONAL AGENT REQUEST GUIDANCE]` 且含 `no acceptance criteria are frozen` | 它在**那条通道**里 ✓（`cache-prefix.ts:148` 认的正是这个标记 ✓） |
+| 冻结之后**不再含**这句话 | 条件**真的在动** ✓ |
+
+**红是量到的，不是推的** ✓✓（两次都只改条件、不改断言 ✓）：
+
+```text
+把催促语从通道里拿掉        → ✖ the errand rides the guidance channel, which is the one that already carries harness text into every request
+把它改成永远出现（不读记录） → ✖ once the record exists the sentence is gone, because a sentence that is always present is noise
+```
+
+**并登记进 `AGENTS.md` 规则表** ✓（这条规则现在**有机制看着** ✓，不再只靠散文 ✓）。
+
+## 第 3 片：这一轮自己付的税 ✓✗（**照实记** ✓）
+
+1. **mount 表随位移** ✓✓：我插在 `:3423` 之前 ⇒ **`pi.on("context")` 3523 → 3548** ✓，
+   **`cites the declaration each mount-point row names` 当场红** ✓✓（`1 of 18` ✓）—— **这个门第二次为同一件事存在** ✓。
+   修：该行 → `:3548` ✓，页顶那条**区间** `:2167`-`:3523` → `:3548` ✓。
+2. **同一位移还带出一处页面引用** ✓✗：`personal-agent-product.md:81` 的 `3575-3595` → `3600-3620` ✓（纯位移 +25 ✓，形状未改 ✓）。
+3. **顺手量出一处*先前就*烂的引用** ✗✓✓：`personal-agent-mode-format.md:46` 写的 `extension.ts:3418` ✓，
+   而**在改动之前的 HEAD 上** `:3418` 是 `requestContextRevision = …empty` ✗，真身 `workModeInstructions(activeWorkMode)` 在 **3433** ✓
+   —— **它在我动手之前就已经差 15** ✓（两个数都是量出来的：`git show HEAD:src/pi-adapter/extension.ts` 逐行读 ✓，
+   改动后真身是 **3448** ✓）。**已改** ✓（→ `:3448` ✓）。**记在这里，因为是量到的** ✓。
+
+## 第 4 片：这一轮的判据与代价 ✓✓
+
+| 项 | 读数 |
+|---|---|
+| `npm run typecheck` | **0** ✓ |
+| `npm test` | **974 / 974 pass / 0 fail** ✓✓（比上一轮 +1 = 新用例 ✓） |
+| 两个方向**先见红** | 是 ✓（两条 AssertionError 原文见第 2 片 ✓） |
+| 文档门（`spec-anchors` ✓ `document-drift` ✓） | **16 / 16 绿** ✓✓（含 mount 表那条 ✓） |
+| token / provider 代价 | **零** ✓✓（本轮没有真跑 ✓） |
+
+**顺带记一条与本次改动无关的** ✗✓：整轮里 `keeps every child of a parallel batch visible while the batch is in flight`
+**红过一次**（`0 !== 2` ✓），**第二次整轮绿** ✓。**它不可能被本轮碰到** ✓ —— 那条用例注册的是 `on() {}` ✓（`pi-adapter.test.ts:1767` ✓），
+`before_agent_start` **一次都不进** ✓。**机制是它自己的** ✓：子进程 2,500 ms、而它只等 600 ms ✓，
+满套件并发下两次 node 启动可能超出这个固定窗口 ✓。**记为读数，不擅自改** ✓（它不属本任务的 AC ✓）。
+
+## 第 5 片：仍未达成的那一条 ✓✗（**不粉饰** ✓）
+
+- **AC#2「一条运行里走完整个流程」仍不成立** ✗✓ —— 而**这一轮把它的第一阻断从"没人告诉模型"改成了"模型被告知"** ✓：
+  以前那句催促只活在"调工具时才读到的指南"里 ✓（两次没被照做 ✓），现在它**每个请求都在** ✓，**且只在为真时在** ✓。
+- **仍未证明的** ✗：**第九次真跑里模型会不会照做** ✓ —— 那要一个不被打断的 provider 窗口 ✓，
+  而按第十次读数的算术 ✓，那是**本仓造不出来**的东西 ✓。
+- 第 4 片那条**与本次同形的判据**（"下一次真跑里账本应在第一次 `tool.started` 之前出现冻结" ✓）**未取** ✗。
+- 第十一次读数列出的两个**改策略**的选项 **(a)/(b)** ✓ **仍原样开着** ✗✓ —— 本轮没有走它们 ✓（走的是操作者选定的 GUIDANCE 通道 ✓）。
+

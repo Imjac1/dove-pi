@@ -53,7 +53,28 @@
 3. 用例：一条**看住那句话出现/不出现的条件** ✓（这是"规则要有机制"的那一半 ✓）。
 4. 判据：下一次真跑里，账本在**第一次 `tool.started` 写工具之前**就应出现冻结 ✓（或至少在 `#21` 之前 ✓）。
 
+## 落地（2026-10-11 ✓，操作者选定方案 A ✓）
+
+**通道按上面那条走** ✓✓：催促语进 **`[PERSONAL AGENT REQUEST GUIDANCE]`** ✓（组装点在 `extension.ts:3441` ✓，
+句子本体在 `:3433-3437` ✓），
+**事实驱动** ✓ —— 只在 `requestLease.isNewRequest && requestPlan.lane === "formal"` ✓ **且**
+`projectProvider.readTaskConvergence(requestTaskId).kind === "missing"` ✓ 时出现，
+`valid` 时不出现 ✓✓（`missing` 正是**门的判据** ✓ —— 门在 `:2750` 用的是同一次读 ✓，所以两者不会漂 ✓）。
+
+**稳定块只留"不再否认有门"** ✓✓：`[PERSONAL AGENT]` 从句改成
+*"Formal task artifacts organize work and never gate Pi tools themselves; what a formal task gates is its frozen acceptance record."* ✓
+—— 催促语**不在那里** ✗✓，因为那块对整个会话逐字节恒定 ✓，写进去就是一句模型学会跳过的噪声 ✓。
+
+**用例** ✓✓（`tests/pi-adapter.test.ts` ✓）：`says a formal task's acceptance record is unfrozen only while it is, and keeps the errand out of the stable prompt` ✓
+—— **两个方向都实测见红** ✓✓：把催促语从通道里拿掉 → 红在"它在通道里" ✓；把它改成永远出现 → 红在"冻结之后那句必须消失" ✓。
+**已登记进 `AGENTS.md` 规则表** ✓（这一条现在有机制看着 ✓，不再是只有散文的规则 ✓）。
+
+**仍开着** ✗✓：上面第 4 条判据（**下一次真跑里账本应在第一次 `tool.started` 之前出现冻结** ✓）**未取** ✗ ——
+它要一个不被打断的 provider 窗口 ✓，而那是第九次读数定下的、不在本仓手里的事 ✓。
+
 ## 另一个仍待你裁决的选项 ✓（上轮已提，未答）
 
 **(a) 对 `state: missing` 不终止** ✗ —— 放宽 fail-closed（`extension.ts:2777-2780` ✓）。**改策略，我不擅自做** ✗。
 **(b) intake 就地把请求者那句话冻成判据** ✓ —— 改产品行为（判据多一个"harness 转写"的来源 ✓）。**同样待你定** ✗。
+
+**本轮没有走 (a)/(b)** ✓：操作者选的是"GUIDANCE 通道（散文，但不改策略、不加机制）" ✓。两条仍原样开着 ✗✓。
