@@ -1148,7 +1148,9 @@ project/.dove/tasks/goal-c09ec8b9-…/convergence.json   ← 真的写出来了 
 | `npm test` | **978 / 978 pass / 0 fail** ✓✓（+2 = 两条新用例 ✓） |
 | 两处修复的用例**先见红** | 是 ✓（选择器那条红在缺描述 ✓；文法那条红在第一条 Python 断言 ✓） |
 | mount 表税 | **零** ✓（选择器修复付过一次 +18 ✓，文法修复在 `src/core/` 不付 ✓） |
-| 托管安装 | 仍是 `0.2.0+source.cbd52bea5c7b` ✓，**不含本轮三处修复** ✗（要再装一次 ✓） |
+| 托管安装 | 已重装到 **`0.2.0+source.9f2493d50700`** ✓（`previous` = 本轮之前那份 ✓ ⇒ 一步可退 ✓）—— 装的那份**三处修复都在** ✓：`:287` 的 `FAILED_STREAM_STOP_REASONS` ✓、`:1743` 的 `task` 选择器描述 ✓、`:3465` 的催促语 ✓，且 `src/core/invocation-disposition.ts` 的新文法在 ✓ |
+| 装的那份的**行为**（用**它自己的** node_modules 跑 ✓） | `go test ./...` → true ✓ · **`python -m pytest -q` → true** ✓ · `npm test` → false ✓ —— **与源逐字相同** ✓ |
+| 装的那份的活体检查（零 token ✓） | `--launcher dove-pi` 跑 `status-line-only`：`exitCode=0` ✓ `settled=true` ✓ `events=18` ✓ `toolNames=[]` ✓，状态行与源同形 ✓ |
 
 ## 仍未达成的 ✗✓
 
