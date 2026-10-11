@@ -827,3 +827,56 @@ requestLease.isNewRequest && requestPlan.lane === "formal"
 - 第 4 片那条**与本次同形的判据**（"下一次真跑里账本应在第一次 `tool.started` 之前出现冻结" ✓）**未取** ✗。
 - 第十一次读数列出的两个**改策略**的选项 **(a)/(b)** ✓ **仍原样开着** ✗✓ —— 本轮没有走它们 ✓（走的是操作者选定的 GUIDANCE 通道 ✓）。
 
+---
+
+# 读数（第十三次：**装的那份与源的那份，在同一个场景上对得起来**）（2026-10-11 ✓✓）
+
+**重装在前** ✓：`node bin/dove-pi.cjs install` 从本树装出一份新的 ✓ ——
+`current = 0.2.0+source.35cc36f24c9d` ✓、`previous = 0.2.0+source.a5b0e17e2318`（旧那份保留 ⇒ `dove-pi rollback` 一步可退 ✓）。
+指纹是**全树内容哈希**（`installer/manager.py:_source_fingerprint` ✓，排除 `.git`/`.trellis`/`node_modules` ✓、**含** `.trellis/spec/**` ✓），
+所以这棵树一改就得到新 release id ✓，不会命中 `_is_prepared` 的复用分支 ✓。
+装的过程照实记 ✓：拷贝 → `npm ci`（335 包 / 11 s）→ `release:manifest` → `typecheck` → `pi:smoke` → 原子切换 →
+13 个托管扩展逐个对账（**0 installed / 13 already current / 0 failed** ✓）。
+
+**三个可观测的判据** ✓✓：
+
+| 判据 | 读数 |
+|---|---|
+| `install.json.current` | **`0.2.0+source.35cc36f24c9d`** ✓（`previous` 是旧那份 ✓） |
+| 装的那份 `src/pi-adapter/extension.ts` | **带上本轮** ✓：`:3462` 是新从句 ✓、`:3435` 是 GUIDANCE 里的催促语 ✓ |
+| `bin/` | **`dove-pi` 538 B、`-rwxr-xr-x`** ✓✓ —— 第四轮那个无扩展名 shim **终于装上了** ✓ |
+
+**而它解决的正是第四轮那个口** ✓✓：在 harness 选定的那把 shell（git-bash）里
+`which dove-pi` 与 `command -v dove-pi` **都解析到 `/c/Users/Macfy/AppData/Local/DovePi/bin/dove-pi`** ✓✓，
+`dove-pi --version` 走 shim → PowerShell → `.ps1` → 按 `install.json` 解析 release → `Dove Pi 0.2.0 (Pi 1.0.0)` ✓；
+`dove-pi doctor` 在仓外也正常 ✓（13 extensions all healthy ✓）。**从前这里两边都是 command-not-found** ✗✓。
+
+## 两次 `status-line-only`（零 token ✓）
+
+| 项 | `--launcher source` | `--launcher dove-pi` |
+|---|---|---|
+| exitCode / settled | 0 ✓ / true ✓ | 0 ✓ / true ✓ |
+| harnessTimedOut / scenarioFailed | false / false ✓ | false / false ✓ |
+| events | 18 ✓ | 18 ✓ |
+| durationMs | 26134 | 17359 |
+| carriedConfig | `[settings.json, models.json, auth.json, npm/]` ✓ | 同一份 ✓ |
+| toolNames / providerEvidence | `[]` / `[]` ✓ | `[]` / `[]` ✓ |
+
+状态行**逐字相同** ✓✓：`workMode=code-development` ✓ · `hashlineEditTools=present` ✓ · `hashline=active` ✓ ·
+`1 denied action(s) are refused` ✓。`artifactEvidence.doveState=false` ✓（`/status` 不建状态 ✓，与第五次同形 ✓）。
+
+⇒ **装的那份功能正常** ✓（托管路径走的是 `cmd.exe /c dove-pi.cmd` ✓，`scripts/real-dove-blackbox.mjs:115` ✓），
+且**管道仍然通** ✓：mode 真的加载 ✓、工具面在场 ✓（`npm/` 携带修复在里面 ✓）、零模型调用 ✓。
+
+**这次没证明的** ✗✓（**必须写明** ✓）：**本轮那句催促语**看不住 ✓ —— `/status` 那句没有落进 formal lane ✓
+（`formalTaskCount=0` ✓），所以那句话**根本不会出现** ✓。**这次量的是管道，不是改动本身** ✓。
+要看它，只有一次真跑：请求发到 provider、payload 里带上那块消息 ✓。
+
+**两条 stderr，两次都在、与本次改动无关** ✗✓：`builtin:mcp` 与某扩展的命令冲突 ✓、
+以及三处 `typebox` 应在 `peerDependencies` 而非 `dependencies` ✓ —— 都来自那 13 个托管扩展 ✓，
+source 与安装两份**一模一样** ✓。**记为观察，没动** ✓。
+
+**顺带纠正一条** ✗✓：配方 §4 原写"这台机器的托管安装还没有那个无扩展名的 shim" ✓ ——
+**那句话量于当时为真、现在是假的** ✓，已就地改成当前状态 ✓（并写明"field runner 托管路径仍拼 `dove-pi.cmd`" ✓ 所以场景不变 ✓）。
+
+

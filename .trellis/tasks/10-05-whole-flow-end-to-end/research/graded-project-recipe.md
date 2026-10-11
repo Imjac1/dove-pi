@@ -67,7 +67,13 @@ this task says `python -m pytest -q`.
   see (RFC 8246 has more to say than one code path).
 - **The baseline is a fact about this clone, not about cachecontrol.** Two re-measurements of the same command on
   different days are two experiments; the number `115` is whatever upstream's suite holds at the commit measured.
-- **`dove-pi.cmd` may be replaced by a bare `dove-pi` once the managed install carries the extension-less shim.** The
-  installer writes it (`installer/manager.py:250`), this machine's managed install does not have it yet, and the shell
-  this harness selects is git-bash — measured 2026-10-11: `command -v dove-pi.cmd` resolves and `command -v dove-pi`
-  does not.
+- **`dove-pi.cmd` no longer has to stand in for the bare name, as of 2026-10-11.** The bullet here used to say the
+  managed install did not carry the extension-less shim yet, and that was measured then. It carries it now: a source
+  install from this tree (`0.2.0+source.35cc36f24c9d`) wrote `bin/dove-pi` at 538 B with mode 0755, and in the shell
+  this harness selects `which dove-pi` and `command -v dove-pi` both resolve to it and `dove-pi --version` runs through
+  it. What that does **not** change: the field runner still spells `dove-pi.cmd` on its managed path
+  (`scripts/real-dove-blackbox.mjs:115`), so the scenario is unchanged, and the bare name is what a person gets.
+  **The two launchers were checked against each other on the same scenario** (`status-line-only`, zero model calls):
+  source and installed both settle at exit 0 with 18 events and the same status line - `workMode=code-development`,
+  `hashlineEditTools=present`. The plumbing is what that shows; the extension's own new sentence is not in either
+  reading, because a `/status` turn never lands in the formal lane.
