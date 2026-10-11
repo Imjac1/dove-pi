@@ -48,7 +48,7 @@ harness **自报**：*"当前 Pi 宿主未提供 hashline 编辑工具（replace
 
 - [x] **一条运行里**：`workMode=<声明的那个 id>` ✓（**不是 `failed`** ✗）· 编辑工具在场 ✓ 或缺失被记录 ✓ · 项目自己的套件给出结果 ✓ · **账本的累计量与判分并列** ✓。
       **四条全成立** ✓✓（读数见 `readings.md` 第二份 ✓）：`workMode=code-development` ✓ · `hashlineEditTools=absent` 进了读数 ✓ · 副本里 `1 failed, 115 passed` ✓ · 累计量数自账本事件流 ✓。
-- [ ] **流程各步在同一次运行里都有痕** ✓（安装/绑定 ✓ mode ✓ 干活 ✓ 判分 ✓ 收敛 ✓ 归档 ✓）。
+- [x] **流程各步在同一次运行里都有痕** ✓（安装/绑定 ✓ mode ✓ 干活 ✓ 判分 ✓ 收敛 ✓ 归档 ✓）。
       **不成立** ✗✓✓：**干活那一步被 25 分钟上限切断** ✗（`harnessTimedOut=true` ✓ `settled=false` ✓ 终态 `cancelled/user-cancelled` ✓），**收敛与归档从未到达** ✗（`task.convergence.observed = 0` ✓）。**原因量到了** ✓：截断时会话仍在 bash/edit 交替、最后三次是调试探针 ✓ —— **不是步骤坏了，是预算用完了** ✓。**这一条留开** ✗，**不写成达成** ✓。
       **（2026-10-11 第四次尝试，仍不成立，而原因第四次不同 ✓✗）**：45 分钟预算**给足** ✓，运行却在 **27.8 分钟**因 **provider 瞬时重试预算用尽**自行结束 ✗（`terminal=provider-attempt-limit` ✓ `retryable=true` ✓）；step 0 未 settle ⇒ 步骤 1–3 **一次都没发出** ✗。**多量出一条更早的阻断** ✓✓✓：请求被判成 **`lane=fast`** ⇒ **根本没开正式任务** ✗（`formalTaskCount=0` ✓）⇒ **收敛与归档在请求被规划的那一刻就已注定到不了** ✓；根因在 `src/core/request-plan.ts:178`/`:77`（`what` 的子串命中 + 逃逸名单为空），**而那个 `what` 是上一轮自己写进 prompt 的** ✗✓。判据用仓内真实判定函数**确定性复现** ✓，改写后复核为 `lane=formal` ✓。**判分那一半红了五天的那条已被修绿** ✓✓（副本 `118 passed` ✓），**且判分仪器字节未变** ✓✓。**读数见 `readings.md` 第五次。这一条留开** ✗，**不写成达成** ✓。
       **（2026-10-11 第五次尝试，仍不成立，原因第五次不同 ✓✗）**：lane 修复**在真跑里成立** ✓✓（`formalTaskCount=1` ✓，任务从消息开出来 ✓），而且**引擎里两道门都真的动了** ✓✓（收敛门 `product_mutation.blocked` ✓ 让请求以 `convergence-missing`、`retryable=false` 中止 ✓；沙箱门 `gate.refused` 拦下 `fetch_content` ✓）。**而 step 0 正是被自己的收敛门中止的** ✗✓✓：**门要求先冻结验收标准再改产品文件，而 prompt 从未这么说** ✗ ⇒ 请求在门口停 ✓；收尾那步再由 provider 的瞬时配额杀场 ✗✓（两次真跑同一死因 ✓）。任务终态 `active/intake`、**无 `convergence.json`** ✗ ⇒ **finish/archive 仍未到达** ✗；副本套件 `2 failed, 114 passed` ✗（目标仍红且弄坏一条 ✓，仪器未动 ✓）。**第五个阻断已定位并已修** ✓：场景第 0 步写明"先冻结再改"，复核仍为 `lane=formal` ✓。**读数见 `readings.md` 第六次。这一条留开** ✗，**不写成达成** ✓。
@@ -109,6 +109,18 @@ harness **自报**：*"当前 Pi 宿主未提供 hashline 编辑工具（replace
       **场景第 0 步已补上第二步** ✓（"冻结判据，然后把你在做的那一条标成 started" ✓），**lane 复核未变** ✓（step 0 formal ✓ step 1 fast/archive-task ✓）。
       **Claim B 第三次没被走到** ✗✓（两次运行里每个 `error` 都带文本 ⇒ 全走文本规则 ✓）。
       **这一条仍留开** ✗✓：AC#2 ✗ —— step 0 failed ✗、step 1/2/3 一次没发 ✗、任务未归档 ✗；副本字节未变 ⇒ 套件仍是基线 ✓。
+      **（2026-10-11 第十七次读数：第十三次真跑 ✓✓✓✓ —— 整条流程跑完，AC#2 达成）**：
+      **四步全部 settled** ✓✓✓ · `scenarioFailed=false` ✓ · 终态 **`completed`** ✓（13 次跑里第一个成功终态 ✓）·
+      `convergence.json` ✓ · **`status=archived`** ✓ `phase=archived` ✓ `currentGoalId` 已清空 ✓ ·
+      副本里 **`116 passed`** ✓（基线 `1 failed, 115 passed` ✓）· **判分仪器字节未变** ✓（只动了 `controller.py` 20090 → 22307 B ✓）·
+      收敛决策**只有 `freeze` → `progress`，零拦截** ✓（场景第 0 步的补写在真跑里生效 ✓）。
+      **而它靠的是那个已有的旋钮** ✗✓✓：`DOVE_PI_MAX_REQUEST_ATTEMPTS=10` ✓ ——
+      **step 0 用了 4 次 attempt** ✓，而默认是 3 ✓ ⇒ **默认预算下会在第 3 次停住** ✗✓。
+      所以准确说法是：**"整条流程能跑完"成立** ✓✓；**"它在默认预算下能跑完"没有证明** ✗✓ —— 两个数字都记着，互不冒充 ✓。
+      那个旋钮不是本仓的改动 ✓（`extension.ts:929-933` 一直读它 ✓，`dove-pi --help` 列给用户 ✓，runner 传父环境 ✓）·
+      它守护的安全性质未被碰 ✓（非幂等 effect 的拒绝不看 attempt 数 ✓）。
+      代价：44.8 / 45.0 min ✓、约 2.7M input tokens ✓（十三次里最贵，而它完成了 ✓）。
+      **这一条现在达成** ✓✓✓；余下未证的是第 2 片那条与 Claim B ✓。
 - [x] **两处缺口的处置各有可复现判据** ✓（定案见 `## 决定`✓ 与 `design.md`✓）：修好了是绿的 ✓，没修是红的且有原文 ✓。
       **两处都成立** ✓✓：① `workMode` 从 `failed` ✗ 变成 `code-development` ✓；② `hashlineEditTools=absent` 在读数里 ✓。
       而 ② **多量出一层** ✓✓：**这不是宿主不提供** ✗ —— 宿主装了 ✓、声明也带进了运行 ✓，**没带的是包** ✗（run 的 agent 目录里没有 `npm/` ✓）→ **缺口的可修面在本仓的运行器，不在 Pi** ✓。

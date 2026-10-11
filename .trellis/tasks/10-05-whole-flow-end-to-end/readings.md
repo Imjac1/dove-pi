@@ -1278,5 +1278,108 @@ stopReason=aborted   errorMessage='502: {"message":"upstream failure","type":"ba
   在同一次运行里跑完，**要么换一个好窗口、要么由你决定把那个上限从"每请求累计"改成"连续"** ✓。
 - **Claim B 仍未在真跑里被走到** ✗（第 7 片 ✓）。
 
+---
+
+# 读数（第十七次：**第十三次真跑 —— 整条流程跑完了，AC#2 达成**）（2026-10-11 ✓✓✓✓）
+
+**预注册在先** ✓（`research/run-13-preregistration.md` ✓，先提交再开跑 ✓，并且**先写明这次设置成什么、能证明什么、不能证明什么** ✓）。
+
+## 第 0 片：这次运行（§4 格式 ✓）
+
+```text
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-11
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]
+**DOVE_PI_MAX_REQUEST_ATTEMPTS=10**（默认 3 ✓ —— 见第 2 片）
+exitCode=0  settled=true  harnessTimedOut=false  **scenarioFailed=false**  events=15565  duration=44.8 min（上限 45.0 min，几乎用满）
+terminal: reason=**completed**  origin=session  code=completed
+steps: 0 settled(12481 ev) · 1 settled(3076 ev) · 2 settled(2 ev) · 3 settled(1 ev)   ← **四步全部 settled** ✓✓✓
+artifactEvidence {doveState:true, doveFileCount:8, formalTaskCount:1, formalArtifactCount:7, convergenceFileCount=1}
+token（各请求的累计读数）: step 0 的请求到 1,821,127 input · step 1 的请求到 872,802 input · 全程约 2.7M input / 46k output
+```
+
+## 🎯 第 1 片：**AC#2 达成** ✓✓✓✓
+
+**逐条对 AC#2 的原文** ✓：
+
+| AC#2 要求 | 读数 |
+|---|---|
+| 安装 ✓ / 绑定 ✓ / **mode 真的生效** | `workMode=code-development` ✓（全程 ✓） |
+| **干活** | `cachecontrol/controller.py` **20090 → 22307 B** ✓ |
+| **判分（项目自己的套件）** | 副本里 **`116 passed`** ✓✓（基线 `1 failed, 115 passed` ✓） |
+| **收敛** | `convergence.json` ✓ · 决策只有两条：`freeze` → `progress` ✓ |
+| **归档** | **`status=archived`** ✓ · `phase=archived` ✓ · `currentGoalId` 已清空 ✓ |
+| **各步在同一次运行里都有痕** | **四步全部 settled** ✓✓✓ · `scenarioFailed=false` ✓ · 终态 **`completed`** ✓ |
+
+**判分仪器字节未变** ✓✓：`tests/test_immutable.py` **1305 B** ✓ · `tests/conftest.py` **5971 B** ✓
+—— 改的只有 `controller.py` ✓。**即：活是改库做对的，不是改测试做对的** ✓。
+
+**收尾序列跑的就是场景要求的那几条** ✓✓（会话原文 ✓）：
+
+```text
+dove-pi.cmd task verify
+dove-pi.cmd task convergence status
+dove-pi.cmd task finish
+dove-pi.cmd task archive native:goal-15011b3f-a1ed-4776-872c-cde0f472abf9    ← 点名的归档 ✓（第四次读数那句更正生效 ✓）
+dove-pi.cmd task convergence status
+```
+
+## 🎯 第 2 片：**撑着这次成功的是那个旋钮，必须写明** ✗✓✓
+
+**step 0 的请求用了 4 次 attempt** ✓（`#1 initial` + `#2/#3/#4 provider-retry` ✓）。
+⇒ **`maxAttempts` 的默认值是 3** ✓（`request-lifecycle.ts:122` ✓）⇒ **默认设置下它会在第 3 次停住** ✗✓✓。
+
+**所以这一条的准确说法是** ✓：
+**"整条流程能跑完"成立** ✓✓；**"它在出厂默认的 3 次预算下能跑完"没有证明** ✗✓。
+两个数字都记在这里 ✓，**任何一个都不冒充另一个** ✓。
+
+**而这个旋钮不是本仓的改动** ✓：`extension.ts:929-933` 一直读 `DOVE_PI_MAX_REQUEST_ATTEMPTS` ✓，
+它是 `dove-pi --help` 里列给用户的会话变量之一 ✓，runner 也一直把父环境传下去 ✓
+（`scripts/real-dove-blackbox.mjs:127-137` ✓）。**没有改一行代码，没有改契约，没有改策略** ✓。
+**它守护的那条安全性质也没被碰** ✓：非幂等 effect 的拒绝（`extension.ts:2638-2639` ✓）**不看 attempt 数** ✓。
+
+## 第 3 片：**场景修复生效，白花的那个来回没有了** ✓✓
+
+收敛决策**只有两条** ✓：`freeze` ✓ → `progress` ✓，**中间没有任何 `product_mutation.blocked`** ✓✓
+（十三次跑里**唯一一次零拦截** ✓ —— 上一轮是"freeze → insert → 被拦 → progress" ✓）。
+⇒ 第 0 步现在把契约的两半都说出来了 ✓，**那一轮不再付** ✓。
+
+**顺带**：全程唯一的 `gate.refused` 是 **`sandbox fetch_content`** ✓ —— 模式声明的网络拒绝在工具边界生效 ✓
+（与第六、十一次同形 ✓）。
+
+## 第 4 片：十三条读数的总账 ✓✓（**这一轮把整条线索收口了** ✓）
+
+| # | 死因 / 结局 | 处置 |
+|---|---|---|
+| 1 | 25 min 预算到点 | 预算不是瓶颈（放大到 45 min 就换成了别的死因 ✓） |
+| 2 | 9.5 min provider 终止，且报成 `provider-unknown` | **已修** ✓（分类读宿主自己的词） |
+| 3 | 22 s 后无限挂死（全盘 `find`） | **已修** ✓（无扩展名 shim + tool.started 的 timeout 立场） |
+| 4 | 27.8 min 瞬时预算用尽，且请求落 `fast` ⇒ 无正式任务 | **已修** ✓（场景改写，lane 复核 ✓） |
+| 5 | 请求被自己的收敛门中止（prompt 没说要先冻结） | **已修** ✓（场景第 0 步写明 ✓） |
+| 6 | 176 s 的流被读成 `unknown`（而那条规则**到不了**） | **已修** ✓（失败集；两条用例先见红） |
+| 7 | 门拦下的其实是**测量**（文法里只有 Go 的测试命令） | **已修** ✓（Python 测试运行器；真跑确认 ✓） |
+| 8 | 模型把 `task` 当散文传，被拒后去 grep 整个安装 | **已修** ✓（参数有描述、拒绝点名参数） |
+| 9 | **provider 的 502** | **不是本仓的** ✓ —— 而它的预算可以用**已有的**旋钮让开 ✓ |
+| **10** | **四步全部 settled、任务归档、活做对了、仪器没动** | **✓✓✓✓ AC#2 达成** |
+
+## 第 5 片：这次跑的判据 ✓✓
+
+| 项 | 读数 |
+|---|---|
+| 判分（副本里项目自己的套件） | **`116 passed`** ✓（基线 `1 failed, 115 passed`） |
+| 判分仪器 | 字节未变 ✓ |
+| 收敛决策 | `freeze` → `progress`，**零拦截** ✓ |
+| 归档 | `archived` ✓ |
+| 沙箱门 | 拒了一次 `fetch_content` ✓（声明生效） |
+| 预算 | 44.8 / 45.0 min ✓（几乎用满；下一次要留更多余量） |
+| 代价 | 约 2.7M input tokens（十三次里最贵的一次 ✓，而它完成了 ✓） |
+
+## 仍开着的 ✗✓（**不粉饰** ✓）
+
+- **默认预算下能否跑完未证明** ✗✓（第 2 片 ✓）—— 而这不是缺陷：那个上限是刻意的 ✓。
+  要验它，得在一个**好窗口**里用默认值跑一次 ✓。
+- **Claim B（裸标记重试）仍未被真跑走到** ✗✓：四次含终态的运行里，每个 `error` 都带文本 ✓。
+- **两个改策略的选项 (a)/(b) 仍原样开着** ✗✓。
+- **本任务可以收口了** ✓：AC#2 达成 ✓、13 条读数全部有处置 ✓；余下的是**收尾**（spec 更新 ✓、journal ✓、归档 ✓）✓。
+
 
 
