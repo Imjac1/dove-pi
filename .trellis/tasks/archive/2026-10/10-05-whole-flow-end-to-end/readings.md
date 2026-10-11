@@ -1381,5 +1381,93 @@ dove-pi.cmd task convergence status
 - **两个改策略的选项 (a)/(b) 仍原样开着** ✗✓。
 - **本任务可以收口了** ✓：AC#2 达成 ✓、13 条读数全部有处置 ✓；余下的是**收尾**（spec 更新 ✓、journal ✓、归档 ✓）✓。
 
+---
+
+# 读数（第十八次：**第十四次真跑 —— 缺省预算下也跑完了，那条限定解除**）（2026-10-11 ✓✓✓✓）
+
+**预注册在先** ✓（`research/run-14-preregistration.md` ✓，先提交再开跑 ✓）。它问的是第十三跑**明确留下的那一条** ✓：
+"整条流程能跑完 ✓，但**它在出厂默认的 3 次预算下能不能跑完**没有证明" ✗✓✓。
+
+## 第 0 片：这次运行（§4 格式 ✓）
+
+```text
+DOVE_PI_MAX_REQUEST_ATTEMPTS **缺席** ✓（= 出厂默认 3 ✓；开跑前在 shell 里复核过 ✓）
+scenario=immutable-directive-work-as-a-task  provider=ant  endpoint=https://api.atria-asi.ai/v1/  model=Atria-Dawn-Preview  date=2026-10-11
+launcher=source  providerMode=real  carriedConfig=[settings.json, models.json, auth.json, npm/]
+exitCode=0  settled=true  harnessTimedOut=false  **scenarioFailed=false**  events=15614  duration=**43.0 min**（上限 45.0 ✓）
+terminal: reason=**completed**  origin=session
+steps: 0 settled(11083 ev) · 1 settled(4523 ev) · 2 settled(2 ev) · 3 settled(1 ev)   ← **四步全部 settled** ✓✓
+artifactEvidence {doveState:true, doveFileCount:8, formalTaskCount:1, formalArtifactCount:7, convergenceFileCount=1}
+```
+
+## 🎯 第 1 片：**答案：成立 —— 缺省预算下整条流程跑完** ✓✓✓✓
+
+**预注册判据表第 1 行逐条对上** ✓：
+
+| 判据 | 读数 |
+|---|---|
+| 四步全部 settled | ✓ `scenarioFailed=false` ✓ |
+| **任务归档** | **`status=archived`** ✓ `phase=archived` ✓ `currentGoalId` 已清空 ✓ |
+| 判分 `116 passed` | ✓（基线 `1 failed, 115 passed` ✓） |
+| **判分仪器字节未变** | `test_immutable.py` **1305 B** ✓ · `conftest.py` **5971 B** ✓ ⇒ 改的是库（`controller.py` 20090 → **20977 B** ✓），不是测试 ✓ |
+
+**而它把缺省预算用满才过** ✓✓：step 0 的请求用了 **3 次 attempt** ✓（`#1 initial` + `#2` + `#3 provider-retry` ✓
+—— 恰好是默认允许的全部 ✓），中间两次瞬时失败（`transient/http_502` ✓、`transient/reviewed-provider-message` ✓）；
+step 1 只用了 1 次 ✓。**43.0 / 45.0 分钟** ✓。
+
+⇒ **第十三跑留下的那条限定解除** ✓✓：**"整条流程能跑完"与"它在出厂默认预算下能跑完"现在都成立** ✓✓。
+第七片那条"默认下能否跑完未证明"不再挂着 ✓。
+
+## 第 2 片：**收敛生命周期比上一轮完整** ✓✓
+
+```text
+freeze → progress ×5 → finding → resolve_finding → progress ×2 → （state=ready_to_finish）✓
+```
+
+**这一轮多出了 `finding` + `resolve_finding`** ✓✓ —— 模型自己记了一条发现并把它解决了 ✓，
+然后收敛状态才到 `ready_to_finish` ✓。**九条决策，零 `product_mutation.blocked`** ✓（与第十三跑同 ✓）。
+
+**收尾序列** ✓（会话原文 ✓）：
+
+```text
+dove-pi.cmd task verify ×2 → dove-pi.cmd task convergence status → dove-pi.cmd task finish
+→ dove-pi.cmd task archive "native:goal-e6b6ed2f-57aa-4a9f-94d9-a54f38e77cca"    ← 点名的归档 ✓
+```
+
+## 🎯 第 3 片：**这一轮量到一个新缺陷，形状与本轮修掉的那个相同** ✗✓✓
+
+6 次 `agent_task_convergence` 调用里，**3 次白费** ✗✓✓：
+
+| 模型传的 | 工具回的 |
+|---|---|
+| `progress` + `stepId`，**没有 `acceptanceId`** | `agent_task_convergence requires acceptanceId.` |
+| `acceptanceId: "goal-e6b6ed2f-57aa-4a9f-94d9-a54f38e77cca"`（**一个任务 id**） | `event.acceptanceId must contain 1-35 characters` |
+| 同第一次 | `agent_task_convergence requires acceptanceId.` |
+| `acceptanceId: "AC-001"` | ✓ 成了 |
+
+**根因量到了行** ✓✓：**`extension.ts:1728` —— `acceptanceId: Type.Optional(Type.String())`，没有任何描述** ✗✓
+—— 与我在 `:1740-1743` 修掉的 `task` **一模一样的病** ✓，而它就在**同一个 `Type.Object` 里、隔了 15 行** ✗✓。
+两条后果都量到了 ✓：**裸名招来错值**（模型拿任务 id 当判据 id ✓），而**第二条回话描述的是症状** ✗✓
+（36 字符的 goal id 撞上长度规则 ⇒ 它读到的是"太长了"，不是"那是个任务 id，判据 id 长这样 `AC-001`" ✓）。
+
+**代价是 3 个来回 —— 而在这个预算下，来回正是稀缺资源** ✗✓✓：
+这次请求把 3 次 attempt 全部用满才过 ✓ ⇒ **这 3 轮是把那次成功的机会挤掉的同一池子里花的** ✓。
+
+## 第 4 片：这次跑的判据 ✓✓（**预注册的价值** ✓）
+
+| 预注册的可观测 | 实测 | 判 |
+|---|---|---|
+| 四步 settled + 归档 + 判分绿 + 仪器未变 | 全中 ✓ | **缺省预算下成立** ✓✓ |
+| `attempt-limit`、活已干完、step 1-3 未发 | **没出现** ✓（用满 3 次而第 3 次成功 ✓） | — |
+| 活没干完就被预算拿走 | 没出现 ✓ | — |
+| `product_mutation.blocked` 或对 shell 命令的门 | **零** ✓ | **三处修复无回归** ✓ |
+| 少于三次瞬时失败仍未完成 | 没出现 ✓ | — |
+
+## 仍未达成的 ✗✓（**不粉饰** ✓）
+
+- **`acceptanceId` 缺描述** ✗✓（第 3 片 ✓）—— **新量到的，未修** ✓，形状与已修的那个相同 ✓。
+- **Claim B（裸标记重试）第五次没被走到** ✗✓：这次两个 `error` 一个带 `502` ✓、一个带文本 ✓ ⇒ 都命中文本规则 ✓。
+- **两个改策略的选项 (a)/(b) 仍原样开着** ✗✓ —— 而现在它们**不再是完成流程的必要条件** ✓。
+
 
 

@@ -165,7 +165,11 @@ with the run's own verdict `scenarioFailed: false` -
 `.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/readings.md`, the seventeenth reading. **One caveat travels
 with it and is not a footnote**: that run set the operator's `DOVE_PI_MAX_REQUEST_ATTEMPTS` to ten and used four attempts
 where the default allows three, so it shows the flow completes rather than that it completes under the shipped budget -
-[`personal-agent-field-run.md`](./personal-agent-field-run.md). **And the host's editing tools are present**: the `absent`
+[`personal-agent-field-run.md`](./personal-agent-field-run.md). **That caveat was discharged the same day, by the next
+run**: with the variable unset, so the default of three applied, it walked the same flow to the same end - four steps
+settled, the acceptance record frozen with a finding raised and resolved, the task archived, and the suite at `116 passed`
+with the judging test byte-identical - and it used all three attempts the default allows, which is why the sentence above
+is no longer conditional - same file, the eighteenth reading. **And the host's editing tools are present**: the `absent`
 reading came from the field runner's carried copy, which shipped the declaration without the agent directory's package
 store, not from the host, which has them installed - same file, readings 4 and 13 - and `hashlineEditTools=present`, with
 `replace` and `insert` actually called, is what the runs that finished the work show.
