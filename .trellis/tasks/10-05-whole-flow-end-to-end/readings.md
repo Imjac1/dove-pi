@@ -990,7 +990,8 @@ artifactEvidence {doveState:true, doveFileCount:7, formalTaskCount:1, formalArti
 | `npm test` | **976 / 976 pass / 0 fail** ✓✓（比上一轮 +2 = 两条新用例 ✓） |
 | 新用例**先见红** | 是 ✓（actual 就是账本值 ✓） |
 | `spec-anchors`（mount 表那条） | 绿 ✓ |
-| 托管安装 | 上一轮装的 `0.2.0+source.35cc36f24c9d` **不含本轮** ✗（要再装一次才带上 ✓） |
+| 托管安装 | 已重装到 **`0.2.0+source.cbd52bea5c7b`** ✓（`previous` = 本轮之前那份 ✓ ⇒ 一步可退 ✓）—— 装的那份 `extension.ts` 现在**两条都在** ✓：`:287` 的 `FAILED_STREAM_STOP_REASONS` ✓ 与 `:3447` 的催促语 ✓ |
+| 装的那份的活体检查（零 token ✓） | `--launcher dove-pi` 跑 `status-line-only`：`exitCode=0` ✓ `settled=true` ✓ `events=18` ✓ `toolNames=[]` ✓，状态行 `workMode=code-development` / `hashlineEditTools=present` / `hashline=active` ✓，与源那次**逐字同形** ✓ |
 
 ## 仍未达成的 ✗✓（**不粉饰** ✓）
 
