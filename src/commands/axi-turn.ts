@@ -11,9 +11,14 @@
  * reading instead of an intention.
  *
  * **What it deliberately does not do.** No model, no network, no writes: the provider is
- * `createScriptedProvider`, and the only tool reads one file inside the workspace. Writing, isolation and the
- * improvement loop belong to later milestones; this one exists to show that every proposed action passes the
- * gate *by construction* and that the turn leaves a ledger behind.
+ * `createScriptedProvider`, and the only tool reads one file inside the workspace. Writing and the improvement
+ * loop belong to later milestones; this one exists to show that every proposed action passes the gate *by
+ * construction* and that the turn leaves a ledger behind.
+ *
+ * **Isolation is no longer one of the deferred ones.** When a caller supplies `boundary`, this command is also the
+ * consumer that `tests/harness-reachability.test.ts` said would arrive: it sets and re-reads the two ACL
+ * invariants, verifies the restricted token's list, and starts the improver's work through `src/jailer/`'s helper -
+ * which is why the six `src/jailer/` entries left the allow-list. Something reaches them now rather than intending to.
  */
 
 import { readFile } from "node:fs/promises";
@@ -25,6 +30,58 @@ import { createAgentLoop } from "../core/loop-runner.ts";
 import type { ActionGate, GateDecision, GateInvocation, LoopOutcome, LoopToolSpec, ToolCall, ToolResult } from "../core/loop.ts";
 import { gateLabelOf } from "../core/loop.ts";
 import { loadWorkModeFromDirectory } from "../core/work-mode.ts";
+import { ensureBoundary, launchJailed, probeToken, type LaunchRequest } from "../jailer/index.ts";
+import type { BoundarySpec, SelfCheck } from "../jailer/types.ts";
+
+/**
+ * **The boundary, as three readings the host refuses to run without.**
+ *
+ * The mechanism is `src/jailer/` - `ensureBoundary` sets the two ACL invariants and *re-reads* them, `probeToken`
+ * creates the restricted token and *verifies* its restricting list, `launchJailed` starts the child under that
+ * token. This port is what a caller asks for, and it exists for one reason beyond naming: **a case must be able to
+ * drive a boundary that is not as declared**, and the real one can only be made wrong by changing the machine's
+ * ACLs. So the readings travel as narrow shapes here, and the real implementation is the default.
+ */
+export interface BoundaryPort {
+	readonly ensure: (spec: BoundarySpec) => { readonly violations: readonly string[]; readonly missing: readonly string[] };
+	readonly probe: (spec: BoundarySpec) => { readonly selfCheck: SelfCheck };
+	readonly launch: (spec: BoundarySpec, request: LaunchRequest) => { readonly selfCheck: SelfCheck; readonly exitCode: number };
+}
+
+/** The default port: the real mechanism, unchanged. */
+export const realBoundaryPort: BoundaryPort = {
+	ensure: (spec) => {
+		const report = ensureBoundary(spec);
+		return { violations: report.violations, missing: report.missing };
+	},
+	probe: (spec) => ({ selfCheck: probeToken(spec).selfCheck }),
+	launch: (spec, request) => {
+		const report = launchJailed(spec, request);
+		return { selfCheck: report.selfCheck, exitCode: report.exitCode };
+	},
+};
+
+/** What a caller must decide for a turn to run under the boundary, and what it wants run there. */
+export interface BoundaryRequest {
+	/**
+	 * The paths the improver must not reach (no grant for the work SID) and the ones it works in (one,
+	 * explicitly) - `BoundarySpec`'s own two invariants. **The lists are the caller's policy**, not this
+	 * command's: which side is held out is a decision about the project, not about the turn.
+	 */
+	readonly spec: BoundarySpec;
+	/** The command the constrained child runs. `cmd.exe`-style, as the helper takes it. */
+	readonly command: string;
+	readonly cwd?: string;
+	readonly port?: BoundaryPort;
+}
+
+/** The boundary's readings for one turn, recorded so a reader can tell "refused" from "never asked". */
+export interface BoundaryReading {
+	readonly aclInvariants: "as-declared";
+	readonly tokenSelfCheck: SelfCheck;
+	/** The child's own exit code. **A non-zero code is not a failure here**: a blocked write is criterion 1 succeeding. */
+	readonly childExitCode: number;
+}
 
 /** The one tool this turn has. Reading only: nothing here can change the workspace. */
 export const READ_FILE_TOOL: LoopToolSpec = {
@@ -47,6 +104,13 @@ export interface AxiTurnOptions {
 	/** Defaults to one `read_file` call followed by a closing line of text. */
 	readonly steps?: readonly ScriptedStep[];
 	readonly maxTurns?: number;
+	/**
+	 * **When present, this turn runs under the Plane B boundary** - established first, and the improver's work
+	 * dispatched through the helper rather than in this process. Absent, this stays the diagnostic turn it was:
+	 * no ACL work, no child, one read. The two are not a mode switch for convenience; setting ACLs is a change to
+	 * the machine, and a turn that only reads the notes has no business making one.
+	 */
+	readonly boundary?: BoundaryRequest;
 }
 
 export interface GateInvocationReading {
@@ -63,6 +127,8 @@ export interface AxiTurnReport {
 	readonly gateInvocations: readonly GateInvocationReading[];
 	/** Records this turn wrote. Read after the fact so a caller can compare it with the file. */
 	readonly ledgerRecords: number;
+	/** Present exactly when this turn ran under the boundary - absent is "never asked", not "held". */
+	readonly boundary?: BoundaryReading;
 }
 
 function refusalReason(tool: string, reason: string | undefined): string {
@@ -70,6 +136,38 @@ function refusalReason(tool: string, reason: string | undefined): string {
 }
 
 export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport> {
+	// **The boundary is established before anything else, and it refuses rather than warns.** A turn that
+	// dispatches work under a boundary it could not establish is a turn whose containment is a claim - the shape
+	// this plane exists to end - so each of the three readings is checked here and a failure stops the turn
+	// instead of being reported next to it. The order is the one the mechanism asks for: set and re-read the ACL
+	// invariants, verify the token's restricting list, and only then start the child under it.
+	let boundary: BoundaryReading | undefined;
+	if (options.boundary !== undefined) {
+		const port = options.boundary.port ?? realBoundaryPort;
+		const { spec } = options.boundary;
+		const acl = port.ensure(spec);
+		if (acl.violations.length > 0 || acl.missing.length > 0) {
+			throw new Error(
+				`refusing to start: the boundary is not as declared (${String(acl.violations.length)} violation(s), ${String(acl.missing.length)} missing path(s))`,
+			);
+		}
+		const token = port.probe(spec);
+		if (token.selfCheck !== "pass") {
+			throw new Error(`refusing to start: the restricted token self-check reported '${token.selfCheck}'`);
+		}
+		const launched = port.launch(spec, {
+			command: options.boundary.command,
+			cwd: options.boundary.cwd ?? options.workspaceRoot,
+			tag: "axi-turn",
+		});
+		if (launched.selfCheck !== "pass") {
+			throw new Error(`refusing to start: the launch self-check reported '${launched.selfCheck}'`);
+		}
+		// The child's exit code is recorded rather than judged: a blocked write is criterion 1 *succeeding*, and a
+		// caller that read a non-zero code as "the turn failed" would turn every correct refusal into a failure.
+		boundary = { aclInvariants: "as-declared", tokenSelfCheck: token.selfCheck, childExitCode: launched.exitCode };
+	}
+
 	const { mode } = loadWorkModeFromDirectory(options.workspaceRoot, options.modeName, { frameworkVersion: "0.2.0" });
 
 	// The policy is the repository's own name-and-argument layer. `registeredCapabilities` is empty because
@@ -179,6 +277,7 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 			...(decision.outcome === "allow" ? {} : { reason: decision.reason }),
 		})),
 		ledgerRecords,
+		...(boundary === undefined ? {} : { boundary }),
 	};
 }
 

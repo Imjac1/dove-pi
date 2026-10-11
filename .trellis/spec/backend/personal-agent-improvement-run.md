@@ -154,7 +154,7 @@ stated before anyone builds it* - `.trellis/tasks/09-30-substrate-choice/framewo
 | The file-level harness/verifier split does not exist | needs a task |
 | Pareto preservation is uncomputable as the ledger stands | needs a task |
 | "Sandbox violations" counts this repository's refusals rather than a boundary denial | needs a task |
-| The loop's own host is deliberately deferred | the framework document named above says so; no task owns it yet |
+| The loop's own host runs a round that writes | its boundary half arrived: `src/commands/axi-turn.ts` establishes the Plane B invariants and starts the child under the restricted token when a caller supplies a boundary, which is why the six `src/jailer/` entries left the reachability allow-list (`10-11-axi-loop-host`). What no task owns yet is the round that writes - the command still runs a scripted provider and one read-only tool |
 
 **Nothing in this thread is claimed as working.** What exists is the contract for the instruments
 ([`personal-agent-harness-loop.md`](./personal-agent-harness-loop.md)), the boundary mechanism measured in isolation

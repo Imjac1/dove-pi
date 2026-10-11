@@ -96,19 +96,13 @@ const ALLOW_LIST: Record<string, { reason: string; wiredBy: string | null }> = {
 	// observing it on every provider request** - the seventh shrink, and the one the check stated the rule for:
 	// *removing the entry is the definition of done for that module*.
 
-	// **Six entries arrive together, and they are the first time this list has grown.** The boundary that keeps
-	// the improver out of the held-out side (`src/jailer/`) was built *before* the loop that will run under it,
-	// on purpose: a boundary cannot be added after something has already been running inside it, and the
-	// mechanism was measured in one session - three criteria plus the positive control that keeps "it blocked"
-	// apart from "the probe was blind". So nothing reaches these yet, and that is a reading rather than an
-	// oversight. The rule holds in this direction too: **removing an entry is the definition of done**, and the
-	// loop's dispatch path is what will remove the last five.
-	"src/jailer/types.ts": { reason: "the boundary contract: which paths are held out, which are writable, and the two invariants as data. Nothing reaches it yet; the loop's startup path will, through acl.ts", wiredBy: null },
-	"src/jailer/host.ts": { reason: "the one caller of src/windows-runtime/jailer-host.ps1, over files rather than pipes because a piped capture is EPERM under the sandbox this repository runs in. Nothing reaches it yet; token.ts and launch.ts will", wiredBy: null },
-	"src/jailer/acl.ts": { reason: "sets the ACL invariants with icacls and then re-reads them, so the boundary cannot be satisfied by declaring it. Nothing reaches it yet; the loop's startup path will", wiredBy: null },
-	"src/jailer/token.ts": { reason: "creates the restricted token and verifies its restricting SID list, failing closed on an empty one. Nothing reaches it yet; launch.ts will", wiredBy: null },
-	"src/jailer/launch.ts": { reason: "launches the improver under the boundary, in the shape that keeps it from being its own jailer. Nothing reaches it yet; the loop's dispatch path will", wiredBy: null },
-	"src/jailer/index.ts": { reason: "the module's public surface, for those two consumers", wiredBy: null },
+	// **The six `src/jailer/` entries left together, and the consumer is the one every one of their reasons named.**
+	// "the loop's startup path will" (`types.ts`, `acl.ts`), "the loop's dispatch path will" (`launch.ts`),
+	// "`token.ts` and `launch.ts` will" (`host.ts`), "`launch.ts` will" (`token.ts`) - that path is
+	// `src/commands/axi-turn.ts`, which now establishes the boundary before it runs a turn and starts the improver's
+	// work through the helper. The readings travel out with it in the order the mechanism asks for: the ACL
+	// invariants re-read, the token's restricting list verified, and the child's own exit code recorded rather than
+	// judged. This is the eighth shrink, and the first one this list grew in order to pay.
 
 };
 
