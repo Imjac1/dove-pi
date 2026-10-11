@@ -8,24 +8,20 @@
 
 ## 顺序（顺序即依赖）
 
-1. [ ] **宿主启动时建边界** ✓：在 `runAxiTurn` 的入口，按 `BoundarySpec` 调 `ensureBoundary`（设并回读 ✓）→ 再 `probeToken`（验证 restricting 列表 ✓）。
-       **判据**：`invariantViolations` 为空 ✓、`TokenReport` 的 `selfCheck === "pass"` ✓。
-       **落点**：`src/commands/axi-turn.ts`（自有派发路径的入口 ✓）；**规格**：`personal-agent-hook...` 无关 —— 见 `use-time-architecture.md` §7 ✓。
-2. [ ] **建不起来就拒绝启动** ✓：任一步不自检通过 → 抛错并返回非零，**不降级**。
-       **判据**：一条用例（构造一个建不起来/自检不过的 spec）断言"没有派发发生" ✓。
-3. [ ] **派发走 helper** ✓：把"改进者要做的事"从**进程内调用**改为 `launchJailed(spec, { command, cwd, tag, timeoutMs })` 启动 ✓。
-       **判据**：`LaunchReport.selfCheck === "pass"` ✓；宿主代码里**不存在**可传递的令牌（R2 ✓）。
-4. [ ] **`ok` 的读法写进调用点** ✓：注释 + 命名说明 `ok` 是"机制如实 + 令牌已验证"，**不是**"孩子成功" ✓；孩子的非零退出码如实进读数 ✓。
-       **判据**：一条用例让"孩子被挡住"（非零退出）时宿主**不**把它记成失败 ✓。
-5. [ ] **读数进账本** ✓：边界三项（不变量、令牌自检、launch 自检）与孩子的退出码写进 `axi-turn` 自己的 ledger ✓。
-       **判据**：跑一次命令后账本里能读出这三个读数 ✓。
-6. [ ] **删掉白名单六条** ✓（`tests/harness-reachability.test.ts`），保留其余条目不动 ✓。
-       **判据**：`tests/harness-reachability.test.ts` 绿 ✓ —— 若某条删早了，这道门会红 ✓，那正是它的作用。
-7. [ ] **`axi-turn` 的文档段更新** ✓：把 *"Writing, isolation and the improvement loop belong to later milestones"*（`:13-17`）改成实测后的现状 ✓ ——
-       **isolation 这一件已经在场**，剩下的（写、回路）仍标为后面的里程碑 ✓。
-8. [ ] **规格两页各改一次** ✓（它们自己都写了"当事实变化时改本页，不要加脚注" ✓）：
-       - `personal-agent-use-time-architecture.md` §7：`Plane B` 那格从"no runtime path composes it yet"改为实测现状 ✓；
-       - `personal-agent-improvement-run.md` §10：`The loop's own host is deliberately deferred | no task owns it yet` 这一行**离开表格** ✓（本任务就是那个 owner ✓）。
+1. [x] **宿主启动时建边界** ✓（2026-10-11）：在 `runAxiTurn` 的入口，按 `BoundarySpec` 调 `ensureBoundary`（设并回读 ✓）→ 再 `probeToken`（验证 restricting 列表 ✓）→ 再 `launchJailed` ✓。
+       **判据成立** ✓：真跑读数 `aclInvariants: "as-declared"` ✓ · `tokenSelfCheck: "pass"` ✓ · `childCreateProcessError: 0` ✓（见 `readings.md` ✓）。
+2. [x] **建不起来就拒绝启动** ✓：任一步不自检通过 → 抛错并返回非零，**不降级** ✓。
+       **判据成立** ✓：三条用例（不变量不符 · 令牌未验证 · 孩子没被创建 ✓）。
+3. [x] **派发走 helper** ✓：改进者的工作由 `launchJailed(spec, { command, cwd, tag })` 启动 ✓；宿主没有可传递的令牌 ✓。
+       **判据成立** ✓：`selfCheck: "pass"` + `createProcessError: 0` ✓。
+4. [x] **`ok` 的读法写进调用点** ✓：契约写在 `BoundaryPort.launch` 与 `BoundaryReading` 的注释里 ✓；孩子非零退出码**如实记录、不判失败** ✓（两处独立用例 ✓）。
+5. [ ] **读数进账本** ✗ —— **未达成，已量**：读数进了 `AxiTurnReport.boundary` ✓，但 **`ledger.jsonl` 里没有它们** ✓
+       （那次真跑一个 gate 记录都没写，因为脚本化的 turn 没有工具调用 ✓）。修法是一个小决定，下一轮做 ✓：
+       账本的种类是**封闭词汇表**，新增一种要连它的 writer 与门一起加（`tests/harness-reachability.test.ts` 要求每个种类都有 writer ✓），
+       或者复用既有的 `runtime.phase.completed` ✓ —— 两种都可，但不能只是"把报告留着" ✓。
+6. [x] **删掉白名单六条** ✓：`tests/harness-reachability.test.ts` 绿 ✓ —— 而且它是**自己变红并点名六个模块**之后我才删的 ✓。
+7. [x] **`axi-turn` 的文档段更新** ✓：*"Writing, isolation and the improvement loop belong to later milestones"* 已改为实测后的现状 ✓（isolation 已在场 ✓）。
+8. [x] **规格两页各改一次** ✓：`use-time-architecture.md` §7 三处 + `improvement-run.md` §10 那一行（缺口没关掉，只是**移动**了 ✓）。
 
 ## 验证命令
 

@@ -45,7 +45,20 @@ import type { BoundarySpec, SelfCheck } from "../jailer/types.ts";
 export interface BoundaryPort {
 	readonly ensure: (spec: BoundarySpec) => { readonly violations: readonly string[]; readonly missing: readonly string[] };
 	readonly probe: (spec: BoundarySpec) => { readonly selfCheck: SelfCheck };
-	readonly launch: (spec: BoundarySpec, request: LaunchRequest) => { readonly selfCheck: SelfCheck; readonly exitCode: number };
+	readonly launch: (spec: BoundarySpec, request: LaunchRequest) => {
+		readonly selfCheck: SelfCheck;
+		readonly exitCode: number;
+		/**
+		 * **The field that keeps "the child was refused" apart from "the child never ran."** Zero on success; a Win32
+		 * error code when `CreateProcessAsUser` refused. A port that dropped it would make a launch that failed in
+		 * `PATH` lookup read exactly like a blocked write, which is the confusion this whole reading exists to end -
+		 * measured: the first run of this host passed `echo probe> ...`, which is a `cmd` builtin rather than an
+		 * executable, and the dropped field hid that behind `exitCode: -1` on both sides.
+		 */
+		readonly createProcessError: number;
+		/** The helper's own diagnostic text, carried through rather than summarised. */
+		readonly diag: string;
+	};
 }
 
 /** The default port: the real mechanism, unchanged. */
@@ -57,7 +70,7 @@ export const realBoundaryPort: BoundaryPort = {
 	probe: (spec) => ({ selfCheck: probeToken(spec).selfCheck }),
 	launch: (spec, request) => {
 		const report = launchJailed(spec, request);
-		return { selfCheck: report.selfCheck, exitCode: report.exitCode };
+		return { selfCheck: report.selfCheck, exitCode: report.exitCode, createProcessError: report.createProcessError, diag: report.diag };
 	},
 };
 
@@ -81,6 +94,9 @@ export interface BoundaryReading {
 	readonly tokenSelfCheck: SelfCheck;
 	/** The child's own exit code. **A non-zero code is not a failure here**: a blocked write is criterion 1 succeeding. */
 	readonly childExitCode: number;
+	/** 0 when the constrained child was actually created. Non-zero is refused, not recorded - see the startup. */
+	readonly childCreateProcessError: number;
+	readonly childDiag: string;
 }
 
 /** The one tool this turn has. Reading only: nothing here can change the workspace. */
@@ -163,9 +179,24 @@ export async function runAxiTurn(options: AxiTurnOptions): Promise<AxiTurnReport
 		if (launched.selfCheck !== "pass") {
 			throw new Error(`refusing to start: the launch self-check reported '${launched.selfCheck}'`);
 		}
+		// **A child that never ran is not a boundary that held.** `CreateProcessAsUser` refusing is a fact about the
+		// command or the token rather than about the held-out side, and reporting it as `exitCode: -1` next to
+		// "as-declared" would let a turn claim containment it never exercised. So it refuses, and it names the code
+		// and the helper's own diagnostic rather than a summary of them.
+		if (launched.createProcessError !== 0) {
+			throw new Error(
+				`refusing to start: the constrained child was not created (Win32 error ${String(launched.createProcessError)})${launched.diag === "" ? "" : `: ${launched.diag}`}`,
+			);
+		}
 		// The child's exit code is recorded rather than judged: a blocked write is criterion 1 *succeeding*, and a
 		// caller that read a non-zero code as "the turn failed" would turn every correct refusal into a failure.
-		boundary = { aclInvariants: "as-declared", tokenSelfCheck: token.selfCheck, childExitCode: launched.exitCode };
+		boundary = {
+			aclInvariants: "as-declared",
+			tokenSelfCheck: token.selfCheck,
+			childExitCode: launched.exitCode,
+			childCreateProcessError: launched.createProcessError,
+			childDiag: launched.diag,
+		};
 	}
 
 	const { mode } = loadWorkModeFromDirectory(options.workspaceRoot, options.modeName, { frameworkVersion: "0.2.0" });

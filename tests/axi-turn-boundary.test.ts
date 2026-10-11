@@ -36,7 +36,7 @@ interface Recorder {
 function recorder(overrides: {
 	ensure?: () => { violations: readonly string[]; missing: readonly string[] };
 	probe?: () => { selfCheck: SelfCheck };
-	launch?: () => { selfCheck: SelfCheck; exitCode: number };
+	launch?: () => { selfCheck: SelfCheck; exitCode: number; createProcessError?: number; diag?: string };
 }): Recorder {
 	const calls: string[] = [];
 	const port: BoundaryPort = {
@@ -50,7 +50,8 @@ function recorder(overrides: {
 		},
 		launch: () => {
 			calls.push("launch");
-			return overrides.launch?.() ?? { selfCheck: "pass", exitCode: 0 };
+			const launched = overrides.launch?.() ?? { selfCheck: "pass" as SelfCheck, exitCode: 0 };
+			return { createProcessError: 0, diag: "", ...launched };
 		},
 	};
 	return { port, calls };
@@ -99,6 +100,20 @@ describe("the turn's own discipline at the boundary", () => {
 			assert.equal(report.boundary?.tokenSelfCheck, "pass");
 			assert.equal(report.boundary?.childExitCode, 1, "a blocked write is criterion 1 succeeding: the code is recorded, not judged");
 			assert.equal(report.outcome.executedActions >= 0, true, "and the turn still ran, so the refusal did not become the turn failing");
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("refuses when the child was never created, so a launch failure cannot read as a blocked write", async () => {
+		// The defect this case was written from: the first real run of this host passed `echo probe> ...`, which is a
+		// `cmd` builtin rather than an executable. The child never started, and a port that carried only the exit code
+		// reported `-1` on both sides - the held-out write and the writable one - which is indistinguishable from a
+		// boundary that held. `createProcessError` is the reading that separates them, so a non-zero one stops the turn.
+		const directory = mkdtempSync(join(tmpdir(), "axi-turn-noprocess-"));
+		try {
+			const { port } = recorder({ launch: () => ({ selfCheck: "pass", exitCode: -1, createProcessError: 2, diag: "CreateProcessAsUser failed" }) });
+			await assert.rejects(turnWith(port, directory), /refusing to start: the constrained child was not created \(Win32 error 2\): CreateProcessAsUser failed/);
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}
