@@ -611,6 +611,20 @@ provider.request.completed  stopReason="error"  failureKind="transient"  failure
 （第六次真跑证明：≥85 秒、≥6 轮就够它走到"工具面进读数 + 收敛观察 + 目标 phase=blocked"✓）。
 **可选的出路**（都在 provider/运维侧 ✓）：换一个不吃紧的 provider/端点 · 提高该 key 的配额 · 等端点恢复 ✓。
 
+---
+
+# 读数（第十次：**窗口与窗口之间差异很大** —— 第七次真跑 18 秒就死，三次全失败）（2026-10-11 ✓✗）
+
+**第七次真跑** ✗：`~18 秒` ✓ · **3 轮 provider 调用、3 次全失败** ✗ ⇒ `request.terminal {detail: "attempt-limit", policyAbort: true}` ✓。
+对照第六次（**6 轮、其中 3 轮真的调用了工具 ✓**、88 秒 ✓）⇒ **失败率是"每个窗口一个数"，不是常数** ✓：
+好窗口里错误与成功**交错** ✓，坏窗口里**一次都不成** ✗。
+
+**这也是那条契约的形状** ✓（`personal-agent-request-runtime.md:313-329` ✓ 原文）：
+*"Automatic retry is **bounded and fail-closed**. HTTP 408/425/429/5xx and reviewed transport-reset/timeout codes are transient
+**while the attempt limit has not been reached**…"* ✓ —— 所以那个上限是**刻意的策略** ✓（同段给了理由：已发生的 effect 不能被盲目重放 ✓），
+**不是疏漏，我不动它** ✗。**结论**：② 需要的是**一个好窗口**，而窗口好坏 **30 秒内可见** ✓ ⇒ **反复试是便宜且机械的**（每次失败 ~20 秒 ✓），
+这正是本轮采用的做法 ✓。
+
 > **同一个 URL、同一个 key、同一份载荷、同一个 Node 栈** —— 我构造的请求全部成功，**Pi 的请求 18–76 ms 内失败** ✓。
 > 差别只能在 **Pi 自己构造/处理那一次请求的路径里**（它加的 header、它的重试/中止逻辑、它的连接池状态），
 > 而 **provider 通道属于 Pi**（D1：本仓不实现它 ✓）。**故不写成"原因已找到"** ✗ —— 剩下的可能一个都没量到 ✓。
