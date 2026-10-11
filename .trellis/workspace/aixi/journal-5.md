@@ -1181,3 +1181,49 @@ The whole-flow task was put through three real runs and ended up rewriting what 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 246: The whole flow completes, and three rules that could not be reached
+<!-- trellis-session: v=2 fp=d1076eee0ee37c6a -->
+
+**Date**: 2026-10-11
+**Task**: The whole flow completes, and three rules that could not be reached
+**Branch**: `master`
+
+### Summary
+
+The session resumed this task mid-edit - a half-finished prompt clause and a plan written thirty-five seconds earlier - and turned it into four field runs, three harness defects and a completed flow. The first thing it did was refuse to guess: the working change and the committed plan disagreed about which channel the freeze errand belonged in, so it asked, and the answer fixed the shape for everything after: the stable prompt names the gate, and the errand rides the per-request guidance channel only while the gate would refuse. The first defect found was that the rule added five days earlier for a provider stream that ends early could never be reached - the message's own stopReason is always from the failed set, because both call sites classify only when the normalizer reports error, and the normalizer maps aborted to cancelled. The real function returned exactly the two fields the run's ledger held, which is what made the diagnosis the function's own output rather than an inference about it; the rule now reads the whole failed set, after the text rules, with two cases observed red first. The second was the convergence tool: its task parameter carried no description while its neighbours did, and one refusal sentence covered both 'you named a task I do not know' and 'nothing is current', so a model that passed a sentence was refused, could not tell which argument was wrong, and grepped the whole managed install for the message - a command outside the shell timeout whitelist, which hung the run for minutes. The refusal now names the argument and says what to pass, and the control call in the case omits the selector and freezes the current task. The third was the largest: the read-only shell grammar admitted go test and had no Python entry, so the gate refused the project's own test command as a product mutation - and that corrected the task's central story, because the blocked decisions earlier readings had read as the model mutating before freezing were measurements. The scenario now states both halves of the contract the gate enforces, freeze then start, and its lanes were re-checked because one added word had once flipped a request out of the formal lane. Four runs followed, three of them covered by a pre-registration committed before the launcher started, and both registrations were wrong in the same way: their rows could not tell which mechanism produced a value. The first nearly had a retry produced by the text rule written up as the new rule working, which the session caught by reading the session file; the second could not tell a blocked measurement from a blocked edit. The last run completed the flow - every scenario step settled, the acceptance record frozen and its criterion started with no block at all, the library edited, the project's own suite going from one failure and 115 passes to 116 passes with the judging test byte-identical, and the formal task archived - and it was the operator's own DOVE_PI_MAX_REQUEST_ATTEMPTS knob that let it, used four times against a default of three, which is recorded as the caveat that the run shows the flow completes rather than that it completes under the shipped budget. The managed install was brought level twice and checked behaviourally rather than textually, by running its own modules. The archive then cost five curated entries rather than the two the pre-archive check predicted, because the predictor is every entry in the corpus pointing inside the task directory and three came from other archived tasks. Three specification pages carried claims these readings overturned, and the correction was to the claims as well as the citations. Gates: typecheck 0, npm test 978 of 978, the corpus lint at 39 artifacts and no problems, and every documentation door green. The session leaves two things open and says so: whether the flow completes under the default attempt budget, and the one rule no field run has exercised because this endpoint always sends text with its errors.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `059fdc8` | ﻿docs(spec): the two claims this session's readings overturned, and the citations the archive moved |
+| `be93c70` | ﻿docs(spec): the two contracts this session measured against |
+| `ccf1d89` | ﻿docs(task): the thirteenth run - the whole flow completes, and the knob that let it |
+| `4c136a4` | ﻿docs(task): the thirteenth run, and the knob that was already there |
+| `d548ea1` | ﻿docs(task): the twelfth run - the errand works unaided, and the block after it was the gate's job |
+| `723dc86` | ﻿test(scenarios): the work step states the second half of the contract the gate enforces |
+| `c982e5c` | ﻿docs(task): the question the twelfth run answers, written before it runs |
+| `ddfe805` | ﻿docs(task): the managed release catches up with the three fixes, and answers the same |
+| `844ad93` | ﻿docs(task): the eleventh run - the work succeeded, the freeze landed, and the gate refused a measurement |
+| `4b287a5` | ﻿fix(disposition): the read-only shell grammar admits a project's own test runner in more than one language |
+| `8e4476a` | ﻿docs(agents): a rule that a refusal names the argument that failed |
+| `e347597` | ﻿docs(spec): the mount table shifts for the fourth time, and the page moves with it |
+| `eb47a51` | ﻿fix(pi-adapter): the convergence refusal names the argument, and the selector says what it is |
+| `e3e9396` | ﻿docs(task): what the next field run is testing, written before it runs |
+| `6958679` | ﻿docs(task): the installed release catches up again, and the two launchers still agree |
+| `b7075d4` | ﻿test(pi-adapter): the run's own shape, driven through the handler, retries |
+| `6bc041d` | ﻿docs(task): the tenth field run, the sentence that reached the model, and the fix that could not be |
+| `654c994` | ﻿docs(agents): a rule for the failed-stream token, because the first version reached nothing |
+| `59c8835` | ﻿docs(spec): the citations this change moved, and one that was cited for the wrong thing |
+| `2dce58e` | ﻿fix(pi-adapter): a failed provider stream is transient whichever of the host's words spells it |
+| `bd5b88c` | ﻿docs(task): the installed release catches up, and the two launchers agree on one scenario |
+| `cf668c1` | ﻿docs(task): the twelfth reading, and the errand moved into the channel that is per request |
+| `6a0d1d9` | ﻿docs(agents): a rule for where an errand a gate implies is said |
+| `0e69d74` | ﻿docs(spec): the citations this change moved, and one that was already stale |
+| `7fda3c7` | ﻿fix(pi-adapter): the freeze errand is said only while the gate would refuse it |
+
+### Status
+
+[OK] **Completed**
