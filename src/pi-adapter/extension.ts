@@ -2759,13 +2759,28 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 				// the metadata tool surface the validation error when used.
 				if (ctx.hasUI) ctx.ui.notify(`[Dove convergence] Formal metadata is invalid; convergence updates are unavailable: ${convergence.issue}`, "warning");
 			}
-			else if (convergence.kind !== "valid") blockedReason = "[Dove convergence] Freeze stable acceptance criteria with agent_task_convergence before the first formal product mutation.";
+			// **The reason and the next action come from one decision, not two.** They were two: the reason above is
+			// written per case, while the terminal's `nextAction` was one fixed sentence - "Resume the active acceptance
+			// criterion", which is right for `checkpointed`/`blocked` and wrong for everything else. Measured: a run
+			// whose `state` was `missing` recorded that sentence in its ledger, and a reader of the record (this
+			// session's own first reading of it) concluded the gate had offered the model a resume when what the case
+			// needs is a freeze. A record whose two halves can disagree about what to do next is a record that misleads
+			// whoever reads only one half.
+			let blockedNextAction = "Freeze stable acceptance criteria with agent_task_convergence before the first formal product mutation.";
+			if (convergence.kind !== "valid") blockedReason = "[Dove convergence] Freeze stable acceptance criteria with agent_task_convergence before the first formal product mutation.";
 			else {
 				blockedState = convergence.snapshot.state;
 				blockedAcceptanceId = convergence.snapshot.criteria.find((criterion) => criterion.status === "in_progress")?.id;
-				if (convergence.snapshot.state === "ready_to_finish") blockedReason = "[Dove convergence] This formal task is ready_to_finish; do not start another implement/check mutation cycle.";
-				else if (convergence.snapshot.state === "checkpointed" || convergence.snapshot.state === "blocked") blockedReason = `[Dove convergence] Resume the checkpoint for ${convergence.snapshot.checkpoint?.nextAcceptanceId ?? "the active acceptance"} before mutating product files.`;
-				else if (!blockedAcceptanceId) blockedReason = "[Dove convergence] Select an active acceptance criterion with agent_task_convergence before mutating product files.";
+				if (convergence.snapshot.state === "ready_to_finish") {
+					blockedReason = "[Dove convergence] This formal task is ready_to_finish; do not start another implement/check mutation cycle.";
+					blockedNextAction = "Finish and archive this task instead of starting another implement/check mutation cycle.";
+				} else if (convergence.snapshot.state === "checkpointed" || convergence.snapshot.state === "blocked") {
+					blockedReason = `[Dove convergence] Resume the checkpoint for ${convergence.snapshot.checkpoint?.nextAcceptanceId ?? "the active acceptance"} before mutating product files.`;
+					blockedNextAction = "Resume the active acceptance criterion before mutating product files.";
+				} else if (!blockedAcceptanceId) {
+					blockedReason = "[Dove convergence] Select an active acceptance criterion with agent_task_convergence before mutating product files.";
+					blockedNextAction = "Select an active acceptance criterion with agent_task_convergence before mutating product files.";
+				}
 			}
 			if (blockedReason) {
 				if (currentRequestTaskId && currentRequestPlan) {
@@ -2773,7 +2788,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 						await ledger.appendTaskConvergenceDecision({ taskId: currentRequestTaskId, stepId: `tool:${event.toolCallId}`, mode: currentRequestPlan.mode, requestId: currentRequestPlan.requestId, toolCallId: event.toolCallId, acceptanceId: blockedAcceptanceId, eventKind: "product_mutation.blocked", state: blockedState, snapshotRevision: convergence.kind === "valid" ? convergence.snapshot.revision : 0, acceptanceRevision: convergence.kind === "valid" ? convergence.snapshot.acceptanceRevision : "unknown", nextAction: convergence.kind === "valid" ? convergence.snapshot.checkpoint?.nextAction ?? convergence.snapshot.correctiveAction?.nextAction : undefined });
 					} catch { /* blocking diagnostics are best effort */ }
 				}
-				pendingRequestTerminal = terminalForPolicy("convergence", `convergence-${blockedState}`, blockedReason, "Resume the active acceptance criterion before mutating product files.");
+				pendingRequestTerminal = terminalForPolicy("convergence", `convergence-${blockedState}`, blockedReason, blockedNextAction);
 				if (blockedState === "ready_to_finish" || blockedState === "invalid" || blockedState === "missing") {
 					await issueRequestHostAbort(ctx, pendingRequestTerminal);
 				}
