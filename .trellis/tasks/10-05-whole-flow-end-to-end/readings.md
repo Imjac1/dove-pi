@@ -678,6 +678,50 @@ task.convergence.decision  {eventKind:"product_mutation.blocked", state:"missing
 **这一步的改动边界**（下一轮的规划，需你点头 ✓）：`src/core/task-convergence.ts`（verifier-embedded ✗ ⇒ 改动要按本仓对 verifier 的规矩来 ✓）
 + intake 的那处调用点 + 一条用例（"开正式任务后，第一次产品变更不再因 `state: missing` 被挡" ✓）+ 相关规格页 ✓。
 
+## 纠正：上一条规划的前提是错的 ✗✓（读代码后自我更正）
+
+**动手前读代码，发现三点，合起来否掉了上一条的修法** ✓：
+
+1. intake 开正式任务的地方在 `src/pi-adapter/extension.ts:3301` ✓（`requestPlan.lane === "formal"` ⇒ `ensureFormalTask(...)` ✓）；
+2. **但它写下的 `acceptance.md` 是模板占位** ✗：`native-artifacts.ts:115` 的原文是
+   *"Pending: define and verify the acceptance criteria from prd.md."* ✓ —— **不是判据** ✗；
+3. 而冻结事件**必须是第一个**（`task-convergence.ts:250`：*"acceptance.frozen must be the first convergence event"* ✓），
+   且**判据由调用方提供**（`extension.ts:410`：`operation === "freeze"` ⇒ `criteria: input.criteria ?? []` ✓）。
+
+⇒ **判据的文本并不在场** ✗ —— 它们要**从请求/prd 推导** ✓，那是模型的活 ✓。
+所以"让 harness 把自己刚写的东西冻结掉"**做不到** ✓：它写的是占位符 ✗。**上一条规划的这一步作废** ✗✓。
+
+**修正后的选项**（都保留原样记录，不挑好看的 ✓）：
+
+- **(1) intake 把"请求者说过的那句"冻结成一条判据** ✓ —— 文本是**用户自己的**（不发明 ✗），
+  于是模型下一次变更不再被 `state: missing` 挡住 ✓，并且冻结快照**反过来把判据显示给模型** ✓。
+  代价：产品行为改变（判据的来源多了一个"harness 的转写" ✓），需你定 ✓。
+- **(2) 只改工具指南/模式文本（再来一次）** ✗ —— 已经做过两次了（`extension.ts:1546-1549` ✓ 与场景第 0 步 ✓），
+  **模型两次都没照做** ✗✓ ⇒ 按本仓纪律，这条不算修法 ✓。
+- **(3) 不动它，只把读数留住** ✓ —— ② 保持"被两件事挡住"（模型不冻结 ✓ + provider 窗口 ✗）的如实状态 ✓。
+
+## 再纠正一次：**step 0 不是被 provider 杀死的** ✗✓✓（账本按追加顺序读出来的）
+
+第九次真跑的**事件顺序**（追加顺序 = 时间顺序 ✓）把它说清了 ✓：
+
+```text
+#3..#19   5 轮 provider 全部成功（15s / 17s / 7s / 11s / 70s，stop 全是 tool_call ✓）
+#20       tool.started read                    ← 模型最后一次动作
+#21       task.convergence.decision            product_mutation.blocked / state=missing
+#22       request.terminal                     detail=convergence-missing  abort=True   ← 本仓自己的门
+#23..#30  step 1 的请求，从这里才开始出现 stop=error（5ms）✗
+```
+
+⇒ **provider 一直健康到第 5 轮**（含一轮 **70 秒**的成功调用 ✓），**失败是从门中止之后才开始的** ✗✓✓。
+**我上一条读数（"好窗口也会被 provider 杀掉"）过粗，纠正** ✗：**step 0 是 Dove 自己的收敛门中止的** ✓，
+而模型**在拒绝之后没有得到任何回应机会** ✗ —— 因为请求在拒绝那一刻就结束了 ✓。
+
+**这把主杠杆换了位** ✓✓：② 的第一阻断是**"冻结必须发生在第一次产品变更之前"** ✓，
+而模型的模式是 `read/grep/bash → 直接尝试改文件` ✗，于是每次都在门口结束 ✓。
+（**未验证** ✗：那条拒绝给模型的 `nextAction` 在 `state: missing` 情形下到底是什么文本 ——
+第九次读到的 `"Resume the active acceptance criterion before mutating product files."`（第五次 ✓）在 `missing` 时**可能本就是错的建议** ✓
+—— 它在 `extension.ts` 里搜不到 ✓，我的上下文预算不足以继续追 ✗。**记为待查，不记为结论** ✗。）
+
 > **同一个 URL、同一个 key、同一份载荷、同一个 Node 栈** —— 我构造的请求全部成功，**Pi 的请求 18–76 ms 内失败** ✓。
 > 差别只能在 **Pi 自己构造/处理那一次请求的路径里**（它加的 header、它的重试/中止逻辑、它的连接池状态），
 > 而 **provider 通道属于 Pi**（D1：本仓不实现它 ✓）。**故不写成"原因已找到"** ✗ —— 剩下的可能一个都没量到 ✓。
