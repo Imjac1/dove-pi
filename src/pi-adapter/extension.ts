@@ -277,6 +277,32 @@ export function applyAdaptiveShellTimeout(
 	return { applied: true, timeoutSeconds: ceilingSeconds, reason: "command-ceiling" };
 }
 
+/**
+ * **The prompt text, from whichever shape the host used.**
+ *
+ * Pi's `before_agent_start` event is a union as of 1.2.0: the `user` variant carries `prompt`, and the `custom` variant -
+ * a run started by `pi.sendMessage(..., { triggerTurn: true })` - carries `message` and has no `prompt` field at all. The
+ * pinned 1.0.0 had one interface with `prompt` on it, so reading `event.prompt` was right then and is wrong twice over
+ * now: the typecheck fails against the latest channel, and a custom-shaped event makes `beginRequest` throw on an
+ * undefined prompt before any of Dove's own work starts. Both were measured 2026-10-13, from the compatibility matrix's
+ * red - the typecheck error by CI, the throw by the case beside this one.
+ *
+ * **Structural, on purpose.** Taking the event as `unknown` and reading the two fields it might have keeps this module
+ * compiling against both versions, which is the point: the pinned host is what Dove ships against and the latest channel
+ * is what the matrix tests, and one of them has no `prompt` on this event at all.
+ */
+function beforeAgentStartPrompt(event: unknown): string {
+	const shaped = event as { readonly prompt?: unknown; readonly message?: { readonly content?: unknown } };
+	if (typeof shaped.prompt === "string") return shaped.prompt;
+	const content = shaped.message?.content;
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) {
+		return content
+			.map((part) => (part !== null && typeof part === "object" && typeof (part as { text?: unknown }).text === "string" ? (part as { text: string }).text : ""))
+			.join(" ");
+	}
+	return "";
+}
 function runtimeReadOnly(): boolean {
 	return /^(1|true|yes|on)$/i.test(process.env.DOVE_PI_READ_ONLY ?? "");
 }
@@ -3359,11 +3385,13 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		const hookStartedAt = Date.now();
 		const intentStartedAt = Date.now();
-		const requestLease = requestLifecycle.beginRequest({ prompt: event.prompt });
+		// **Read once, structurally**, because the host's event is a union in 1.2.0 and a single interface in 1.0.0.
+		const prompt = beforeAgentStartPrompt(event);
+		const requestLease = requestLifecycle.beginRequest({ prompt });
 		let requestPlan = currentRequestPlan?.requestId === requestLease.logicalRequestId
 			? currentRequestPlan
 			: createRequestPlan({
-				message: event.prompt,
+				message: prompt,
 				requestId: requestLease.logicalRequestId,
 				mode: mode.current,
 				interactionMode,
@@ -3393,7 +3421,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		}
 		if (requestLease.isNewRequest && requestPlan.lane === "formal" && projectProvider.ensureFormalTask) {
 			try {
-				await projectProvider.ensureFormalTask(event.prompt.trim().split(/\r?\n/, 1)[0]?.slice(0, 240) || "Current formal task");
+				await projectProvider.ensureFormalTask(prompt.trim().split(/\r?\n/, 1)[0]?.slice(0, 240) || "Current formal task");
 				projectProvider = createProjectProvider(projectProvider.projectRoot);
 			} catch (error) {
 				// Goal tracking is optional. A damaged metadata file must not block Pi
@@ -3406,7 +3434,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const contextlessRequest = requestPlan.interactionMode === "chat" || (requestPlan.intent === "chat" && requestPlan.lane !== "formal");
 		const continuationState = contextlessRequest ? undefined : readProjectContinuationForPlan(projectProvider, requestPlan);
 		const requestProjectContext = continuationState?.context ?? (contextlessRequest ? undefined : projectProvider.getContext());
-		const taskInventoryRequest = isTaskInventoryRequest(event.prompt);
+		const taskInventoryRequest = isTaskInventoryRequest(prompt);
 		const projectContextDurationMs = Date.now() - projectContextStartedAt;
 		currentRequestPlan = requestPlan;
 		currentRequestIsTaskInventory = taskInventoryRequest;
@@ -3479,11 +3507,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			|| requestContextRevision === `${epoch}:empty`;
 		const shouldRefreshSnapshot = !isChat && !taskInventoryRequest && requestContextEpoch !== epoch
 			&& (requestLease.isNewRequest || retryableMissingSnapshot);
-		if (process.env.DOVE_PI_DEBUG_CONTEXT === "1" && event.prompt.includes("Provider Prompt")) console.error("DEBUG_CONTEXT", { isChat, taskInventoryRequest, requestLeaseNew: requestLease.isNewRequest, epoch, requestContextEpoch, requestContextRevision, shouldRefreshSnapshot, plan: requestPlan.intent, lane: requestPlan.lane });
+		if (process.env.DOVE_PI_DEBUG_CONTEXT === "1" && prompt.includes("Provider Prompt")) console.error("DEBUG_CONTEXT", { isChat, taskInventoryRequest, requestLeaseNew: requestLease.isNewRequest, epoch, requestContextEpoch, requestContextRevision, shouldRefreshSnapshot, plan: requestPlan.intent, lane: requestPlan.lane });
 		let snapshotForTurn: string | undefined;
 		let contextCompileDurationMs = 0;
 		if (shouldRefreshSnapshot) {
-			const contextQuery = requestPlan.lane === "formal" ? `${event.prompt} prd design implementation acceptance` : event.prompt;
+			const contextQuery = requestPlan.lane === "formal" ? `${prompt} prd design implementation acceptance` : prompt;
 			const contextCompileStartedAt = Date.now();
 			const context = buildInteroperableProjectContext(projectProvider, contextQuery, mode.current, { maxChars: remainingContextChars, includeFormalArtifacts: requestPlan.lane === "formal" }).context;
 			contextCompileDurationMs = Date.now() - contextCompileStartedAt;
@@ -3559,7 +3587,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 					payload: null,
 					segments: [
 						{ id: "host-system", source: "pi", content: builtSystemPrompt },
-						{ id: "user-prompt", source: "user", content: event.prompt },
+						{ id: "user-prompt", source: "user", content: prompt },
 						{ id: "dove-context", source: "dove", content: messageForTurn, required: true },
 					],
 				});

@@ -85,6 +85,58 @@ describe("Pi adapter", () => {
 		assert.equal(receivedTimeout, 1);
 	});
 
+	it("reads the prompt from either shape the host gives it, including the one that carries no prompt field", async () => {
+		// **The compatibility matrix's red, reproduced as a case.** Measured 2026-10-13: the latest Pi (1.2.0) split this
+		// event into a union - the `user` variant carries `prompt`, the `custom` variant carries `message` and has no
+		// `prompt` at all - where the pinned 1.0.0 had one interface with `prompt` on it. Dove read `event.prompt`
+		// unconditionally, which is right for 1.0.0 and a typecheck failure against the latest channel. The read is
+		// structural now, and this case is the claim rather than the spelling: **the same text through either shape must
+		// reach the planner and produce the same plan.**
+		//
+		// Its own state directory and its own project, so the ledger it reads is only its own: the file-level fixture is
+		// shared, and a case that leaves `request.planned` records in it changes what the cases after it are reading.
+		const root = mkdtempSync(join(tmpdir(), "pi-either-shape-"));
+		mkdirSync(join(root, ".dove"), { recursive: true });
+		const goal = { id: "goal-either-shape", title: "Either shape", status: "active", formal: true, phase: "intake", createdAt: "2026-10-13T00:00:00.000Z", updatedAt: "2026-10-13T00:00:00.000Z", decisions: [], verification: [] };
+		writeFileSync(nativeProjectStatePath(root), JSON.stringify({ schemaVersion: 1, revision: 1, currentGoalId: goal.id, goals: [goal] }), "utf8");
+		const previousCwd = process.cwd();
+		const previousStateDir = process.env.DOVE_PI_STATE_DIR;
+		process.chdir(root);
+		process.env.DOVE_PI_STATE_DIR = join(root, "state");
+		try {
+			const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+			const api = {
+				registerCommand() {}, registerShortcut() {}, registerTool() {}, registerFlag() {}, appendEntry() {},
+				getAllTools() { return representativeTools.map((name) => ({ name })); },
+				setActiveTools() {}, getActiveTools() { return [...representativeTools]; },
+				getThinkingLevel() { return "high"; },
+				on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+			} as unknown as ExtensionAPI;
+			extension(api);
+			const context: FakeContext = {
+				ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+				sessionManager: { getEntries: () => [], getSessionId: () => "either-shape-session" },
+			};
+			const ledgerPath = join(root, "state", "execution.jsonl");
+			const lastLane = (): string | undefined => readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean)
+				.map((line) => JSON.parse(line) as { kind?: string; details?: { lane?: string } })
+				.filter((record) => record.kind === "request.planned").at(-1)?.details?.lane;
+			const text = "Implement the RFC 8246 immutable directive in the cache controller and freeze the acceptance criteria first";
+			await events.get("before_agent_start")?.({ type: "before_agent_start", messageType: "user", prompt: text, systemPrompt: "" }, context);
+			const userLane = lastLane();
+			// The same text, carried the other way, with no `prompt` field for Dove to read.
+			await events.get("before_agent_start")?.({ type: "before_agent_start", messageType: "custom", message: { content: text }, systemPrompt: "" }, context);
+			const customLane = lastLane();
+			assert.equal(userLane, "formal", `the user-shaped event reached the planner: ${String(userLane)}`);
+			assert.equal(customLane, userLane, "and the custom-shaped one produced the same plan, which is the whole claim");
+		} finally {
+			process.chdir(previousCwd);
+			if (previousStateDir === undefined) delete process.env.DOVE_PI_STATE_DIR;
+			else process.env.DOVE_PI_STATE_DIR = previousStateDir;
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("allows only explicitly read-only shell checks before formal acceptance freeze", () => {
 		assert.equal(isReadOnlyShellCommand("bash", { command: "git -C /repo log --oneline -5; echo ---; git -C /repo status --porcelain" }), true);
 		assert.equal(isReadOnlyShellCommand("bash", { command: "cd /repo && go vet ./... 2>&1 | head -40" }), true);
