@@ -45,6 +45,10 @@ too: the first version of the case broke `registers modes, shortcuts, capabiliti
 
 Committed as `61450d9`, with a rule row in the front door.
 
+**And then confirmed where it was first reported.** Pushed as `491cc5b`, the compatibility workflow on master went green
+in 3m57s with **both** jobs passing - `test (locked)` in 3m54s and `test (latest)` in 2m50s. The `latest` job is the one
+that had been red, so the fix is verified against the real channel and not only against a scratch install of it.
+
 ## Two: a person's own request, through the CLI's own entry
 
 **The TUI itself cannot be driven here** - it needs a TTY, and this session has no PTY - so what follows is the next
