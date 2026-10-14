@@ -2,7 +2,9 @@
 
 ## Goal
 
-Measured on Pi 1.0.0: inside a provider-evidence record that still exists and still reports a positive message size, `systemPromptChars` is no longer positive.
+**已定位（2026-10-05）**：`--provider real` 的每次运行里 `providerEvidence` **必然为空** ✓ —— 写它的那个扩展只装在 faux 那条腿上（`scripts/real-dove-blackbox.mjs:110` ✓），而读取在 `:308` 是无条件的 ✓ ⇒ 在 real 路径上 `systemPromptChars` **根本没有写入者** ✗。所以任务开头那句"这个字段变成 0"**不成立** ✓：更早看到的那个读数来自 faux 路径 ✓。
+
+**要决定的**：给 real 路径也装记录器（**(a)**，换来一份外部交叉验证 ✓，代价是**记录器进入被测路径** ✗），还是不再依赖这个外部字段、把"这一轮提示词多大"交给产品自己的读数（**(b)**，`/status full` 的 `prompt=<n>` ✓，实测 `prompt=28340` ✓）。两条分支、各自的证据与一条建议见 `design.md` ✓；**选哪条是操作者的决定** ✓。
 
 ## 已定位（2026-10-05，另一次真跑给出答案 —— 见 `.trellis/tasks/10-05-turn-cost-readings/findings.md` §四）
 
@@ -29,7 +31,7 @@ Measured on Pi 1.0.0: inside a provider-evidence record that still exists and st
 
 - [ ] 明确选择 (a) 或 (b)，并把选择写进 R1/R2 对应验收。
 - [x] 根因已定位并带锚点（`real-dove-blackbox.mjs:95`），实测证据在仓外。
-- [ ] 本任务开头的目标句改写为已定位的事实，或按 (b) 关闭。
+- [x] 本任务开头的目标句已改写为已定位的事实（见 `## Goal` ✓）。
 
 ## Out of Scope
 

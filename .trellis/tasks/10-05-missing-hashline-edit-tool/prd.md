@@ -23,11 +23,20 @@ Measured: the extension's own status output prints that the current Pi host does
 
 ## Requirements
 
-- TBD
+- **R1 缺了哪一族编辑工具必须是一个读数** ✓：由扩展状态行的 `hashlineEditTools=present|absent` 满足 ✓（`extension.ts:1280`，读自 `hashlineEditTools` 的同一处判定 ✓）—— 本任务**不再为同一事实加第二个字段** ✓。
+- **R2 声明的包与包库不一致时，会话的行为必须被明确选定** ✓：**拒会话 (i)** 或 **加载并记录 (ii)** ✓。`design.md` 给出两条分支、各自的证据与一条建议 ✓；**选哪条是操作者的决定** ✓。
+- **R3 无论选哪条，不一致本身要被*指出*** ✓，而不是被默默留下 ✓（仓的教条：refused, never ignored ✓）。
+- **R4 结论落进规格** ✓（`personal-agent-field-run.md` 的携带清单旁 ✓），并带**可解析的锚点** ✓。
+- **R5 先红后绿** ✓：任何行为改动都要有**今天必红**的用例 ✓。
 
 ## Acceptance Criteria
 
-- [ ] TBD
+- [x] **缺了哪一族编辑工具是读数** ✓：`hashlineEditTools=absent|present` ✓，其用例已在 `tests/pi-adapter.test.ts` ✓。
+- [ ] **R2 的选择被写下来** ✓（(i) 或 (ii) ✓），并按所选分支落地 ✓。
+- [ ] 一条**今天必红**的用例 ✓：声明到场而包缺席时 —— (ii) 下读数**指名那个包** ✓；(i) 下会话**被拒且指名包与所查的 store** ✓。
+- [ ] 一条**对照**用例 ✓：声明与包库一致时，启动行**与今天逐字节相同** ✓。
+- [ ] `pentest`/`trading` 等模式与现有工具面用例**全部保持绿** ✓（(ii) 下不拒任何会话 ✓）。
+- [ ] 引文门保持全绿 ✓。
 
 ## Notes
 
