@@ -504,6 +504,55 @@ describe("the host loads the work mode (design 5.4: 'loaded by the host' is the 
 		}
 	});
 
+	it("says what a declared network axis does not reach, when the shell is still permitted", async () => {
+		// **A mode that loads successfully and cannot keep all of what it declared.** The specification is honest and the
+		// mode file is honest - `code-development`'s own MODE.md says `network: none` means no host network tool runs and
+		// not that the machine has no network - while the line a person reads at load said only what the mode denies.
+		// Measured 2026-10-04: under exactly this declaration a shell command ran `npm install`, which resolved and
+		// installed a new package version.
+		//
+		// Its own case and its own host, deliberately: a case that starts two hosts leaves the second one's hooks in
+		// place, which took the cases after it down. Measured 2026-10-14, on this case's first version.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-development");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-development" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const line = host.notifications.find((message) => /code-development loaded from modes\/code-development/.test(message));
+			assert.ok(line, "the mode loads, so nothing new refuses it: " + host.notifications.join(" | "));
+			assert.match(line, /the axis does not cover/i, "the load line says what the axis does not reach: " + line);
+			assert.match(line, /shell/i, "and names the shell, which this mode still permits: " + line);
+		} finally {
+			// **In a `finally`, and that is not tidiness.** `startHost` chdirs into the root it was given, and a working
+			// directory inside the temporary tree is a handle Windows will not delete - the file's `after` hook then fails
+			// with EPERM on this case's directory. Measured 2026-10-14: with the restore on the last line instead, this
+			// case's own red took the hook down with it.
+			host.restoreCwd();
+		}
+	});
+
+	it("does not claim a blind spot for a mode that denies the shell", async () => {
+		// **The control, and it is what makes the sentence mean something.** `code-audit` declares the same
+		// `network: none` and also denies bash and powershell, so the axis has nothing it cannot reach and the load line
+		// must not acquire the sentence. Without this, the first case would pass for a line that says the same thing
+		// about every mode.
+		const root = freshRoot();
+		process.env.DOVE_PI_FRAMEWORK_VERSION = "0.2.0";
+		copyMode(root, "code-audit");
+		declareMode(root, JSON.stringify({ schemaVersion: 1, mode: "code-audit" }));
+		const host = startHost(root);
+		try {
+			await host.events.get("session_start")?.({ type: "session_start" }, host.context);
+			const line = host.notifications.find((message) => /code-audit loaded from modes\/code-audit/.test(message));
+			assert.ok(line, "the control loads: " + host.notifications.join(" | "));
+			assert.doesNotMatch(line, /the axis does not cover/i, "a mode that denies the shell has no blind spot to report: " + line);
+		} finally {
+			host.restoreCwd();
+		}
+	});
+
 	it("refuses a declared mode when the framework version is unavailable, rather than comparing a different number", async () => {
 		const root = freshRoot();
 		delete process.env.DOVE_PI_FRAMEWORK_VERSION;

@@ -1278,6 +1278,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			// A field run on a real library had exactly that shape: one changed file, the target test still failing,
 			// and a test that had passed now broken, with nothing in the reading to say the tools were absent.
 			const hashlineEditText = `hashlineEditTools=${hashline ? "present" : "absent"}`;
+			// **The same fact the load line carries, in the line a reading is taken from.** The `full` detail below already
+			// lists `never_allow=`, but seeing what the network axis does not cover from it means knowing that the axis
+			// matches eight tool names and that the shell is not one of them. This says it, in the vocabulary the fence
+			// already uses for the same kind of fact (`shell: 'uncovered'`).
+			const shellPermitted = activeWorkMode !== undefined && (!activeWorkMode.permissions.never_allow.includes("bash") || !activeWorkMode.permissions.never_allow.includes("powershell"));
+			const networkAxisText = `networkAxis=${activeWorkMode?.sandbox?.network === "none" && shellPermitted ? "shell-uncovered" : "none"}`;
 			// A count of neither: the members are listed, because a number here would be a count of what the code declares.
 			const workModeDetail = !full
 				? ""
@@ -1334,7 +1340,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			const strategyText = full
 				? ` Strategy roles: /dove-workspace controls development or pentest launch policy; /mode controls execution intensity; /dove-mode controls context; /dove-thinking controls thinking policy; /dove-tools controls only explicit compatibility profile. ${formatStrategySnapshot(strategy)}.`
 				: "";
-			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, ${hashlineEditText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${ledgerDetail}${strategyText}${workModeDetail} ${detail}`, "info");
+			ctx.ui.notify(`Dove Pi: workspace=${workspacePolicy.mode}, ${workModeText}, ${hashlineEditText}, ${networkAxisText}, lens=${lensEnabledForWorkspaceMode(workspacePolicy.mode) ? "on-next-session" : "off-next-session"}, mode=${displayMode(mode.current)}, ${policyShort}, tools=${toolProfile}, hashline=${hashline ? "active" : "inactive"}, operation=${operation}, progress=${formatProgressSnapshot(progressGuard.snapshot())}.${cacheText}${ledgerDetail}${strategyText}${workModeDetail} ${detail}`, "info");
 		},
 	});
 
@@ -2486,8 +2492,18 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 						(fence.shell === "denied"
 							? "refuses bash and powershell, so the fence cannot be walked around."
 							: "declares shell: 'uncovered' - a bash or powershell command can still write into those paths.");
+			// **What the axis does not reach, said where the person already reads.** A mode that declares
+			// `sandbox.network: none` and keeps a shell is not making a false claim - the eight host network tools are
+			// refused at the tool boundary, which is what the declaration is about - but the line above reports only
+			// what the mode denies, so it read as a boundary around the machine. Measured 2026-10-04: under exactly this
+			// declaration a shell command ran `npm install`, which resolved and installed a new package version. The
+			// specification and the mode file both say so; this is the third place a person looks, and it said nothing.
+			const shellStillPermitted = !activeWorkMode.permissions.never_allow.includes("bash") || !activeWorkMode.permissions.never_allow.includes("powershell");
+			const networkAxisReport = activeWorkMode.sandbox?.network === "none" && shellStillPermitted
+				? " Its 'sandbox.network: none' is enforced at the tool boundary, and the axis does not cover a command run through the shell, which this mode still permits."
+				: "";
 			ctx.ui.notify(
-				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are refused, and ${activeWorkMode.permissions.ask_before.length} action(s) run only after you confirm them. A host without a dialog refuses those too.` + fenceReport,
+				`[Dove mode] ${activeWorkMode.id} loaded from modes/${selection.name} (${activeWorkMode.gateSemantics}, ${bound}): ${activeWorkMode.permissions.never_allow.length} denied action(s) are refused, and ${activeWorkMode.permissions.ask_before.length} action(s) run only after you confirm them. A host without a dialog refuses those too.` + fenceReport + networkAxisReport,
 				"info",
 			);
 		}

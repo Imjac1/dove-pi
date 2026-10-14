@@ -83,6 +83,12 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   harness's `paths`, which is how `authority`'s
   no-self-authored-authority rule (below) is enforced, and requires a `shell` stance because it cannot see
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
+  **Where the unkept part is reported.** A mode whose claims are partly enforceable **loads**, so nothing refuses it
+  and nothing else would say what was left out. The sentence belongs on the two lines a person and a reading already
+  use: the load line (`src/pi-adapter/extension.ts:2506`) and the status line's `networkAxis=none|shell-uncovered`
+  field (`src/pi-adapter/extension.ts:1286`). Measured 2026-10-14: `code-development` declares `network: none` and
+  keeps its shell, so it carries the sentence, while `code-audit` declares the same axis and denies bash and
+  powershell, so it does not - the pair is the case, because a sentence every mode got would say nothing.
   **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2289` (`loadWorkModeFromDirectory`), whose own fence refusals are in `src/core/work-mode.ts`.
 - **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
   and compared as locations: inside the workspace the relative form is produced first and wins, and a
