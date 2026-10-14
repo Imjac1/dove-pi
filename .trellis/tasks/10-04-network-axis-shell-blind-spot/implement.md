@@ -1,4 +1,13 @@
 # Implementation: the load line says what the mode could not enforce
+## Done when
+
+- [ ] 用例**先见红**：同时声明 `network: none` 与保留 shell 的模式**加载成功**，且启动行点名 **shell 不在该轴内**。
+- [ ] 对照：所有声明都可兑现的模式，启动行**与今天逐字节相同**。
+- [ ] `code-development` 仍能跑项目自己的测试（R2）—— 这是拒绝路径被否掉的原因。
+- [ ] `pentest`/`trading` 等模式**不因本改动被拒加载**。
+- [ ] `/status` 里同一事实的字段，与既有 `hashlineEditTools=` 并列。
+- [ ] 规格一句 + **可解析锚点**；引文门全绿。
+- [ ] 若编辑落在注册之上，mount 表**按声明重指**（不是按增量算）。
 
 ## Ordered checklist
 

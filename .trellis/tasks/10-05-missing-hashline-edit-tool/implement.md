@@ -1,4 +1,13 @@
 # Implementation: a declaration with nothing behind it is reported, not hidden
+## Done when
+
+- [x] 缺了哪一族编辑工具是读数 ✓（`hashlineEditTools=present|absent`，用例已在 `tests/pi-adapter.test.ts`）。
+- [ ] **操作者选定 (i) 或 (ii)**，并把它写进本任务的 prd 与 design。
+- [ ] 用例**先见红**：声明到场而包缺席时 —— (ii) 下读数**指名那个包**；(i) 下会话**被拒且指名包与所查的 store**。
+- [ ] 对照：声明与包库一致时，启动行**与今天逐字节相同**。
+- [ ] (ii) 下**不拒任何会话**；(i) 下 **runner 的携带清单不触发拒绝**（那是运行的配置，不是人的配置）。
+- [ ] `personal-agent-field-run.md` 一句 + **可解析锚点**。
+- [ ] 门全绿。
 
 Depends on the operator's choice in `design.md`: the checklist below is the recommended branch **(ii) load and record**.
 Under **(i) refuse the session** steps 3 and 4 become the refusal beside `extension.ts:2420`, and step 2's case asserts

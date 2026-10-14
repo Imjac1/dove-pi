@@ -1,4 +1,12 @@
 # Implementation: remove the declared field with no writer, or give it one
+## Done when
+
+- [x] 目标句已改写为已定位的事实（`## Goal` ✓）。
+- [ ] 用例**先见红**：real 路径产出的 summary 不再呈现一个该路径填不了的字段。
+- [ ] `/status full` 的 `prompt=<n>` 有自己的用例 —— 它成为该主题**唯一**的读数，不能是唯一没有用例的那个。
+- [ ] 对照：faux 路径的 summary 与证据**逐字节不变**（确定性套件已在断言它）。
+- [ ] `personal-agent-field-run.md` 写明：证据记录带什么、为什么**不含**那个外部字段、大小在哪里读。
+- [ ] 门全绿：`npm test` · `spec-anchors` · `document-drift` · `task-artifact-lint --assert-corpus`。
 
 Depends on the operator's choice in `design.md`. The checklist below is the recommended branch **(b) drop the external
 field**; under **(a) record on the real path too**, step 2 becomes "install the capture extension for both providers" and
