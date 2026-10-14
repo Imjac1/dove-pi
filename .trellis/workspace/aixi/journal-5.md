@@ -1227,3 +1227,72 @@ The session resumed this task mid-edit - a half-finished prompt clause and a pla
 ### Status
 
 [OK] **Completed**
+
+
+## Session 247: Three customer passes, the TUI driven, and three releases
+<!-- trellis-session: v=2 fp=f7724f95e826ce03 -->
+
+**Date**: 2026-10-14
+**Task**: Three customer passes, the TUI driven, and three releases
+**Branch**: `master`
+
+### Summary
+
+This session finished the whole-flow task and then tested the result the way a customer meets it. It began by
+completing the task itself: the fourteenth field run settled the question the thirteenth had left open, that the flow
+completes on the shipped default of three attempts rather than only on a raised budget, and the task was archived with
+its readings, its recipe and its pre-registrations. Then three customer-path passes on the installed build, each one the
+customer's own two steps - install from the published release, then the whole flow through the managed launcher on the
+graded clone. All three: four steps settled, terminal completed, the project's own suite from one failure to 116 passed,
+the judging instrument byte-identical, the formal task archived, and the source clone untouched at its three pinned byte
+counts. Three further attempts did not count and are recorded as what they were - a dead provider window, a run that
+finished the work and burned its budget on rounds measured at 337 and 168 seconds, and a run that finished the work, hit
+the retry bound and then hung in shutdown. The passes found two defects, both fixed. The copy of the project is not a
+fence: the agent learned the source clone's absolute path from a __pycache__ file its own copy carried, because measuring
+the baseline in place writes exactly those caches, and it ran 23 commands against the original with git stash among them;
+the clone was restored from a read-only scenario copy and the recipe gained the step. And a shell command the aggregate
+rule did not recognise had no timeout at all, which lost a whole run to one find across the whole filesystem while the
+ledger accurately recorded that nothing bounded it - every shell command now gets a ceiling, and the fix was exercised in
+the field before the passes were done, cutting the same command shape at exactly 900 seconds and letting the run continue.
+Alongside those: the suite stopped leaking its temporary workspaces (92 per run to 0, and 49,135 stale directories
+cleared), the convergence tool's acceptanceId learned to say which kind of id it takes, the jailer's two cases learned to
+skip only where a machine cannot hold a boundary rather than where one was violated, and the blackbox runner learned to
+find the faux provider wherever npm actually put it - which is what unblocked CI after a month without a run on master.
+The repository gained an Apache-2.0 licence with the notice the licence asks for, and the archive now carries it, and it
+gained three releases: 0.2.1 for the tag rule, 0.2.2 for the ceiling, and 0.2.3 for the compatibility fix. That fix came
+from the compatibility matrix going red overnight: the latest Pi split before_agent_start into a union so prompt exists on
+one variant and not the other, which was a typecheck failure against that channel and a throw before any of Dove's work
+started - verified the way the matrix does it and then confirmed by the matrix itself, green on both jobs. Last, the TUI
+was driven, which no pass had done: winpty refused without a console to attach to, so a node-pty ConPTY driver typed a
+958-character request into a real TUI session in a copy of the graded clone, and the work got done - the suite from one
+failure to 116 passed with the instrument untouched, and six megabytes of transcript holding what a person would have
+watched. Three times in this session text was mangled by a command line, once cutting a request at its first space so the
+model received a single word, which is the same lesson this repository had already written down twice.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `91977d9` | ﻿docs(task): the TUI driven, and 0.2.3 published |
+| `479c1fc` | ﻿chore(release): 0.2.3 |
+| `3967638` | ﻿docs(task): the compatibility fix, confirmed where it was first reported |
+| `491cc5b` | ﻿docs(task): the two open questions, answered and fixed |
+| `61450d9` | ﻿fix(pi-adapter): read the prompt from either shape the host's event has, so the latest channel works |
+| `11dcf52` | ﻿chore(release): 0.2.2 |
+| `07695b9` | ﻿docs(task): three customer-path passes, and the two defects they found |
+| `d16af78` | ﻿fix(pi-adapter): a shell command the aggregate rule does not recognise is bounded too |
+| `8aa89c7` | ﻿docs(field-run): the copy of the project is a convenience, not a fence, and a cache was the way out |
+| `e0d4e52` | ﻿fix(jailer): a machine that cannot hold the boundary is not the same reading as a boundary that was violated |
+| `b8359d1` | ﻿fix(blackbox): find the faux provider wherever npm actually put it, not where my machine kept it |
+| `e18d197` | ﻿chore(license): Apache-2.0, and the archive now carries it |
+| `f72d7b4` | ﻿chore(release): 0.2.1 |
+| `ba2a8b8` | ﻿test(blackbox): the case that deliberately makes a directory in the temp root removes it too |
+| `11efe92` | ﻿test: the suite removes the temporary workspaces it makes, and one run stops leaking 92 directories |
+| `cd10d44` | ﻿docs(task): the acceptance-id defect is fixed in the same round it was measured, and the flake is recorded |
+| `db1f6e7` | ﻿fix(pi-adapter): the acceptance id says which kind of id it takes, and the refusal says the same |
+| `6833b25` | ﻿docs(task): the fourteenth run - the flow completes on the default budget too |
+| `516a1bf` | ﻿docs(task): the fourteenth run asks the question the thirteenth left open |
+
+### Status
+
+[OK] **Completed**
