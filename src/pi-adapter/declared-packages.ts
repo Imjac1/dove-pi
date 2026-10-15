@@ -2,13 +2,13 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * A package `settings.json` declares with nothing behind it in the store Pi resolves from.
+ * A package `settings.json` declares that none of the stores this runtime can name has.
  *
  * **This is the fact the extension used to get wrong.** Its warning about the missing hashline family said the current
  * Pi host does not provide those tools, and the measurement on 2026-10-05 corrected it: the host provides them, and what
  * was missing was the agent directory's package store - the declaration travels in `settings.json`, the package does
- * not, so a session whose agent directory holds a declaration and no store loads none of them. A message that names the
- * declaration it can see is unsatisfied is a message a reader can act on; one that blames the host is not.
+ * not. A message that names the declaration it can see is unsatisfied is a message a reader can act on; one that blames
+ * the host is not.
  */
 export interface MissingDeclaredPackage {
 	/** The declaration as written, e.g. `npm:pi-hashline-edit-pro@2.7.0`. */
@@ -17,16 +17,53 @@ export interface MissingDeclaredPackage {
 	readonly name: string;
 }
 
+export interface DeclaredPackageReport {
+	/** Every store that was searched, in the order it was searched, for the message to name. */
+	readonly checkedStores: readonly string[];
+	readonly missing: readonly MissingDeclaredPackage[];
+}
+
 /**
- * Where an `npm:` declaration is resolved from, relative to the agent directory.
+ * The stores to search, and **the reason this list is a union rather than one path.**
  *
- * **Measured, not read from an API.** The host keeps its own npm root private (`PackageManager` has a private
- * `globalNpmRoot` and no exported accessor), so this path was taken from an installed tree on 2026-10-14: the agent
- * directory holds `npm/node_modules/`, with both plain (`pi-open-tui`) and scoped (`@juicesharp/...`) package
- * directories in it. If a host release moves it, the symptom is this function reporting nothing missing - which is why
- * the message names the store it looked in rather than asserting the package is absent from every store there is.
+ * The host resolves an `npm:` declaration from more than one place: the managed store under the agent directory, the
+ * project store under the project, and - for a user-scope declaration whose managed path does not exist - a legacy
+ * global store (`PackageManager`: `getManagedNpmInstallPath`, `getLegacyGlobalNpmInstallPath`, and `getNpmInstallPath`
+ * choosing between them). Its own resolver is **private**, so this module cannot ask where a given declaration resolved.
+ * Measured 2026-10-14 on the machine that wrote this: a first version searched only the managed store, and would have
+ * told a person their declaration had nothing behind it while the package sat in the global root, which exists and is
+ * not empty. That is the failure this whole message exists to remove, so the list is a union and the message reports
+ * **what was searched** rather than asserting the package is absent everywhere.
+ *
+ * `SettingsManager.getPackages()` cannot narrow this down either: it returns the user and project declarations **merged**,
+ * and `PackageSource` carries no scope field, so a declaration cannot be attributed to one store.
  */
-export const NPM_STORE_FROM_AGENT_DIR = join("npm", "node_modules");
+export function npmStoreCandidates(agentDir: string, cwd: string): readonly string[] {
+	const stores = [
+		// The managed user-scope store, which is the one a run's own agent directory is given.
+		join(agentDir, "npm", "node_modules"),
+		// The project-scope store, which the host reads when the project is trusted.
+		join(cwd, ".pi", "npm", "node_modules"),
+	];
+	const legacy = legacyGlobalStore();
+	if (legacy !== undefined) stores.push(legacy);
+	return stores;
+}
+
+/**
+ * The legacy global store, from what the environment says without running anything.
+ *
+ * The host reads this by asking npm (`getGlobalNpmRoot`), which is a subprocess this warning is not worth. A configured
+ * prefix is what npm itself would use; `%APPDATA%\npm\node_modules` is where Windows puts a global install when no
+ * prefix was set. Both are **widenings**: a package found in either stops the warning, and a store the host would also
+ * have searched but this function cannot name simply means the message says less, never something false.
+ */
+function legacyGlobalStore(): string | undefined {
+	const prefix = process.env.npm_config_prefix ?? process.env.NPM_CONFIG_PREFIX;
+	if (prefix !== undefined && prefix.length > 0) return join(prefix, "node_modules");
+	const appData = process.env.APPDATA;
+	return appData !== undefined && appData.length > 0 ? join(appData, "npm", "node_modules") : undefined;
+}
 
 /**
  * The package name a declaration names, or `undefined` for a declaration that is not ours to resolve.
@@ -45,16 +82,18 @@ export function npmPackageNameOf(declaration: string): string | undefined {
 }
 
 /**
- * The declared packages the store does not have.
+ * The declared packages that none of {@link npmStoreCandidates} has.
  *
- * Empty means the declarations and the store agree, which is also what an agent directory with no declarations
- * reports - so a caller must not read an empty result as *the store has everything you might have declared*.
+ * An empty `missing` means the declaration and the stores that could be searched agree, which is also what an agent
+ * directory with no declarations reports - so a caller must not read it as *everything you might have declared is
+ * installed*.
  */
 export function declaredPackagesMissingFromStore(
 	agentDir: string,
+	cwd: string,
 	packages: readonly (string | { source?: string })[],
-): readonly MissingDeclaredPackage[] {
-	const store = join(agentDir, NPM_STORE_FROM_AGENT_DIR);
+): DeclaredPackageReport {
+	const checkedStores = npmStoreCandidates(agentDir, cwd);
 	const missing: MissingDeclaredPackage[] = [];
 	for (const entry of packages) {
 		const declaration = typeof entry === "string" ? entry : entry?.source;
@@ -62,7 +101,8 @@ export function declaredPackagesMissingFromStore(
 		const name = npmPackageNameOf(declaration);
 		if (name === undefined) continue;
 		// A scoped name is two path segments; `join` handles both that and a plain name.
-		if (!existsSync(join(store, ...name.split("/")))) missing.push({ declaration, name });
+		const segments = name.split("/");
+		if (!checkedStores.some((store) => existsSync(join(store, ...segments)))) missing.push({ declaration, name });
 	}
-	return missing;
+	return { checkedStores, missing };
 }

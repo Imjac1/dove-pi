@@ -932,6 +932,24 @@ export function matchesPermission(list: readonly string[], action: string): bool
 }
 
 /**
+ * Whether a shell command can still run under this mode's declaration.
+ *
+ * **One function, because this was two expressions and both were wrong.** The line a mode's load prints and the status
+ * field beside it each decided this with `never_allow.includes("bash")`, which is neither of the two ways this runtime
+ * refuses a shell: `never_allow` is read through {@link matchesPermission}, so `"*"`, `"bash*"` and `"b*"` all deny it,
+ * and a mode declaring `fence.shell: denied` refuses both shells with **no** permission entry at all. Measured
+ * 2026-10-14 against the real loader and the real policy: with `never_allow: ["*"]` the runtime blocked both shells while
+ * the load line read *which this mode still permits*, and with `fence.shell: denied` the same notification contained both
+ * *refuses bash and powershell* and that clause - a string contradicting itself.
+ *
+ * Either shell suffices, so a permission list must name **both** to close the route; the fence closes both at once.
+ */
+export function shellRoutesOpen(mode: Pick<WorkMode, "permissions" | "fence">): boolean {
+	const bothDenied = matchesPermission(mode.permissions.never_allow, "bash") && matchesPermission(mode.permissions.never_allow, "powershell");
+	return !bothDenied && mode.fence?.shell !== "denied";
+}
+
+/**
  * Permission precedence, and the mode's own answer for everything the lists do not mention. `never_allow` wins
  * over `always_allow`, over `ask_before`, and over any mode setting - a deny list that a mode can override is not
  * a deny list.

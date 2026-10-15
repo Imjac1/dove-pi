@@ -23,7 +23,7 @@ import { inspectWebAccessReadiness, writeWebSearchConfig } from "../web-access/c
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
 import { discoverAllSkills } from "../skills/discovery.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts";
-import { declaredPackagesMissingFromStore, NPM_STORE_FROM_AGENT_DIR } from "./declared-packages.ts";
+import { declaredPackagesMissingFromStore } from "./declared-packages.ts";
 import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
 import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 import { formatProgressSnapshot, ProgressGuard, type ProgressRunOptions } from "./progress-guard.ts";
@@ -66,7 +66,7 @@ import { createEffectBoundary, type EffectBoundary } from "../core/effect-bounda
 import { admit } from "../core/context-admission.ts";
 import { createFileEffectStore, listUnresolvedClaims } from "../core/effect-store-file.ts";
 import { preflightAuthority, type AuthorityDocument } from "../core/authority.ts";
-import { loadWorkModeFromDirectory, resolveWorkModeSelection, workModeRefusal, enforceableSandboxClaims, formatSandboxClaim, unenforceableSandboxClaims, type WorkMode } from "../core/work-mode.ts";
+import { loadWorkModeFromDirectory, resolveWorkModeSelection, shellRoutesOpen, workModeRefusal, enforceableSandboxClaims, formatSandboxClaim, unenforceableSandboxClaims, type WorkMode } from "../core/work-mode.ts";
 import { resolveActionIdentity } from "./action-identity.ts";
 import { projectModelMessages } from "./context-projection.ts";
 
@@ -1283,8 +1283,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			// lists `never_allow=`, but seeing what the network axis does not cover from it means knowing that the axis
 			// matches eight tool names and that the shell is not one of them. This says it, in the vocabulary the fence
 			// already uses for the same kind of fact (`shell: 'uncovered'`).
-			const shellPermitted = activeWorkMode !== undefined && (!activeWorkMode.permissions.never_allow.includes("bash") || !activeWorkMode.permissions.never_allow.includes("powershell"));
-			const networkAxisText = `networkAxis=${activeWorkMode?.sandbox?.network === "none" && shellPermitted ? "shell-uncovered" : "none"}`;
+			// **Three states, because two of them were conflated.** `none` used to mean both *no mode is loaded* and *the
+			// mode's network axis reaches its shell*, so the field could not be read on its own. The shell question is
+			// asked of the one function that answers it the way the runtime does (`shellRoutesOpen`, which reads the
+			// wildcard rule and the fence stance) rather than of a second copy of that expression, which is how the load
+			// line and this field came to agree with each other and disagree with the runtime.
+			const networkAxisText = `networkAxis=${activeWorkMode === undefined ? "unloaded" : activeWorkMode.sandbox?.network !== "none" ? "none" : shellRoutesOpen(activeWorkMode) ? "shell-uncovered" : "none"}`;
 			// A count of neither: the members are listed, because a number here would be a count of what the code declares.
 			const workModeDetail = !full
 				? ""
@@ -2367,11 +2371,11 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			// rather than inventing a cause - because "the host does not provide it" was a claim this code had no way to
 			// check, which is the shape of wrong this repository keeps finding.
 			const agentDir = getAgentDir();
-			const missingDeclared = declaredPackagesMissingFromStore(agentDir, SettingsManager.create(ctx.cwd, agentDir).getPackages());
+			const declared = declaredPackagesMissingFromStore(agentDir, ctx.cwd, SettingsManager.create(ctx.cwd, agentDir).getPackages());
 			ctx.ui.notify(
-				missingDeclared.length > 0
-					? `当前 Pi 的工具面里没有 hashline 编辑工具（replace/insert/undo）：settings.json 声明了 ${missingDeclared.map((entry) => entry.name).join("、")}，而包库（${NPM_STORE_FROM_AGENT_DIR}）里没有它们 —— 声明到场而包缺席时，那一条也加载不了。`
-					: `当前 Pi 的工具面里没有 hashline 编辑工具（replace/insert/undo），而按 settings.json 的声明去包库查并没有缺的包 —— 所以原因不在声明上。为保证跨环境一致，建议升级 Pi 或执行 dove-pi install。`,
+				declared.missing.length > 0
+					? `当前 Pi 的工具面里没有 hashline 编辑工具（replace/insert/undo）：settings.json 声明了 ${declared.missing.map((entry) => entry.name).join("、")}，而这次会话查过的包库（${declared.checkedStores.join("、")}）里都没有它 —— 声明到场而包缺席时，那一条也加载不了。`
+					: `当前 Pi 的工具面里没有 hashline 编辑工具（replace/insert/undo），而按 settings.json 的声明去这次会话查得动的包库看，并没有缺的包 —— 所以原因不在声明上。为保证跨环境一致，建议升级 Pi 或执行 dove-pi install。`,
 				"warning",
 			);
 		}
@@ -2513,7 +2517,7 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			// what the mode denies, so it read as a boundary around the machine. Measured 2026-10-04: under exactly this
 			// declaration a shell command ran `npm install`, which resolved and installed a new package version. The
 			// specification and the mode file both say so; this is the third place a person looks, and it said nothing.
-			const shellStillPermitted = !activeWorkMode.permissions.never_allow.includes("bash") || !activeWorkMode.permissions.never_allow.includes("powershell");
+			const shellStillPermitted = shellRoutesOpen(activeWorkMode);
 			const networkAxisReport = activeWorkMode.sandbox?.network === "none" && shellStillPermitted
 				? " Its 'sandbox.network: none' is enforced at the tool boundary, and the axis does not cover a command run through the shell, which this mode still permits."
 				: "";

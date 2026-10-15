@@ -285,6 +285,11 @@ child.on("close", (code, signal) => {
     .map((step) => step.index);
   const terminalByStep = new Map(requestStepIndexes.map((index, position) => [index, terminals[position]]));
   const planByStep = new Map(requestStepIndexes.map((index, position) => [index, plans[position]]));
+  // **The gap is read from the record, not from the fact that a recorder was installed.** A first version derived it
+  // from the installation alone, so it kept saying the recorder cannot measure the prompt whether or not an entry had
+  // actually arrived without the key - a constant wearing the shape of a measurement, which is the defect this task is
+  // about. It is emitted only when an entry really did omit the size.
+  const providerEvidenceEntries = providerExtension === undefined ? undefined : readProviderEvidence(providerCapturePath);
   const summary = {
     caseId, scenarioSessionKey, cwd: workspaceRoot, outputPath, runLogPath, scenarioRoot, sessionDir, stateDir,
     launcher, providerMode, dialogCase, carriedConfig,
@@ -305,7 +310,7 @@ child.on("close", (code, signal) => {
     resourceObservation: lastResourceObservation ? redactResourceObservation(lastResourceObservation) : undefined,
     rpcFailure: rpcFailure ? { message: undefined, terminal: rpcFailure.terminal } : undefined,
     diagnosticGap: rpcFailure && rpcCode !== ledgerCode ? "rpc-error-not-preserved-in-ledger" : undefined,
-    ledgerTerminals: terminals.map(redactLedgerTerminal), providerEvidence: providerExtension === undefined ? undefined : readProviderEvidence(providerCapturePath), providerEvidenceGap: providerExtension === undefined ? "no-recorder-installed-for-the-real-provider" : "recorder-cannot-measure-the-system-prompt", providerIdentity: readProviderIdentity(providerIdentityCapturePath), subagentEvidence: readSubagentEvidence(subagentCapturePath),
+    ledgerTerminals: terminals.map(redactLedgerTerminal), providerEvidence: providerEvidenceEntries, providerEvidenceGap: providerEvidenceEntries === undefined ? "no-recorder-installed-for-the-real-provider" : providerEvidenceEntries.some((entry) => entry.systemPromptChars === undefined) ? "recorder-cannot-measure-the-system-prompt" : undefined, providerIdentity: readProviderIdentity(providerIdentityCapturePath), subagentEvidence: readSubagentEvidence(subagentCapturePath),
     artifactEvidence: readArtifactEvidence(workspaceRoot),
     terminalConsistency: harnessTimedOut ? "harness-timeout" : rpcFailure && rpcCode !== ledgerCode ? "mismatch" : lastTerminal ? "completed-ledger-only" : "none",
     closeWaitMs: closeStartedAt ? Date.now() - closeStartedAt : undefined,

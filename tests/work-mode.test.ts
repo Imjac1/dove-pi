@@ -21,7 +21,9 @@ import {
 	enforceableSandboxClaims,
 	formatSandboxClaim,
 	sandboxClaimsOf,
+	shellRoutesOpen,
 	unenforceableSandboxClaims,
+	type WorkMode,
 	type WorkModeFiles,
 	type WorkModeSelection,
 } from "../src/core/work-mode.ts";
@@ -748,6 +750,33 @@ describe("the fence", () => {
 		assert.deepEqual(sandboxClaimsOf(undefined), [], "a mode that says nothing about its sandbox makes no claim to judge");
 		// A value the table does not know is refused rather than waved through: no one can say what the host would do about it.
 		assert.equal(unenforceableSandboxClaims({ network: "tunnel" as never }).length, 1);
+	});
+});
+
+describe("the shell route question", () => {
+	/** A mode with only the two fields the question is asked of. */
+	const mode = (never_allow: string[], fence: "denied" | "uncovered" | undefined): Pick<WorkMode, "permissions" | "fence"> => ({
+		permissions: { unlisted: "allow", never_allow, always_allow: [], ask_before: [] },
+		fence: fence === undefined ? undefined : { paths: [], shell: fence },
+	});
+
+	it("answers the two ways this runtime refuses a shell, not the two names it used to look for", () => {
+		// **Measured 2026-10-14 against the real loader and the real policy, after a verifier falsified the first
+		// version.** The load line and the status field each decided this with `never_allow.includes("bash")`, so the
+		// shapes below produced a notification reading *which this mode still permits* while the runtime blocked every
+		// shell - and the fence shape contradicted itself inside one string, because the fence report in the same line
+		// already says the mode refuses bash and powershell.
+		//
+		// The wildcard is this format's own rule (`matchesPermission`: a trailing `*` is a prefix), so `"*"` denies both
+		// shells without naming either, and a fence that denies the shell needs no permission entry at all.
+		assert.equal(shellRoutesOpen(mode(["*"], undefined)), false, "a blanket deny closes the shell route");
+		assert.equal(shellRoutesOpen(mode(["bash*", "power*"], undefined)), false, "so does a pair of prefixes");
+		assert.equal(shellRoutesOpen(mode([], "denied")), false, "and a fence that denies the shell closes it with no permission entry");
+		// **Either shell suffices**, which is why a list must name both: naming one leaves the route open, and that is what
+		// the shipped `code-development` does - the reason its load line carries the sentence at all.
+		assert.equal(shellRoutesOpen(mode(["bash"], undefined)), true, "one denied shell does not close the route");
+		assert.equal(shellRoutesOpen(mode(["web.*"], undefined)), true, "and a deny list about something else does not either");
+		assert.equal(shellRoutesOpen(mode([], "uncovered")), true, "a fence that declares the shell uncovered still permits it");
 	});
 });
 

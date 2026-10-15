@@ -232,6 +232,56 @@ describe("Pi adapter", () => {
 		}
 	});
 
+	it("does not call a package missing while the project store has it", async () => {
+		// **A verifier's counterexample, kept as a case.** The first version of this check searched one store - the managed
+		// user one - while the host also resolves a project-scope declaration from the project's own store, so a person
+		// whose package was installed there would have been told their declaration had nothing behind it. That is the exact
+		// failure this message exists to remove, and it was measured on 2026-10-14 rather than imagined: the host's own
+		// resolver is private, and it chooses between at least three stores.
+		const agentDir = mkdtempSync(join(tmpdir(), "pi-adapter-project-store-"));
+		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		try {
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: ["npm:pi-hashline-edit-pro@2.7.0"] }), "utf8");
+			mkdirSync(join(agentDir, ".pi", "npm", "node_modules", "pi-hashline-edit-pro"), { recursive: true });
+			const notifications = await sessionStartNotifications(agentDir);
+			const warning = notifications.find((message) => /hashline/.test(message));
+			assert.ok(warning, "the missing family is still announced: " + JSON.stringify(notifications));
+			assert.doesNotMatch(warning, /pi-hashline-edit-pro/, "a package the project store has is not called missing: " + warning);
+		} finally {
+			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+			rmSync(agentDir, { recursive: true, force: true });
+		}
+	});
+
+	it("does not call a package missing while the legacy global store has it", async () => {
+		// The host falls back to a legacy global store for a user-scope declaration whose managed path is empty
+		// (`getNpmInstallPath`), and that is where a plain global npm install puts things - this machine has one and it is
+		// not empty. The store is read from a configured prefix, and failing that from the platform's own location.
+		const agentDir = mkdtempSync(join(tmpdir(), "pi-adapter-legacy-store-"));
+		const prefix = mkdtempSync(join(tmpdir(), "pi-adapter-prefix-"));
+		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+		const previousPrefix = process.env.npm_config_prefix;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		process.env.npm_config_prefix = prefix;
+		try {
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: ["npm:pi-hashline-edit-pro@2.7.0"] }), "utf8");
+			mkdirSync(join(prefix, "node_modules", "pi-hashline-edit-pro"), { recursive: true });
+			const notifications = await sessionStartNotifications(agentDir);
+			const warning = notifications.find((message) => /hashline/.test(message));
+			assert.ok(warning, "the missing family is still announced: " + JSON.stringify(notifications));
+			assert.doesNotMatch(warning, /pi-hashline-edit-pro/, "a package the legacy global store has is not called missing: " + warning);
+		} finally {
+			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+			if (previousPrefix === undefined) delete process.env.npm_config_prefix;
+			else process.env.npm_config_prefix = previousPrefix;
+			rmSync(agentDir, { recursive: true, force: true });
+			rmSync(prefix, { recursive: true, force: true });
+		}
+	});
+
 	it("advises on a long conversation through the handler, and only that guard fires", async () => {
 		// **The turn cap is wired and this holds the wiring.** A case of its own, for the same reason as the one
 		// below: every notice is one-shot per `extension(api)` call. And it stages a small prefix on purpose, so

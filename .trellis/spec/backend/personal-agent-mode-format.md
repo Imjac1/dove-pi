@@ -85,10 +85,15 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
   **Where the unkept part is reported.** A mode whose claims are partly enforceable **loads**, so nothing refuses it
   and nothing else would say what was left out. The sentence belongs on the two lines a person and a reading already
-  use: the load line (`src/pi-adapter/extension.ts:2506`) and the status line's `networkAxis=none|shell-uncovered`
-  field (`src/pi-adapter/extension.ts:1286`). Measured 2026-10-14: `code-development` declares `network: none` and
-  keeps its shell, so it carries the sentence, while `code-audit` declares the same axis and denies bash and
-  powershell, so it does not - the pair is the case, because a sentence every mode got would say nothing.
+  use: the load line (`src/pi-adapter/extension.ts:2525`) and the status line's
+  `networkAxis=unloaded|none|shell-uncovered` field (`src/pi-adapter/extension.ts:1291`). **Whether a shell route is
+  actually open is a question for `shellRoutesOpen`** (`src/core/work-mode.ts`), which reads `never_allow` through the
+  wildcard rule and the fence's own shell stance; a first version looked for the two names `bash` and `powershell`
+  instead, so `never_allow` `["*"]` and a `fence.shell: denied` each produced a line claiming the mode still permits a
+  shell while the runtime blocked every one - and the fence shape contradicted itself inside the same notification, whose
+  fence clause says the mode refuses both. Measured 2026-10-14 and held by `tests/work-mode.test.ts`: `code-development`
+  declares `network: none` and leaves both shells open, so it carries the sentence, while `code-audit` denies both and
+  does not - the pair is the case, because a sentence every mode got would say nothing.
   **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2289` (`loadWorkModeFromDirectory`), whose own fence refusals are in `src/core/work-mode.ts`.
 - **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
   and compared as locations: inside the workspace the relative form is produced first and wins, and a
