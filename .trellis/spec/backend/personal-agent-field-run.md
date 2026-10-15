@@ -155,9 +155,22 @@ A field run does **not** cover, and must not be cited as covering:
   not part of it.
 - **Real provider rate limiting and network variance.** A single run samples one path through one endpoint.
 - **Dialogs other than `confirm`.** The harness cannot reach the rest unattended.
-- **`providerEvidence`.** It is empty for a real provider **by construction**: the capture is written inside the
-  faux provider, so a real run has no such entries. A reader who expects them is expecting something this mode
-  cannot produce.
+- **`providerEvidence`, and the size it cannot measure.** The capture is written inside the faux provider, so the
+  summary reports evidence **only where a recorder is installed**: under `--provider faux` it carries one entry per
+  provider round, and under a real provider the field is **absent** rather than an empty list - `[]` reads as *we looked
+  and found nothing*, when the truth is *there is no recorder on this path*. `providerEvidenceGap` says which of the two
+  happened: `no-recorder-installed-for-the-real-provider`, or `recorder-cannot-measure-the-system-prompt`. The second is
+  the state measured on 2026-10-14: the host no longer hands the provider a `systemPrompt` string - Pi 1.0 carries the
+  system prompt as the first `role: "system"` message instead - so the recorder's ternary wrote a constant `0`, and the
+  entry now **omits the key** rather than reporting a number it did not measure.
+  **Read the size from the product instead**: `/status full` prints `prompt=<n>` for the prompt this adapter actually
+  assembled (`src/core/strategy-snapshot.ts:192`, fed by `src/pi-adapter/extension.ts:1071`), and
+  `tests/host-work-mode.test.ts` holds that reading with its own case.
+  Wrong: `providerEvidence: []` for a real run, and `systemPromptChars: 0` beside `messageChars: 23129` - an absent
+  recorder and a written-by-ternary zero, both shaped like measurements. Correct: the field absent with a named gap, and
+  an entry that carries only what was measured. Both halves are held by `tests/real-dove-blackbox.test.ts`: the
+  real-provider case asserts the absence and the gap, the faux case asserts the entry is present and carries no
+  unmeasured size.
 
 ### 6. Tests Required
 

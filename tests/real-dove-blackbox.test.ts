@@ -20,6 +20,7 @@ describe("real Dove Pi black-box harness", () => {
 				ledgerTerminal?: { terminal?: { origin?: string; code?: string } };
 				terminalConsistency?: string;
 				providerEvidence?: Array<{ model?: string; systemPromptChars?: number; messageCount?: number; messageChars?: number; toolCount?: number }>;
+				providerEvidenceGap?: string;
 				diagnosticGap?: string;
 				prompt?: string;
 				promptDigest?: string;
@@ -31,6 +32,13 @@ describe("real Dove Pi black-box harness", () => {
 			assert.equal(summary.diagnosticGap, "rpc-error-not-preserved-in-ledger");
 			assert.equal(summary.prompt, undefined);
 			assert.match(summary.promptDigest ?? "", /^[a-f0-9]{24}$/);
+			// **A field that reads as a measurement and is not one.** The capture extension is installed only for the
+			// faux provider, so on this path nothing writes the capture at all - and the summary used to report the
+			// empty result as `[]`, which reads as *we looked and found nothing* rather than *there is no recorder on
+			// this path*. Measured 2026-10-14 on exactly this scenario: `providerEvidence: []` and no other field
+			// saying why. The reader is sent to the product's own reading, which is `/status full`'s `prompt=<n>`.
+			assert.equal(summary.providerEvidence, undefined, "with no recorder installed there is no evidence to report, so none is reported");
+			assert.equal(summary.providerEvidenceGap, "no-recorder-installed-for-the-real-provider");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -53,6 +61,7 @@ describe("real Dove Pi black-box harness", () => {
 				sawSettled?: boolean;
 				terminalConsistency?: string;
 				providerEvidence?: Array<{ model?: string; systemPromptChars?: number; messageCount?: number; messageChars?: number; toolCount?: number }>;
+				providerEvidenceGap?: string;
 				providerIdentity?: Array<{ entryKind?: string; doveExtensionOrigin?: string; doveExtensionTrust?: string }>;
 			};
 			assert.equal(summary.providerMode, "faux");
@@ -67,14 +76,19 @@ describe("real Dove Pi black-box harness", () => {
 			assert.equal(summary.providerEvidence?.length, 1);
 			assert.equal(summary.providerEvidence?.[0]?.model, "blackbox");
 			assert.ok((summary.providerEvidence?.[0]?.messageChars ?? 0) > 0);
-			// **Measured on Pi 1.0.0: the system-prompt size is no longer reported.** The neighbouring assertions still
-			// pass - the record exists, its model is right, its message size is positive - so what changed is one field
-			// inside a record that otherwise survived, which is the shape of loss this repository keeps having to find
-			// and will not paper over with a relaxed number. The assertion is degraded to "the record is still there",
-			// and the missing number is recorded as a limitation in this task's readings with its root cause **not
-			// located rather than guessed at**. Note the collector here may itself be the thing that lost the field
-			// silently, which would make this the same defect class inside our own instrument.
+			// **Measured 2026-10-14: the root cause is located, and this note replaces the one that said it was not.**
+			// The field used to be read as *the system-prompt size is no longer reported*, with the cause unknown, and
+			// the note here even wondered whether our own collector had lost it silently. It had not lost a field. The
+			// host no longer hands the provider a `systemPrompt` string - Pi 1.0 carries the system prompt as the first
+			// message instead, which this run's own event stream shows as `message_start` with `role: "system"` - so
+			// the recorder's ternary took its else branch and wrote a constant zero. **A zero written by a ternary is
+			// not a measurement**, and reporting it beside real numbers is the defect class this repository keeps
+			// having to find; so the entry does not carry a size it could not measure, and the summary names the gap.
 			assert.ok(summary.providerEvidence?.[0] !== undefined, "the provider evidence record is still reported");
+			assert.equal(summary.providerEvidence?.[0]?.model, "blackbox");
+			assert.ok((summary.providerEvidence?.[0]?.messageChars ?? 0) > 0);
+			assert.equal(summary.providerEvidence?.[0]?.systemPromptChars, undefined, "and it does not carry a size the recorder could not measure");
+			assert.equal(summary.providerEvidenceGap, "recorder-cannot-measure-the-system-prompt");
 			assert.equal(summary.providerIdentity?.[0]?.entryKind, "source-or-explicit");
 			assert.equal(summary.providerIdentity?.[0]?.doveExtensionOrigin, "managed");
 			assert.equal(summary.providerIdentity?.[0]?.doveExtensionTrust, "managed");
