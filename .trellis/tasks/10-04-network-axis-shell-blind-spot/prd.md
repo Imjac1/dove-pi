@@ -24,10 +24,19 @@
 
 ## Acceptance Criteria
 
-- [ ] `network: none` 的**含义**在规格里被写成它**真正覆盖的范围** ✓，且**明确说出 shell 不在其中** ✓。
-- [ ] 有一处**可执行的判定**（用例 ✓），使得"**声明 `network: none` 且同时保留 shell 的模式**"这一组合**不再无声无息** ✓✓。
-- [ ] `code-development` 仍能跑自己的测试 ✗✓（R2 ✓），且 `pentest`/`trading` 等模式**不会因此被拒加载** ✗✓（除非它们确实声明了不可兑现的东西 ✓）。
-- [ ] 引文门保持全绿 ✓（新写的锚点**可解析** ✓✓）。
+- [x] `network: none` 的**含义**在规格里被写成它**真正覆盖的范围** ✓，且**明确说出 shell 不在其中** ✓（(II) 已落 ✓，本轮又补了"未兑现部分在哪里被报出来" ✓）。
+- [x] 有一处**可执行的判定**（用例 ✓），使得"声明 `network: none` 且同时保留 shell 的模式"这一组合**不再无声无息** ✓✓：启动行 ✓ + 状态行 `networkAxis=` ✓，用例在 `tests/host-work-mode.test.ts` ✓。
+- [x] `code-development` 仍能跑自己的测试 ✓（R2 ✓，全套 991/991 ✓），且 `pentest`/`trading` 等模式**不因本改动被拒加载** ✓。
+- [x] 引文门保持全绿 ✓。
+
+## 落地（2026-10-14，含一次被验证推翻后的修正）
+
+- **两条读数** ✓：启动行说 `the axis does not cover a command run through the shell` ✓；状态行加 `networkAxis=unloaded|none|shell-uncovered` ✓（三态 ✓ —— 原来 `none` 把"没加载模式"和"轴够不着 shell"混在一起 ✗）。
+- **规格** ✓：`personal-agent-mode-format.md` 补"未兑现的部分在哪里被报出来" ✓，带可解析锚点 ✓。
+- **设计里的第三条读数（每个请求计划一条账本记录）没做** ✗，照实记下 ✓ —— 人和读数实际用的那两条进去了 ✓。
+- **而第一版** ✗✓：那句"仍然允许 shell"是用 `never_allow.includes("bash")` 算的 ✗ —— 对抗性验证**推翻了它** ✓✓：本格式自己的匹配器把尾随 `*` 当前缀 ✓，所以 `never_allow` 写 `["*"]`、`["bash*","power*"]`、`["b*","p*"]` 时运行时**两条 shell 全拒** ✗，而那句话还说"仍然允许" ✗；更糟的是 `fence.shell: denied` **不需要任何权限条目**就拒两条 shell ✓ ⇒ 同一条通知里既有"refuses bash and powershell"又有"which this mode still permits" ✗ —— **一句话自相矛盾** ✓。
+- **修法** ✓：这个问题现在只问一个导出的函数 ✓ `shellRoutesOpen`（`src/core/work-mode.ts` ✓），它按**通配规则**读 `never_allow` ✓、并算上 fence 的 shell 立场 ✓；原来分开算的两处（启动行 ✓、状态行 ✓）现在同源 ✓ —— 它们此前"彼此一致却与运行时不一致" ✓。
+- **守卫用例** ✓：`tests/work-mode.test.ts` 的 "answers the two ways this runtime refuses a shell, not the two names it used to look for" ✓（通配 ✓、前缀对 ✓、fence 拒 ✓、只拒一条 ⇒ 路仍开 ✓）；规则行 ✓。
 
 ## Out of Scope
 
