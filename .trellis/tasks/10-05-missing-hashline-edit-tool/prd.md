@@ -32,11 +32,19 @@ Measured: the extension's own status output prints that the current Pi host does
 ## Acceptance Criteria
 
 - [x] **缺了哪一族编辑工具是读数** ✓：`hashlineEditTools=absent|present` ✓，其用例已在 `tests/pi-adapter.test.ts` ✓。
-- [ ] **R2 的选择被写下来** ✓（(i) 或 (ii) ✓），并按所选分支落地 ✓。
-- [ ] 一条**今天必红**的用例 ✓：声明到场而包缺席时 —— (ii) 下读数**指名那个包** ✓；(i) 下会话**被拒且指名包与所查的 store** ✓。
-- [ ] 一条**对照**用例 ✓：声明与包库一致时，启动行**与今天逐字节相同** ✓。
-- [ ] `pentest`/`trading` 等模式与现有工具面用例**全部保持绿** ✓（(ii) 下不拒任何会话 ✓）。
-- [ ] 引文门保持全绿 ✓。
+- [x] **R2 的选择被写下来** ✓（2026-10-14，操作者选 **(ii)** ✓），并按 (ii) 落地 ✓（见下）。
+- [x] 一条**今天必红**的用例 ✓：`tests/pi-adapter.test.ts` 的 "names the declaration that has nothing behind it, instead of blaming the host" ✓ —— 红的时候读数正是缺陷本身 ✓：`actual: '当前 Pi 宿主未提供 hashline 编辑工具（…）'` ✗、`expected: /pi-hashline-edit-pro/` ✓。
+- [x] 一条**对照**用例 ✓：同一声明、同一缺失的工具族 ✓，唯一区别是**包库里有那个包** ⇒ 消息**不得**把那个声明说成原因 ✓；否则"凡是读得到的声明都点名"的消息也会过掉主用例 ✓。
+- [x] `pentest`/`trading` 等模式与现有工具面用例**全部保持绿** ✓（(ii) 下不拒任何会话 ✓；全套 986/986 ✓）。
+- [x] 引文门保持全绿 ✓（四条文档门 34/34 ✓）。
+
+## 落地（2026-10-14，按 (ii)）
+
+- **新模块** `src/pi-adapter/declared-packages.ts` ✓：`npmPackageNameOf` 把 `npm:<name>@<version>` 解成包名 ✓（作用域名以 `@` 开头 ⇒ 版本分隔符取**最后一个** `@` ✓），`declaredPackagesMissingFromStore` 拿声明去包库查 ✓，`NPM_STORE_FROM_AGENT_DIR` 是那条**实测**得来的相对路径 ✓（宿主把自己的 npm root 保持私有 ✓，所以这条路径由我们命名并注明来历 ✓）。
+- **那句归错原因的告警改了** ✓（`src/pi-adapter/extension.ts` 里 `!hashline && hasEdit` 那段 ✓）：它**点名**声明里包库没有的包 ✓、说出**查的是哪个包库** ✓；两者一致时它**说一致** ✓，而不是继续声称宿主不提供 ✗ —— 那是这段代码**从来没法检查**的一句话 ✓，正是本仓反复在找的那一类 ✗。
+- **声明走宿主的读法** ✓：`SettingsManager.getPackages()` ✓（不手解 `settings.json` ✓）；`getAgentDir()` 实测**调用时读环境变量、不缓存** ✓ ⇒ 用例可中途改 `PI_CODING_AGENT_DIR` ✓。
+- **两处我自己的坑，记在用例注释里** ✓：① `representativeTools` **含** `replace`/`insert` ✓ ⇒ 用它那条告警根本不触发 ✗，用例必须自带一个"有 `edit`、无 hashline 族"的工具面 ✓；② 夹具缺 `cwd` 时 `SettingsManager.create` 抛 `TypeError` ✗（`normalizeWindowsShellPath(undefined)` ✓）⇒ 给 `FakeContext` 补了 `cwd?: string` ✓。
+- **规则行** ✓：AGENTS.md 加"消息要点名它自己代码能检查的原因" ✓，执行器就是主用例 ✓。
 
 ## Notes
 

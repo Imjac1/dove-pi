@@ -23,6 +23,7 @@ import { inspectWebAccessReadiness, writeWebSearchConfig } from "../web-access/c
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
 import { discoverAllSkills } from "../skills/discovery.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../project-status.ts";
+import { declaredPackagesMissingFromStore, NPM_STORE_FROM_AGENT_DIR } from "./declared-packages.ts";
 import { hasHashlineEditTools, parseDoveToolProfile, selectDoveToolNames, type DoveToolProfile } from "./tool-profile.ts";
 import { normalizeDsmlContent } from "./dsml-tool-calls.ts";
 import { formatProgressSnapshot, ProgressGuard, type ProgressRunOptions } from "./progress-guard.ts";
@@ -2358,7 +2359,21 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 		const hashline = hasHashlineEditTools(allToolNames);
 		const hasEdit = allToolNames.includes("edit");
 		if (!hashline && hasEdit && ctx.hasUI) {
-			ctx.ui.notify("当前 Pi 宿主未提供 hashline 编辑工具（replace/insert/undo）。为保证跨环境一致，建议升级 Pi 或执行 dove-pi install。", "warning");
+			// **Say the cause that can be checked, not the one that reads well.** This message blamed the host for tools
+			// it does provide, and the measurement of 2026-10-05 corrected it: what was missing was the agent
+			// directory's package store, because the declaration travels in `settings.json` and the package does not, so
+			// a declaration that arrives without the store loads none of its resources. The message now names the
+			// declaration the store does not satisfy **and the store it looked in**, and where the two agree it says so
+			// rather than inventing a cause - because "the host does not provide it" was a claim this code had no way to
+			// check, which is the shape of wrong this repository keeps finding.
+			const agentDir = getAgentDir();
+			const missingDeclared = declaredPackagesMissingFromStore(agentDir, SettingsManager.create(ctx.cwd, agentDir).getPackages());
+			ctx.ui.notify(
+				missingDeclared.length > 0
+					? `当前 Pi 的工具面里没有 hashline 编辑工具（replace/insert/undo）：settings.json 声明了 ${missingDeclared.map((entry) => entry.name).join("、")}，而包库（${NPM_STORE_FROM_AGENT_DIR}）里没有它们 —— 声明到场而包缺席时，那一条也加载不了。`
+					: `当前 Pi 的工具面里没有 hashline 编辑工具（replace/insert/undo），而按 settings.json 的声明去包库查并没有缺的包 —— 所以原因不在声明上。为保证跨环境一致，建议升级 Pi 或执行 dove-pi install。`,
+				"warning",
+			);
 		}
 		updateStatus(ctx);
 		await reconcileProjectMutations(ctx);

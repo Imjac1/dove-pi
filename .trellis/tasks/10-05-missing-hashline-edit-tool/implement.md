@@ -2,12 +2,13 @@
 ## Done when
 
 - [x] 缺了哪一族编辑工具是读数 ✓（`hashlineEditTools=present|absent`，用例已在 `tests/pi-adapter.test.ts`）。
-- [ ] **操作者选定 (i) 或 (ii)**，并把它写进本任务的 prd 与 design。
-- [ ] 用例**先见红**：声明到场而包缺席时 —— (ii) 下读数**指名那个包**；(i) 下会话**被拒且指名包与所查的 store**。
-- [ ] 对照：声明与包库一致时，启动行**与今天逐字节相同**。
-- [ ] (ii) 下**不拒任何会话**；(i) 下 **runner 的携带清单不触发拒绝**（那是运行的配置，不是人的配置）。
-- [ ] `personal-agent-field-run.md` 一句 + **可解析锚点**。
-- [ ] 门全绿。
+- [x] **操作者选定 (ii)**（2026-10-14）✓，并写进 prd ✓ 与 design ✓。
+- [x] 用例**先见红** ✓：`actual: '当前 Pi 宿主未提供 hashline 编辑工具（…）'` ✗ —— 红在缺陷本身 ✓，不是红在编译 ✓。
+- [x] 对照 ✓：同一声明、同一缺失的工具族 ✓，包库里有那个包 ⇒ 消息**不点名**该声明 ✓（否则"凡是读得到的声明都点名"也会过掉主用例 ✓）。
+- [x] (ii) 下**不拒任何会话** ✓ —— 全套 986/986 ✓，(i) 的分支未启用 ✓。
+- [x] `personal-agent-field-run.md` 补了那段 ✓（带可解析锚点 ✓，且非仓库路径**不加反引号** ✓ 以过路径门 ✓）。
+- [x] 门全绿 ✓：typecheck ✓ · `npm test` 986/986 ✓ · 四条文档门 34/34 ✓ · corpus 42/0 ✓。
+- [x] mount 表**第七次**重指 ✓（deltas 1 与 15 ✓ —— 对应顶部 1 行导入与下方 14 行 ✓），表外 6 处按锚点重指 ✓。
 
 Depends on the operator's choice in `design.md`: the checklist below is the recommended branch **(ii) load and record**.
 Under **(i) refuse the session** steps 3 and 4 become the refusal beside `extension.ts:2420`, and step 2's case asserts

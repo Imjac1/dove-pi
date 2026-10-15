@@ -50,6 +50,14 @@ Preconditions, every one of which a **person** supplies:
   `absent` against a host that has those tools installed. Measured 2026-10-05 on a bound clone: with the store present
   the same status line reads `hashlineEditTools=present` and the remaining extensions load with it. It is a copy, and it
   is the one carry that costs real time — deterministic cases are `--provider faux` and pay none of it.
+  **And the message a person gets when that carry is missing names the declaration, not the host.** The extension's
+  warning used to say the current Pi host does not provide the hashline edit tools — false, and uncheckable from where it
+  was written. It now compares the declaration (`SettingsManager.getPackages()` over the agent directory's
+  `settings.json`) against the store those resolve from (npm/node_modules under the agent directory — measured rather
+  than read from an API, because the host keeps its own root private) and names the packages the store does not have,
+  plus the store it looked in; where the two agree it says so instead of inventing a cause. Held by
+  `tests/pi-adapter.test.ts`, one case with a declaration and no store and one with both, so a message that named every
+  declaration it could read would fail.
 - **The copy of the project is a convenience, not a fence.** `--cwd` names the project to work in and the runner copies
   it, and that sentence used to stand here as "a run still cannot touch the original". Measured 2026-10-11, one did:
   a run's agent learned the source clone's absolute path from a `__pycache__` file in its own copy — bytecode embeds the

@@ -151,6 +151,87 @@ describe("Pi adapter", () => {
 		assert.equal(isReadOnlyShellCommand("bash", { command: "unknown-tool --inspect" }), false);
 	});
 
+	/**
+	 * A session start over the tool surface the warning is about: the host's own `edit` is there, the hashline family is
+	 * not. `representativeTools` cannot be used for this - it carries `replace`/`insert`, so `hasHashlineEditTools` reads
+	 * the family as present and the warning never fires.
+	 */
+	async function sessionStartNotifications(agentDir?: string): Promise<string[]> {
+		const toolNames = ["read", "grep", "find", "ls", "bash", "powershell", "edit", "write"];
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const notifications: string[] = [];
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return toolNames.map((name) => ({ name })); },
+			setActiveTools() {},
+			getActiveTools() { return [...toolNames]; },
+			getThinkingLevel() { return "max"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		const context: FakeContext = {
+			hasUI: true,
+			// **A cwd, because a session has one.** `SettingsManager.create` normalises it, so a fixture without one makes
+			// the declared-package check throw before it can report anything - measured 2026-10-14, on this case's first
+			// version.
+			cwd: agentDir ?? process.cwd(),
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify: (message) => notifications.push(message) },
+			sessionManager: { getEntries: () => [], getSessionId: () => "declared-packages" },
+			getContextUsage: () => ({ tokens: 0, contextWindow: 1_000_000 }),
+		};
+		await events.get("session_start")?.({ type: "session_start" }, context);
+		return notifications;
+	}
+
+	it("names the declaration that has nothing behind it, instead of blaming the host", async () => {
+		// **The message this repository wrote about its own tool surface, and the cause it got wrong.** It said the
+		// current Pi host does not provide the hashline edit tools. Corrected by measurement on 2026-10-05: the host
+		// provides them - what was missing was the agent directory's package store, because `settings.json` declares the
+		// packages and Pi resolves them from that store, so a declaration that travels without the store loads nothing.
+		// The message now names the declaration it can see is unsatisfied and says where it looked. Measured 2026-10-14:
+		// with `npm:pi-hashline-edit-pro@2.7.0` declared and no store beside it, the old wording blamed the host.
+		const agentDir = mkdtempSync(join(tmpdir(), "pi-adapter-declared-"));
+		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		try {
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: ["npm:pi-hashline-edit-pro@2.7.0"] }), "utf8");
+			const notifications = await sessionStartNotifications(agentDir);
+			const warning = notifications.find((message) => /hashline/.test(message));
+			assert.ok(warning, "the missing family is still announced: " + JSON.stringify(notifications));
+			assert.match(warning, /pi-hashline-edit-pro/, "and the declaration the store does not satisfy is named: " + warning);
+			assert.doesNotMatch(warning, /宿主未提供/, "instead of blaming the host for a declaration that never arrived: " + warning);
+		} finally {
+			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+			rmSync(agentDir, { recursive: true, force: true });
+		}
+	});
+
+	it("does not blame a declaration whose package the store has", async () => {
+		// **The control, and it is what makes the sentence mean something.** Same declaration, same missing family, and
+		// the only difference is that the store has the package - so nothing about the declaration may be named as the
+		// cause. Without this, a message that named every declaration it could read would pass the case above.
+		const agentDir = mkdtempSync(join(tmpdir(), "pi-adapter-declared-present-"));
+		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		try {
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: ["npm:pi-hashline-edit-pro@2.7.0"] }), "utf8");
+			mkdirSync(join(agentDir, "npm", "node_modules", "pi-hashline-edit-pro"), { recursive: true });
+			const notifications = await sessionStartNotifications(agentDir);
+			const warning = notifications.find((message) => /hashline/.test(message));
+			assert.ok(warning, "the missing family is still announced: " + JSON.stringify(notifications));
+			assert.doesNotMatch(warning, /pi-hashline-edit-pro/, "a declaration the store satisfies is not named as the cause: " + warning);
+		} finally {
+			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+			rmSync(agentDir, { recursive: true, force: true });
+		}
+	});
+
 	it("advises on a long conversation through the handler, and only that guard fires", async () => {
 		// **The turn cap is wired and this holds the wiring.** A case of its own, for the same reason as the one
 		// below: every notice is one-shot per `extension(api)` call. And it stages a small prefix on purpose, so
@@ -2087,6 +2168,8 @@ describe("Pi adapter", () => {
 interface FakeContext {
 	hasUI?: boolean;
 	model?: unknown;
+	/** Present where the handler resolves settings against a directory; a session always has one. */
+	cwd?: string;
 	/** Present where the handler reads it; most cases never do, which is why it is optional. */
 	getContextUsage?: () => { tokens?: number; contextWindow?: number };
 	ui: {
