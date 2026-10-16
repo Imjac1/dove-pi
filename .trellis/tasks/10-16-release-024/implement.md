@@ -2,9 +2,13 @@
 
 ## Before `task.py start`
 
-- [ ] Curate `implement.jsonl` and `check.jsonl` with real entries: `scripts/check_release_readiness.py` is the check that
-      must pass before the tag, and `.github/workflows/release.yml` is the job the local replay is predicting.
-      This round verifies with a dispatched sub-agent, so both need non-empty entries.
+- [ ] Curate the manifests with **spec/research documents only** - the loader refuses code paths. The page that matters
+      here is `.trellis/spec/backend/personal-agent-managed-install.md`, because this child's first reading is what an
+      install says it is, and its acceptance is what a user's launcher fetches. `implement.jsonl` also takes
+      `.trellis/spec/backend/quality-guidelines.md` for the discipline the local replay follows; `check.jsonl` takes the
+      managed-install page, so the verifier can judge the identity claims without me paraphrasing them.
+      The readiness script and the workflow file are read directly during the work - they are code, and they do not
+      belong in a manifest.
 
 ## Done when
 
