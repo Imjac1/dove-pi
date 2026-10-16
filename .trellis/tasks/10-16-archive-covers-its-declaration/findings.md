@@ -56,7 +56,37 @@ a ref here produced **CRLF** (203 CRLF, 0 bare LF) - identical after normalising
 step in this pipeline that converts them was **not** isolated, so the helper's own doc was corrected against the
 measurement instead of the intuition it was written from, and the criterion that asks for byte identity is left unticked.
 
+## 0.2.6: the user-facing half closed, and the gate that refused to move a tag
+
+The operator approved a release for one reason - the published v0.2.4 archive carries the seventeen `.pyc` files and fails
+the check this child added, while the repair lives in the assembly step - and that release is **out**: `v0.2.6`, published
+2026-10-16T13:38:15Z, `Release` green in 4m38s, both `Compatibility` jobs green, four assets, and the **published** archive
+measured at **348 entries and 0 caches**. Its manifest reads `releaseId 0.2.6+f019a8d`, tracking the tagged commit.
+
+**The first attempt failed and the tag did not move.** `v0.2.5` was tagged on `410a73d` and its release job failed at
+`npm run test:installer`: three cases in the Python readiness suite build a complete archive by construction, so
+`REQUIRED_ARCHIVE_FILES` gaining the two `.trellis` entries made them stop being complete and they failed with
+`Archive must contain exactly one complete Dove Pi release root` instead of the mode refusal they assert. Both fixtures
+carry the two entries now, and this repository's rule for that moment - a red gate does not move the tag - is why the fix
+is published as **0.2.6** with `v0.2.5` left pointing at the commit that failed. Nothing was published by the failing
+attempt, and no public ref was rewritten.
+
+**Two lessons, both about my own habits rather than the code.** `npm run test:installer` is a **separate command** from
+`npm test`, and my local gate runs never included it - the release workflow does, which is the only reason CI caught this
+while my green 994/994 did not. And the failure arrived through the one place in the repository besides the check itself
+that enumerates what a complete archive is: the fixture. A requirement that breaks the thing built to satisfy it is a
+requirement that has reached something real.
+
+**One criterion stays unmet on purpose**, and it is now outside this child's reach rather than merely unverified: "the
+rebuilt archive is byte-identical to the published one". The verifier sharpened it to a statement about the **published**
+bytes - 231 of v0.2.4's 344 tree files are LF→CRLF converted and 113 are committed LF bytes, so neither `core.autocrlf`
+setting reproduces that mix - and answering which CI step does the converting needs the **release job's own workspace**,
+which exists only inside a run. The local conversion is named and proven (`core.autocrlf=true`, 5029 B/70 LF → 5099 B/70
+CRLF); the published mix is transferred to whoever next has a release workspace to inspect, and the criterion says so
+instead of being ticked.
+
 ## What the verification changed, and what is still not held
+
 
 A verifier measured this child's claims on 2026-10-16 and found three real defects - all in the **words**, not in the code
 path, and all now fixed:
