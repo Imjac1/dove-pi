@@ -66,8 +66,8 @@
 - [x] **AC-7（S3）** "哪些测试**不会**因宿主变动而红" ✗✓ 的清单 ✓ —— 空清单也是结论 ✓，但必须写明**搜法与范围** ✓。—— 清单**非空** ✓：宿主内部布局（`install.ts:266` ✓）、**版本读取本身**（`getPiVersion` ✓、`host-version` 模块 ✓）、依赖形状（`typebox` ✓）、源码注释里的版本与路径 ✓ —— **四类，各 0 个文件看着** ✓；而挂载点与 7 个导出**由编译器看着** ✓（宿主 `on()` 是字面量类型重载 ✓，`types.d.ts:1144` ✓）。搜法与范围 ✓：`tests/` 与 `scripts/` 的全部 `.ts`/`.mts`/`.py`/`.mjs` ✓（见 readings §S3 ✓）。
 - [x] **AC-8（S4）** 实验 0 的状态**二选一** ✓：执行读数 ✓，或明写"**未跑 + 原因**"✗（不许写"不适用" ✗）；`replaySafe` 两行注释已**开任务** ✓。—— 实验 0：**未跑** ✗ + 原因 ✓（本会话是 `danger-full-access` ✓，需要一个会拒写的会话 ✓；阻塞地位保留 ✓）。`replaySafe` → **`10-17-replaysafe-names-a-missing-type`** ✓。
 - [x] **AC-9（S5）** 每条判定都带 **可行 / 需改 / 需降级并标注** ✓，且每条"需改"都有对应**任务 id** ✓。—— 11 条判定见 readings §S5 ✓；**需改 3 条各有任务** ✓（`10-17-host-version-silent-degradation` ✓ / `10-17-host-detail-comments-drift` ✓ / `10-17-replaysafe-names-a-missing-type` ✓）；**1 条需降级并标注** ✓（在 prd §一 就地标注 ✓）；**1 条需改·待批** ✓（计划册 ✓，理由写明 ✓）；**1 条未验证** ✓（不写成结论 ✓）。
-- [ ] **AC-10** 门禁三连（typecheck / `npm test` / installer）**仍绿** ✓；**若不绿 → 记为发现** ✓ 且**不修** ✗（(A) 已定 ✓）。
-- [ ] **AC-11** **零**代码 / 规格 / 计划册改动 ✗ —— 可观察：改动范围只落在 `.trellis/tasks/10-03-pi-1-recheck/**` ✓。
+- [x] **AC-10** 门禁三连（typecheck / `npm test` / installer）**仍绿** ✓；**若不绿 → 记为发现** ✓ 且**不修** ✗（(A) 已定 ✓）。—— **2026-10-17 当场重跑，三连全绿** ✓：`npm run typecheck` **exit 0** ✓、`npm test` **999/999, 0 fail** ✓、`npm run test:installer` **143 tests OK** ✓；任务产物体检 `42 artifacts, 0 problems` ✓。**没有一条因宿主 1.0 而红** ✓ —— 所以"这次变动能不能被发现"的答案见 AC-7 ✓（发现它的是**编译器**，不是测试 ✓）。
+- [x] **AC-11** **零**代码 / 规格 / 计划册改动 ✗ —— 可观察：改动范围只落在 `.trellis/tasks/10-03-pi-1-recheck/**` ✓。—— **量的** ✓：`git diff --name-only a0002db..HEAD` 的**每一条**都在 `.trellis/tasks/` 下 ✓（脚本逐条过滤，**没有一条**落在该前缀之外 ✓）。**一处限定** ✗：AC-8 / AC-9 要求"各自开任务" ✓ → 工作区多出**三个新任务目录** ✓（`10-17-host-version-silent-degradation` ✓ / `10-17-host-detail-comments-drift` ✓ / `10-17-replaysafe-names-a-missing-type` ✓）—— 它们是**任务目录** ✓，不是代码 ✓、不是规格页 ✓、不是计划册 ✓。
 
 ## Out of Scope
 
