@@ -1363,3 +1363,53 @@ door documents, which is the standing number rather than a new one.
 ### Status
 
 [OK] **Completed**
+
+
+## Session 249: The reading is blocked on money, and the failure that hid it is fixed
+<!-- trellis-session: v=2 fp=45a602040ec274b4 -->
+
+**Date**: 2026-10-17
+**Task**: The reading is blocked on money, and the failure that hid it is fixed
+**Branch**: `master`
+
+### Summary
+
+The tenth and eleventh attempts at the reading failed and neither counts, but the diagnosis this child had been carrying was wrong twice over. The configured credential answers a 25-token request with `429 insufficient_quota` - a quota state, not the transient rate limit that seven attempts over five hours were spent waiting out - and the backup credential was never revoked: it answers 200 on `GET /v1/models` with twenty models, and 200 with tool calls for four of them, including the very model id the recorded baseline used. The eighth attempt's opaque `provider.request.rejected` was the config that session built for itself, whose `contextWindow` was 256; at 200000 the same request reaches the provider and comes back with a 402 `insufficient_balance`. Both credentials are out of funds, so the child is prepared and blocked on a payment rather than on an unknown - the one thing that had been written down as outside this session's reach. 
+
+What the record said about both was `failureKind: transient`, and the field that separates them - the provider's own `code` - reached the ledger in neither case. That was worth fixing rather than only documenting, and it is fixed: a cause the provider names now outranks the status it arrived with, 402 is terminal by status as well, both routes report `account-unpaid` rather than `authorization-denied` (both credentials authenticated while every completion was refused, so the existing envelope would have sent a reader to check working keys), the unmatched fallback no longer borrows a reason that claims a message was reviewed, and the evidence the decision was taken from - `providerCode` and `httpStatus` - is recorded beside the classification and surfaced by the reader. Two rule rows hold it, each stating where its door is narrower than the rule. Found on the way through: the reader took its `httpStatus` from `usage.httpStatus`, where the failure path never wrote it. 
+
+The routed page this contract belongs to was already full, at 24,520 of its 24,576-byte cap, so the operator chose to make room rather than raise a cap that exists to keep a page below Trellis' 32 KiB injection limit. The retry contract was said more densely and two genuine redundancies removed - the same read/shell/search bound stated twice, and one framing sentence carrying no rule - leaving 16 bytes of headroom for whoever writes here next. Ten anchors were repointed, twice, because the edit sits above every `pi.on(...)` registration: the 18 mount-point citations and nine prose citations across four pages. The anchors door caught both shifts; the prose citations are checked by nothing, and one range citation had already been broken by my own repoint script shifting only its start. 
+
+The three decisions this session put to the operator were the classification stance (take the provider at its word, and record the evidence so a wrong call is visible), the spec page's fate, and which task came next.
+
+### Main Changes
+
+- Classified a provider cause above the status carrying it; added `account-unpaid`, `402`, and the evidence fields `providerCode`/`httpStatus` through the classifier, the ledger and the reader.
+- Gave the unmatched stopReason fallback its own reason, `unread-provider-message`, leaving `reviewed-provider-message` to the text rules where it is true.
+- Added two `AGENTS.md` rule rows, each naming the case that holds it and where its door is narrower than the rule.
+- Rewrote the retry contract on the routed page and removed two redundancies to fit its unchanged cap; repointed the mount table and nine prose citations across four pages.
+- Diagnosed both credentials as unfunded rather than rate-limited, and settled the eighth attempt's rejection as its own context window; recorded both in the reading child's findings.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3c84a5` | fix(provider): the cause the provider names decides, and the record carries it |
+| `9548c45` | docs(task): both credentials are unfunded, and the eighth attempt's rejection was its own context window |
+
+### Testing
+
+- [OK] npm run typecheck: clean.
+- [OK] npm test: 998 of 998, including the four documentation doors and the closed-set enumeration of terminal reasons.
+- [OK] npm run test:installer: 143 passed.
+- [OK] npm run doctor and npm run pi:smoke: green.
+- [OK] The archive tax measured zero: no curated entry pointed inside the task, and no page cited its files.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The reading needs a funded account - either credential - and then the two passes are one command each.
+- The routed page has 16 bytes of headroom; the next contract sentence there has to pay for itself or the cap gets revisited deliberately.

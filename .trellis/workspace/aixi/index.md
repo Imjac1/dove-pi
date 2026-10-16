@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 248
-- **Last Active**: 2026-10-16
+- **Total Sessions**: 249
+- **Last Active**: 2026-10-17
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1365 | Active |
+| `journal-5.md` | ~1415 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 249 | 2026-10-17 | The reading is blocked on money, and the failure that hid it is fixed | `e3c84a5`, `9548c45` | `master` |
 | 248 | 2026-10-16 | Three tasks planned, landed, and falsified once each | `9651312`, `58e4ee0`, `6eaffdb`, `d40f9b5`, `f528375`, `80e4dad`, `b6110e4`, `88b86a3`, `0983322` | `master` |
 | 247 | 2026-10-14 | Three customer passes, the TUI driven, and three releases | `91977d9`, `479c1fc`, `3967638`, `491cc5b`, `61450d9`, `11dcf52`, `07695b9`, `d16af78`, `8aa89c7`, `e0d4e52`, `b8359d1`, `e18d197`, `f72d7b4`, `ba2a8b8`, `11efe92`, `cd10d44`, `db1f6e7`, `6833b25`, `516a1bf` | `master` |
 | 246 | 2026-10-11 | The whole flow completes, and three rules that could not be reached | `059fdc8`, `be93c70`, `ccf1d89`, `4c136a4`, `d548ea1`, `723dc86`, `c982e5c`, `ddfe805`, `844ad93`, `4b287a5`, `8e4476a`, `e347597`, `eb47a51`, `e3e9396`, `6958679`, `b7075d4`, `6bc041d`, `654c994`, `59c8835`, `2dce58e`, `bd5b88c`, `cf668c1`, `6a0d1d9`, `0e69d74`, `7fda3c7` | `master` |
