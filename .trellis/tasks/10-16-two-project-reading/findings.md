@@ -1,3 +1,54 @@
+# Re-measured 2026-10-17: the fixtures are still ready, and the funds still are not
+
+This child was resumed in a later session, and the whole state was taken again rather than quoted from the entry below.
+Three of the four readings came back identical; the fourth is why the two passes are still owed.
+
+## The blocker, probed once more, unchanged
+
+| Credential | Host | Today's answer |
+|---|---|---|
+| `atr_Yvio…` (the one in effect) | `api.atria-asi.ai` | `429` - `{"error":{"message":"Token quota exhausted.","type":"atria_api_error","code":"insufficient_quota"}}` |
+| `sk-KHY0l…` (the backup config) | `maas-api.antdigital.com` | `402` - `{"error":{"message":"Insufficient balance: apikey status is overdue","type":"insufficient_balance","code":"insufficient_balance"},"trace_id":…}` |
+
+Both were probed with a one-token `POST /chat/completions` against the same model ids the passes use, reading the keys
+out of `~/.pi/agent/models.json` and `~/.pi/agent/models.json.bak-before-replay` without printing them and without
+writing the operator's files. **Neither answer is a state that waiting changes**: an exhausted quota and an overdue
+apikey are account states, which is the same conclusion the tenth attempt reached, and the reason the ledger's
+`failureKind=transient` was the wrong word for them.
+
+## What came back identical
+
+- **The build identity, re-read rather than remembered.** `dove-pi --version` reads `Dove Pi 0.2.6 (Pi 1.0.0)`, and
+  `dove-pi update --check` reads `Latest stable release: v0.2.6` / `Current release: 0.2.6+f019a8d` / `Previous release:
+  0.2.4+25039c9`. That is the `releaseId` the release child recorded, so a pass run today would still measure the build
+  users have.
+- **The graded clone's three pins**, read on the source at `C:\Users\Macfy\Desktop\dsh\dove-graded\cachecontrol`:
+  `cachecontrol/controller.py` 20090 B, `tests/conftest.py` 5971 B, `tests/test_immutable.py` 1305 B, and **no caches**
+  (searched for `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`). HEAD is still `2627d9b`; the two files the
+  recipe calls instruments rather than checkouts still show as `M` and `??`; `.dove/mode.json` is still 55 B.
+- **The second project still reproduces**, which is the one reading worth re-running rather than trusting. The generator
+  was run into a fresh directory twice, and both runs printed the same seven sizes - `instrument.lock.json 662`,
+  `package.json 108`, `src/cli.mjs 152`, `src/ledger.mjs 161`, `test/instrument.test.mjs 765`, `test/ledger.test.mjs 346`,
+  `test/report.test.mjs 301`, **2495 bytes in 7 files** - and `node --test` under Node v24.14.1 still reads `tests 4 /
+  suites 3 / pass 3 / fail 1`, failing on `actual: 0.30000000000000004, expected: 0.3`. The directory was removed after
+  the reading. So "the instrument is byte-identical afterwards" remains a comparison against bytes produced in the same
+  run rather than against a number someone typed.
+
+## Why no substitute pass was run
+
+The repository can drive the flow against its own faux provider, and for one of this child's criteria that would look like
+an answer - a read-only pass whose record shows the mutation tools never ran. It was not taken, because it would be a
+reading of a different artefact: the faux provider does not do the work, so project one's criterion (the copy's suite
+going `1 failed, 115 passed` to `116 passed`) could not move, and the pass would be a statement about the harness's own
+fake rather than about the build users have. The two passes need an account with funds, and that is the operator's to
+settle.
+
+## Where this leaves the child
+
+Prepared, and blocked on exactly what it was blocked on before - now re-measured rather than assumed. Nothing else in the
+record is outstanding: the build identity is settled and matches the release child, both fixtures are ready, and each pass
+is one command once a credential answers.
+
 # Findings so far: ten attempts, none counts, and the blocker is not the one this record first gave
 
 ## The ninth and tenth attempts: both credentials are out of funds, and the ledger calls that transient
