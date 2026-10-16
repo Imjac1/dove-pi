@@ -62,6 +62,14 @@ def write_fixture(root: Path):
             "package-lock.json",
             "installer/release.py",
             "src/cli.ts",
+            # **The two `.trellis` entries became required on 2026-10-16, and this fixture is what noticed.** A verifier
+            # measured that an archive staged without them passed this check and would have published - the specification
+            # index and the workflow document simply absent from every download - so `REQUIRED_ARCHIVE_FILES` names them
+            # now. This fixture is a complete release **by construction**, which is why it had to grow with the
+            # requirement: it is the only other place in the repository that enumerates what a complete archive is, and
+            # it failing was the signal that the requirement had reached something real.
+            ".trellis/workflow.md",
+            ".trellis/spec/backend/index.md",
         ):
             bundle.writestr(name, "fixture\n")
         # **A mode definition, because a release without one is not a release**: the runtime loads `modes/<id>/MODE.md` and
@@ -199,7 +207,15 @@ class ReleaseReadinessTests(unittest.TestCase):
             with self.subTest(extra=sorted(extra)), TemporaryDirectory() as temporary:
                 archive = Path(temporary) / "dove-pi-windows.zip"
                 with zipfile.ZipFile(archive, "w") as bundle:
-                    for name in ("dove_pi.py", "package.json", "package-lock.json", "installer/release.py", "src/cli.ts"):
+                    for name in (
+                        "dove_pi.py",
+                        "package.json",
+                        "package-lock.json",
+                        "installer/release.py",
+                        "src/cli.ts",
+                        ".trellis/workflow.md",
+                        ".trellis/spec/backend/index.md",
+                    ):
                         bundle.writestr(name, "fixture\n")
                     for name, body in extra.items():
                         bundle.writestr(name, body)
