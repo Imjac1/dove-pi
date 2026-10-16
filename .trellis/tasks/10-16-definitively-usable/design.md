@@ -25,8 +25,17 @@ the interactive affordances, and any change to the shape where the wrap-up is th
 
 | site | today | why it is wrong | the shape that replaces it |
 |---|---|---|---|
-| `tests/pi-adapter.test.ts:2193` | two `agent_subagent` dispatches, `await new Promise(r => setTimeout(r, 600))`, then `agent_doctor` must report two `activeRuns` | **fails** on a slower machine: measured on CI (`38811790771`, `test (locked)`) as `0 !== 2` in 2807 ms - the dispatches had not registered yet, and nothing made them. It passed here 5 times out of 5, which is the same defect seen from the lucky side | the child fixture (`:2163`) writes a `started` marker and then **waits for a `release` marker** (bounded by its own deadline); the case waits for **both started markers**, reads the doctor while both are provably in flight, then writes both releases |
+| `tests/pi-adapter.test.ts:2193` | two `agent_subagent` dispatches, `await new Promise(r => setTimeout(r, 600))`, then `agent_doctor` must report two `activeRuns` | **fails** on a slower machine: measured on CI (`38811790771`, `test (locked)`) as `0 !== 2` in 2807 ms - the dispatches had not registered yet, and nothing made them. It passed here 5 times out of 5, which is the same defect seen from the lucky side | the child fixture (`:2163`) writes its own `started-<unique>` file and then waits for **one shared** `release` file (bounded by its own deadline, so a mistake fails loudly instead of hanging the suite). The case waits until **two** `started-*` files exist, reads the doctor while both are provably in flight, then writes the single `release` and awaits the two results |
 | `tests/project-provider.test.ts:427` | the first action sleeps 50 ms; the case sleeps 5 ms and launches the second; the assertion is about **order** | **passes vacuously**: if the second launch lands after the first has finished, the expected order still holds, and the serialisation the case exists to prove was never exercised | the first action signals an `entered` promise and then awaits a `release` promise; the case awaits `entered`, launches the second, and only then releases - so the overlap is constructed, and "the second was blocked" is a fact rather than a hope |
+
+**Why the child takes a shared release gate rather than one per child** - measured 2026-10-16, after the first version
+of this design said otherwise: the fixture is injected through `DOVE_PI_SUBAGENT_PREFIX_ARGS`, a **process-wide**
+environment variable (`:2167`), so both dispatches receive the same argv and neither can be told its own marker name.
+A shared gate removes the question, and counting `started-*` files is how the case learns that both have arrived.
+
+**What the rewrite must preserve, because two assertions read it**: the child still writes `child answer` to stdout
+(`:2197`, `:2198` assert it), and the injection stays an argv prefix rather than becoming a different mechanism.
+`tests/pi-subagent-provider.test.ts` has its own fixture and is not affected.
 
 **`tests/pi-adapter.test.ts:2163` and `tests/capability-protocol.test.ts:43` stay as they are**, and the design says why
 rather than leaving them to look like oversights: the first is a `setTimeout` inside a **generated child script** - the
@@ -49,13 +58,17 @@ it enforces the one shape that has actually hurt, instead of pretending to detec
 
 ## Workstream 2: the reading, taken on the tree that ships
 
-The recipe that produced the three recorded passes, restated because the readings are only comparable if the steps are:
+The recipe that produced the three recorded passes, restated because the readings are only comparable if the steps are -
+plus one fact measured on 2026-10-16 that makes the first step load-bearing rather than ceremonial: **the managed install
+on this machine reports `Dove Pi 0.2.1`**, which is neither the current tree nor even 0.2.3. A pass taken now without
+refreshing it would measure a build two releases old, and would be read as a statement about this tree.
 
-1. **Install the current tree** through the managed launcher, so the pass measures what a customer would get, not the
-   source checkout. The previous passes were run this way; the four commits since the last one make it necessary again.
+1. **Install the current tree** through the managed launcher, then **read back what the install says it is** - the version
+   is the first reading, because a pass is only ever a statement about the build it ran on.
 2. **A fresh copy of the graded clone** (`.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/research/graded-project-recipe.md`),
    with the caches removed after the baseline measurement - the recipe's step, learned when a `__pycache__` in the copy
-   told an agent where the original lived.
+   told an agent where the original lived. Re-read the three pins at start rather than trusting them: they held on
+   2026-10-16 (20090 / 5971 / 1305 bytes, no caches), and the point of a pin is that it is checked each time.
 3. **The customer's own words**, one scenario, through the launcher, on the runner's own harness budget rather than a
    relaxed one.
 4. **Three readings decide it**: the copy's own suite must reach `116 passed`; the judging instrument must stay

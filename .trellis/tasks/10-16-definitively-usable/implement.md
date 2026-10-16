@@ -28,11 +28,13 @@
    awaits `entered`, launches the second, awaits a tick that proves the second is queued (not a duration - the second's
    own body records that it started, and the assertion is that it started **after** `first-end`), then releases.
    Delete the 5 ms and the 50 ms.
-2. **`tests/pi-adapter.test.ts`, the parallel-batch case.** The fixture script at `:2163` gains two files per child: it
-   writes `<name>.started` and then polls for `<name>.release`, bounded by its own deadline so a mistake fails loudly
-   instead of hanging the suite. The case waits for **both** started markers with a deadline, then reads `agent_doctor`
-   and asserts two `activeRuns`, then writes both releases and awaits the two results.
-   Delete the 600 ms.
+2. **`tests/pi-adapter.test.ts`, the parallel-batch case.** The fixture script at `:2163` gains a gate: it writes its own
+   `started-<unique>` file under the case's root and then polls for **one shared** `release` file, bounded by its own
+   deadline so a mistake fails loudly instead of hanging the suite. The case waits until **two** `started-*` files exist,
+   then reads `agent_doctor` and asserts two `activeRuns`, then writes the single `release` and awaits the two results.
+   Delete the 600 ms. **Two things must survive the rewrite**, because assertions read them: the child still writes
+   `child answer` to stdout (`:2197`, `:2198`), and the injection stays the argv prefix it is (`:2167`, a process-wide
+   environment variable - which is why the gate is shared rather than per child).
 3. **The two mutations that prove the cases still bite**, run once by hand (and recorded in the task's findings):
    - make `activeRuns` report one run - the batch case must go **red** where it is green today;
    - make the second mutation skip the lock - the serialisation case must go **red** where it can pass vacuously today.
@@ -46,9 +48,11 @@
 
 ## Workstream 2: the reading
 
-6. **Install the current tree** with the managed launcher, and record what the install reports it is.
-7. **Fresh copy of the graded clone**, caches removed after the baseline measurement; verify the three pins on the copy
-   and on the source before starting.
+6. **Install the current tree** with the managed launcher, then **read back what it says it is**. Measured 2026-10-16: it
+   currently reports `Dove Pi 0.2.1`, so this step is load-bearing - a pass taken without it measures a build two
+   releases old and would be read as a statement about this tree.
+7. **Fresh copy of the graded clone**, caches removed after the baseline measurement; **re-read the three pins at start**
+   (they held on 2026-10-16: 20090 / 5971 / 1305 bytes, no caches) on the copy and on the source before starting.
 8. **One pass** through the launcher with the customer's own words, the runner's own harness budget, the scenario the
    previous passes used (`.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/research/three-customer-passes.md`).
 9. **Read the three pins and the task's own state**; write `findings.md` with the pass's readings, the attempts that did
