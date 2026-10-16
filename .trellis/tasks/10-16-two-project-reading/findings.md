@@ -1,3 +1,66 @@
+# The eleventh attempt: the released build answers 429, and it is the build before the cause fix
+
+Run on 2026-10-17, after a probe of both credentials refused (`429 insufficient_quota` on the primary, `402
+insufficient_balance` on the backup). The pass was fired anyway, because the product's own ledger is a different reading
+from a probe and because the instruction was to run it. It did not count.
+
+```bash
+node scripts/real-dove-blackbox.mjs \
+  --cwd C:\Users\Macfy\Desktop\dsh\dove-two-project-reading\p1-copy \
+  --case-id p1-pass1 --output ...\runs\p1-pass1.jsonl \
+  --scenario tests/fixtures/scenarios/immutable-directive-work-as-a-task.json \
+  --provider real --launcher dove-pi --timeout-ms 3600000
+```
+
+## It does not count, and the three readings say so rather than the summary
+
+| Reading | Value |
+|---|---|
+| duration / `settled` / `scenarioFailed` | 17.4 s / true / false |
+| `toolCalls` / `outputTokens` / `stopReasons` | **0 / 0 / `["error"]`**, one provider round |
+| the run's own project copy | suite still `1 failed, 115 passed`; pins 20090 / 5971 / 1305 |
+| the copy the pass was handed | pins unchanged, still no caches |
+| the source clone | pins unchanged at 20090 / 5971 / 1305 |
+| what the run wrote | intake only - `doveState: true`, `formalTaskCount: 1`, 5 formal artifacts |
+
+**The ledger's own sentence for it**, from `dove-state/execution.jsonl`:
+
+```json
+{"kind":"provider.request.completed","details":{"stopReason":"error",
+ "usage":{"input":0,"output":0,"totalTokens":0},
+ "failureKind":"transient","failureReason":"http_429","durationMs":619}}
+```
+
+Usage all zeros and no provider `code` in the entry - the same shape as the seven attempts that cost five hours.
+
+## The correction that has to be stated with it, and it is measured
+
+**This is not evidence that the cause fix fails. The fix is not in the build that answered.** The provider-cause repair
+landed in the tree as `e3c84a5`, and:
+
+| `src/core/failure-reading.ts` | bytes | carries `insufficient_quota` / `insufficient_balance` |
+|---|---|---|
+| the tree | **20277** | yes |
+| installed `0.2.6+f019a8d` | 18990 | **no** |
+| installed `0.2.4+25039c9` | 18990 | **no** |
+
+So `failureKind=transient / failureReason=http_429` is the correct behaviour of a build that predates the repair, and the
+sentence this repository already holds - *a cause the provider names outranks the status it arrived with* - has **still
+never run against a real provider refusal**. That verification is owed, and it needs the same funded account as the two
+passes: a refusal is exactly the event it is written for, so no amount of a funded account's *success* would test it
+either. Recorded here rather than repaired: this child's contract is that a defect it finds becomes the parent's problem.
+
+**And the install keeps two builds side by side** - `C:\Users\Macfy\AppData\Local\DovePi\app\versions\` holds
+`0.2.4+25039c9` (the `--check` rollback point) and `0.2.6+f019a8d` (current), both carrying the same pre-fix
+`failure-reading.ts`. `dove-pi` resolves to `...\Local\DovePi\bin\dove-pi.ps1`.
+
+## What the attempt does establish
+
+The managed path itself is intact on the released build: the launcher, the mode line (`code-development`, 1 denied action
+refused, `networkAxis=shell-uncovered`), the task intake, and the ledger's fidelity - it recorded a settled run with zero
+work as a settled run with zero work rather than as success. What it does not establish is anything about the flow: no
+tool ran, so no criterion moved.
+
 # Re-measured 2026-10-17: the fixtures are still ready, and the funds still are not
 
 This child was resumed in a later session, and the whole state was taken again rather than quoted from the entry below.
