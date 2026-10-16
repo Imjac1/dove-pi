@@ -31,33 +31,15 @@ jobs:
         shell: pwsh
         run: |
           $stage = Join-Path $env:RUNNER_TEMP 'dove-pi-release'
-          New-Item -ItemType Directory -Path $stage | Out-Null
-          # `modes` belongs here because it is product content the runtime reads: the manifest's digest covers it
-          # (`scripts/release-roots.mts`), and an archive without it publishes a release that refuses every tool call the
-          # moment a mode is declared. `tests/release-manifest.test.ts` holds this list against those roots, and
-          # `scripts/check_release_readiness.py` refuses an archive whose modes are missing or half-copied.
-          # `LICENSE` and `NOTICE` belong here for a different reason: Apache-2.0 section 4(a) gives every recipient of the
-          # Work a copy of the License, and the zip is where a recipient gets it. They are **not** in `RELEASE_SOURCE_ROOTS`,
-          # deliberately - that list must stay equal to `MANAGED_INSTALL_SOURCE_ROOTS` (the same test asserts it), so adding
-          # the licence there would oblige the installer to put a licence inside a machine-local copy, which is not what
-          # section 4(a) asks for. The check above is a superset one, which is why these two can be here and only here.
-          $include = @('bin', 'installer', 'scripts', 'src', 'tests', 'modes', '.pi', 'LICENSE', 'NOTICE', 'dove_pi.py', 'package.json', 'package-lock.json', 'tsconfig.json', 'README.md', 'README.en.md')
-          foreach ($entry in $include) { Copy-Item -LiteralPath $entry -Destination $stage -Recurse }
-          # **The archive may carry nothing the manifest does not describe, and a cache is the case that shipped.** The
-          # runner executes Python before this step, so `__pycache__` directories exist inside the copied roots; in
-          # v0.2.4 seventeen `.pyc` files reached the published zip, present in no commit, embedding this builder's
-          # absolute path, while `sourceDigest` deliberately skips `__pycache__` - so the manifest covered a smaller
-          # scope than the archive delivered. Removed here by name, and refused there by
-          # `scripts/check_release_readiness.py`, which is the half that fails loudly: the two are one rule, and a
-          # change to either without the other is what the refusal catches.
-          Get-ChildItem -LiteralPath $stage -Recurse -Force -Directory -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -in @('__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache') } |
-              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          $trellisStage = Join-Path $stage '.trellis'
-          New-Item -ItemType Directory -Path $trellisStage | Out-Null
-          Copy-Item -LiteralPath '.trellis/spec' -Destination (Join-Path $trellisStage 'spec') -Recurse
-          Copy-Item -LiteralPath '.trellis/workflow.md' -Destination (Join-Path $trellisStage 'workflow.md')
-          Copy-Item -LiteralPath "$env:RUNNER_TEMP\release.json" -Destination (Join-Path $stage 'release.json')
+          # **What a release archive contains is defined in one place**, `scripts/stage-release.ps1`, so this workflow
+          # and a local replay cannot drift apart on the include list - drift here produces an archive whose contents
+          # differ between the machine that tested it and the machine that shipped it. Two of its entries are worth
+          # keeping in view without opening it: `modes` is product content the runtime reads, and a mode without its
+          # `MODE.md` refuses every tool call the moment it is selected; `LICENSE` and `NOTICE` are staged because
+          # Apache-2.0 section 4(a) gives every recipient a copy of the Licence, and the zip is where they get it.
+          # Caches are excluded there by name, and `scripts/check_release_readiness.py` refuses an archive that still
+          # carries one - the assembly half and the enforcement half of the same rule.
+          ./scripts/stage-release.ps1 -Stage $stage -GeneratedAssets "$env:RUNNER_TEMP\release.json"
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath 'dove-pi-windows.zip'
           $hash = (Get-FileHash -LiteralPath 'dove-pi-windows.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content -LiteralPath 'dove-pi-windows.zip.sha256' -Value "$hash  dove-pi-windows.zip" -Encoding ascii

@@ -22,10 +22,18 @@ Both were launched through the installed launcher (`--launcher dove-pi`) with th
 |---|---|---|---|---|---|
 | `p1-pass1` | 21 s | true | 0 | 0 | `["error"]` |
 | `p1-pass1-retry` | 31 s | true | 0 | 0 | `["error","error"]` |
+| `p1-pass1-b` (round 5) | 26 s | true | 0 | 0 | `["error"]` |
 
-The ledger names the cause for the first: `kind=provider.request.completed stopReason=error failureKind=transient
+The ledger names the cause for the first and the third: `kind=provider.request.completed stopReason=error failureKind=transient
 failureReason=http_429 durationMs=1432`. The second shows the host's own `auto_retry_start` … `auto_retry_end,
 success=false` - so the retry ran and hit the same window.
+
+**Three attempts across roughly an hour and a half, the same `http_429` each time**, so the rate-limited window is not a
+momentary thing and a fourth attempt now would be spending the round to learn the same sentence again. **No remedy was
+available to try from here**: the model and credential configuration was not found at any of the paths I looked in
+(`~/.pi/models.json`, `%APPDATA%\pi`, `%LOCALAPPDATA%\pi`), so there is no second provider to switch to without asking
+the operator. Each attempt ran against the released build - the install self-reports `Dove Pi 0.2.4 (Pi 1.0.0)` - so
+when the window opens, the run that counts is one command away, not a re-installation.
 
 **Neither counts**, by this child's own rule: the criterion is three readings changing (suite, held-out instrument,
 controller), and nothing changed for either - the copy's suite read `1 failed, 115 passed` again, `controller.py` 20090 B
