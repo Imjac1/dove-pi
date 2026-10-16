@@ -1459,3 +1459,34 @@ Two things the work turned up on its own. The header had to be rewritten to say 
 
 - The reading child is still the only thing outstanding on the parent, and still needs a funded account.
 - The prose citations on the specification pages remain held only to resolvability; whether a cited line still says what its sentence claims cannot be judged without changing the pages, and the front door now says so.
+
+
+## Session 251: The host surface under 1.0, and the cause rule's first real refusal
+<!-- trellis-session: v=2 fp=72faf19fc21be195 -->
+
+**Date**: 2026-10-17
+**Task**: The host surface under 1.0, and the cause rule's first real refusal
+**Branch**: `master`
+
+### Summary
+
+The session opened with no active task pointer, re-attached the two-project reading, and measured that both provider credentials are still unfunded - 429 insufficient_quota and 402 insufficient_balance - so the two passes remain owed. A claim this session had itself written was then falsified by its own measurement: the provider-cause rule had not been waiting on money at all, because a refusal is what an unfunded account produces and the only missing ingredient was a build carrying the fix. The contrast was measured minutes apart on the same credential and scenario - the released build records failureKind=transient failureReason=http_429 with no provider code, while the tree under --launcher source records terminal/account-unpaid with providerCode=insufficient_quota, retryable false and a next action, stopping after one attempt instead of retrying a terminal state - and the attribution is measured rather than assumed, since account-unpaid and providerCode occur in five files under src and in none of either installed version. The reading plan was then written and its riskiest step de-risked without money: the runner has no work-mode flag, so project two needs its own .dove/mode.json, and a throwaway fixture proved the binding loads code-audit with networkAxis=none against code-development's shell-uncovered. The Pi 1.0 re-check then ran to completion. Four artifacts that had sat uncommitted for a day landed only after their three headline readings were taken again and held. The host surface was enumerated under four named patterns and judged line by line, which also corrected an earlier count that had no recorded search behind it. The silent degradation of getPiVersion was converted from an inference into a reading by relocating the file to a tree where the host package is unreachable and running it. plan-v8 was judged not to need a v9, scoped to the host-assumption question. The negative half of the test question was answered by class: the mount points and the seven adapter exports are held by the compiler, because the host types on() as literal overloads, while the version reading, the host internal layout, the dependency shape and the comment prose are held by nothing. Eleven verdicts were recorded, with three needs-change tasks opened, one claim downgraded in place, one waiting on the operator because it edits the plan book, and one left unverified rather than concluded. Three things that read like defects were measured and are not: the typebox warning belongs to three of the operator installed packages, the hard-coded host bundle path still resolves in 1.0, and the adapter seven symbols are all present.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d781546` | docs(task): the two-project reading is prepared, and the funds are still the blocker |
+| `98f71d8` | docs(task): the eleventh attempt does not count, and the build that answered predates the cause fix |
+| `a0002db` | docs(task): the two passes are bound by the build, not by their order |
+| `bec6792` | docs(task): the interrupted 1.0 re-check lands, its headline readings re-measured first |
+| `9a0bb7f` | docs(task): the completion order, and the change boundary before any code |
+| `f93170d` | docs(task): the host surface, enumerated under four named patterns and judged line by line |
+| `de3fec8` | docs(task): the silent degradation is measured, and S1b, S1c and the surface close |
+| `221eec3` | docs(task): S2 does not need a v9, S3 says what nothing watches, and the verdicts carry their task ids |
+| `f5dadd1` | docs(task): three needs-change verdicts become three planned tasks |
+| `051dd5c` | docs(task): the re-check acceptance record is complete, gates re-run green |
+
+### Status
+
+[OK] **Completed**

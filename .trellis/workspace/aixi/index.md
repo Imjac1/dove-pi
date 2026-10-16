@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 250
+- **Total Sessions**: 251
 - **Last Active**: 2026-10-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1461 | Active |
+| `journal-5.md` | ~1492 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 251 | 2026-10-17 | The host surface under 1.0, and the cause rule's first real refusal | `d781546`, `98f71d8`, `a0002db`, `bec6792`, `9a0bb7f`, `f93170d`, `de3fec8`, `221eec3`, `f5dadd1`, `051dd5c` | `master` |
 | 250 | 2026-10-17 | The range's end was never a cited line | `d5b21ec` | `master` |
 | 249 | 2026-10-17 | The reading is blocked on money, and the failure that hid it is fixed | `e3c84a5`, `9548c45` | `master` |
 | 248 | 2026-10-16 | Three tasks planned, landed, and falsified once each | `9651312`, `58e4ee0`, `6eaffdb`, `d40f9b5`, `f528375`, `80e4dad`, `b6110e4`, `88b86a3`, `0983322` | `master` |
