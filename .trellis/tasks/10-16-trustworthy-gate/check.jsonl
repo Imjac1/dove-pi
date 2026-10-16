@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/personal-agent-use-time-architecture.md", "reason": "本子任务只动测试，挂载点表应当不动，验证时要核对它没动"}

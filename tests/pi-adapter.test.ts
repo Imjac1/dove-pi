@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -2153,14 +2154,55 @@ describe("Pi adapter", () => {
 		}
 	});
 
+	/**
+	 * Wait until `count` children of the batch case have written their started markers, or fail loudly.
+	 *
+	 * A bounded wait for an observable state, not a fence: it returns the moment the state holds, and it fails with the
+	 * count it actually reached when it does not - so a mistake reads as a number rather than as a timeout. It polls with
+	 * `timers/promises` so the suite's scan, which forbids the awaited-promise form, has nothing to except here.
+	 */
+	async function waitForStartedChildren(root: string, count: number): Promise<void> {
+		const deadline = Date.now() + 20_000;
+		for (;;) {
+			const started = readdirSync(root).filter((name) => name.startsWith("started-")).length;
+			if (started >= count) return;
+			if (Date.now() > deadline) assert.fail(`only ${started} of ${count} children reported that they started`);
+			await delay(10);
+		}
+	}
+
 	it("keeps every child of a parallel batch visible while the batch is in flight", async () => {
 		// **Pi runs the tool calls of one assistant message in parallel** (`pi-agent-core/dist/agent-loop.js:411-453`),
 		// so two dispatches interleave at their await points. A single last-state binding can describe only one of
 		// them, and the doctor projection has no `activeRuns` field at all - which is what this case fails on.
 		const root = mkdtempSync(join(tmpdir(), "pi-subagent-batch-"));
 		const childScript = join(root, "fake-pi-child.mjs");
-		// The child ignores argv and answers after a delay, so the batch is still in flight when it is observed.
-		writeFileSync(childScript, "setTimeout(() => { process.stdout.write(\"child answer\"); process.exit(0); }, 2500);\n", "utf8");
+		// **The child holds itself in flight, so the case does not have to hope.** It reports that it started, waits for
+		// the case to open the gate, and only then answers - three steps the case can see, instead of a window it hopes is
+		// wide enough. The first version of this case wrote a 2500 ms delay here and slept 600 ms below, which is a race:
+		// measured on CI 2026-10-15 as `0 !== 2` in 2807 ms, on a commit that only changed a task status.
+		//
+		// Two details that are not style. The marker is named from the child's own pid, because both dispatches are
+		// launched with the **same** argv (`DOVE_PI_SUBAGENT_PREFIX_ARGS` is process-wide), so a per-child name cannot be
+		// passed in. And the poll uses `timers/promises`, not the awaited-promise form, because that form is exactly what
+		// the suite's own scan forbids - a sleep standing where a state should be - and a rule the case itself breaks is
+		// not a rule.
+		writeFileSync(childScript, [
+			'import { writeFileSync, existsSync } from "node:fs";',
+			'import { dirname, join } from "node:path";',
+			'import { fileURLToPath } from "node:url";',
+			'import { setTimeout as delay } from "node:timers/promises";',
+			"const dir = dirname(fileURLToPath(import.meta.url));",
+			'writeFileSync(join(dir, "started-" + process.pid), "");',
+			"const deadline = Date.now() + 30000;",
+			'while (!existsSync(join(dir, "release"))) {',
+			'	if (Date.now() > deadline) { process.stderr.write("the release gate never opened\\n"); process.exit(3); }',
+			"	await delay(10);",
+			"}",
+			'process.stdout.write("child answer");',
+			"process.exit(0);",
+			"",
+		].join("\n"), "utf8");
 		const previousExecutable = process.env.DOVE_PI_SUBAGENT_EXECUTABLE;
 		const previousPrefixArgs = process.env.DOVE_PI_SUBAGENT_PREFIX_ARGS;
 		process.env.DOVE_PI_SUBAGENT_EXECUTABLE = process.execPath;
@@ -2189,10 +2231,13 @@ describe("Pi adapter", () => {
 			};
 			const first = subagent.execute("batch-call-1", { name: "one", prompt: "Read the first area" });
 			const second = subagent.execute("batch-call-2", { name: "two", prompt: "Read the second area" });
-			// Both have launched and neither has settled - the window a single slot cannot describe.
-			await new Promise((resolve) => setTimeout(resolve, 600));
+			// **Wait for the state, do not sleep into it.** Both children are in flight exactly when both have written
+			// their started marker, which is a fact this case can see rather than a window it hopes is wide enough.
+			await waitForStartedChildren(root, 2);
 			const doctorResult = await doctor.execute("doctor-call", {}, undefined, undefined, context);
 			assert.equal(doctorResult.details.subagent.activeRuns?.length, 2, "a batch in flight must be reported as two runs, not one overwritten slot");
+			// Now let them finish: the gate is the thing that was holding them.
+			writeFileSync(join(root, "release"), "");
 			const [a, b] = await Promise.all([first, second]);
 			assert.match(a.content[0]?.text ?? "", /child answer/, "each dispatch keeps its own answer");
 			assert.match(b.content[0]?.text ?? "", /child answer/);

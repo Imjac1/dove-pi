@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { createProjectProvider, discoverProject, initializeNativeProject, nativeProjectStatePath, nativeTaskArtifactPath, nativeTaskConvergencePath, readNativeProjectState, readProjectManifest, summarizeProjectContinuation, updateProjectManifest, withProjectMutationLock, type ProjectContextSnapshot, type ProjectTask } from "../src/project-provider/index.ts";
 import { formatProjectStatus, inspectProjectStatus } from "../src/project-status.ts";
@@ -420,12 +421,33 @@ describe("Dove native project provider", () => {
 	});
 
 	it("serializes concurrent native mutations", async () => {
+		// **The overlap is constructed, not hoped for.** The first action holds the lock until the case releases it, and
+		// the case launches the second while it is still held - so the state this case is about exists because the case
+		// made it. The first version slept 50 ms inside the action and 5 ms here and asserted only the order: if the
+		// second launch landed after the first had finished, that order still held, and the serialisation the case
+		// exists to prove was never exercised. It passed for that reason, which is worse than failing.
+		//
+		// The one short wait below is a wait for a **negative** fact - that the second has not run - so it makes a broken
+		// lock more likely to show rather than making the case depend on a duration. The poll-free style is deliberate:
+		// the positive facts are all awaited promises, and the suite's scan forbids the awaited-sleep form.
 		const root = await mkdtemp(join(tmpdir(), "dove-native-lock-"));
 		try {
 			const events: string[] = [];
-			const first = withProjectMutationLock(root, async () => { events.push("first-start"); await new Promise((resolve) => setTimeout(resolve, 50)); events.push("first-end"); });
-			await new Promise((resolve) => setTimeout(resolve, 5));
+			let enter: () => void = () => {};
+			const entered = new Promise<void>((resolve) => { enter = resolve; });
+			let release: () => void = () => {};
+			const released = new Promise<void>((resolve) => { release = resolve; });
+			const first = withProjectMutationLock(root, async () => {
+				events.push("first-start");
+				enter();
+				await released;
+				events.push("first-end");
+			});
+			await entered;
 			const second = withProjectMutationLock(root, async () => { events.push("second"); });
+			await delay(20);
+			assert.deepEqual(events, ["first-start"], "the second action waits for the lock rather than running beside it");
+			release();
 			await Promise.all([first, second]);
 			assert.deepEqual(events, ["first-start", "first-end", "second"]);
 		} finally { await rm(root, { recursive: true, force: true }); }

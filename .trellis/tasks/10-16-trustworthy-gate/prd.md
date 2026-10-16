@@ -27,12 +27,13 @@
 
 ## Acceptance Criteria
 
-- [ ] `pi-adapter.test.ts` 那条**不再有固定睡眠** ✓，且**仍然会红** ✓：把 `agent_doctor` 报的 `activeRuns` 限成 1 个 ✓ 或用例构造不出重叠时 ✓，它必须红 ✓ —— 变异结果写进 `findings.md` ✓，带**红的样子** ✓。
-- [ ] `project-provider.test.ts` 那条**不再可能空过** ✓：重叠由用例**构造** ✓（`entered` / `release` 两个承诺 ✓），且断言**仍然关于顺序** ✓。
-- [ ] 两处改写**保住了**它们原本测的东西 ✓：`child answer` 仍写在 stdout ✓（两处断言读它 ✓）、注入仍是 argv 前缀 ✓。
-- [ ] **扫描执行器**存在且今天为绿 ✓，人为加一处 `await new Promise((resolve) => setTimeout(resolve, 1000));` 必须**变红** ✓。
-- [ ] **规则行**进了前门表 ✓，且 `document-drift` 能解析它的执行器 ✓。
-- [ ] `npm test` 全绿 ✓，四条文档门全绿 ✓。
+- [x] `pi-adapter.test.ts` 那条**不再有固定睡眠** ✓（子进程写 `started-<pid>` ✓、等共享 `release` ✓；用例数到两个标记后再读 doctor ✓），且**仍然会红** ✓：把 `activeRuns` 改成 `.slice(-1)` ⇒ `actual: 1` ✓、报 `a batch in flight must be reported as two runs, not one overwritten slot` ✓。**耗时从 ~2800 ms 降到 1663 ms** ✓（不再等时长 ✓）。
+- [x] `project-provider.test.ts` 那条**不再可能空过** ✓：重叠由 `entered` / `release` 两个承诺**构造** ✓，且新增了那条关键断言 ✓ —— 锁被持有时 `events` 仍为 `["first-start"]` ✓；变异（`if (acquired)` → `if (true)` ✓，只改那一行 ✓）⇒ **红** ✓，报 `the second action waits for the lock rather than running beside it` ✓。
+- [x] 两处改写**保住了**它们原本测的东西 ✓：`child answer` 仍写在 stdout ✓（两处断言读它 ✓）、注入仍是 argv 前缀 ✓、锁那条的顺序断言原样保留 ✓。
+- [x] **扫描执行器**存在 ✓、今天为绿 ✓，且在 `tests/temporary-directory.ts` 加一处**带数字**的固定睡眠后**变红并点名到行** ✓（`temporary-directory.ts:34` ✓），删掉后恢复绿 ✓。
+- [x] **规则行**进了前门表 ✓，`document-drift` 解析通过 ✓（四门 34/34 ✓）。
+- [x] `npm test` **992/992** ✓、typecheck 干净 ✓、四条文档门全绿 ✓、corpus 45/0 ✓。
+- [x] `findings.md` 记了两处变异的**红样** ✓、耗时的前后对比 ✓、扫描**首次运行时抓到自己的注释**这件事与修法 ✓、以及我弄错的两处（变异不够外科 ✓、子进程的 30 秒尾巴 ✓）。
 
 ## Out of Scope
 
