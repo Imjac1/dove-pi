@@ -1,5 +1,29 @@
 # Partial integration review: three children read together
 
+## Added after the release: four children are now three archived and one open
+
+**`10-16-archive-covers-its-declaration` is archived**, 4 of its 5 criteria met and the fifth transferred rather than
+ticked: the rebuilt archive is content-identical to the published one but **not byte-identical**, because the published
+bytes are a mix (231 of v0.2.4's 344 tree files LF→CRLF converted, 113 committed LF) that neither `core.autocrlf` setting
+reproduces, and answering which CI step produces that mix needs the release job's own workspace. The local conversion is
+named and proven. What the child did deliver is measured: staging removes exactly the caches (17 → 0, with 7 + 9 + 1 = 17
+reproduced on this machine), the refusal names the entry, a case drives the stager, and the front door's row was narrowed
+to what its door holds after a verifier showed a stray `docs/extra.md` still passes.
+
+**The user-facing half is closed by `v0.2.6`** - published 2026-10-16T13:38:15Z, `Release` green in 4m38s, both
+`Compatibility` jobs green, four assets, and the **published** archive measured at **348 entries and 0 caches**, with
+`releaseId 0.2.6+f019a8d` tracking the tagged commit. The first attempt is part of the record: `v0.2.5` was tagged, its
+release job failed at `npm run test:installer` because a complete-archive fixture had to grow with
+`REQUIRED_ARCHIVE_FILES`, and this repository's rule - a red gate does not move the tag - is why the fix ships under a new
+patch number with `v0.2.5` left on the commit that failed. Nothing was published by that attempt and no public ref was
+rewritten.
+
+**The remaining child has been refreshed to the current build.** Its sixth attempt failed on the same `http_429` as the
+five before it, but it caught that the managed install was still reporting **0.2.4** while **0.2.6** is Latest - a pass
+against a superseded build, which is what its first requirement exists to prevent. The install now reports
+`Dove Pi 0.2.6 (Pi 1.0.0)`, pulled from the release, so when the provider window opens the reading measures what users
+have.
+
 **Why partial.** This task's design puts the integration review after the children are archived, and two of the four are:
 `10-16-release-024` (archived, v0.2.4 is Latest) and `10-16-trustworthy-gate` (archived). `10-16-archive-covers-its-declaration`
 is in_progress with one criterion unmet, and `10-16-two-project-reading` has taken no counting reading. So this reads what

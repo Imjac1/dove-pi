@@ -68,14 +68,30 @@ clone itself as its cwd, against the recipe's rule that passes run on a copy. No
 statement of the third criterion is therefore "the three pinned files are unchanged", which is how the criterion is
 worded, rather than "the tree was never touched".
 
-## The fifth attempt
+## The sixth attempt, and the drifting build it caught
 
-| Attempt | Duration | `settled` | `toolCalls` | `outputTokens` | `stopReasons` |
-|---|---|---|---|---|---|
-| `p1-pass1-d` (round 7) | 41 s | true | 0 | 0 | `["error","error"]` |
+| Attempt | Duration | `settled` | `toolCalls` | `outputTokens` | `stopReasons` | the install said |
+|---|---|---|---|---|---|---|
+| `p1-pass1` | 21 s | true | 0 | 0 | `["error"]` | 0.2.4 |
+| `p1-pass1-retry` | 31 s | true | 0 | 0 | `["error","error"]` | 0.2.4 |
+| `p1-pass1-b` | 26 s | true | 0 | 0 | `["error"]` | 0.2.4 |
+| `p1-pass1-d` | 41 s | true | 0 | 0 | `["error","error"]` | 0.2.4 |
+| `p1-pass1-e` (round 8) | 24 s | true | 0 | 0 | `["error"]` | **0.2.4 while 0.2.6 is Latest** |
 
-Same cause as the four before it, and the same non-counting reading: zero tool calls, zero output tokens, the copy's
-suite still `1 failed, 115 passed`, `controller.py` still 20090 B, the instrument still 1305 / 5971 B. **Five attempts
-across roughly three hours, all `http_429`** - which is why this round stopped rather than spending a sixth, and why the
-work it did instead was the part that does not need a provider.
+**The sixth attempt did not count either**, for the same reason as the five before it - zero tool calls, zero output
+tokens, the three readings unchanged - but it caught something the five could not: the managed install was reporting
+**0.2.4** while **0.2.6** is the current release. That is exactly what this child's first requirement and its criterion
+about reading the version back exist for: **the version is the first reading**, and a pass against a superseded build
+would have been a reading of the wrong artefact - published, honest-looking, and about a release users no longer get.
+
+So the install was refreshed before anything else: `dove-pi update` pulled `0.2.6+f019a8d` from the release, reporting
+`Previous release: 0.2.4+25039c9` as the rollback point, and `--version` now reads `Dove Pi 0.2.6 (Pi 1.0.0)`. That
+update is also the strongest evidence this child has about the **user's** path: it fetched the real archive from GitHub
+with no local artefact involved.
+
+**One thing I looked for and did not find**, stated because it looks like a defect and is not: requesting
+`releases/latest/download/release.json` returned nothing. That was **my guess at the URL**, not a check of the release -
+`release.json` in v0.2.6 was downloaded and read directly (`releaseId 0.2.6+f019a8d`), and the launcher's own update path
+works. Whether that particular `/latest/download/` URL is meant to serve the manifest is not something this child
+established one way or the other.
 
