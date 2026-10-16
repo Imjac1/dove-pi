@@ -47,8 +47,35 @@ self-consistent: *"1 denied action(s) are refused, and 0 action(s) run only afte
 none' is enforced at the tool boundary, and the axis does not cover a command run through the shell, which this mode
 still permits."*
 
-## What remains for this child
+## The second project is built, and the source clone's state needs a precise reading
 
-- **The first reading is not taken.** Two attempts were lost to a rate-limited provider window. A third immediately would
-  hit the same window, which is why this round stopped rather than spending the budget on it.
-- Everything else - the second project, the non-writable mode, the conclusion paragraph - is untouched.
+**The Node project exists and its baseline is recorded**, so the second reading is one command away when the provider
+window opens. It is generated, not committed (R4): `.trellis/tasks/10-16-two-project-reading/research/node-project-fixture.mjs`
+writes seven files and prints their byte sizes, so the "instrument unchanged" assertion is recomputable rather than
+dependent on a file that can rot. Its baseline: **`tests 4 / suites 3 / pass 3 / fail 1`** under Node v24.14.1, with the
+failing case being the customer's own complaint - `actual: 0.30000000000000004, expected: 0.3` - which is the work a
+**read-only** mode cannot do, so "the suite stays failing" is the honest outcome rather than a disappointment. The
+instrument is `test/instrument.test.mjs` plus the `instrument.lock.json` it checks every other file against, so any write
+to the project turns it red: for a read-only pass that makes "it did not write" checkable, and it should be read as a
+tripwire rather than as a held-out behavioural test.
+
+**The graded clone is at its three pins** - `controller.py` 20090 B, `tests/conftest.py` 5971 B,
+`tests/test_immutable.py` 1305 B, no caches, its suite still `1 failed, 115 passed`. It is **not** a clean checkout, and
+the recipe says so: `tests/conftest.py` shows as modified and `tests/test_immutable.py` as untracked because those are the
+**instrument bytes a previous session wrote into it** - "the original was never committed and is not on this machine". One
+item is not explained by the recipe: **`.dove/` is present in the source clone**, which means some earlier pass used the
+clone itself as its cwd, against the recipe's rule that passes run on a copy. Nothing was deleted here; the accurate
+statement of the third criterion is therefore "the three pinned files are unchanged", which is how the criterion is
+worded, rather than "the tree was never touched".
+
+## The fifth attempt
+
+| Attempt | Duration | `settled` | `toolCalls` | `outputTokens` | `stopReasons` |
+|---|---|---|---|---|---|
+| `p1-pass1-d` (round 7) | 41 s | true | 0 | 0 | `["error","error"]` |
+
+Same cause as the four before it, and the same non-counting reading: zero tool calls, zero output tokens, the copy's
+suite still `1 failed, 115 passed`, `controller.py` still 20090 B, the instrument still 1305 / 5971 B. **Five attempts
+across roughly three hours, all `http_429`** - which is why this round stopped rather than spending a sixth, and why the
+work it did instead was the part that does not need a provider.
+
