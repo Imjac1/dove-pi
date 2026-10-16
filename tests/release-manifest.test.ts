@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RELEASE_SOURCE_ROOTS } from "../scripts/release-roots.mts";
 import { MANAGED_INSTALL_SOURCE_ROOTS } from "../src/managed-install-status.ts";
@@ -54,6 +56,47 @@ describe("the release source roots", () => {
 			return !copied.has(root) && !copied.has(top);
 		});
 		assert.deepEqual(missing, [], "these roots are in the digest and not in the archive: " + missing.join(", "));
+	});
+
+	it("stages what it says it stages: every root, the two .trellis entries, and no cache", () => {
+		// **The list is held by the case above; the stager itself was held by nothing.** Measured 2026-10-16 by a verifier:
+		// dropping the stager's `.trellis` entries left the suite green, removing its cache exclusion left both release cases
+		// green, and **no test executed it at all** - one reads it as text. So an archive staged without `.trellis/spec` and
+		// `.trellis/workflow.md` passed the suite, passed readiness (their absence was not required then; `REQUIRED_ARCHIVE_FILES`
+		// requires them now) and would have published, taking the specification index and the workflow document out of every
+		// download. This case runs it, because reading it is what failed to notice.
+		//
+		const stage = mkdtempSync(join(tmpdir(), "dove-stage-"));
+		try {
+			// **Two interpreters, because the workflow's is not always on the PATH a test sees.** Measured on 2026-10-16: `pwsh`
+		// could not be resolved by `spawnSync` here while `powershell` could, and the stager produced identical results under
+		// both - 347 files staged, 3 cache directories removed, 0 left. The release workflow runs it with `shell: pwsh`, so
+		// this case prefers that interpreter and falls back to the one Windows always has, rather than failing on a
+		// distinction that makes no difference to what is staged.
+		const interpreters = ["pwsh", "powershell"];
+		let staged = spawnSync(interpreters[0] as string, ["-NoProfile", "-File", "scripts/stage-release.ps1", "-Stage", join(stage, "release")], { encoding: "utf8" });
+		let interpreter = interpreters[0] as string;
+		if (staged.error || staged.status !== 0) {
+			interpreter = interpreters[1] as string;
+			staged = spawnSync(interpreter, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/stage-release.ps1", "-Stage", join(stage, "release")], { encoding: "utf8" });
+		}
+		const output = `${staged.stdout ?? ""}${staged.stderr ?? ""}`;
+		assert.ok(!staged.error, `the stager needs a PowerShell, as the release workflow does: ${staged.error?.message ?? ""}${output}`);
+		assert.equal(staged.status, 0, `the stager failed under ${interpreter}: ${output}`);
+			const entries = readdirSync(join(stage, "release"), { recursive: true, encoding: "utf8" }).map((entry) => entry.replace(/\\/gu, "/"));
+			assert.ok(entries.length > 100, `a stage this small would pass the rest of this case vacuously: ${entries.length} entries`);
+			for (const required of [".trellis/workflow.md", ".trellis/spec/backend/index.md"]) {
+				assert.ok(entries.includes(required), `an archive a recipient gets must carry ${required}, and this one does not`);
+			}
+			const caches = entries.filter(
+				(entry) =>
+					entry.split("/").some((part) => ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"].includes(part)) ||
+					entry.endsWith(".pyc"),
+			);
+			assert.deepEqual(caches, [], `a cache in the staged tree is what the readiness check refuses: ${caches.slice(0, 3).join(", ")}`);
+		} finally {
+			rmSync(stage, { recursive: true, force: true });
+		}
 	});
 
 	it("are the same roots the installed release verifies its own digest over", () => {

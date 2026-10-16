@@ -30,6 +30,13 @@ REQUIRED_ARCHIVE_FILES = {
     "release.json",
     "installer/release.py",
     "src/cli.ts",
+    # **A recipient needs these, and nothing checked them.** Measured 2026-10-16 by a verifier: staging an archive without
+    # `.trellis/spec` and `.trellis/workflow.md` passed the suite, passed this check, and would have published. The
+    # specification index is what a reader of the installed tree navigates by, and the workflow document is the one a
+    # project's own agent reads; `scripts/stage-release.ps1` has staged both since the first release, so requiring them
+    # here cannot refuse an archive that was assembled correctly.
+    ".trellis/workflow.md",
+    ".trellis/spec/backend/index.md",
 }
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 
@@ -137,10 +144,18 @@ def validate_archive(archive: Path, expected_manifest: dict[str, object]) -> Non
             # `__pycache__`, so the manifest covered a **smaller scope than the archive delivered**. v0.2.3 carried them
             # too. This check is deliberately first: it is about what must never be in an archive at all, and a reader
             # should be told that before being told the archive is also incomplete.
+            #
+            # **All four names, not two.** A verifier drove this function on archives carrying one extra entry each and
+            # measured that `docs/extra.md`, `src/extra-generated.ts`, `notes/readme.md` and `.pytest_cache/CACHEDIR.TAG`
+            # all passed - so the condition covered `__pycache__` and `.pyc` while `scripts/stage-release.ps1` removes
+            # four directory names, and the sentence in the findings claiming the two halves matched was itself false.
+            # They match now. A cache under a name nobody thought of still passes, which is why the row in the front door
+            # says what was established rather than what it would be convenient to claim.
+            cache_names = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
             cached = sorted(
                 name
                 for name in normalized_names
-                if "__pycache__" in PurePosixPath(name).parts or name.endswith(".pyc")
+                if cache_names & set(PurePosixPath(name).parts) or name.endswith(".pyc")
             )
             if cached:
                 others = f" and {len(cached) - 1} more" if len(cached) > 1 else ""

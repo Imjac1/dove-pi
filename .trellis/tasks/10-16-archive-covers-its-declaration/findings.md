@@ -56,18 +56,39 @@ a ref here produced **CRLF** (203 CRLF, 0 bare LF) - identical after normalising
 step in this pipeline that converts them was **not** isolated, so the helper's own doc was corrected against the
 measurement instead of the intuition it was written from, and the criterion that asks for byte identity is left unticked.
 
+## What the verification changed, and what is still not held
+
+A verifier measured this child's claims on 2026-10-16 and found three real defects - all in the **words**, not in the code
+path, and all now fixed:
+
+- **The rule row read wider than its mechanism.** "The release archive carries nothing the manifest does not describe" is
+  false: 201 of the 344 shipped tree files are outside `RELEASE_SOURCE_ROOTS` (mostly deliberately), and the verifier drove
+  `validate_archive` on archives carrying one extra entry each and measured that `docs/extra.md`, `src/extra-generated.ts`,
+  `notes/readme.md` and `.pytest_cache/CACHEDIR.TAG` **all passed**. The row now says what was established and names the
+  residual limit. **This is the defect class the sibling gate child exists for, sitting in the row written to fix it.**
+- **The enforcement covered two of the four names the assembly half removes.** `.pytest_cache`, `.mypy_cache` and
+  `.ruff_cache` were removed by the stager and refused by nothing - so the sentence in this very file claiming the two halves
+  matched was itself false. Both halves cover the same four names now, and the case loops over all of them.
+- **Nothing executed the stager.** One case read it as text; its `.trellis` entries, its cache exclusion and its own guard
+  were held by nothing, so an archive staged without `.trellis/spec` and `.trellis/workflow.md` passed the suite, passed
+  readiness and would have published. Two things close it: `REQUIRED_ARCHIVE_FILES` names both files, and a case runs the
+  stager and asserts the roots, the two `.trellis` entries and the absence of caches. Measured under two interpreters -
+  `pwsh` could not be resolved by `spawnSync` here while `powershell` could, and the stager staged 347 files with the same
+  three cache directories removed under each - so the case prefers the workflow's interpreter and falls back to Windows'.
+
 ## What this child did not do, stated instead of implied
 
-
-- **The design's stronger shape is not implemented.** It called for one assembly helper owning the include list, called by
-  the workflow *and* by a local replay, so the rule would have a single home. What exists is the workflow's removal step
-  and the check's refusal, cross-referenced - two places instead of one. The drift that shape was meant to prevent is
-  therefore still possible; the refusal makes it loud rather than silent, which is weaker than the design and stronger
-  than nothing. This is the first thing a follow-up should close.
-- **The exclusion is by name, not by rule.** A cache directory with another name (`__pycache__.old`, a `.ruff_cache`
-  variant not in the list) would pass both halves. The list is explicit for that reason: it can be extended deliberately.
-- **A `.pytest_cache`-only archive was not tested.** The refusal's condition covers the four known names through its
-  `__pycache__` and `.pyc` tests; the `.pytest_cache` entries are covered by the workflow's removal only.
+- **The exclusion is by caching name, not by rule.** A directory called `__pycache__.old` still passes both halves. The four
+  names are explicit so they can be extended deliberately, and the front door's row says where the next reader should look.
+- **The criterion about digest scope cannot be satisfied as written.** It asked that the scope `sourceDigest` covers equal
+  the scope the archive delivers; the verifier measured that **201 of the 344 shipped tree files are outside
+  `RELEASE_SOURCE_ROOTS`** - pre-existing and mostly deliberate. What is true now is narrower: the archive carries nothing
+  of the cache kind that the digest cannot see.
+- **The published archive is not a function of the commit alone**, which is the sharper form of the byte-identity finding:
+  231 of its 344 tree files are LF→CRLF converted and 113 are committed LF bytes, so neither `core.autocrlf=true` nor
+  `false` reproduces it locally. The **local** conversion is now isolated and named - `core.autocrlf=true`, turning
+  5029 B/70 LF into 5099 B/70 CRLF - so what remains unexplained is the **published** mix, which needs the release job's
+  own workspace to chase.
 - **The consequence for the published release is not this child's to settle.** v0.2.4 is Latest and fails the new gate.
   That is correct - it carries the defect - and how a superseded release is handled belongs to the parent's map, per this
   child's own design.
