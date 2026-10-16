@@ -1,3 +1,134 @@
+# Findings so far: ten attempts, none counts, and the blocker is not the one this record first gave
+
+## The ninth and tenth attempts: both credentials are out of funds, and the ledger calls that transient
+
+The way was cleared for a second provider config, so the route was built and tested **before** anything long was spent.
+
+**The route is proven, at the HTTP level, and it works.** `~/.pi/agent/models.json.bak-before-replay` names a second host,
+`https://maas-api.antdigital.com/v1`. Its key is valid: `GET /v1/models` answered **200 with 20 models** (the primary host
+answers `["Atria-Dawn"]` alone - the `Atria-Dawn-Preview` id the 2026-10-11 reading saw listed is no longer in the
+catalogue), and `POST /chat/completions` answered **200 with tool calls** for `atria-dawn-preview`, `kimi-k3`,
+`glm-5.3-flashx` and `mimo-v2.6-pro` - `finish_reason=tool_calls`, the tool name and its arguments correct. The model id
+is the one the recorded baseline used, so the instrument's identity is preserved rather than replaced.
+
+Both attempts ran through the managed launcher on the same fresh copy of the graded clone, with the customer's own
+request, `PI_CODING_AGENT_DIR` pointed at a **copy** of the agent directory carrying that config. The operator's own files
+were not edited.
+
+| Attempt | Config | Duration | `toolCalls` | `outputTokens` | the run's own record |
+|---|---|---|---|---|---|
+| `p1-pass1-h` | second host, `contextWindow` 200000 | 18 s | 0 | 0 | `stopReason=error`; provider body: `402 Insufficient balance: apikey status is overdue` |
+| `p1-pass1-i` | the same, `contextWindow` 256 | 17 s | 0 | 0 | `terminal=invalid-configuration MODEL_CONTEXT_OVER_BUDGET`; no provider call |
+
+**Neither counts**, by the same rule as the eight before it: for both, the three readings are unchanged - the copy's suite
+still `1 failed, 115 passed`, the instrument still 1305 / 5971 B, `controller.py` still 20090 B.
+
+**The ninth attempt's cause is the provider's own words, and the ledger does not carry them.** The session log holds the
+error verbatim: `402: {"message":"Insufficient balance: apikey status is overdue","type":"insufficient_balance","code":"insufficient_balance"}`.
+The ledger's entry for the same call reads:
+
+```json
+"failureKind": "transient",
+"failureReason": "reviewed-provider-message"
+```
+
+`usage` is all zeros, and the provider's own `code` - `insufficient_balance` - is nowhere in that entry. A reader gets
+"transient, reviewed the provider's message", which is an instruction to retry. **There is nothing to retry**: an apikey
+whose status is overdue does not become payable by waiting, exactly as an exhausted quota does not.
+
+**Both credentials are exhausted, and two different account states carry the same classification:**
+
+| Credential | Host | The provider's answer | What the ledger recorded |
+|---|---|---|---|
+| `atr_…` (the one in effect) | `api.atria-asi.ai` | `429 insufficient_quota` - "Token quota exhausted" | `failureKind=transient failureReason=http_429`, for 7 attempts over ~5 h |
+| `sk-…` (the backup config) | `maas-api.antdigital.com` | `402 insufficient_balance` - "apikey status is overdue" | `failureKind=transient failureReason=reviewed-provider-message` |
+
+**The cost is the whole of this child's elapsed time, and one field would have ended it.** For the first credential the
+state is `http_429` and nothing more; the status does not separate a rate limit from an exhausted quota, and a hand probe
+of the same key on a 25-token request returns `insufficient_quota` with the message "Token quota exhausted". Whether each
+of the seven was a quota refusal or another 429 is not something the seven records can be asked - but the operator's plan
+of 2026-10-11, "retry repeatedly, catch a good window", was built on an assumed 5-10% transient failure rate, and the
+actual rate was 100% with the reason present in every response and absent from every record. The decision that came from
+it was re-examined in the section below and survived only in part.
+
+## The tenth attempt settles the eighth, and the eighth's cause was one field of its own making
+
+The eighth attempt is recorded above as `provider.request.rejected` "with no `failureKind` and no `failureReason` at all",
+attributed first to a revoked credential and then, when that was tested, to a model id that does not exist at the second
+host. **Both attributions are false by measurement** (the credential answers 200; the model id answers 200), and the
+record's own suspicion - that the one field left differing from a workable config was `contextWindow: 256` - is **the
+answer**. The tenth attempt was run to decide it, and by then the account state was constant, so the field was the only
+variable.
+
+With `contextWindow: 256` the run produces exactly the eighth attempt's event, and the ledger entry for it is not silent
+at all:
+
+```json
+"kind": "provider.request.rejected",
+"contextWindow": 256, "inputTokens": 2318, "overflowTokens": 21014, "availableInput": -18696,
+"code": "MODEL_CONTEXT_OVER_BUDGET",
+"message": "Model payload exceeds context window by 21014 token(s); provider dispatch was refused."
+```
+
+**`provider.request.rejected` is the record of a request the budget check refused before dispatch** - it is emitted
+alongside `model.budget.rejected`, with `providerRound.used = 0` and no `provider.request.started` anywhere in the run.
+It is not a credential event, and the cause is one field of the config the eighth attempt built for itself: it copied the
+backup `models.json`, whose `contextWindow` is 256, while presenting that number in its own comparison table. The record
+then spent a session diagnosing a credential that was never broken.
+
+**So the second half of the eighth attempt's conclusion is also wrong**, and in the direction that matters: that entry does
+carry `code` and `message`, plus a `request.terminal` naming `origin: model-budget`, `retryable: true` and the way out -
+*"Use a smaller context or model, then retry."* What the previous session read was the event kind. The field it reported as
+absent was there, in the ledger, under the event it quoted.
+
+## What this corrects, section by section
+
+- **"Neither credential works"** - false. Both authenticate; both are *unfunded*, which is a third thing.
+- **"A rejected credential is revoked or not entitled"** - false, and it was the leading explanation for the eighth
+  attempt's failure. The rejection was the context window, and the credential has answered 200 all along.
+- **"This is outside this session's reach - it needs either the window to pass or a credential this machine does not
+  have"** - false on both counts. Waiting was never the remedy for either credential, and the second credential was on
+  this machine, working, and is the same model id the baseline used.
+- **"A sustained rate limit rather than a window"** - the reading is right and the conclusion is not: it is a quota state,
+  and no window opens in a quota state.
+- **"`provider.request.rejected` carries no reason field"** - contradicted by measurement; the field is `code`, with a
+  `message` beside it.
+- **What the eighth attempt got right, and it is worth keeping**: a reader of the run's *summary* cannot tell one cause
+  from another, and the two config files had to be diffed by hand. That is still true, for a different reason than the one
+  given - the summary does not carry the ledger's `code`/`message`, so the cause is one file away rather than absent, and
+  a reader who stops at the summary pays the whole cost again.
+
+**One product observation that survives all of this, measured twice in one evening:** `insufficient_quota`,
+`insufficient_balance` and a genuine rate limit all arrive as `failureKind=transient`, and the field that distinguishes
+them is the provider's `code`, which the ledger records in neither case. Seven attempts over five hours is the price of
+that, and this repository already holds the rule it breaks - *"a message names the cause its own code can check, not the
+one that reads well."*
+
+## What is still owed
+
+**The build identity is settled and matches the release child.** The install self-reports `Dove Pi 0.2.6 (Pi 1.0.0)`;
+`dove-pi update --check` reads `Latest stable release: v0.2.6` / `Current release: 0.2.6+f019a8d` / `Previous release:
+0.2.4+25039c9`, which is the `releaseId 0.2.6+f019a8d` the release child recorded as tracking the tagged commit. So
+whatever a pass measures here measures the build users have.
+
+**No counting reading could be taken, and the reason is now payable rather than mysterious.** The child's remaining
+criteria are the two passes. Nothing about the product prevents them: the route answers 200 with tool calls, both projects
+are built and baselined, and the runner carries the config through `PI_CODING_AGENT_DIR` without touching the operator's
+files. What they need is an account with funds - `insufficient_quota` on one and `insufficient_balance` on the other - and
+that is the operator's to settle, not this session's to work around. The honest state of this child is therefore
+**prepared, blocked on funds, and no longer blocked on a diagnosis**.
+
+**Both fixtures are ready and the three readings are recorded for both**, so the two passes are one command each once the
+account is funded: project one's copy at `1 failed, 115 passed` with its pins at 20090 / 5971 / 1305 and its caches
+removed, project two generated from its own script with all seven declared sizes reproduced and `tests 4 / suites 3 /
+pass 3 / fail 1`.
+
+**Where the ten attempts' evidence is.** Nothing was added to this repository but this file. The two counting-attempt
+records - the redacted run logs, their full summaries, and the `execution.jsonl` ledgers that carry the `code`/`message`
+entries quoted above - are in `C:\Users\Macfy\Desktop\dsh\dove-two-project-reading\evidence\`, outside the repository. The
+project copies, the generated fixture and the temporary agent directory were removed; the clone is back at its three pins
+with no caches.
+
 # Findings so far: two attempts, neither counts, and the reason is the same
 
 ## What was measured before the passes
