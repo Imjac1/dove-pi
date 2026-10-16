@@ -1490,3 +1490,28 @@ The session opened with no active task pointer, re-attached the two-project read
 ### Status
 
 [OK] **Completed**
+
+
+## Session 252: Three needs-change verdicts land, and the tax the doors charge for moving a line
+<!-- trellis-session: v=2 fp=36e8e326eb812bb1 -->
+
+**Date**: 2026-10-17
+**Task**: Three needs-change verdicts land, and the tax the doors charge for moving a line
+**Branch**: `master`
+
+### Summary
+
+The three needs-change tasks the 1.0 re-check opened were implemented and archived, all three of them text and one of them behaviour. The replaySafe comment now names this repository own name table and keeps the measurement that corrects its old claim, because a correction has to name what it corrects - and that forced two of the task own acceptance criteria to be amended rather than quietly moved: pinning a line number inside a source comment would have reproduced the sibling defect, and HarnessTool survives twice under src, both inside the paragraph that records it as absent. Five comment sites stopped stating a host version as the host standing state, two of them found by the sweep rather than listed in the plan, and every assertion underneath was re-measured: the ls schema has no cursor, the host still declares its own thinking command, no file in the host package carries a submission id, and the install comment was corrected rather than re-endorsed because 1.0 declares installAndPersist and its siblings. The host-version reading became a reading with three distinguishable states and its first case ever - nothing under tests or scripts had named the module - plus a session-start warning built from the paths the search walked rather than from a claim about the host. Two things the work forced. The citation door charged its tax twice, once at 18 of 18 mount points and once at 16 of 18, and both repairs were done by content with every pre-edit line proved identical to the line it moved to, never by arithmetic. And the sweep found three named citations that had been stale before any of this work - the pre-edit file holds the same text at those positions - which turns the front door claim that only the mount table is checked by rule into three measurements rather than a warning. Two questions the work left open are now planned tasks of their own, with the measurement that produced each. Gates at the end: typecheck exit 0, npm test 1001 pass and 0 fail, installer OK, the task-artifact corpus at 0 problems, and both citation doors green. The two passes on the two-project reading are still owed and still blocked on the same thing: the funding never reached either credential, measured across 164 watcher probes overnight with the primary answering 429 insufficient_quota and the backup 403 API key is not enabled.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b016a8` | docs(core): replaySafe names this repository own table, not a host type that is gone |
+| `eb7c521` | docs(spec,src): no comment pins a host version, and the citations the edit moved are repointed by content |
+| `bf327d5` | fix(adapter): the host version reading says what it searched, and a case holds the failure path |
+| `52bfa82` | docs(task): two questions the last three tasks left open become planned tasks |
+
+### Status
+
+[OK] **Completed**
