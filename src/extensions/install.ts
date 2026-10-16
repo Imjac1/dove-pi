@@ -92,10 +92,16 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 		updateStatus = "unchanged";
 	}
 
-	// Pi 0.84.3 has no public persistent multi-source install API. Its npm
-	// batch helper is private, while resolveExtensionSources() remains serial
-	// and does not persist settings. Keep writes to the shared Pi/npm root
-	// serialized and expose bounded progress instead of reaching into internals.
+	// **This comment used to say the host had no public persistent multi-source install API.**
+	// Measured 2026-10-17 against the installed Pi 1.0: it does. `PackageManager` declares
+	// `installAndPersist`, `removeAndPersist`, `install`, `remove`, `update`,
+	// `addSourceToSettings`, `removeSourceFromSettings` and `setProgressCallback` over
+	// `install | remove | update | clone | pull` progress events
+	// (`pi-coding-agent/dist/core/package-manager.d.ts`). The sentence was true of the
+	// version this code was written against, and the loop below still keeps its writes to
+	// the shared Pi/npm root serialized and its progress bounded - but that shape is now a
+	// deliberate choice rather than a workaround for a missing API, and whether to adopt the
+	// public path is its own task rather than this comment's conclusion.
 	for (const [index, entry] of profilePackages.entries()) {
 		const existing = configuredPackages.find((value) => matchesConfiguredPackage(value, entry));
 		const alreadyConfigured = existing !== undefined && (!updateConfigured || matchesExactConfiguredPackage(existing, entry));

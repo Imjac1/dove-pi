@@ -300,9 +300,18 @@ const FENCE_SHELL_STANCES = new Set(["denied", "uncovered"]);
 /**
  * The tools whose path argument this repository can **verify**, and where that argument is.
  *
- * Read from the installed host's own schemas (`pi-agent-core`, `dist/harness/tools/*.d.ts`): `write` and `edit`
- * both take `path`, and `tools/index.d.ts` exports exactly `{read, write, edit, bash}`. `agent_workspace_patch`
- * is ours (`pi-adapter/extension.ts`) and takes a **list**, which is why a target is a set rather than a value.
+ * Read from the installed host's own tool declarations (`pi-coding-agent`, `dist/core/tools/`): `write` and `edit`
+ * take a `path`, typed as `WriteToolInput` and `EditToolInput` and re-exported from that directory's `index.ts`.
+ * `agent_workspace_patch` is ours (`pi-adapter/extension.ts`) and takes a **list**, which is why a target is a set
+ * rather than a value.
+ *
+ * **The citation moved, and the sentence that stood here is worth recording.** It read "`pi-agent-core`,
+ * `dist/harness/tools/*.d.ts` ... `tools/index.d.ts` exports exactly `{read, write, edit, bash}`". Measured
+ * 2026-10-17 against the installed Pi 1.0: `pi-agent-core` holds **no** tool declaration file - the `harness`
+ * directory is gone - and the host's tool index exports a factory per tool, `createReadTool`, `createWriteTool`,
+ * `createEditTool` and `createBashTool` among others, so it is not the four-name set that sentence named. The map
+ * above did not change with any of that, and that is the point of it: it names the tools whose path argument this
+ * repository can verify, not the tools the host happens to have.
  *
  * **The map is deliberately tiny, and the smallness is the design.** The installed catalog holds 57 tool names
  * across extensions this repository cannot read schemas for, so "which other tools mutate, and where is their

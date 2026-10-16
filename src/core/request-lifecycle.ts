@@ -159,9 +159,12 @@ export class RequestLifecycleController {
 		if (delivery !== "initial" && this.#active?.state === "active") {
 			return { lease: snapshotLease(this.#active), delivery, newLogicalRequest: false, coalesced: false, reason: "active-delivery", terminalized: [] };
 		}
-		// Pi 0.84.3 does not expose a submission id. An equivalent input can only
-		// be treated as host redelivery while the same initial submission remains
+		// The host exposes no submission id, so an equivalent input can only be
+		// treated as host redelivery while the same initial submission remains
 		// unsettled. Steering/follow-up are always deliberate new submissions.
+		// (Re-measured 2026-10-17: no file in the installed host package carries
+		// a submission id, so the reason this comment gives still holds - what it
+		// no longer carries is a version number, which only went stale.)
 		if (delivery === "initial") {
 			const candidate = [this.#active].find((lease): lease is MutableLease =>
 				lease !== undefined

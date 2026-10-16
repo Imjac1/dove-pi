@@ -172,7 +172,7 @@ A field run does **not** cover, and must not be cited as covering:
   system prompt as the first `role: "system"` message instead - so the recorder's ternary wrote a constant `0`, and the
   entry now **omits the key** rather than reporting a number it did not measure.
   **Read the size from the product instead**: `/status full` prints `prompt=<n>` for the prompt this adapter actually
-  assembled (`src/core/strategy-snapshot.ts:192`, fed by `src/pi-adapter/extension.ts:1113`), and
+  assembled (`src/core/strategy-snapshot.ts:192`, fed by `src/pi-adapter/extension.ts:1116`), and
   `tests/host-work-mode.test.ts` holds that reading with its own case.
   Wrong: `providerEvidence: []` for a real run, and `systemPromptChars: 0` beside `messageChars: 23129` - an absent
   recorder and a written-by-ternary zero, both shaped like measurements. Correct: the field absent with a named gap, and

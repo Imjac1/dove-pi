@@ -428,9 +428,10 @@ export interface LsObservationMetadata {
 	readonly continuation?: { readonly kind: "increase-limit"; readonly nextLimit: number };
 }
 
-/** Pi 0.84.x makes built-in tool input mutable but does not expose a cursor
- * parameter for ls. Normalize its documented default and report the supported
- * limit-expansion continuation explicitly instead of inventing a cursor. */
+/** The host makes built-in tool input mutable but exposes no cursor parameter for ls - its
+ * schema is `path` and `limit`, re-measured 2026-10-17 against the installed Pi 1.0. Normalize
+ * its documented default and report the supported limit-expansion continuation explicitly
+ * instead of inventing a cursor. */
 export function normalizeLsToolInput(toolName: string, input: Record<string, unknown>): boolean {
 	if (toolName !== "ls" || (typeof input.path === "string" && input.path.trim() !== "")) return false;
 	input.path = ".";
@@ -1440,9 +1441,10 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("用法：/reasoning-voice on|off", "warning");
 		},
 	});
-	// Pi 0.84+ owns the built-in `/thinking` command. Keep Dove's policy
-	// controls under an explicit namespace so the extension does not conflict
-	// with the host command or disappear from autocomplete.
+	// The host owns the built-in `/thinking` command - still declared in its own slash-command
+	// table, re-measured 2026-10-17 against the installed Pi 1.0. Keep Dove's policy controls
+	// under an explicit namespace so the extension does not conflict with the host command or
+	// disappear from autocomplete.
 	pi.registerCommand("dove-thinking", {
 		description: "Show or change the thinking-level policy: auto (mode-driven), lock <level>, or off (manual only)",
 		handler: async (args, ctx) => {
