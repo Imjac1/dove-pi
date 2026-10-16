@@ -2162,7 +2162,12 @@ describe("Pi adapter", () => {
 	 * `timers/promises` so the suite's scan, which forbids the awaited-promise form, has nothing to except here.
 	 */
 	async function waitForStartedChildren(root: string, count: number): Promise<void> {
-		const deadline = Date.now() + 20_000;
+		// Ten seconds, not the twenty this started with: the two children report in about 1.6 seconds here, CI is slower
+		// than this machine, and **the bound is what a failing run costs** - the failure is this deadline expiring. Ten
+		// leaves the margin a loaded runner needs and keeps the red prompt, which is the whole reason the case does not
+		// sleep for a duration in the first place. Measured: the failing path went from 33.4 seconds to 24.3 when the
+		// children were awaited, and to 13.6 when this bound came down.
+		const deadline = Date.now() + 10_000;
 		for (;;) {
 			const started = readdirSync(root).filter((name) => name.startsWith("started-")).length;
 			if (started >= count) return;
