@@ -130,6 +130,21 @@ def validate_archive(archive: Path, expected_manifest: dict[str, object]) -> Non
             if len(normalized_names) != len(set(normalized_names)):
                 raise RuntimeError("Archive contains duplicate file entries")
             names = set(normalized_names)
+            # **The archive may carry nothing its manifest does not describe, and a cache is the case that shipped.**
+            # Measured 2026-10-16 by a verifier over the released v0.2.4: seventeen `.pyc` files, present in no commit,
+            # embedding the CI builder's absolute path (`D:\a\dove-pi\dove-pi\installer\...`) - the same leak mechanism
+            # this repository documents for a `__pycache__` in a copy - while `sourceDigest` deliberately skips
+            # `__pycache__`, so the manifest covered a **smaller scope than the archive delivered**. v0.2.3 carried them
+            # too. This check is deliberately first: it is about what must never be in an archive at all, and a reader
+            # should be told that before being told the archive is also incomplete.
+            cached = sorted(
+                name
+                for name in normalized_names
+                if "__pycache__" in PurePosixPath(name).parts or name.endswith(".pyc")
+            )
+            if cached:
+                others = f" and {len(cached) - 1} more" if len(cached) > 1 else ""
+                raise RuntimeError(f"Archive carries a cache: {cached[0]}{others}")
             for name in names:
                 path = PurePosixPath(name)
                 if path.is_absolute() or name.startswith("//") or re.match(r"^[A-Za-z]:", name) or ".." in path.parts:

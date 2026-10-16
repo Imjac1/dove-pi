@@ -43,6 +43,16 @@ jobs:
           # section 4(a) asks for. The check above is a superset one, which is why these two can be here and only here.
           $include = @('bin', 'installer', 'scripts', 'src', 'tests', 'modes', '.pi', 'LICENSE', 'NOTICE', 'dove_pi.py', 'package.json', 'package-lock.json', 'tsconfig.json', 'README.md', 'README.en.md')
           foreach ($entry in $include) { Copy-Item -LiteralPath $entry -Destination $stage -Recurse }
+          # **The archive may carry nothing the manifest does not describe, and a cache is the case that shipped.** The
+          # runner executes Python before this step, so `__pycache__` directories exist inside the copied roots; in
+          # v0.2.4 seventeen `.pyc` files reached the published zip, present in no commit, embedding this builder's
+          # absolute path, while `sourceDigest` deliberately skips `__pycache__` - so the manifest covered a smaller
+          # scope than the archive delivered. Removed here by name, and refused there by
+          # `scripts/check_release_readiness.py`, which is the half that fails loudly: the two are one rule, and a
+          # change to either without the other is what the refusal catches.
+          Get-ChildItem -LiteralPath $stage -Recurse -Force -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -in @('__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache') } |
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           $trellisStage = Join-Path $stage '.trellis'
           New-Item -ItemType Directory -Path $trellisStage | Out-Null
           Copy-Item -LiteralPath '.trellis/spec' -Destination (Join-Path $trellisStage 'spec') -Recurse
