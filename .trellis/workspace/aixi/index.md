@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 249
+- **Total Sessions**: 250
 - **Last Active**: 2026-10-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1415 | Active |
+| `journal-5.md` | ~1461 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 250 | 2026-10-17 | The range's end was never a cited line | `d5b21ec` | `master` |
 | 249 | 2026-10-17 | The reading is blocked on money, and the failure that hid it is fixed | `e3c84a5`, `9548c45` | `master` |
 | 248 | 2026-10-16 | Three tasks planned, landed, and falsified once each | `9651312`, `58e4ee0`, `6eaffdb`, `d40f9b5`, `f528375`, `80e4dad`, `b6110e4`, `88b86a3`, `0983322` | `master` |
 | 247 | 2026-10-14 | Three customer passes, the TUI driven, and three releases | `91977d9`, `479c1fc`, `3967638`, `491cc5b`, `61450d9`, `11dcf52`, `07695b9`, `d16af78`, `8aa89c7`, `e0d4e52`, `b8359d1`, `e18d197`, `f72d7b4`, `ba2a8b8`, `11efe92`, `cd10d44`, `db1f6e7`, `6833b25`, `516a1bf` | `master` |

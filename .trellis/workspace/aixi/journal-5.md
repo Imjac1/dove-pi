@@ -1413,3 +1413,49 @@ The three decisions this session put to the operator were the classification sta
 
 - The reading needs a funded account - either credential - and then the two passes are one command each.
 - The routed page has 16 bytes of headroom; the next contract sentence there has to pay for itself or the cap gets revisited deliberately.
+
+
+## Session 250: The range's end was never a cited line
+<!-- trellis-session: v=2 fp=0a1d343920ab51c1 -->
+
+**Date**: 2026-10-17
+**Task**: The range's end was never a cited line
+**Branch**: `master`
+
+### Summary
+
+The citation door asks whether a reader can follow a citation, and a range was the weakest citation on the page. In the form the pages actually use - a path, a line, and the second number inside the same code mark - the anchor matched only the first half, so the end was never turned into a claim at all: not checked for existence, and not for order. A hand repoint earlier this session had moved a range's start and not its end, leaving a citation that resolved, landed inside the file, and was nonsense, and this door was green throughout. Both numbers are now claims and a range whose end precedes its start is refused, which the replay measured as 158 claims before and 236 after over the real pages - the difference is exactly the 78 range ends - with no new finding, so no citation on the tree had a broken end either. 
+
+**The evidence corrected the plan before any code was written, which is the part worth keeping.** The design as first drafted would have required order of the other spelling too - a bare second number in its own code mark. Reading the six lines that use it showed that the pages mean a *list* by it: one specification cites a base with a continuation below it, correctly. Ordering that pair would have reported the real pages as broken, which is the false finding this door's own header says turns a check off. So the ordering is confined to the single-span form, and the new case pins both sides of the line - a backwards range refused, an end past the last line refused, a forwards range and a decreasing list accepted - each with the citation count that proves the number was claimed rather than merely unchallenged. 
+
+Two things the work turned up on its own. The header had to be rewritten to say what the door now judges, because a header that stops describing its file is a defect this repository has caught twice. And the other documentation door refused a comment of mine that cited a live line of this repository - name the thing instead - which is this task's own defect class caught by a door that already existed, on the first run. The mirror-tax note in the front door said this condition could be held in about three lines; it is now held, and the note says so.
+
+### Main Changes
+
+- Made both numbers of a single-span `path:N-M` citation into claims, so a range's end is existence-checked like any other cited line.
+- Refused a range whose end precedes its start, naming both numbers, and confined that requirement to the single-span form because the other spelling is an unordered list.
+- Rewrote the door's header to state the third property it judges, and added a case that proves the check can fail on a fixture rather than on the pages.
+- Corrected the front-door mirror-tax note - the condition it said could be held now is - and added a rule row citing the new case, stating where the door is narrower than the rule.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d5b21ec` | test(spec-anchors): the range's end is a cited line, and a backwards range is refused |
+
+### Testing
+
+- [OK] npm run typecheck: clean.
+- [OK] npm test: 999 of 999, including both documentation doors.
+- [OK] npm run test:installer: 143 passed; npm run doctor and npm run pi:smoke green.
+- [OK] Replayed the old and new claim rules over the real pages: 158 claims before, 236 after, 0 findings either way.
+- [OK] The archive tax measured zero again: no curated entry pointed inside the task and no page cited it.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The reading child is still the only thing outstanding on the parent, and still needs a funded account.
+- The prose citations on the specification pages remain held only to resolvability; whether a cited line still says what its sentence claims cannot be judged without changing the pages, and the front door now says so.
