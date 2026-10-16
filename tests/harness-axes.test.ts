@@ -23,7 +23,7 @@ describe("the Safety and Stability axis", () => {
 	it("classifies every terminal reason the type defines, so a new one cannot default", () => {
 		// The list is written out here **on purpose**: derived from the module it would agree with the module, and the
 		// point is to fail when the reason type grows without the classification growing with it.
-		const REASONS = ["completed", "cancelled", "superseded", "startup-failed", "startup-conflict", "invalid-configuration", "authorization-denied", "recovered", "failed"] as const;
+		const REASONS = ["completed", "cancelled", "superseded", "startup-failed", "startup-conflict", "invalid-configuration", "authorization-denied", "account-unpaid", "recovered", "failed"] as const;
 		assert.deepEqual(Object.keys(TERMINAL_CLASSES).sort(), [...REASONS].sort(), "every reason has a class");
 		const classes = ["clean", "recovered", "interrupted", "failure"];
 		for (const reason of REASONS) assert.ok(classes.includes(classifyTerminal(reason)), reason + " classifies into one of the four");
@@ -32,6 +32,7 @@ describe("the Safety and Stability axis", () => {
 		assert.equal(classifyTerminal("superseded"), "interrupted");
 		assert.equal(classifyTerminal("recovered"), "recovered", "a recovery is reported beside the ratio, not folded into it");
 		assert.equal(classifyTerminal("authorization-denied"), "failure");
+		assert.equal(classifyTerminal("account-unpaid"), "failure", "and an unpaid account is a request that did not do its work, for a reason the run did not choose - the same class as a denied credential, a different reason to report");
 	});
 
 	it("returns undefined rather than a perfect ratio when nothing has ended", () => {

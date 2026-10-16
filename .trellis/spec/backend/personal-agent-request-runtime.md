@@ -55,7 +55,7 @@ interface RecoveryOwnerOptions {
 - Mode changes are persisted as `personal-agent-mode` entries and apply only at the next not-yet-started step.
 - PowerShell output is structured; raw output stays in an artifact and summaries reference evidence instead of copying logs into model context.
 - Pi tool results must apply a model-facing output bound to large execution strings (stdout/stderr and nested recipe results); complete output remains in tool details and execution artifacts.
-- The Pi adapter bounds oversized built-in read/shell/search results before model re-entry, preserving full output in tool details and adding a narrowing marker.
+- The Pi adapter bounds oversized built-in read/shell/search results before model re-entry with sizes, digest, and a narrowing marker; complete output remains in tool details.
 - The Pi adapter normalizes complete DeepSeek DSML text tool calls at `message_end` into standard Pi `toolCall` blocks. It accepts only complete wrapper/invocation/parameter tags, preserves non-DSML content, leaves malformed text unchanged, and uses Pi's normal policy/approval path.
 - Execution ledger records use JSONL and include task, step, mode, capability, status, timestamp, and duration.
 - Pi resource samples are observation-only; never stop convergence.
@@ -65,7 +65,6 @@ interface RecoveryOwnerOptions {
 - Provider cache evidence is per-call with bounded digests/sizes for policy, tools, Dove context, and history. The first call per session/provider/model scope is `cold`; later records distinguish reuse, appended history, rewrites, and misses.
 - Cache diagnostics separate cumulative/session reuse, warm reuse, and a bounded recent window. Warm reuse excludes the first cold call; the recent window is request-weighted and defaults to five calls. Summaries must not present warm rate as a request count.
 - Usage-only diagnostics may attribute a miss to model change or an explicit idle gap. Without prefix evidence they report `provider-miss-or-expiry`, never infer a Dove prefix change. A session with no Dove context message is labelled `no-context`, meaning the minimal prefix path rather than unknown policy.
-- Oversized built-in read/shell/search observations are compacted before model re-entry with sizes, digest, and narrowing metadata; complete output remains in tool details.
 - Token audit aggregates project rows using one `sinceHours` inclusion predicate for input, cache, output, reasoning, session count, and message count. `totalReasoning` is the sum of included project `reasoningTokens`; output-only entries outside the window do not affect aggregate output or reasoning percentages.
 
 ## 4. Validation & Error Matrix
@@ -223,7 +222,6 @@ capability executor. In the Pi adapter, the accepted Pi tool call supplies that
 host decision without a second Dove confirmation. Standalone CLI/RPC/MCP hosts
 retain their transport-specific authorization boundary.
 
-Provider calls are runtime decisions, not incidental transport details.
 The Pi `before_provider_request` hook converts the final opaque payload into
 shared ModelGateway segments, reserves model output/tool/provider headroom,
 and rejects the request before HTTP dispatch when the complete payload cannot
@@ -284,63 +282,63 @@ records remain readable.
 
 ### 3. Contracts
 
-Pi's `input` hook owns logical request identity because it runs before skill or
-template expansion and before `before_agent_start`. `RequestPlan.requestId`
-must receive that logical ID rather than generating a second identity. A
-low-level `agent_start` owns a distinct attempt ID, each provider dispatch owns
-a provider-call ID, capability execution owns an execution ID, and Pi retains
-its tool-call ID; ledger correlation keeps these values separate.
+Pi's `input` hook owns logical request identity: it runs before skill or template
+expansion and before `before_agent_start`, and `RequestPlan.requestId` must carry
+that logical ID rather than generating one. A low-level `agent_start` owns an
+attempt ID, each provider dispatch a provider-call ID, capability execution an
+execution ID, and Pi its tool-call ID; ledger correlation keeps them separate.
 
-One active logical request survives Pi's low-level `agent_end`, automatic
-provider retry, compaction retry, and continuation machinery. It closes only at
-`agent_settled` or an explicit terminal transition. Steering and queued
-follow-up inputs are deliberate user deliveries, never automatic retries;
-Pi consumes them inside the active run without a second `before_agent_start`,
-so their `request.received` records retain the active logical request ID and do
-not create orphan request leases that can never own the provider/tool work they
-trigger. The active request closes once at settlement and cannot leak into the
-next prompt. A queued input that fails model/auth/startup preflight before
-`before_agent_start` is terminalized as `startup-failed` when the next input or
-host shutdown exposes the abandoned lease.
+One active logical request survives `agent_end`, automatic provider retry,
+compaction retry and continuation, closing only at `agent_settled` or an explicit
+terminal transition. Steering and queued follow-ups are user deliveries, never
+automatic retries: Pi consumes them inside the active run with no second
+`before_agent_start`, so their `request.received` records keep the active logical
+request ID and create no orphan lease that could never own the work it triggers.
+The active request closes once at settlement and cannot leak into the next prompt.
+A queued input that fails model/auth/startup preflight before `before_agent_start`
+is terminalized `startup-failed` when the next input or host shutdown exposes the
+abandoned lease.
 
-Pi 0.84.3 exposes no host submission ID. Dove may therefore use prompt digest
-only as supporting evidence while an equivalent request is already active; it
-must never deduplicate a merely queued preflight lease or a completed same-text
-submission. A coalesced active redelivery is handled at `input` so Pi does not
-persist a second user entry. `request.planned` and current guidance are emitted
-once per logical request.
+Pi 0.84.3 exposes no host submission ID, so prompt digest is supporting evidence
+only while an equivalent request is active: never deduplicate a merely queued
+preflight lease or a completed same-text submission. A coalesced active
+redelivery is handled at `input` so Pi does not persist a second user entry, and
+`request.planned` and current guidance are emitted once per logical request.
 
 Automatic retry is bounded and fail-closed. HTTP 408/425/429/5xx and reviewed
-transport-reset/timeout codes are transient while the attempt limit has not been
-reached; a started effect no longer refuses one, because Pi's provider retry
-continues from the existing tool result (measured) rather than re-executing the
-tool. The overflow replay stays refused at `session_before_compact` (`willRetry`
-is cancelled): unmeasured, and it rewrites that result away. Cancellation,
-startup conflict, invalid configuration, authorization denial, other terminal
-HTTP statuses, and a refused replay become an `aborted` assistant stop at
-`message_end` so Pi's real post-run retry loop cannot continue; `agent_end` also
-calls `ctx.abort()` as a host boundary. Dove keeps the policy terminal reason
-separately, so `agent_settled` records `authorization-denied`,
-`invalid-configuration`, or a `failed` detail such as
-`attempt-limit`/`non-idempotent-effect`, never the abort as user cancellation.
-Effect classification uses the reviewed read-only tool allowlist, Core
-capability idempotency, and recipe steps; unknown plugin tools fail closed as
-non-idempotent. Classify provider errors by status/code/auth before generic
-abort wording; 401/429 markers outrank cancellation. A stream that ends before
-its response is that transient class too, and the host spells the event
-`aborted`, `error`, `failed` or `failure` - so the rule reads the whole failed
-set, not one spelling of the four.
-Events
-`request.received`, `request.redelivery.coalesced`,
-`request.attempt.started`, `request.attempt.completed`, and `request.terminal`
-are additive; legacy readers may ignore them.
+transport-reset/timeout codes are transient until the attempt limit, **unless the
+provider names a cause no retry changes**: an exhausted quota or unpaid account is
+terminal, reported `account-unpaid` and not `authorization-denied`; `402` is
+terminal by status too, and the vocabulary is closed and read from the message
+text. A started effect no longer refuses a retry, because Pi continues from the
+existing tool result (measured) rather than re-executing the tool. The overflow
+replay stays refused at `session_before_compact` (`willRetry` cancelled):
+unmeasured, and it rewrites that result away. Cancellation, startup conflict,
+invalid configuration, authorization denial and unpaid account, other terminal
+statuses, and a refused replay become an `aborted` assistant stop at `message_end`
+so Pi's post-run retry loop cannot continue, with `agent_end` also calling
+`ctx.abort()`. Dove keeps the policy terminal reason, so `agent_settled` records
+`authorization-denied`, `invalid-configuration`, `account-unpaid`, or a `failed`
+detail such as `attempt-limit`/`non-idempotent-effect`, never the abort as user
+cancellation. Effect classification uses the reviewed read-only tool allowlist,
+Core capability idempotency and recipe steps; unknown plugin tools fail closed as
+non-idempotent. Classify provider errors by the cause named first, then
+status/code/auth, before abort wording; 401/429 markers outrank cancellation, and
+the record carries the evidence it decided from (`providerCode`, `httpStatus`)
+beside the classification. A fallback that matched nothing says
+`unread-provider-message`; `reviewed-provider-message` means a text rule matched.
+A stream that ends before its response is that transient class too, and the host
+spells it `aborted`, `error`, `failed` or `failure`, so the rule reads the whole
+failed set. Events `request.received`, `request.redelivery.coalesced`,
+`request.attempt.started`, `request.attempt.completed` and `request.terminal` are
+additive; legacy readers may ignore them.
 
 `request.terminal` carries one `{origin, code, summary, retryable, nextAction}`
 envelope. Persist it before host abort; shutdown must preserve a specific
 policy/provider cause and use `startup-failed` only for queued preflight work.
 
-`StrategySnapshot` is evidence in `request.planned`/
-`diagnostics/status`; separate preflight failures.
+`StrategySnapshot` is evidence in `request.planned`/`diagnostics/status`;
+separate preflight failures.
 
 ### 4. Validation & Error Matrix
 

@@ -49,6 +49,16 @@ export interface ProviderOutcome {
 	 */
 	readonly failureKind?: string;
 	readonly failureReason?: string;
+	/**
+	 * **The provider's own error code, verbatim** - `insufficient_quota`, `insufficient_balance`. It belongs with
+	 * `stopReason` and `httpStatus` rather than beside `failureKind`, because it is a fact the provider stated, not an
+	 * inference Dove made from it.
+	 *
+	 * It is here so that the classification can be disagreed with. Measured 2026-10-16: an unpaid account and an
+	 * exhausted quota were both recorded as `transient`, and the record carried neither this nor the status - so a reader
+	 * who suspected the classification had to reproduce the request by hand to find out what the provider had said.
+	 */
+	readonly providerCode?: string;
 }
 
 /**
@@ -246,10 +256,16 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 			const providerDetails = detailsOf(record);
 			const stopReason = stringField(providerDetails, "stopReason") ?? "rejected";
 			const usage = providerDetails.usage as Record<string, unknown> | undefined;
-			const httpStatus = typeof usage?.httpStatus === "number" ? usage.httpStatus : undefined;
+			// **The status the failure record itself carries, before the one nested in a usage object.** The failure path
+			// writes `httpStatus` beside `failureKind`; the `usage.httpStatus` slot below is kept because records written
+			// before that existed may carry it there, and a reader that preferred the nested one would report nothing for
+			// every record written since.
+			const recordedStatus = providerDetails.httpStatus;
+			const httpStatus = typeof recordedStatus === "number" ? recordedStatus : typeof usage?.httpStatus === "number" ? usage.httpStatus : undefined;
 			const diagnostic = stringField(providerDetails, "diagnostic");
 			const failureKind = stringField(providerDetails, "failureKind");
 			const failureReason = stringField(providerDetails, "failureReason");
+			const providerCode = stringField(providerDetails, "providerCode");
 			if (record.kind === "provider.request.rejected" || stopReason === "error") {
 				providers.set(id, {
 					stopReason,
@@ -257,6 +273,7 @@ export function readFailures(records: readonly ExecutionRecord[], options: { rea
 					...(diagnostic === undefined ? {} : { diagnostic }),
 					...(failureKind === undefined ? {} : { failureKind }),
 					...(failureReason === undefined ? {} : { failureReason }),
+					...(providerCode === undefined ? {} : { providerCode }),
 				});
 			}
 			continue;

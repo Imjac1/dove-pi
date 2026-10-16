@@ -50,6 +50,11 @@ export const TERMINAL_CLASSES: Readonly<Record<RequestTerminalReason, TerminalCl
 	"startup-conflict": "failure",
 	"invalid-configuration": "failure",
 	"authorization-denied": "failure",
+	// **A separate reason from `authorization-denied`, because the fix is different work.** Measured 2026-10-16:
+	// both credentials authenticated - `200` on `GET /v1/models` - while every completion was refused for an
+	// exhausted quota on one and an unpaid account on the other. Folding these together sends a reader to check
+	// credentials that answer, which is the session this reason exists to have prevented.
+	"account-unpaid": "failure",
 };
 
 /** The two controls whose refusal is what makes an isolation claim enforceable at the tool boundary. */

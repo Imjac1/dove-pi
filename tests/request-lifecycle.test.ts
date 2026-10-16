@@ -90,10 +90,13 @@ describe("request lifecycle", () => {
 		lifecycle.beginRequest({ prompt: "deploy" });
 		lifecycle.startAttempt("initial");
 
-		assert.deepEqual(classifyProviderFailure({ httpStatus: 429 }), { kind: "transient", reason: "http_429" });
-		assert.deepEqual(classifyProviderFailure({ httpStatus: 501 }), { kind: "transient", reason: "http_501" });
-		assert.deepEqual(classifyProviderFailure({ httpStatus: 524 }), { kind: "transient", reason: "http_524" });
-		assert.deepEqual(classifyProviderFailure({ httpStatus: 401 }), { kind: "terminal", reason: "authorization-denied" });
+		// **The decision travels with the evidence it was taken from.** Each case below asserts the whole
+		// classification, so a `httpStatus` that stopped being recorded - the value a reader would need to disagree with
+		// the decision - fails here rather than passing quietly.
+		assert.deepEqual(classifyProviderFailure({ httpStatus: 429 }), { kind: "transient", reason: "http_429", httpStatus: 429 });
+		assert.deepEqual(classifyProviderFailure({ httpStatus: 501 }), { kind: "transient", reason: "http_501", httpStatus: 501 });
+		assert.deepEqual(classifyProviderFailure({ httpStatus: 524 }), { kind: "transient", reason: "http_524", httpStatus: 524 });
+		assert.deepEqual(classifyProviderFailure({ httpStatus: 401 }), { kind: "terminal", reason: "authorization-denied", httpStatus: 401 });
 		assert.deepEqual(classifyProviderFailure({ code: "ECONNRESET" }), { kind: "transient", reason: "ECONNRESET" });
 		assert.equal(lifecycle.retryDecision(classifyProviderFailure({ httpStatus: 503 })).retry, true);
 
@@ -116,6 +119,28 @@ describe("request lifecycle", () => {
 		second.startAttempt("provider-retry");
 		second.startAttempt("provider-retry");
 		assert.deepEqual(second.retryDecision(classifyProviderFailure({ httpStatus: 503 })), { retry: false, reason: "attempt-limit" }, "the effect does not lift the attempt bound");
+	});
+
+	it("stops retrying a cause the provider named, and keeps the words it was told", () => {
+		// **The defect this case exists for, measured 2026-10-16.** The provider this machine talks to answers `429`
+		// carrying `insufficient_quota`, and a status rule that decided above every text rule made that `transient` -
+		// an instruction to retry. Seven attempts over roughly five hours went into it, for a state no wait changes.
+		// The other credential answered `402 insufficient_balance` and was recorded as a *reviewed* provider message.
+		const named = classifyProviderFailure({ category: "account-unpaid", providerCode: "insufficient_quota", httpStatus: 429 });
+		assert.deepEqual(named, { kind: "terminal", reason: "account-unpaid", providerCode: "insufficient_quota", httpStatus: 429 }, "the decision and the evidence it was taken from travel together");
+		const lifecycle = new RequestLifecycleController({ createId: deterministicIds(), maxAttempts: 3 });
+		lifecycle.acceptSubmission({ text: "deploy", source: "interactive" });
+		lifecycle.beginRequest({ prompt: "deploy" });
+		lifecycle.startAttempt("initial");
+		assert.deepEqual(lifecycle.retryDecision(named), { retry: false, reason: "account-unpaid" }, "a permanent account state does not spend the retry budget");
+
+		// **`402` reaches the same reason from the status alone**, because it is the one status that names a cause - so
+		// a payment failure whose body could not be read is still not retried, and the two routes cannot disagree.
+		assert.deepEqual(classifyProviderFailure({ httpStatus: 402 }), { kind: "terminal", reason: "account-unpaid", httpStatus: 402 });
+
+		// **And a genuine rate limit keeps the meaning it always had.** A status with no cause named beside it is not a
+		// payment failure, which is what stops this from being a rule about retrying less.
+		assert.deepEqual(classifyProviderFailure({ httpStatus: 429 }), { kind: "transient", reason: "http_429", httpStatus: 429 });
 	});
 
 	it("never retries cancellation, startup/configuration failures, or authorization denial", () => {

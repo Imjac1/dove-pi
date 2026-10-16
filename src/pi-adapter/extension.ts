@@ -350,14 +350,45 @@ function isGuidanceOnlyContextMessage(message: unknown): boolean {
  */
 const FAILED_STREAM_STOP_REASONS = new Set(["aborted", "error", "failed", "failure"]);
 
+/**
+ * **The provider's own words for "this account cannot pay", closed and enumerable on purpose:** `insufficient_quota`
+ * and `insufficient_balance`, measured 2026-10-16 as a `429` body and a `402` body respectively, and nothing else.
+ * Matched
+ * against a normalized message so that a provider naming the cause in its `code` (`insufficient_balance`) and one
+ * naming it in prose (`Insufficient balance: apikey status is overdue`) reach the same entry.
+ *
+ * **Bare `quota`, `balance` and `limit` are deliberately absent.** A genuine rate limit is about a limit, and a rule
+ * keyed on the word rather than on the claim would classify one as a payment failure - which is the defect this
+ * change exists to fix, pointing the other way. The price of the list is named in the design: a provider whose
+ * phrasing is not here is unclassified until it is measured, and one line plus one case is what adding it costs.
+ */
+const ACCOUNT_UNPAID_TOKENS = ["insufficient_quota", "insufficient_balance"] as const;
+
+function accountUnpaidToken(text: string): string | undefined {
+	const normalized = text.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+	return ACCOUNT_UNPAID_TOKENS.find((token) => normalized.includes(token));
+}
+
 export function classifyAssistantProviderFailure(message: unknown): ProviderFailureClassification {
 	if (typeof message !== "object" || message === null) return classifyProviderFailure({ category: "unknown" });
 	const value = message as { errorMessage?: unknown; error?: unknown; stopReason?: unknown };
 	const text = String(value.errorMessage ?? value.error ?? "");
 	const code = text.match(/\b(?:ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_SOCKET)\b/i)?.[0];
 	if (code) return classifyProviderFailure({ code });
-	const httpStatus = Number(text.match(/(?:^|\D)(401|403|408|425|429|500|502|503|504|524)(?:\D|$)/)?.[1]);
-	if (Number.isSafeInteger(httpStatus)) return classifyProviderFailure({ httpStatus });
+	// **Extracting the status is not the same act as deciding by it**, and the two are now separate lines because the
+	// record wants the status as evidence even when a cause decides the outcome. `402` is in the list because it is
+	// the status a payment failure arrives as: without it the extractor returned nothing, the cause had no status to
+	// be recorded with, and the message fell through to the stopReason fallback below.
+	const parsedStatus = Number(text.match(/(?:^|\D)(401|402|403|408|425|429|500|502|503|504|524)(?:\D|$)/)?.[1]);
+	const httpStatus = Number.isSafeInteger(parsedStatus) ? parsedStatus : undefined;
+	// **A cause the provider names outranks the status it arrived with.** Measured 2026-10-16: this provider answers
+	// `429` carrying `insufficient_quota`, and the status rule that used to sit on this line answered `transient` -
+	// "wait, it will lift" - for a state that no wait changes. Seven attempts over five hours went into that one
+	// ordering. The principle is the one already written for the fallback thirty lines below: a message that names a
+	// cause beats a message that names an event.
+	const providerCode = accountUnpaidToken(text);
+	if (providerCode) return classifyProviderFailure({ category: "account-unpaid", providerCode, httpStatus });
+	if (httpStatus !== undefined) return classifyProviderFailure({ httpStatus });
 	if (/authorization denied|permission denied|unauthorized|forbidden|invalid api key/i.test(text)) return classifyProviderFailure({ category: "authorization-denied" });
 	if (/invalid (?:configuration|config|model|provider)|configuration error/i.test(text)) return classifyProviderFailure({ category: "invalid-configuration" });
 	if (/cancel(?:led|ed)?|abort(?:ed)?/i.test(text)) return classifyProviderFailure({ cancelled: true });
@@ -377,8 +408,14 @@ export function classifyAssistantProviderFailure(message: unknown): ProviderFail
 	// `retryable: false`, and a next action pointing at nothing. The host's word for the event is the event, whichever of
 	// its words it is, so the rule reads the whole failed set. It stays after the text rules on purpose: a message that
 	// says `429`, `Connection error.` or `aborted by the user` is classified above and never reaches here.
+	//
+	// **Its reason is its own, and it used to borrow a name that was not true of it.** `reviewed-provider-message` says a
+	// message was read and matched a rule; this line is reached precisely when nothing matched and nothing was read.
+	// Measured 2026-10-16: a `402 insufficient_balance` arrived here, was recorded as `reviewed-provider-message`, and so
+	// read as a reviewed decision about a cause the reader had every reason to trust. The text rules above keep the old
+	// name, where it is accurate; only the fallback moves.
 	const stopReason = String(value.stopReason ?? "").trim().toLowerCase().replace(/[ -]/g, "_");
-	if (FAILED_STREAM_STOP_REASONS.has(stopReason)) return { kind: "transient", reason: "reviewed-provider-message" };
+	if (FAILED_STREAM_STOP_REASONS.has(stopReason)) return { kind: "transient", reason: "unread-provider-message" };
 	return classifyProviderFailure({ category: "unknown" });
 }
 
@@ -606,6 +643,11 @@ function terminalForFailure(failure: ProviderFailureClassification, decisionReas
 	if (failure.reason === "startup-conflict") return { reason: "startup-conflict", detail: failure.reason, policyAbort: true, terminal: { origin: "session", code: "startup-conflict", summary: "Another Dove/Pi runtime owns this session.", retryable: false, nextAction: "Close the other runtime or start a separate session." } };
 	if (failure.reason === "invalid-configuration") return { reason: "invalid-configuration", detail: failure.reason, policyAbort: true, terminal: { origin: "model-budget", code: "model-budget-rejected", summary: "The provider request could not fit the model or provider budget.", retryable: true, nextAction: "Use a smaller context or model, then retry." } };
 	if (failure.reason === "authorization-denied") return { reason: "authorization-denied", detail: failure.reason, policyAbort: true, terminal: { origin: "provider", code: "provider-authorization-denied", summary: "The provider rejected authentication or authorization.", retryable: false, nextAction: "Check provider credentials and retry." } };
+	// **A terminal that names the fix, because the default branch would not.** Without this line the envelope falls to
+	// the last case below, whose `nextAction` reads "Inspect the provider error and adjust the request." - pointing at
+	// the provider for a bill. The provider's own code is carried into the summary because it is the evidence the
+	// decision was taken from, and a reader who wants to disagree with it should not have to open the ledger.
+	if (failure.reason === "account-unpaid") return { reason: "account-unpaid", detail: failure.reason, policyAbort: true, terminal: { origin: "provider", code: "provider-account-unpaid", summary: `The provider refused because the account behind the credential cannot pay${failure.providerCode === undefined ? "" : ` (${failure.providerCode})`}.`, retryable: false, nextAction: "Settle the provider account or restore its quota, then submit the request again." } };
 	if (decisionReason === "attempt-limit") return { reason: "failed", detail: decisionReason, policyAbort: true, terminal: { origin: "provider", code: "provider-attempt-limit", summary: "Dove stopped after the transient provider retry limit was exhausted.", retryable: true, nextAction: "Check provider availability, then submit the request again." } };
 	if (decisionReason === "non-idempotent-effect") return { reason: "failed", detail: decisionReason, policyAbort: true, terminal: { origin: "provider", code: "retry-refused-after-effect", summary: "Dove refused to replay a provider failure after a non-idempotent effect.", retryable: false, nextAction: "Inspect the workspace and reconcile the effect before retrying." } };
 	return { reason: "failed", detail: decisionReason, policyAbort: true, terminal: { origin: "provider", code: `provider-${decisionReason.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`, summary: `The provider request ended with ${decisionReason}.`, retryable: failure.kind === "transient", nextAction: failure.kind === "transient" ? "Retry after checking provider availability." : "Inspect the provider error and adjust the request." } };

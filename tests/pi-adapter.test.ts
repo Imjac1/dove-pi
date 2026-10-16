@@ -1489,8 +1489,8 @@ describe("Pi adapter", () => {
 	});
 
 	it("prioritizes provider status over abort wording in assistant failures", () => {
-		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 401: request aborted" }), { kind: "terminal", reason: "authorization-denied" });
-		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 429: operation aborted" }), { kind: "transient", reason: "http_429" });
+		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 401: request aborted" }), { kind: "terminal", reason: "authorization-denied", httpStatus: 401 });
+		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "HTTP 429: operation aborted" }), { kind: "transient", reason: "http_429", httpStatus: 429 });
 		assert.deepEqual(classifyAssistantProviderFailure({ errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
 	});
 
@@ -1501,7 +1501,7 @@ describe("Pi adapter", () => {
 		// `provider-unknown` and told the operator to inspect a provider error the ledger did not hold. **The same host
 		// event was `transient-failure` on the first attempt and `unknown` on the second**, so what the reading said about
 		// one event came down to which word the provider happened to send. The host's word for the event is the event.
-		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "terminated" }), { kind: "transient", reason: "reviewed-provider-message" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "terminated" }), { kind: "transient", reason: "unread-provider-message" });
 		// The text still wins where it says something: a person's cancellation is not this, and it is matched above.
 		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
 	});
@@ -1516,14 +1516,53 @@ describe("Pi adapter", () => {
 		// "unknown"`, and the terminal says `retryable: false` with `nextAction: "Inspect the provider error and adjust
 		// the request."` against a ledger that holds no provider error. A stream that ends before its response is the
 		// transient class whether the host spells the event `aborted`, `error`, `failed` or `failure`.
-		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error" }), { kind: "transient", reason: "reviewed-provider-message" });
-		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "failed" }), { kind: "transient", reason: "reviewed-provider-message" });
-		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "failure", errorMessage: "   " }), { kind: "transient", reason: "reviewed-provider-message" });
+		// **The reason is the fallback's own, and it used to borrow one that asserted a review.** `reviewed-provider-message`
+		// is this file's word for "the message was read and matched a rule"; these four lines are reached only when nothing
+		// matched and there was nothing to read. Measured 2026-10-16: a `402 insufficient_balance` landed here, was recorded
+		// as `reviewed-provider-message`, and so read as a reviewed conclusion about a cause the reader had every reason to
+		// trust. The text rule at `HTTP 503` below keeps the old name, where it is true.
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error" }), { kind: "transient", reason: "unread-provider-message" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "failed" }), { kind: "transient", reason: "unread-provider-message" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "failure", errorMessage: "   " }), { kind: "transient", reason: "unread-provider-message" });
 		// The spelling the neighbouring case names is kept, for a caller that hands over a message it did not normalize.
-		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "terminated" }), { kind: "transient", reason: "reviewed-provider-message" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "aborted", errorMessage: "terminated" }), { kind: "transient", reason: "unread-provider-message" });
 		// **The text still wins where there is text**, which is what keeps a bare token from swallowing a real cause.
-		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "HTTP 503" }), { kind: "transient", reason: "http_503" });
+		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "HTTP 503" }), { kind: "transient", reason: "http_503", httpStatus: 503 });
 		assert.deepEqual(classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "Request was aborted by the user" }), { kind: "terminal", reason: "cancelled" });
+	});
+
+	it("reads a cause the provider names, so the status it arrived with does not answer instead", () => {
+		// **Both bodies are the measured responses, verbatim** (2026-10-16), because a rule keyed on a paraphrase of them
+		// would be a rule keyed on my reading rather than on what the provider sent.
+		assert.deepEqual(
+			classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "402: {\"message\":\"Insufficient balance: apikey status is overdue\",\"type\":\"insufficient_balance\",\"code\":\"insufficient_balance\"}" }),
+			{ kind: "terminal", reason: "account-unpaid", providerCode: "insufficient_balance", httpStatus: 402 },
+		);
+		// **The one that cost five hours.** This provider answers `429` - a status the classifier is told to retry - with
+		// `insufficient_quota` in the body, and until this rule existed the status decided and the body was never read.
+		assert.deepEqual(
+			classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "429: {\"error\":{\"message\":\"Token quota exhausted.\",\"type\":\"atria_api_error\",\"code\":\"insufficient_quota\"}}" }),
+			{ kind: "terminal", reason: "account-unpaid", providerCode: "insufficient_quota", httpStatus: 429 },
+		);
+		// **The prose spelling reaches the same entry as the code**, so a provider that names the cause only in its
+		// message is not missed - which is why the list is matched against a normalized text rather than a JSON body.
+		assert.deepEqual(
+			classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "HTTP 402: Insufficient balance" }),
+			{ kind: "terminal", reason: "account-unpaid", providerCode: "insufficient_balance", httpStatus: 402 },
+		);
+		// **And a payment failure with nothing readable in the body is still one**, because `402` means this and
+		// nothing else. Nothing is invented for `providerCode`, which is the absence the reader should see.
+		assert.deepEqual(
+			classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "HTTP 402" }),
+			{ kind: "terminal", reason: "account-unpaid", httpStatus: 402 },
+		);
+		// **A real rate limit keeps the meaning it always had.** The list holds the provider's *claim* and not the word
+		// `limit`, so a 429 about too many requests is not swept into the payment class - the trade this rule could
+		// easily have got wrong in the other direction.
+		assert.deepEqual(
+			classifyAssistantProviderFailure({ stopReason: "error", errorMessage: "HTTP 429: rate limit exceeded, too many requests" }),
+			{ kind: "transient", reason: "http_429", httpStatus: 429 },
+		);
 	});
 
 	it("records why a provider round failed, because the retry was decided from that classification", async () => {
@@ -1576,6 +1615,8 @@ describe("Pi adapter", () => {
 		assert.ok(errored, `the errored round is recorded: ${JSON.stringify(written.map((record) => record.kind))}`);
 		assert.equal(errored.details?.failureKind, "transient", "the record names the kind, which is what made the retry happen");
 		assert.equal(errored.details?.failureReason, "http_429", "and why Dove called it that, in the vocabulary the classifier already owns");
+		assert.equal(errored.details?.httpStatus, 429, "and the status the decision was taken from is recorded beside it, so the decision can be disagreed with without replaying the request");
+		assert.equal(errored.details?.providerCode, undefined, "with no provider code invented, because this message named no cause beyond the status");
 	});
 
 	it("turns the run's bare failed-stream token into a retry rather than a terminal", async () => {
@@ -1626,12 +1667,75 @@ describe("Pi adapter", () => {
 		const errored = written.find((record) => record.kind === "provider.request.completed" && record.details?.stopReason === "error");
 		assert.ok(errored, `the errored round is recorded: ${JSON.stringify(written.map((record) => record.kind))}`);
 		assert.equal(errored.details?.failureKind, "transient", "a bare failed-stream token is the transient class, not `unknown`");
-		assert.equal(errored.details?.failureReason, "reviewed-provider-message", "and it is named by the rule that reads the host's own token");
+		assert.equal(errored.details?.failureReason, "unread-provider-message", "and it is named by the rule that reads the host's own token, not by a claim that the message was reviewed");
+		assert.equal(errored.details?.providerCode, undefined, "and no provider code is invented for a record in which the provider said nothing");
 		const attempt = written.find((record) => record.kind === "request.attempt.completed");
 		assert.ok(attempt, "the attempt is closed");
 		assert.equal(attempt.details?.outcome, "transient-failure", "and it is retried, which is the whole point of the classification");
 		assert.equal(written.some((record) => record.kind === "request.terminal"), false, "a retried attempt reaches no terminal");
 		assert.equal(aborted, 0, "and it does not abort the request, which is what the terminal it used to produce did");
+	});
+
+	it("ends the request on a provider cause it can read, and says which cause and what to do about it", async () => {
+		// **The whole chain, not the classifier alone.** A terminal classification is worth having only if it reaches
+		// the envelope and the record. Measured 2026-10-16, all of it was wrong at once for a `402 insufficient_balance`:
+		// the loop retried it, the record named neither the provider's word nor the status, and the terminal that would
+		// have been produced pointed at "the provider error" for what is a bill.
+		const events = new Map<string, (event: unknown, ctx: FakeContext) => Promise<unknown>>();
+		const api = {
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool() {},
+			registerFlag() {},
+			appendEntry() {},
+			getAllTools() { return representativeTools.map((name) => ({ name })); },
+			setActiveTools() {},
+			getActiveTools() { return [...representativeTools]; },
+			getThinkingLevel() { return "max"; },
+			on(name: string, handler: (event: unknown, ctx: FakeContext) => Promise<unknown>) { events.set(name, handler); },
+		} as unknown as ExtensionAPI;
+		extension(api);
+		let aborted = 0;
+		const context: FakeContext = {
+			hasUI: true,
+			ui: { theme: { fg: (_color, value) => value }, setStatus() {}, notify() {} },
+			sessionManager: { getEntries: () => [], getSessionId: () => "account-unpaid-session" },
+			getContextUsage: () => ({ tokens: 1_000, contextWindow: 1_000_000 }),
+			model: { contextWindow: 200_000, maxTokens: 16_384, provider: "test", id: "test-model" },
+			abort: () => { aborted += 1; },
+		} as FakeContext;
+		const ledgerPath = join(adapterStateDir, "execution.jsonl");
+		const before = readFileSync(ledgerPath, "utf8").split(/\r?\n/).filter(Boolean).length;
+		await events.get("before_agent_start")?.({ type: "before_agent_start", prompt: "go", systemPrompt: "" }, context);
+		await events.get("agent_start")?.({ type: "agent_start" }, context);
+		await events.get("before_provider_request")?.({ type: "before_provider_request", payload: { messages: [{ role: "user", content: "go" }] } }, context);
+		// The measured body, verbatim, on the status the provider really used.
+		const failure = { role: "assistant", stopReason: "error", errorMessage: "402: {\"message\":\"Insufficient balance: apikey status is overdue\",\"code\":\"insufficient_balance\"}", content: [] };
+		await events.get("message_end")?.({ type: "message_end", message: failure }, context);
+		await events.get("agent_end")?.({ type: "agent_end", messages: [failure] }, context);
+		const written = readFileSync(ledgerPath, "utf8")
+			.split(/\r?\n/)
+			.filter(Boolean)
+			.slice(before)
+			.map((line) => JSON.parse(line) as { kind?: string; details?: Record<string, unknown> });
+		const errored = written.find((record) => record.kind === "provider.request.completed" && record.details?.stopReason === "error");
+		assert.ok(errored, `the errored round is recorded: ${JSON.stringify(written.map((record) => record.kind))}`);
+		assert.equal(errored.details?.failureKind, "terminal", "an unpaid account is not the transient class");
+		assert.equal(errored.details?.failureReason, "account-unpaid");
+		assert.equal(errored.details?.providerCode, "insufficient_balance", "the provider's own word reaches the record");
+		assert.equal(errored.details?.httpStatus, 402, "and so does the status it arrived with, so a reader can disagree with the decision");
+		const attempt = written.find((record) => record.kind === "request.attempt.completed");
+		assert.ok(attempt, "the attempt is closed");
+		assert.equal(attempt.details?.outcome, "failed", "a cause no retry changes does not spend the retry budget");
+		const terminal = written.find((record) => record.kind === "request.terminal");
+		assert.ok(terminal, "the request reaches a terminal rather than a retry");
+		assert.equal(terminal.details?.reason, "account-unpaid");
+		const envelope = terminal.details?.terminal as { code?: string; summary?: string; retryable?: boolean; nextAction?: string } | undefined;
+		assert.equal(envelope?.code, "provider-account-unpaid", "the terminal is named for the account rather than for the provider");
+		assert.equal(envelope?.retryable, false, "and it is not offered as retryable");
+		assert.match(envelope?.nextAction ?? "", /Settle/, "and its next action names the fix instead of pointing at the provider error");
+		assert.match(envelope?.summary ?? "", /insufficient_balance/, "and the provider's own word is in the terminal itself, not only in the ledger");
+		assert.equal(aborted, 1, "a terminal aborts the request, which is what keeps a host retry from continuing it");
 	});
 
 	it("writes down that a tool call started, and whether the whitelist gave it a timeout", async () => {

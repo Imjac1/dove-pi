@@ -187,6 +187,25 @@ describe("the failure reading", () => {
 		);
 	});
 
+	it("carries the provider's own word and the status beside Dove's classification of them", () => {
+		// **The reader's half of the evidence, and the half that decides whether a classification can be argued with.**
+		// Measured 2026-10-16: an unpaid account reached the record as `transient/reviewed-provider-message`, and the
+		// reading had no field the provider's `insufficient_balance` or its `402` could have appeared in - so a reader
+		// who suspected the classification had nothing to suspect it *with*. `providerCode` sits beside the provider's
+		// own status rather than inside Dove's inference, because it is a fact the provider stated.
+		const reading = readFailures([
+			received("req-1"),
+			record("provider.request.started", "req-1", { providerCallId: "call-1" }),
+			record("provider.request.completed", "req-1", { providerCallId: "call-1", stopReason: "error", usage: { input: 0 }, failureKind: "terminal", failureReason: "account-unpaid", providerCode: "insufficient_balance", httpStatus: 402 }),
+			terminal("req-1", "account-unpaid", { origin: "provider", code: "provider-account-unpaid", retryable: false }),
+		]);
+		assert.deepEqual(
+			reading.failures[0]?.provider,
+			{ stopReason: "error", httpStatus: 402, failureKind: "terminal", failureReason: "account-unpaid", providerCode: "insufficient_balance" },
+			"the provider's word and the status it arrived with reach the reading beside the classification they produced",
+		);
+	});
+
 	it("carries a rejected provider call diagnostic", () => {
 		const reading = readFailures([
 			received("req-1"),

@@ -12,6 +12,7 @@ export type RequestTerminalReason =
 	| "startup-conflict"
 	| "invalid-configuration"
 	| "authorization-denied"
+	| "account-unpaid"
 	| "recovered"
 	| "failed";
 export type RequestAttemptTrigger = "initial" | "provider-retry" | "compaction-retry" | "continuation" | "recovery";
@@ -63,12 +64,26 @@ export interface ProviderFailureInput {
 	readonly httpStatus?: number;
 	readonly code?: string;
 	readonly cancelled?: boolean;
-	readonly category?: "startup-conflict" | "invalid-configuration" | "authorization-denied" | "unknown";
+	readonly category?: "startup-conflict" | "invalid-configuration" | "authorization-denied" | "account-unpaid" | "unknown";
+	/**
+	 * **The provider's own error code, verbatim.** `code` above is a *transport* class the classifier owns the
+	 * vocabulary for (`ECONNRESET`, `ETIMEDOUT`); this is the provider's word for why it refused, which the
+	 * classifier only forwards so that a reader can disagree with the decision it produced.
+	 */
+	readonly providerCode?: string;
 }
 
+/**
+ * A decision plus the evidence it was taken from. The evidence is carried rather than re-derived because this
+ * function is the only place that holds it: measured 2026-10-16, a `402 insufficient_balance` reached the ledger
+ * as `transient/reviewed-provider-message` carrying neither the provider's code nor the status, and a reader had
+ * to diff provider configuration files by hand to learn what the record already had in its hands.
+ */
 export interface ProviderFailureClassification {
 	readonly kind: "transient" | "terminal";
 	readonly reason: string;
+	readonly providerCode?: string;
+	readonly httpStatus?: number;
 }
 
 interface MutableAttempt {
@@ -382,17 +397,24 @@ const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const TRANSIENT_CODES = new Set(["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"]);
 
 export function classifyProviderFailure(input: ProviderFailureInput): ProviderFailureClassification {
-	if (input.cancelled) return { kind: "terminal", reason: "cancelled" };
-	if (input.category && input.category !== "unknown") return { kind: "terminal", reason: input.category };
+	const evidence = {
+		...(input.providerCode === undefined ? {} : { providerCode: input.providerCode }),
+		...(input.httpStatus === undefined ? {} : { httpStatus: input.httpStatus }),
+	};
+	if (input.cancelled) return { kind: "terminal", reason: "cancelled", ...evidence };
+	if (input.category && input.category !== "unknown") return { kind: "terminal", reason: input.category, ...evidence };
 	if (input.httpStatus !== undefined) {
-		if (input.httpStatus === 401 || input.httpStatus === 403) return { kind: "terminal", reason: "authorization-denied" };
+		if (input.httpStatus === 401 || input.httpStatus === 403) return { kind: "terminal", reason: "authorization-denied", ...evidence };
+		// **402 is the one status that names its own cause.** "Payment required" has no other reading, so where the
+		// body could not be read this is the only route to the reason the vocabulary rule would also have named.
+		if (input.httpStatus === 402) return { kind: "terminal", reason: "account-unpaid", ...evidence };
 		return TRANSIENT_HTTP_STATUSES.has(input.httpStatus) || (input.httpStatus >= 500 && input.httpStatus <= 599)
-			? { kind: "transient", reason: `http_${input.httpStatus}` }
-			: { kind: "terminal", reason: `http_${input.httpStatus}` };
+			? { kind: "transient", reason: `http_${input.httpStatus}`, ...evidence }
+			: { kind: "terminal", reason: `http_${input.httpStatus}`, ...evidence };
 	}
 	const code = input.code?.trim().toUpperCase();
-	if (code) return TRANSIENT_CODES.has(code) ? { kind: "transient", reason: code } : { kind: "terminal", reason: code };
-	return { kind: "terminal", reason: "unknown" };
+	if (code) return TRANSIENT_CODES.has(code) ? { kind: "transient", reason: code, ...evidence } : { kind: "terminal", reason: code, ...evidence };
+	return { kind: "terminal", reason: "unknown", ...evidence };
 }
 
 function normalizeDelivery(value: RequestStreamingBehavior | undefined): RequestDelivery {
