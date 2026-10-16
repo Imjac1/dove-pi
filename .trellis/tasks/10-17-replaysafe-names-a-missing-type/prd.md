@@ -32,12 +32,20 @@ dispositions.
 
 ## Acceptance Criteria
 
-- [ ] **AC-1** The comment names a declaration that exists in this repository, with its `file:line`, and `HarnessTool`
-      appears nowhere under `src/`.
-- [ ] **AC-2** No sentence in the file claims a host vocabulary the installed packages do not carry; the 1.0
-      measurement is cited or summarised rather than asserted.
-- [ ] **AC-3** **Zero behaviour change**, shown rather than stated: the diff touches comment text only.
-- [ ] **AC-4** Gates: `npm run typecheck` clean, `npm test` 0 fail, `npm run test:installer` OK.
+- [x] **AC-1** The comment names a declaration that exists in this repository, and `HarnessTool` is never presented as
+      something the host has. **Amended in two places while implementing, both recorded rather than quietly moved:**
+      (i) the AC first asked for a `file:line`, and pinning one inside a source comment would reproduce the sibling
+      defect this task family is about - `work-mode.ts:303` cites a path that stopped existing - because no door walks
+      line numbers inside a comment; the paragraph names `DECLARED_TOOLS` instead. (ii) `HarnessTool` survives **twice**
+      under `src/`, both inside the paragraph that records it as absent from the installed host, because a correction has
+      to name what it corrects and a search for the name should land on the paragraph that settles it.
+- [x] **AC-2** No sentence in the file claims a host vocabulary the installed packages do not carry; the 1.0
+      measurement is cited. Measured: the paragraph carries the search, its date, the version, and what was not found.
+- [x] **AC-3** **Zero behaviour change**, shown rather than stated: the diff is 12 insertions and 4 deletions, all
+      inside the file's opening comment block - checked by filtering the unified diff for any changed line that is not a
+      comment line, which found none.
+- [x] **AC-4** Gates: `npm run typecheck` clean, `npm test` 0 fail, `npm run test:installer` OK. All three re-run after
+      the edit: typecheck exit 0, the suite `fail 0`, the installer `OK`, and the task-artifact corpus at 0 problems.
 
 ## Out of Scope
 

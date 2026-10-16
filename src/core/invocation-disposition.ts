@@ -16,10 +16,18 @@ import type { RecipeRegistry } from "./recipe-registry.ts";
  * do about it, in its own words, at its own call site. Collapsing those decisions would have been a behaviour
  * change dressed as a refactor.
  *
- * **`replaySafe` is named after what `pi-agent-core` calls it** (`HarnessTool.replay: "never" | "safe"`), not
- * `idempotent`, because a future Pi version persists a per-invocation record of the same kind this repository keeps
- * in its effect-claim store. That harness is a stub in the pinned version, so nothing is built on it here - but the
- * vocabulary matches so that adopting it later is a replacement rather than a rewrite.
+ * **`replaySafe` answers the replay path's question, and its source is this repository's own name table** -
+ * `DECLARED_TOOLS` below, whose entries carry `replaySafe` beside `readOnly` for every tool this build knows. It is
+ * deliberately not `idempotent`: the question is not whether running a tool twice is harmless in general, but whether
+ * *this* invocation can be re-issued from the record without deciding it again.
+ *
+ * **Earlier revisions of this paragraph said the name was borrowed from the host and held open for it** - from
+ * `HarnessTool.replay` in `pi-agent-core`, so that adopting the host's vocabulary later would be a replacement rather
+ * than a rewrite. Measured 2026-10-17 against the installed Pi `1.0.0`: none of the four `@earendil-works` packages
+ * carries `HarnessTool` or a `replay` field, and `pi-agent-core` does not contain the string `harness` at all - so the
+ * stub that sentence described is gone rather than changed. There is no host vocabulary to hold a place open for, and
+ * none is claimed here. The name is this repository's, and this paragraph names the declaration it comes from rather
+ * than a line number, because nothing walks the line numbers inside a source comment.
  */
 
 /** What an invocation is, as far as this repository can tell before running it. */
