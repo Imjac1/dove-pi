@@ -68,7 +68,41 @@ clone itself as its cwd, against the recipe's rule that passes run on a copy. No
 statement of the third criterion is therefore "the three pinned files are unchanged", which is how the criterion is
 worded, rather than "the tree was never touched".
 
+## The eighth attempt: the other credential on this machine, and why this is a blocker
+
+The operator chose "give me another model or credential", so I went looking for one instead of asking where it is, and
+found that the question had already been answered on disk: `~/.pi/agent/` holds **`models.json.bak-before-replay`**, the
+configuration from before an earlier replay experiment, alongside the current one. Comparing them field by field (values
+redacted) is the whole story:
+
+| | current, in effect | the backup |
+|---|---|---|
+| `apiKey` | `atr_…` | `sk-…` |
+| `baseUrl` | `https://api.atria-asi.ai/v1/` | `https://maas-api.antdigital.com/v1` |
+| model id | `Atria-Dawn-Preview` | `atria-dawn-preview` |
+| `contextWindow` | 200000 | 256 |
+
+The operator's files were **not** edited. A full copy of the agent directory (367 MB, 15,322 files - the run needs its
+package store) was made with the backup `models.json` in place, and the pass ran with `PI_CODING_AGENT_DIR` pointed at it.
+
+| Attempt | Duration | `toolCalls` | the run's own record |
+|---|---|---|---|
+| `p1-pass1-g` (project one, eighth) | 16 s | 0 | **`provider.request.rejected`** |
+
+**Neither credential works, and the two failures say different things.** The current one is **rate-limited**:
+`provider.request.completed … failureKind=transient failureReason=http_429`, seven times over five hours. The backup one is
+**rejected**: `provider.request.rejected`, with no `failureKind` and no `failureReason` at all. A rejected credential is
+revoked or not entitled; a 429 is a limit that will lift. So the state is: this machine has **one working credential that
+is currently limited**, and no second one that works. **That is outside this session's reach** - it needs either the window
+to pass or a credential this machine does not have.
+
+**A product observation, worth keeping.** `provider.request.rejected` carries **no reason field**, while a failed
+completion carries `failureKind` and `failureReason`. A reader trying to tell "revoked credential" from "wrong model" from
+"endpoint moved" gets nothing from the record of the rejection - and the runner's own stderr in that run was only the two
+extension warnings. Diagnosing it required diffing two config files by hand.
+
 ## The seventh attempt, the first one for project two, and the one positive datum in seven tries
+
 
 | Attempt | Duration | `toolCalls` | `outputTokens` | the ledger said |
 |---|---|---|---|---|
