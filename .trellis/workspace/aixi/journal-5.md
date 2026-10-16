@@ -1296,3 +1296,70 @@ model received a single word, which is the same lesson this repository had alrea
 ### Status
 
 [OK] **Completed**
+
+
+## Session 248: Three tasks planned, landed, and falsified once each
+<!-- trellis-session: v=2 fp=9d1cfb1f1ea51127 -->
+
+**Date**: 2026-10-16
+**Task**: Three tasks planned, landed, and falsified once each
+**Branch**: `master`
+
+### Summary
+
+This session planned the three tasks on the board that had a prd and nothing else, landed all three, and then had the
+landings falsified by an adversarial verifier - one claim in each - and fixed them with the cases that would have caught
+them. The survey was the first measurement: of fourteen tasks, eleven already carried a design and an implementation
+plan, and three did not, one of them still holding TBD in its own requirements and acceptance criteria. Each of the
+three got both artifacts, with the change boundary written out rather than implied: 10-04 turned out to be one half
+already landed and one half never started, which is where a successfully loading mode says what it could not enforce;
+10-05 turned out to have one open item already answered by an existing status field and one real decision left; and
+10-03 turned out to be two facts rather than one. The repository lint then caught the artifacts I had just written -
+TAL-002, this plan carries no checkbox line, so it cannot say what step is done - which is what that door is for, and the
+three plans got the checkbox block the house style uses. The operator chose (b) for 10-03, dropping the external
+provider-evidence field in favour of the product own prompt= reading, and (ii) for 10-05, loading and recording a
+declared package that is absent rather than refusing the session. Landing 10-04 meant the load line and the status field
+now say that a network-none axis is enforced at the tool boundary and does not cover a command run through the shell,
+with the shipped pair code-development and code-audit as the case and its control - the same axis, two modes, differing
+only in whether a shell route is open, because a sentence every mode carried would say nothing. Landing 10-03 measured
+both paths: on a real provider nothing writes the capture at all, and on the faux one the writer does run but the size it
+records is a constant zero, because Pi 1.0 no longer hands the provider a systemPrompt string and carries the system
+prompt as the first system-role message instead - so a zero a ternary produced was reported beside real numbers, and a
+field with no writer was reported as an empty array that reads as we looked and found nothing. The summary now reports
+evidence only where a recorder exists, names the reason it does not, and omits a size nothing measured. Landing 10-05
+replaced the message that blamed the host for tools it provides with one that names the declaration the store does not
+satisfy and the store it looked in. Then the verifier, and it falsified one claim in each. The package check searched one
+store while the host resolves an npm declaration from at least three and keeps its resolver private, so a package sitting
+in the global root - which exists on this machine and is not empty - was called missing, the exact failure the message was
+written to remove. The sentence about the shell was computed from two exact permission names while this format's own
+matcher treats a trailing star as a prefix, so a blanket deny or a pair of prefixes closed the route silently, and a mode
+declaring its fence shell denied refuses both shells with no permission entry at all - a shape whose notification
+contained both refuses bash and powershell and which this mode still permits. And the gap field was derived from whether
+a recorder was installed rather than from the record, so it would have gone on saying the recorder cannot measure the
+prompt even if a host release started supplying one again. All three are the same defect this repository keeps finding: a
+sentence the code never checked. Each fix carries the case that would have caught it - the wildcard and fence shapes, a
+package in the project store, a package in the legacy global store, the gap read from the record - and two rule rows were
+added. The mount table moved twice more in this round, by deltas of one and fifteen and then four, and was repointed from
+the declarations each time, the eighth and ninth time this tax has come due. Gates throughout: typecheck clean, npm test
+991 of 991, the four documentation doors green, and the task-artifact corpus at 42 artifacts with 0 problems. The three
+tasks were archived on this round, and the archive tax measured zero - no curated entry pointed inside them and no page
+cited their files, so the doors stayed green and the corpus still holds exactly the three unresolvable pointers the front
+door documents, which is the standing number rather than a new one.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9651312` | chore(task): 10-04 is in progress, because its work is landed |
+| `58e4ee0` | docs(task): 10-04's acceptance, with the correction the verification forced |
+| `6eaffdb` | ﻿fix: three claims the verification falsified, and the guards for each |
+| `d40f9b5` | ﻿fix(adapter): the warning names the declaration, not the host |
+| `f528375` | ﻿fix(blackbox): a provider reading is reported only where something measured it |
+| `80e4dad` | ﻿feat(mode): the load line says what the network axis does not reach |
+| `b6110e4` | docs(tasks): the two decisions the prds left to the operator, recorded |
+| `88b86a3` | ﻿docs(tasks): the three plans carry the checkboxes the lint requires |
+| `0983322` | ﻿docs(tasks): the three unplanned tasks are planned |
+
+### Status
+
+[OK] **Completed**
