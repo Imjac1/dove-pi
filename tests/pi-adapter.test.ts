@@ -2231,13 +2231,23 @@ describe("Pi adapter", () => {
 			};
 			const first = subagent.execute("batch-call-1", { name: "one", prompt: "Read the first area" });
 			const second = subagent.execute("batch-call-2", { name: "two", prompt: "Read the second area" });
-			// **Wait for the state, do not sleep into it.** Both children are in flight exactly when both have written
-			// their started marker, which is a fact this case can see rather than a window it hopes is wide enough.
-			await waitForStartedChildren(root, 2);
-			const doctorResult = await doctor.execute("doctor-call", {}, undefined, undefined, context);
-			assert.equal(doctorResult.details.subagent.activeRuns?.length, 2, "a batch in flight must be reported as two runs, not one overwritten slot");
-			// Now let them finish: the gate is the thing that was holding them.
-			writeFileSync(join(root, "release"), "");
+			try {
+				// **Wait for the state, do not sleep into it.** Both children are in flight exactly when both have
+				// written their started marker, which is a fact this case can see rather than a window it hopes is wide
+				// enough.
+				await waitForStartedChildren(root, 2);
+				const doctorResult = await doctor.execute("doctor-call", {}, undefined, undefined, context);
+				assert.equal(doctorResult.details.subagent.activeRuns?.length, 2, "a batch in flight must be reported as two runs, not one overwritten slot");
+			} finally {
+				// **Open the gate whatever happened, and then wait for them.** Opening it alone was measured insufficient:
+				// the case's outer cleanup deletes the root immediately afterwards, so two children polling for a file
+				// that appears and then a directory that disappears lose the race and spin against a removed path until
+				// their own deadline. A verifier measured 34 seconds for a failing run against 5 for a passing one, and
+				// the cause was in its own report - the children were waiting on a directory that no longer existed.
+				// Awaiting them here is what makes a failure as prompt as the success path.
+				writeFileSync(join(root, "release"), "");
+				await Promise.allSettled([first, second]);
+			}
 			const [a, b] = await Promise.all([first, second]);
 			assert.match(a.content[0]?.text ?? "", /child answer/, "each dispatch keeps its own answer");
 			assert.match(b.content[0]?.text ?? "", /child answer/);
