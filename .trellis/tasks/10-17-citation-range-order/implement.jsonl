@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The repository's standards for what a case must assert, and the convention that a check's own failure is proven on a fixture rather than by corrupting the evidence - which is the shape this change takes."}

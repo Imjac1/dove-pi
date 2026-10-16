@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "The verifier's yardstick for this door: a check with false findings is worse than no check, because a boundary people turn off protects nothing. The change's own file header states the same rule, and the verification should hold the new check to it."}

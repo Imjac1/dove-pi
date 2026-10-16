@@ -13,10 +13,19 @@
  * rule reported three citations that had already been verified as correct. A check with false findings is worse
  * than no check, because a boundary people turn off protects nothing.
  *
- * What is left can be judged without guessing: **a cited path must resolve, and a cited line must exist**. That
- * is a floor, and the class it catches is real - a citation a reader cannot follow, because the path is an
- * abbreviation or the file has moved. Judging whether the line still *says* what the page claims would need the
- * pages to state one claim per citation, which is a change to the pages rather than to this check.
+ * What is left can be judged without guessing: **a cited path must resolve, a cited line must exist, and a range's
+ * two numbers must be in order**. That is a floor, and the class it catches is real - a citation a reader cannot
+ * follow, because the path is an abbreviation or the file has moved. Judging whether the line still *says* what the
+ * page claims would need the pages to state one claim per citation, which is a change to the pages rather than to
+ * this check.
+ *
+ * **The third property was added after this file's own defect**, and it is scoped to the form it belongs to. A
+ * repoint script shifted a range's start and not its end, leaving `3681-3620`: a citation whose path resolved and
+ * whose start existed, so every check here passed it. The pages write a range as `path:N-M` in one code mark, and
+ * there `M` was not turned into a claim at all - not checked for existence, not for order. **The other spelling is
+ * not a range**: a bare `` `:M` `` after an anchor means *another line of the same file*, the pages use it in lists,
+ * and one of them cites a base with a continuation below it. Ordering that pair would report the real pages as
+ * broken, so the ordering requirement is confined to the single-span form.
  */
 
 import { describe, it } from "node:test";
@@ -46,8 +55,14 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
  * the part after the dot, which resolved to nothing and was reported as unresolvable: a false finding produced
  * by the checker, which is the failure this file's own header says to avoid.
  */
-const ANCHOR = /(?<path>[A-Za-z0-9_.][A-Za-z0-9_./-]*\.(?:ts|mts|md|yaml|yml|ps1|json|jsonl|py)):(?<line>\d+)/gu;
-/** A range is written with its second number bare, in its own code mark on the same line. */
+const ANCHOR = /(?<path>[A-Za-z0-9_.][A-Za-z0-9_./-]*\.(?:ts|mts|md|yaml|yml|ps1|json|jsonl|py)):(?<line>\d+)(?:-(?<end>\d+))?/gu;
+/**
+ * A range written the other way - the path and one of its lines, then the second number in its own bare code mark.
+ *
+ * **This is a list, not a range.** The pages use it to mean two lines of one file, in no order, and one page cites a
+ * base with a continuation *below* it. So the number is claimed and existence-checked, and it carries no ordering:
+ * only the single-span form is a range, and only there is order a property the door can judge without guessing.
+ */
 const CONTINUATION = /`:(?<line>\d+)`/gu;
 
 export interface AnchorClaim {
@@ -56,6 +71,12 @@ export interface AnchorClaim {
 	readonly line: number;
 	readonly path: string;
 	readonly citedLine: number;
+	/**
+	 * The first number of the single-span range this claim is the end of, when it is one. Present only for the
+	 * `path:N-M` form: it is what lets the door ask whether a range runs forwards, and its absence is what keeps a
+	 * continuation pair out of that question.
+	 */
+	readonly rangeStart?: number;
 }
 
 export interface AnchorFinding {
@@ -103,6 +124,11 @@ export function anchorsIn(page: string, text: string): readonly AnchorClaim[] {
 			const cited = Number(match.groups?.line ?? "0");
 			if (path === "" || cited <= 0) continue;
 			claims.push({ page, line, path, citedLine: cited });
+			// **The end of a single-span range is a cited line too**, and until this line existed it was not one. The
+			// anchor matched only the `path:N` part of `path:N-M`, so `M` was never read: not for existence, and not
+			// for order. A hand repoint of this tree's citations produced `3681-3620`, and every check here passed it.
+			const end = Number(match.groups?.end ?? "0");
+			if (end > 0) claims.push({ page, line, path, citedLine: end, rangeStart: cited });
 			for (const range of raw.matchAll(CONTINUATION)) {
 				const second = Number(range.groups?.line ?? "0");
 				if (second <= 0 || second === cited) continue;
@@ -134,6 +160,18 @@ export function checkAnchors(root: string, pages?: readonly string[]): AnchorRea
 		for (const claim of anchorsIn(relativeToRepo, readFileSync(resolved, "utf8"))) {
 			citations += 1;
 			if (isExempt(claim.path)) continue;
+			// **A range that runs backwards cannot be followed however well it resolves**, and it is asked here rather
+			// than after the file is read because it is a property of the citation rather than of the file: both
+			// numbers can exist and the pair still describe nothing a reader can use.
+			if (claim.rangeStart !== undefined && claim.citedLine < claim.rangeStart) {
+				findings.push({
+					page: claim.page,
+					line: claim.line,
+					anchor: `${claim.path}:${String(claim.rangeStart)}-${String(claim.citedLine)}`,
+					problem: `the range ends at ${String(claim.citedLine)}, before its start at ${String(claim.rangeStart)}`,
+				});
+				continue;
+			}
 			let lines: readonly string[];
 			try {
 				lines = readFileSync(resolveTarget(root, relativeToRepo, claim.path), "utf8").split(/\r?\n/u);
@@ -190,6 +228,52 @@ describe("the specification pages cite positions a reader can follow", () => {
 			assert.equal(broken.findings.length, 2, "an unresolvable path and a line past the end are both findings");
 			assert.match(problems, /does not resolve/u);
 			assert.match(problems, /past the end/u);
+		} finally {
+			rmSync(scratch, { recursive: true, force: true });
+		}
+	});
+
+	it("refuses a range that runs backwards, and leaves a list of lines unordered", () => {
+		// **The proof that the new property can fail, on a fixture rather than on the pages** - this file's own
+		// convention, because writing a wrong citation into a page in order to test the checker would change the
+		// evidence in order to check it. The defect behind it was a repoint that moved a range's start and not its
+		// end: the result resolved, both numbers existed, and nothing here objected.
+		const scratch = mkdtempSync(join(tmpdir(), "spec-anchors-range-"));
+		try {
+			mkdirSync(join(scratch, ".trellis", "spec"), { recursive: true });
+			mkdirSync(join(scratch, "src"), { recursive: true });
+			writeFileSync(join(scratch, "src", "thing.ts"), ["export function first(): void {}", "", "export function second(): void {}", "", "export function third(): void {}", ""].join("\n"), "utf8");
+
+			const backwards = join(scratch, ".trellis", "spec", "backwards.md");
+			writeFileSync(backwards, "A claim about `second` at `src/thing.ts:3-1`.\n", "utf8");
+			const reported = checkAnchors(scratch, [backwards]);
+			assert.equal(reported.findings.length, 1, "a range whose end precedes its start is a finding");
+			assert.match(reported.findings[0]?.problem ?? "", /ends at 1, before its start at 3/u);
+
+			// **The larger of the two gaps, which is not the one that motivated the change.** In the single-span form
+			// the door read only the start, so an end that did not exist was never noticed either.
+			const pastTheEnd = join(scratch, ".trellis", "spec", "past.md");
+			writeFileSync(pastTheEnd, "A claim at `src/thing.ts:1-99`.\n", "utf8");
+			const endReported = checkAnchors(scratch, [pastTheEnd]);
+			assert.equal(endReported.findings.length, 1, "the end of a range is existence-checked, which it was not before");
+			assert.match(endReported.findings[0]?.problem ?? "", /past the end/u);
+
+			const forwards = join(scratch, ".trellis", "spec", "forwards.md");
+			writeFileSync(forwards, "A claim at `src/thing.ts:1-3`.\n", "utf8");
+			const forwardReading = checkAnchors(scratch, [forwards]);
+			assert.equal(forwardReading.findings.length, 0, "a range that runs forwards is accepted");
+			// **Two, not one**: the assertion above passes even if the end is never claimed, which is the state this
+			// change exists to leave - so the count is what proves the end is read, and read as a cited line.
+			assert.equal(forwardReading.citations, 2, "and both of its numbers are claimed, so the end is existence-checked");
+
+			// **The boundary this must not cross.** A bare second number is a list entry rather than a range's end, and
+			// the pages use it that way - one of them cites a base with a continuation below it. Requiring order there
+			// would report the real pages as broken, which is the false finding this file's header warns about.
+			const list = join(scratch, ".trellis", "spec", "list.md");
+			writeFileSync(list, "Implemented at `src/thing.ts:3` and `:1`, in no order.\n", "utf8");
+			const listed = checkAnchors(scratch, [list]);
+			assert.equal(listed.findings.length, 0, "a continuation pair may decrease, because it is a list rather than a range");
+			assert.equal(listed.citations, 2, "and both of its numbers are still checked");
 		} finally {
 			rmSync(scratch, { recursive: true, force: true });
 		}
