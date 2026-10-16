@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/personal-agent-framework-core.md", "reason": "S1b 判定的地基：loop 所有权与 adapter 边界在这页上被定义为契约，'反转成本 = 一个 adapter' 这句话必须对着它判断，而不是对着印象。"}
+{"file": ".trellis/spec/backend/personal-agent-extension-runtime.md", "reason": "S1 宿主表面清单的口径：Pi 扩展 profile、doctor、identity 的契约在这页，判定'契约 vs 便利'要先知道本仓承诺了什么。"}
+{"file": ".trellis/spec/backend/personal-agent-managed-install.md", "reason": "R4 安装与升级的判定口径：宿主版本钉在哪一层、升级与回退是否原子，这页写着。"}
