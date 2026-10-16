@@ -57,3 +57,37 @@ Neither matches the form. Product code is out of scope on purpose, and the clear
   which the green suite confirms, but a reader should treat the two halves of that case as separately evidenced.
 - **That the suite is now fast.** Two fences were replaced by waits, not by parallelism; the file's cost is now the work
   it measures rather than the sleeps it took.
+
+## The verification, and the two repairs it forced
+
+A verifier ran four probes over `ade8f81`. Its verdict on the behaviour was clean - all five old assertions still run and
+each goes red under its own mutation - but the **enforcer was three times weaker than the rule it guarded**, and one of the
+gaps was undisclosed:
+
+- it read only the top level of `tests/`, so **seven `.ts` files under `tests/fixtures/` were invisible**;
+- its pattern demanded the parameter be named `resolve`, so **renaming one character** defeated it.
+
+Seven variants escaped, including the one-character one. The comment and this file had admitted that respacing the fence
+would defeat the scan, and had said nothing about either of the above - which made the new rule row read stronger than its
+mechanism. **That is the defect this repository's table exists to prevent, and the table was the thing that had it.**
+
+Both are fixed: the scan walks `tests/` at any depth, and the pattern takes any parameter name with a backreference
+requiring the same name twice, which is what a real `new Promise` executor looks like. What it still does not hold - a
+fence written across two lines, with an aliased `setTimeout`, or with a variable delay - is now named in the scan, in the
+rule row, and here. Verified with the verifier's own probes: the renamed-parameter fence and the one under
+`tests/fixtures/` are both caught now, and the suite as it stands is green.
+
+### The failure tail, measured three times
+
+The verifier also measured something the design had got wrong: a failing run took **33.4 seconds** against 5 for a passing
+one, because the children spun against a directory the case had already deleted. Its own report contained the cause - "the
+children spin against a directory that no longer exists" - so the repair was to open the gate from a `finally` **and await
+the children there**, which took the failing path to **24.3 seconds**. The remainder was the case's own wait bound, which
+is literally the price of a red, so it came down from twenty seconds to ten: the failing path is now **13.6 seconds** and
+the passing path is **5.5**.
+
+**Two corrections to my own narration, because both were wrong when I wrote them.** I first claimed the gate-plus-await
+fix "did not work"; it did - the 33.4 s measurement was taken with the *old* code, and the later numbers show its effect.
+And I claimed a `git checkout` had lost both repairs; it lost only the deadline change, because the gate-and-await was
+already committed. The habit worth keeping from both mistakes is the same: `git checkout <file>` destroys uncommitted work
+in that file, and a mutation experiment should copy the file rather than rely on git to restore it.
