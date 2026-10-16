@@ -41,6 +41,13 @@ It is not a pass: `toolCalls: 0`, `outputTokens: 0`, one provider round, the pro
 passed`, pins 20090 / 5971 / 1305. It establishes one thing - that the cause rule reaches a real refusal and names it -
 and that is what it was run for.
 
+**Where the evidence for both runs is.** The temporary scenario roots - 1.09 GB across the three runs, almost all of it
+the agent directory's package store copied per run - were removed once the readings were taken; the run logs, the two
+ledgers, the suite readings and the summaries are kept outside the repository, in
+`C:\Users\Macfy\Desktop\dsh\dove-two-project-reading\evidence\`. One gap is stated rather than papered over: **attempt 11
+has no `summary.json` there**, because its summary was piped to a filter instead of a file. Its run log, ledger and suite
+reading are present, and the numbers it produced are the table above.
+
 # The plan the money still gates
 
 Written so the passes are a sequence rather than a rediscovery. Both run through the **installed** launcher on
@@ -121,7 +128,8 @@ node scripts/real-dove-blackbox.mjs \
 | the source clone | pins unchanged at 20090 / 5971 / 1305 |
 | what the run wrote | intake only - `doveState: true`, `formalTaskCount: 1`, 5 formal artifacts |
 
-**The ledger's own sentence for it**, from `dove-state/execution.jsonl`:
+**The ledger's own sentence for it**, from the run's ledger (`dove-state/execution.jsonl`, kept as
+`p1-pass1.execution.jsonl` in the reading's evidence directory):
 
 ```json
 {"kind":"provider.request.completed","details":{"stopReason":"error",
