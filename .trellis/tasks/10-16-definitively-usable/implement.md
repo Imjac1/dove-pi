@@ -1,94 +1,55 @@
-# Implementation: the gate, the reading, the release
+# Implementation: the cross-child checkpoints, and the integration review
 
-## Before `task.py start`
+This task is **not started** as an implementation target - its children are. This plan is what this task does across
+them: the preconditions it holds, the checkpoint it runs when each child lands, and the review it performs once.
 
-- [ ] Curate the two manifests with real entries, because this round dispatches a verifier rather than doing everything
-      inline. `implement.jsonl`: `.trellis/spec/backend/quality-guidelines.md` (the temporary-workspace and timing
-      discipline the two rewritten cases must follow), `.trellis/spec/backend/personal-agent-field-run.md` (what a field
-      run is allowed to claim). `check.jsonl`: `.trellis/spec/backend/personal-agent-use-time-architecture.md` (the mount
-      table that moves when the adapter is edited) and
-      `.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/research/graded-project-recipe.md` (the pass's recipe and
-      its three pins).
-      `python ./.trellis/scripts/task.py add-context 10-16-definitively-usable implement <path> "<why>"` for each.
+## Before any child starts
+
+- [ ] Re-curate this task's manifests for what *it* now needs: the graded recipe and the field-run spec, because its job
+      is to judge two measurements and say what they may claim. The four entries curated on 2026-10-16 were written for an
+      implementation target that has since moved into the children.
+- [ ] Confirm every child has its own PRD with testable criteria **and** the artifacts its complexity requires - the gate
+      child needs a design (it rewrites two cases and adds one), the release child needs a written rollback position, the
+      reading child needs its second project specified.
 
 ## Done when
 
-- [ ] The two fences are gone and both cases still prove what they proved: a mutation makes each one **red** (see Validation).
-- [ ] The awaited-sleep scan exists, is green on the suite as it stands, and fails when the form is added back.
-- [ ] The rule row is in the front door's table, and `tests/document-drift.test.ts` resolves its enforcer.
-- [ ] A fresh end-to-end pass on the **installed current tree** ends with the copy's suite at `116 passed`, the instrument
-      at 1305 / 5971 bytes, and the source clone at 20090 bytes.
-- [ ] 0.2.4 is Latest with four assets, and the user's install URL serves it.
-- [ ] The conclusion carries the boundaries verbatim from the PRD, including the ones this round did not widen.
+- [ ] All three children are archived, and each one's own PRD criteria are ticked **or** the unticked one is named here.
+- [ ] The release identity and the reading identity are the same build, or the difference is explained in one sentence.
+- [ ] The gate child's mutation evidence is on record: both cases go red when the behaviour they hold is broken.
+- [ ] The reading child's two passes are on record with, for each: the project's own test result, the held-out
+      instrument's byte count, and the untouched state of the source or fixture.
+- [ ] No temporary install and no temporary copy is left behind; the graded clone is back at its three pins.
+- [ ] The conclusion lists the boundaries verbatim: two projects, two modes, the wrap-up as the next request, the driver
+      answering no interactive question, one pass as one sample.
 
-## Workstream 1: the gate
+## Checkpoints, one per child
 
-1. **`tests/project-provider.test.ts`, `serializes concurrent native mutations` first** - it is the smaller of the two and
-   its shape is the pattern the other one reuses: the first action signals `entered` and then awaits `release`; the case
-   awaits `entered`, launches the second, awaits a tick that proves the second is queued (not a duration - the second's
-   own body records that it started, and the assertion is that it started **after** `first-end`), then releases.
-   Delete the 5 ms and the 50 ms.
-2. **`tests/pi-adapter.test.ts`, the parallel-batch case.** The fixture script at `:2163` gains a gate: it writes its own
-   `started-<unique>` file under the case's root and then polls for **one shared** `release` file, bounded by its own
-   deadline so a mistake fails loudly instead of hanging the suite. The case waits until **two** `started-*` files exist,
-   then reads `agent_doctor` and asserts two `activeRuns`, then writes the single `release` and awaits the two results.
-   Delete the 600 ms. **Two things must survive the rewrite**, because assertions read them: the child still writes
-   `child answer` to stdout (`:2197`, `:2198`), and the injection stays the argv prefix it is (`:2167`, a process-wide
-   environment variable - which is why the gate is shared rather than per child).
-3. **The two mutations that prove the cases still bite**, run once by hand (and recorded in the task's findings):
-   - make `activeRuns` report one run - the batch case must go **red** where it is green today;
-   - make the second mutation skip the lock - the serialisation case must go **red** where it can pass vacuously today.
-4. **The scan case**, in a small new `tests/suite-timing.test.ts`: read every `tests/**/*.ts`, find
-   `await new Promise((resolve) => setTimeout(resolve,` and fail on any occurrence outside an allow-list that starts
-   empty and, if it ever gains an entry, requires a reason in the row. Its own comment carries the two legitimate sites
-   and why they are not this shape.
-5. **The rule row** in the front door's table, with `test:tests/suite-timing.test.ts#<the case name>` as its enforcer and
-   a `Fails how` that names the observed damage: a case that sleeps instead of holding the state fails on a slower
-   machine for a reason unrelated to the change, or passes while proving nothing.
-
-## Workstream 2: the reading
-
-6. **Install the current tree** with the managed launcher, then **read back what it says it is**. Measured 2026-10-16: it
-   currently reports `Dove Pi 0.2.1`, so this step is load-bearing - a pass taken without it measures a build two
-   releases old and would be read as a statement about this tree.
-7. **Fresh copy of the graded clone**, caches removed after the baseline measurement; **re-read the three pins at start**
-   (they held on 2026-10-16: 20090 / 5971 / 1305 bytes, no caches) on the copy and on the source before starting.
-8. **One pass** through the launcher with the customer's own words, the runner's own harness budget, the scenario the
-   previous passes used (`.trellis/tasks/archive/2026-10/10-05-whole-flow-end-to-end/research/three-customer-passes.md`).
-9. **Read the three pins and the task's own state**; write `findings.md` with the pass's readings, the attempts that did
-   not count and why each did not, and anything the pass revealed that the suites do not.
-
-## Workstream 3: the release
-
-10. Bump `package.json` plus the two version fields in `package-lock.json`; nothing else.
-11. Gates in the release job's order: `npm run typecheck`, `npm test`, `npm run test:installer`, `npm run pi:smoke`,
-    `node scripts/task-artifact-lint.mjs --assert-corpus`, the four documentation doors.
-12. Assemble the archive exactly as the job does, then `release:check` locally with the tag name, the commit, the
-    manifest, the archive, the checksum and the four assets. **A failure here stops the release**; the tag does not exist
-    yet, which is the whole reason this step is before it.
-13. Tag `v0.2.4`, push the commit and the tag, watch `windows-release` to success, then read `gh release list` and fetch
-    the user-facing URL - the last reading is the only one that speaks for what a customer gets.
+1. **When `10-16-release-024` lands**: read `gh release list` and the user-facing URL. If the CI job went red, check
+   whether it is the fence (a `test (locked)` failure in the parallel-batch case) - if it is, record it here and do
+   **not** move the tag; that red belongs to the gate child.
+2. **When `10-16-trustworthy-gate` lands**: read the two mutation results, not the green suite. A gate change certified
+   only by "the suite passes" has certified nothing, because it passed before too.
+3. **When `10-16-two-project-reading` lands**: read the three numbers per project, and the sentence saying which build
+   each pass measured. A pass whose build is not the released one is a fact to state, not to omit.
 
 ## Validation
 
-- The two fences: the mutations in steps 3 are the assertion - a case that cannot go red is not holding anything.
-- The scan: add `await new Promise((resolve) => setTimeout(resolve, 1000));` to any test file and watch it fail; remove it.
-- The whole suite: `npm test` green, and the four documentation doors green (`spec-anchors`, `document-drift`,
-  `harness-surface`, `spec-context-budget`).
-- The mount table moves again if the adapter is edited above a registration; repoint from the declarations, not from a
-  computed delta, and read the page's prose citations back one by one.
-- The release: only the CI job's green and the fetched URL count, not the local replay alone.
+- After each child's archive, the archive tax is due: run `spec-anchors`, `document-drift`, `harness-surface`,
+  `spec-context-budget`, and scan the curated entries for pointers into the archived directory - the front door documents
+  the tax and its two payers.
+- The corpus gate (`node scripts/task-artifact-lint.mjs --assert-corpus`) runs after each artifact set changes.
+- The mount table moves whenever the adapter is edited above a registration; repoint from the declarations and read the
+  page's prose citations back one by one.
 
 ## Risky files and rollback
 
-- `tests/pi-adapter.test.ts` and `tests/project-provider.test.ts` are rewritten in place; `git checkout` restores them, so
-  each rewrite is its own commit with the mutation result in the message.
-- The release is the one step with no rollback: `release:check` runs before the tag, and a failure after the tag means a
-  new version rather than a moved tag.
-- The graded clone and the install are outside the repository; the clone's recipe is pinned by three byte counts and the
-  install is disposable.
+This task writes only its own artifacts, so it has nothing to roll back. The irreversible step in the goal belongs to the
+release child, and the rule for it is written in this task's design: a red run does not move a tag.
 
-## Follow-up checks before `task.py start`
+## Follow-up checks before any child starts
 
-- [ ] Both manifests curated (this round dispatches a verifier).
-- [ ] This plan and `design.md` reviewed by the operator, and the final planning summary approved in a later message.
+- [ ] The three children reviewed together with this task's requirement set, and the final planning summary approved in a
+      later message.
+- [ ] Each child's own "before start" list satisfied - in particular the JSONL manifests, since the verification step
+      dispatches a sub-agent.

@@ -18,7 +18,11 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "10-16-release-024",
+    "10-16-trustworthy-gate",
+    "10-16-two-project-reading"
+  ],
   "parent": null,
   "relatedFiles": [],
   "notes": "",
