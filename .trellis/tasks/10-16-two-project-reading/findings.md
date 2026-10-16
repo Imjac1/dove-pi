@@ -69,9 +69,19 @@ Written so the passes are a sequence rather than a rediscovery. Both run through
 
    ```bash
    node .trellis/tasks/10-16-two-project-reading/research/node-project-fixture.mjs <dest>
-   # then <dest>/.dove/mode.json = {"schemaVersion":1,"mode":"code-audit"}  - 55 B, no BOM, the same shape the graded
-   # clone carries. Without it the pass runs with no mode at all and proves nothing about the read-only axis.
+   # then <dest>/.dove/mode.json = {"schemaVersion":1,"mode":"code-audit"} - valid JSON, LF, no BOM. It measures 39 B
+   # compact; the "55 B" this plan first carried is the graded clone's own file, which declares the longer
+   # `code-development` and is pretty-printed. What the loader needs is the two fields, not the length. Without the
+   # binding the pass runs with no mode at all and proves nothing about the read-only axis.
    ```
+
+   **And this step is verified rather than planned**: the generator was run into a throwaway directory, the binding was
+   written, and the run announced `[Dove mode] code-audit loaded ... 3 denied action(s) are refused, and 2 action(s) run
+   only after you confirm them` with `workMode=code-audit, networkAxis=none` - against `code-development`'s
+   `networkAxis=shell-uncovered`. So the mode loads under the installed host, the binding is what selects it, and the
+   read-only axis is still the one that has only ever been seen under a provider that never answered - `doveState: false`
+   and `formalTaskCount: 0` on a run that did no work. The throwaway directory was removed; the
+   pass still generates its own, because the byte counts have to be printed in the same run that asserts them.
 
    Then the same command with `--cwd <dest>` and `--case-id p2-pass1`. The criterion is deliberately **not** green: the
    suite must still read `1 failed`, the instrument's bytes unchanged, and the run's own record must show the mutation

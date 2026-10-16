@@ -34,8 +34,11 @@
 5. **Project two**: one pass with the mode that cannot write - and the mode has to be **bound**, because nothing on the
    command line selects a work mode: `extension.ts` resolves it from the project's own declaration
    (`resolveWorkModeSelection`, whose `.dove/mode.json` is named in `src/core/work-mode.ts`), so the generated project
-   needs `{"schemaVersion":1,"mode":"code-audit"}` written at `<dest>/.dove/mode.json`, 55 B, no BOM - the same shape the
-   graded clone carries. Without it the pass runs with no mode and proves nothing about the read-only axis. Then read the
+   needs `{"schemaVersion":1,"mode":"code-audit"}` written at `<dest>/.dove/mode.json`, LF, no BOM - 39 B compact, which
+   is what the loader needs; the "55 B" this plan first said is the graded clone's own pretty-printed file declaring the
+   longer `code-development`. Measured 2026-10-17: with the binding the mode loads and the status line reads
+   `workMode=code-audit, networkAxis=none`, against `code-development`'s `networkAxis=shell-uncovered`. Without it the
+   pass runs with no mode and proves nothing about the read-only axis. Then read the
    three readings - the project's suite, the instrument's bytes, and the run's own record of the mutation tools.
 6. **Write `findings.md`**: both builds' identities, both sets of numbers, the attempts that did not count and why, and
    anything the passes exposed that the suites do not cover.
