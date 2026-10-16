@@ -12,7 +12,7 @@
 
 - **裁决** ✓：框架**定义自己的最小 loop 接口（`AgentLoop`）** ✓，`pi-agent-core` 的 thin `Agent` 是它背后的**一个 adapter，永远不是地基** ✓。理由含实测：该包是**嵌套依赖** ✓、**0.84.3 vs 已发布 0.87.1** ✓、自带**两套并行 harness 栈**（其一标 `./experimental/pico3`）✓；**反转成本 = 一个 adapter 实现** ✓✓。
 - **已落地** ✓：`src/adapters/loop-pi-agent-core.ts` ✓、`src/adapters/loop-scripted.ts` ✓；`pi-agent-core` 已是**直接依赖** ✓；`personal-agent-framework-core.md` 把 `AgentLoop` 写成接口、两个实现各一 ✓。
-- **五条硬要求 × 基座的逐格判定** ✓ 里，Pi 有一条**原理性做不到** ✓：**evaluator 不可被改进者编辑** ✗ —— 理由不是成本，是结构：**扩展 hook 本身就是磁盘上的文件** ✓，能改文件的 agent 就能改自己的闸门 ✓。另有：Pi **无** permission/approval 事件 ✓、**无**任何工具元数据表达路径限制 ✓；`AgentHarness` **是 stub**（`HarnessNotImplemented` ✓）→ 将来是**替换**而非重写 Dove 的同类机制 ✓。
+- **五条硬要求 × 基座的逐格判定** ✓ 里，Pi 有一条**原理性做不到** ✓：**evaluator 不可被改进者编辑** ✗ —— 理由不是成本，是结构：**扩展 hook 本身就是磁盘上的文件** ✓，能改文件的 agent 就能改自己的闸门 ✓。另有：Pi **无** permission/approval 事件 ✓、**无**任何工具元数据表达路径限制 ✓；`AgentHarness` **是 stub**（`HarnessNotImplemented` ✓）→ 将来是**替换**而非重写 Dove 的同类机制 ✓ —— **这一句 2026-10-17 降级并标注** ✗：1.0 的 `pi-agent-core` 里 `harness` 命中 **0 个文件** ✓，`AgentHarness` / `HarnessNotImplemented` 在 `.trellis/spec`、`src/`、`tests/` 里也命中 **0** ✓ —— 它**不是"stub 待转正"，是整个消失了** ✓，所以"将来是替换而非重写"**没有可替换的对象** ✓：该句由**判据**降级为**历史记录** ✓（S5 #2 ✓）。
 - **被点名的缺口 H5** ✓：`tool-implementation` 绑定在**整个 `src`** 上 ✓，而 `src` 同时装着 harness 与 verifier ✗ → "这次改动是不是 verifier 改动"**今天只能靠人读** ✗✓；**把两者在文件级分开是解决它的前提** ✓。
 - **两条尚未做、且已被记录在案的** ✗：**实验 0**（DSH 的 `workspace-write` 是否真的拒写 workspace 之外 ✓ —— Plane B 的**全部强制力**来自这一条 ✓，`09-30-substrate-choice` 的 **AC-8 仍空** ✓，原文写明"任何实现都必须排在它之后" ✓）；以及 `src/core/invocation-disposition.ts` 里把 `replaySafe` 说成"`pi-agent-core` 这么叫"的**两行注释** ✓（研究方纠正：该说法在包内**无支撑** ✓，准确表述是"在 stub harness 里被**声明**" ✓）—— **待你允许后改** ✓，零行为变化 ✓。
 
@@ -62,10 +62,10 @@
 - [x] **AC-3（S1）** 宿主表面清单存在 ✓，**每条带 `file:line`** ✓，并逐条判定**契约 / 便利** ✓。—— **2026-10-17 量** ✓：四个**具名模式**（P1 包 import ✓ / P2 宿主扩展 API ✓ / P3 版本行 ✓ / P4 宿主配置根 ✓）下逐文件列表并判定 ✓（见 readings §S1 ✓）；**顺带纠正** ✗：prd §二 的按文件计数**没记搜法** ✓，因此不可复现 ✓（`cli.ts` 记 (3) 而具名模式下只有 1 处且是自有变量 ✓）。两处 **需改** 已归 S5 ✓。
 - [x] **AC-4（S1b）** adapter 对宿主的导出依赖**被数出来**（一个数字 + 清单 ✓），并给出"**反转成本 = 一个 adapter 实现**"在 1.0 下**成立 / 不成立**的判定 ✓。—— **7 个具名符号**（`Agent`/`AgentMessage`/`AgentTool`/`BeforeToolCallResult`/`StreamFn` + `Api`/`Model` ✓），实装 1.0 里**缺失 0 个** ✓（2026-10-17 复量 ✓）→ **成立** ✓。
 - [x] **AC-5（S1c）** `host-version.ts` 在**识别不了宿主**时的行为——**实测输出** ✓（不是读代码的推断 ✗）；`AgentHarness` 是否仍为 stub——grep 读数 ✓。—— 实测 ✓：仓库内 `"1.0.0"` ✓、**宿主不可达时 `"unknown"` 且一言不发** ✓（见 readings §S1c 之二 ✓）；1.0 的 `pi-agent-core` 里含 `harness` 的文件 **0** ✓（不是转正 ✓，是整个消失 ✓）。
-- [ ] **AC-6（S2）** `plan-v8.md` 是否需要 v9 的**判定** ✓，带依据行 ✓（**只判定，不改** ✗）。
-- [ ] **AC-7（S3）** "哪些测试**不会**因宿主变动而红" ✗✓ 的清单 ✓ —— 空清单也是结论 ✓，但必须写明**搜法与范围** ✓。
-- [ ] **AC-8（S4）** 实验 0 的状态**二选一** ✓：执行读数 ✓，或明写"**未跑 + 原因**"✗（不许写"不适用" ✗）；`replaySafe` 两行注释已**开任务** ✓。
-- [ ] **AC-9（S5）** 每条判定都带 **可行 / 需改 / 需降级并标注** ✓，且每条"需改"都有对应**任务 id** ✓。
+- [x] **AC-6（S2）** `plan-v8.md` 是否需要 v9 的**判定** ✓，带依据行 ✓（**只判定，不改** ✗）。—— **判定：不需要 v9** ✓。依据行 ✓：`plan-v8.md:217` ✓ / `:592` ✓ / `:673` ✓（84,746 B 里提到宿主的地方只有这三处，全是架构性的 ✓）；`AgentHarness` 在计划册里出现 **0** 次 ✓。规格页侧 ✓：`personal-agent-use-time-architecture.md:11`（loop 拥有者 = Pi 宿主 ✓）、`:17` 的十八挂载点 ✓、`:44` 的 `pi-coding-agent` 锚 ✓ 仍成立 ✓。**范围声明**：这是对"宿主假设"这一问的判定 ✓，不是通审 ✓（见 readings §S2 ✓）。
+- [x] **AC-7（S3）** "哪些测试**不会**因宿主变动而红" ✗✓ 的清单 ✓ —— 空清单也是结论 ✓，但必须写明**搜法与范围** ✓。—— 清单**非空** ✓：宿主内部布局（`install.ts:266` ✓）、**版本读取本身**（`getPiVersion` ✓、`host-version` 模块 ✓）、依赖形状（`typebox` ✓）、源码注释里的版本与路径 ✓ —— **四类，各 0 个文件看着** ✓；而挂载点与 7 个导出**由编译器看着** ✓（宿主 `on()` 是字面量类型重载 ✓，`types.d.ts:1144` ✓）。搜法与范围 ✓：`tests/` 与 `scripts/` 的全部 `.ts`/`.mts`/`.py`/`.mjs` ✓（见 readings §S3 ✓）。
+- [x] **AC-8（S4）** 实验 0 的状态**二选一** ✓：执行读数 ✓，或明写"**未跑 + 原因**"✗（不许写"不适用" ✗）；`replaySafe` 两行注释已**开任务** ✓。—— 实验 0：**未跑** ✗ + 原因 ✓（本会话是 `danger-full-access` ✓，需要一个会拒写的会话 ✓；阻塞地位保留 ✓）。`replaySafe` → **`10-17-replaysafe-names-a-missing-type`** ✓。
+- [x] **AC-9（S5）** 每条判定都带 **可行 / 需改 / 需降级并标注** ✓，且每条"需改"都有对应**任务 id** ✓。—— 11 条判定见 readings §S5 ✓；**需改 3 条各有任务** ✓（`10-17-host-version-silent-degradation` ✓ / `10-17-host-detail-comments-drift` ✓ / `10-17-replaysafe-names-a-missing-type` ✓）；**1 条需降级并标注** ✓（在 prd §一 就地标注 ✓）；**1 条需改·待批** ✓（计划册 ✓，理由写明 ✓）；**1 条未验证** ✓（不写成结论 ✓）。
 - [ ] **AC-10** 门禁三连（typecheck / `npm test` / installer）**仍绿** ✓；**若不绿 → 记为发现** ✓ 且**不修** ✗（(A) 已定 ✓）。
 - [ ] **AC-11** **零**代码 / 规格 / 计划册改动 ✗ —— 可观察：改动范围只落在 `.trellis/tasks/10-03-pi-1-recheck/**` ✓。
 

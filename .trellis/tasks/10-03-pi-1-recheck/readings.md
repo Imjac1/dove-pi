@@ -170,3 +170,85 @@
 **判定** ✓：**"沉默降级"从推断升级为读数** ✓ —— 宿主不可达时它**既不拒绝、也不告警、也不记录** ✓，
 而这是本仓已经清过两遍的缺陷类 ✓ → **需改** ✗，归 S5 ✓。探针目录已删 ✓。
 
+---
+
+# S2 自我声明：**不需要 v9** ✓（AC-6 ✓）· S3 哪一类变动不会被发现 ✓（AC-7 ✓）
+
+## S2 —— `plan-v8.md` 与规格页里的宿主假设，逐条
+
+量法 ✓：在 `09-30-axi-program/plan-v8.md`（**84,746 B** ✓）与 `.trellis/spec/**/*.md` 里搜宿主词 ✓，逐条读命中行 ✓。
+
+**`plan-v8.md` 的宿主引用极少，且全是架构性的** ✓：
+
+| 行 | 说的是什么 | 判定 |
+|---|---|---|
+| `:217` | loop 实现：`src/adapters/loop-pi-agent-core.ts`（外部 ✓） | **可行** ✓ —— 这是**放置**，不是宿主能力 ✓ |
+| `:592` | 目录树里的 `adapters/` ✓ | **可行** ✓ |
+| `:673` | 依赖表：`@earendil-works/pi-agent-core` 是**适配器层唯一必需的 pi 包** ✓；`pi-coding-agent`/`pi-tui` 只出现在 Pi 宿主 profile ✓ | **可行**，**需补一句限定** ✗：实测 adapter **还**从 `pi-ai` 取两个**类型**（`loop-pi-agent-core.ts:2` ✓），而 `pi-ai` **不是本仓的直接依赖** ✓（`package.json` 的 7 个依赖里没有它 ✓）→ 那句话差一个词 ✓ |
+
+**`AgentHarness` 在 `plan-v8.md` 里出现 0 次** ✓ —— 所以 1.0 那次"它整个消失"的变动**根本不触及计划册** ✓。
+
+**规格页同样少，而且都带锚** ✓：
+
+- `personal-agent-use-time-architecture.md:11` —— "loop 的拥有者是 **Pi 宿主**" ✓：1.0 下**仍成立** ✓（宿主照样拥有 session/TUI/provider ✓，本轮每一次真跑都是宿主在驱动 ✓）。
+- 同页 `:17` 的 "The eighteen mount points" ✓ 与 `:44` 的 `pi.on("tool_call")` @ `extension.ts:2866` ✓ —— 实测 **18** 个 ✓、**`:2866` 正是 `tool_call` 那一行** ✓ → **可行** ✓。
+- `request-runtime.md` / `extension-runtime.md` / `managed-install.md` 各 1–3 处 ✓，都是宿主契约的**责任描述** ✓，不含版本串 ✓（prd §二 已量：规格页零版本串 ✓）。
+
+**判定：不需要 v9** ✓ —— 依据是"计划册假定宿主行为的地方只有上表这些，且没有一条被 1.0 推翻" ✓。**只判定，不改** ✓。
+**范围声明** ✓：这是**对"宿主假设"这一个问题**的判定 ✓，不是对 84 KB 计划册的通审 ✗。
+
+## S3 —— 哪一类宿主变动**会被发现**，哪一类**不会** ✓
+
+**能测的那一半先给** ✓：宿主的 `on()` 是**字面量类型重载** ✓（`pi-coding-agent` 的 `dist/core/extensions/types.d.ts:1144` ✓ 起，一行一个事件名，如 `on(event: "session_start", …)` ✓）→ **Dove 那 18 个挂载点是编译器看着的** ✓：事件被改名或删掉 → `npm run typecheck` 红 ✓（本会话它是绿的 ✓）。
+
+| 宿主变动类别 | 谁看着它 | 会不会红 |
+|---|---|---|
+| 事件名 / 回调签名 | **typecheck** ✓（字面量重载 ✓） | **会** ✓ |
+| adapter 取的 **7 个导出** | **typecheck** ✓ | **会** ✓（AC-4 ✓） |
+| 配置根 `PI_CODING_AGENT_DIR` | **9** 个文件 ✓ | **会** ✓（我们自己那侧 ✓） |
+| `.pi/agent` 默认根 | **1** 个文件 ✓（`real-dove-blackbox.test.ts` ✓） | 部分 ✓ |
+| **宿主内部布局** `dist/bundle/cli.js`（`install.ts:266` ✓） | **0** ✓ | **不会** ✗ |
+| **版本读取本身**（`getPiVersion` ✓、`host-version` 模块 ✓） | **0** ✓ | **不会** ✗ |
+| **依赖形状**（`typebox` 在 `dependencies` ✓） | **0** ✓ | **不会** ✗ |
+| 注释里的版本与路径（`install.ts:95` ✓、`request-lifecycle.ts:162` ✓、`work-mode.ts:303` ✓） | **0** ✓ | **不会** ✗ |
+
+**一个具体到行的例子** ✓（量到的，不是举例说明 ✓）：`tests/release_readiness_installer_test.py:25-40` 的 `write_fixture()` ✓ **自己造** `package.json`/`package-lock.json` ✓（`:27-28` 把 `0.84.3` 写死 ✓），**不读真实清单** ✗ → 宿主怎么变它都**不会红** ✓。
+
+**判定** ✓："这次大版本变动能不能被发现"的答案是**分层的** ✓：挂载点与导出**由编译器看着** ✓，所以 1.0 这类变动会被发现 ✓；
+而**版本读取、宿主内部布局、依赖形状、注释**没有任何 instrument 看着 ✓ —— 而这四类里前三类**恰好是 1.0 真正动过或可能动的地方** ✓（`harness` 消失 ✓、包 `exports` 收窄 ✓）。
+**搜法与范围** ✓：`tests/` 与 `scripts/` 的全部 `.ts` / `.mts` / `.py` / `.mjs` ✓，模式逐项写明 ✓。
+
+---
+
+# S4 已在案项 ✓（AC-8 ✓）· S5 汇总判定清单 ✓（AC-9 ✓）
+
+## S4 —— 实验 0：**未跑** ✗，原因是环境依赖 ✓
+
+**实验 0**（DSH 的 `workspace-write` 是否真的拒写 workspace 之外 ✓）需要**一个会拒写的会话** ✓ ——
+而**本会话不是** ✗：本会话的运行时自述是 `Current DSH file policy: danger-full-access` ✓。
+所以按 AC-8 的写法 ✓：**未跑 + 原因** ✗（**不是**"不适用" ✗），并且它**保留阻塞地位** ✓ ——
+`09-30-substrate-choice` 的 **AC-8 仍然空着** ✓。没有把"跑不了"记成"已排除" ✓。
+
+**`replaySafe` 两行注释** ✓ → **已开任务** ✓ `10-17-replaysafe-names-a-missing-type` ✓。
+理由（量的 ✓）：那条注释说 `replaySafe` 的名字来自 `pi-agent-core` 的 `HarnessTool.replay` ✓，
+而 `HarnessTool` 与 `replaySafe` 在四个已装宿主包的**全部** `.d.ts` / `.js` / `.mjs` / `.md` / `.json` 里命中 **0** ✓；
+`HarnessTool` 在本仓只出现 **1 处** ✓ —— 就是那条注释本身 ✓。
+
+## S5 —— 汇总判定清单（每条带证据与后续）
+
+| # | 判定对象 | 判定 | 依据（本会话量到的） | 后续 |
+|---|---|---|---|---|
+| 1 | "反转成本 = 一个 adapter 实现" ✓ | **可行** ✓ | 7/7 具名符号在实装 1.0 命中 ✓ | — |
+| 2 | 既有裁决里"`AgentHarness` 若转正是**替换而非重写**" ✓ | **需降级并标注** ✗ | 1.0 的 `pi-agent-core` 里 `harness` 命中 **0** ✓；`AgentHarness`/`HarnessNotImplemented` 在 spec/src/tests 命中 **0** ✓ | **就地标注**在本任务 prd §一 ✓（本任务可改自己的文档 ✓） |
+| 3 | `host-version.ts` 识别不了宿主时的行为 ✓ | **需改** ✗ | 实测 `unknown` ✓：1 行输出、无警告、无日志 ✓ | `10-17-host-version-silent-degradation` ✓ |
+| 4 | 三处注释钉住宿主细节 ✓ | **需改（低）** ✗ | `work-mode.ts:303` 引用不存在的 `dist/harness/` ✓；`install.ts:95` ✓ 与 `request-lifecycle.ts:162` ✓ 的版本号 | `10-17-host-detail-comments-drift` ✓ |
+| 5 | `replaySafe` 注释命名了不存在的宿主类型 ✓ | **需改** ✗ | `HarnessTool` 在四个宿主包 **0** 命中 ✓ | `10-17-replaysafe-names-a-missing-type` ✓ |
+| 6 | `plan-v8.md:673` 的"适配器层唯一必需的 pi 包" ✓ | **需改·待批** ✗ | adapter **还**从 `pi-ai` 取两个**类型**（`loop-pi-agent-core.ts:2` ✓），而 `pi-ai` **非**直接依赖 ✓ | **无 task** ✗ —— 要改的是计划册 ✓，而改计划册在本任务的 Out of Scope 里 ✓（需单独批 ✓） |
+| 7 | `catalog.ts` 的 `minPi` 与散文版本 ✓ | **可行** ✓ | 1.0 满足全部 `minPi` ✓ | — |
+| 8 | `install.ts:266` 硬编码 `dist/bundle/cli.js` ✓ | **可行** ✓ | 实测仍在 ✓ | — |
+| 9 | `typebox` 的依赖形状 ✓ | **可行** ✓ | 撤掉操作者的包后警告 **0** 次 ✓ | — |
+| 10 | adapter 从 `pi-ai` 取类型而 `pi-ai` 非直接依赖 ✓ | **可行** ✓ | 类型导入 ✓、由 `pi-agent-core` 传递提供 ✓；若断了 **typecheck 会红** ✓（**不是**沉默 ✓） | — |
+| 11 | `install.ts:95` 那句"1.0 无公开持久化多源安装 API" ✓ | **未验证** ✗ | 本会话只量了它旁边的版本号 ✓ | 不写成结论 ✓（归 #4 的 AC-3 ✓） |
+
+**每条"需改"都有任务 id** ✓（#3 ✓ #4 ✓ #5 ✓ 各一个 ✓）。**#6 是唯一例外** ✓，理由写明在表里 ✓：它要改的是计划册 ✓。
+
