@@ -68,7 +68,35 @@ clone itself as its cwd, against the recipe's rule that passes run on a copy. No
 statement of the third criterion is therefore "the three pinned files are unchanged", which is how the criterion is
 worded, rather than "the tree was never touched".
 
+## The seventh attempt, the first one for project two, and the one positive datum in seven tries
+
+| Attempt | Duration | `toolCalls` | `outputTokens` | the ledger said |
+|---|---|---|---|---|
+| `p1-pass1-f` (project one, round 8) | 32 s | 0 | 0 | `failureKind=transient failureReason=http_429` |
+| `p2-pass1` (project two, round 8) | 31 s | 0 | 0 | `failureKind=transient failureReason=http_429` |
+
+**Neither counts**, and both projects' criteria are unchanged: project one still reads `1 failed, 115 passed` with its pins
+intact, and project two still reads `tests 4 / pass 3 / fail 1` with all seven file digests identical to its baseline. That
+is seven `http_429` attempts for project one and the first for project two, spanning about five hours - so this is a
+sustained rate limit rather than a window, and a further attempt would buy the same sentence.
+
+**What the two runs do establish, and it is the first positive datum about the read-only mode in this session.** The two
+passes differ in exactly one thing besides their project - the mode - and their own records differ with it:
+
+| | `code-development` (writable) | `code-audit` (`filesystem: read-only-source`) |
+|---|---|---|
+| `artifactEvidence.doveState` | `true` | **`false`** |
+| `formalTaskCount` / `formalArtifactCount` | 1 / 5 | **0 / 0** |
+
+Under the **same** provider failure and the same driver, the writable mode's run created its intake task in the project and
+the read-only mode's run created **nothing** - not even the artifacts intake writes for itself. That is a partial
+confirmation of the mode axis, and it is worth exactly what it measures: **intake was refused by the read-only claim**,
+not that a completed audit kept its hands off the source. This child's criterion asks for the record to say the run did
+not write; the record says **nothing was written at all**, which is the stronger statement - but it is a statement about a
+run that did no work, so it must not be read as an audit's result.
+
 ## The sixth attempt, and the drifting build it caught
+
 
 | Attempt | Duration | `settled` | `toolCalls` | `outputTokens` | `stopReasons` | the install said |
 |---|---|---|---|---|---|---|
