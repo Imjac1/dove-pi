@@ -122,6 +122,21 @@ because it rewrites curated entries only. The repair is the same in kind - name 
 page that cites a task's own files. The second payer is checkable **before** the archive, by searching for the task's path; the doors are what
 tells you afterwards.
 
+**Measured 2026-10-17, and it is the archive note's second payer arriving from the other direction.** That tax is paid when a
+page cites a file *inside* a moved task. There is a mirror tax, paid whenever an edit moves the lines of a file the pages
+cite. One change to `src/pi-adapter/extension.ts` moved **18 mount-point citations in the mount table and nine prose citations
+across four specification pages**, and it moved them **twice**, because the edit sat above every `pi.on(...)` registration.
+**Only the mount table is checked**, and the check is what caught both shifts within seconds: `tests/spec-anchors.test.ts`
+reads its rows and fails when a cited line does not hold the declaration the row names. **The nine prose citations are checked
+by nothing** - the same door asks only that their path resolves and their line exists, and a stale citation satisfies both - so
+they were repaired by hand, by finding where each cited line had moved. One of them was a range, and the first repoint script
+shifted only its start, leaving `3681-3620`: a citation that resolves, lands inside the file, and is nonsense. **Nothing
+caught it**; it was found by reading the result. There are **78 range-shaped citations** in `.trellis/spec` and this file, and
+none is decreasing, which is a condition a check could hold in about three lines. The predictor for the hand work is one
+command - search the edited file's path across `.trellis/spec` and repair each citation **by the content it must hold, never
+by arithmetic** - and the arithmetic is what produced the nonsense range: a second script re-indexed the pre-edit file with
+the already-repaired numbers and moved all nine citations twice.
+
 The harness own subjects: [`personal-agent-harness-loop.md`](./.trellis/spec/backend/personal-agent-harness-loop.md) for what it
 measures and what was decided about its boundaries, [`harness-loop-turn.md`](./.trellis/spec/guides/harness-loop-turn.md) for how a
 turn runs, and [`.trellis/harness-surface.yaml`](./.trellis/harness-surface.yaml) for the editable surface those turns are bounded by.
