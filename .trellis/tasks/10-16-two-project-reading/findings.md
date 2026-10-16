@@ -100,6 +100,13 @@ Written so the passes are a sequence rather than a rediscovery. Both run through
 5. **Cleanup**: the copies and any temporary install go, the graded clone is left at its three pins with no caches, and
    the archive tax is paid - the four documentation doors, and a scan for curated entries pointing into this directory.
 
+**Which pass first, and what actually binds them.** The criterion is not "both passes ran" but "both readings are of the
+same build", so the order is not load-bearing: what makes the pair a reading is that both carry the release child's
+identity. If the quota that arrives is thin, that means the operator may spend it on whichever sample they can afford
+first, and the other one later - **stated as a choice, not as a saving**: which of the two is cheaper is *not measured
+here*, and the only reason to prefer one is that project two's project is four tests against project one's hundred and
+fifteen. Anything stronger would be a guess, and a guess is what this child's own record says not to write down.
+
 **Rollback**: this child writes nothing but `findings.md`, its install and its copies are disposable, and a defect either
 pass finds becomes the parent's map rather than an unplanned repair here.
 
