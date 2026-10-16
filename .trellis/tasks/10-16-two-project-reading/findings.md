@@ -1,3 +1,91 @@
+# The cause rule met its first real refusal, and the entry below it is wrong about what that needed
+
+**The correction first. The entry under this one says the cause rule "has still never run against a real provider
+refusal" and that the verification "needs the same funded account as the two passes". Both halves are false, and the
+second is the kind of error that costs a round: a refusal is produced by an *unfunded* account, which this machine has.
+The only thing missing was a **build carrying the fix**, and that build is three lines away - `--launcher source` runs
+this tree. The two passes need money. This never did.** It is now measured, and the sentence below is struck through by
+cross-reference rather than quietly rewritten.
+
+## Same credential, same scenario, two builds, minutes apart
+
+| | released `0.2.6+f019a8d` (attempt 11) | the tree, `--launcher source` |
+|---|---|---|
+| duration | 17.4 s | 12.0 s |
+| the provider's answer | `429` `insufficient_quota` | the same |
+| `failureKind` / `failureReason` | `transient` / `http_429` | **`terminal` / `account-unpaid`** |
+| the provider's own code in the record | **absent** | **`providerCode":"insufficient_quota"`, `"httpStatus":429`** |
+| the attempt's outcome | `transient-failure` | `failed`, `number: 1` - no retry of a terminal state |
+| the request's terminal | `completed`, `origin: session` | **`provider-account-unpaid`, `policyAbort: true`, `retryable: false`** |
+| what a reader is given | nothing beyond `http_429` | *"The provider refused because the account behind the credential cannot pay (insufficient_quota)."* plus `nextAction`: *"Settle the provider account or restore its quota, then submit the request again."* |
+
+**Attribution is measured rather than assumed**: `account-unpaid` and `providerCode` appear in **5 files under `src/`**
+and in **0 files** of either installed version (`0.2.6+f019a8d`, `0.2.4+25039c9`). No installed build can emit the
+fields the source build emitted, so what moved is the fix and not the window.
+
+## What that closes, in the currency the seven hours were spent in
+
+The recorded cost was seven attempts over about five hours against a quota that could never become payable, each one
+recorded `transient`, under a plan that read "retry repeatedly, catch a good window". The fixed rule answers it inside the
+record: `terminal`, the provider's own code, `retryable: false`, and a next action naming the account. The engine also
+stopped after one attempt instead of retrying a terminal state.
+
+**One difference to state rather than smooth**: the runner summarised this run `scenarioFailed: true` where the released
+run said `false`. That is the policy abort arriving where the scenario expected a turn to complete, and it is the honest
+reading of a terminal account refusal. It is written down because the next reader will see the flag move between two
+otherwise identical runs and should not read it as a regression.
+
+## What the source run does not establish
+
+It is not a pass: `toolCalls: 0`, `outputTokens: 0`, one provider round, the project copy's suite still `1 failed, 115
+passed`, pins 20090 / 5971 / 1305. It establishes one thing - that the cause rule reaches a real refusal and names it -
+and that is what it was run for.
+
+# The plan the money still gates
+
+Written so the passes are a sequence rather than a rediscovery. Both run through the **installed** launcher on
+`0.2.6+f019a8d`, the build users have, because that is what this child's criterion is about.
+
+1. **The gate.** Probe the chosen credential with a one-token `POST /chat/completions`; only a `200` starts a pass. A
+   refusal costs 12-17 s and a round, which is why the gate exists - and note that a refusal is now *legibly* terminal,
+   so the probe is a formality rather than the only way to find out.
+2. **Project one.** `p1-copy` is ready: pins 20090 / 5971 / 1305, no caches, the recipe's own-path predictor clean, and
+   its baseline read in place (`1 failed, 115 passed`).
+
+   ```bash
+   node scripts/real-dove-blackbox.mjs \
+     --cwd "C:\Users\Macfy\Desktop\dsh\dove-two-project-reading\p1-copy" \
+     --case-id p1-pass1 --output "...\runs\p1-pass1.jsonl" \
+     --scenario tests/fixtures/scenarios/immutable-directive-work-as-a-task.json \
+     --provider real --launcher dove-pi --timeout-ms 3600000
+   ```
+
+   Budget 1 h, and **no `DOVE_PI_MAX_REQUEST_ATTEMPTS`** - the shipped default of three is what says anything about the
+   default a customer gets, which is the lesson pass 3 of the 10-05 trio left behind.
+3. **Project two**, and this step is the one the old plan did not have. Generate, then **bind the mode**: the runner has
+   no work-mode flag, and `extension.ts` resolves the mode only from the project's own declaration
+   (`resolveWorkModeSelection({ workspaceRoot: modeRoot, workspaceMode })`, `src/core/work-mode.ts:978` names it
+   `.dove/mode.json`). So the generated project needs an eighth file beside the generator's seven:
+
+   ```bash
+   node .trellis/tasks/10-16-two-project-reading/research/node-project-fixture.mjs <dest>
+   # then <dest>/.dove/mode.json = {"schemaVersion":1,"mode":"code-audit"}  - 55 B, no BOM, the same shape the graded
+   # clone carries. Without it the pass runs with no mode at all and proves nothing about the read-only axis.
+   ```
+
+   Then the same command with `--cwd <dest>` and `--case-id p2-pass1`. The criterion is deliberately **not** green: the
+   suite must still read `1 failed`, the instrument's bytes unchanged, and the run's own record must show the mutation
+   tools never ran or were decided against.
+4. **The readings**, both passes: the run's own project copy's suite, the instrument's bytes, the source clone's three
+   pins, and the build identity (`0.2.6+f019a8d`, matching the release child's `releaseId`). Then this file gets both
+   builds' identities, both sets of numbers, and every attempt that did not count with the reading that made it not
+   count.
+5. **Cleanup**: the copies and any temporary install go, the graded clone is left at its three pins with no caches, and
+   the archive tax is paid - the four documentation doors, and a scan for curated entries pointing into this directory.
+
+**Rollback**: this child writes nothing but `findings.md`, its install and its copies are disposable, and a defect either
+pass finds becomes the parent's map rather than an unplanned repair here.
+
 # The eleventh attempt: the released build answers 429, and it is the build before the cause fix
 
 Run on 2026-10-17, after a probe of both credentials refused (`429 insufficient_quota` on the primary, `402
@@ -46,9 +134,12 @@ landed in the tree as `e3c84a5`, and:
 
 So `failureKind=transient / failureReason=http_429` is the correct behaviour of a build that predates the repair, and the
 sentence this repository already holds - *a cause the provider names outranks the status it arrived with* - has **still
-never run against a real provider refusal**. That verification is owed, and it needs the same funded account as the two
+never run against a real provider refusal**. ~~That verification is owed, and it needs the same funded account as the two
 passes: a refusal is exactly the event it is written for, so no amount of a funded account's *success* would test it
-either. Recorded here rather than repaired: this child's contract is that a defect it finds becomes the parent's problem.
+either.~~ **Both sentences are wrong and the section at the top of this file is the correction**: a refusal is what an
+unfunded account produces, the only missing ingredient was a build carrying the fix, and `--launcher source` supplied it
+12 minutes later. The verification is done. Recorded here rather than repaired: this child's contract is that a defect it
+finds becomes the parent's problem.
 
 **And the install keeps two builds side by side** - `C:\Users\Macfy\AppData\Local\DovePi\app\versions\` holds
 `0.2.4+25039c9` (the `--check` rollback point) and `0.2.6+f019a8d` (current), both carrying the same pre-fix
