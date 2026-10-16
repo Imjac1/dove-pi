@@ -31,16 +31,22 @@ describe("the release source roots", () => {
 
 	it("copies every root the digest covers into the archive the release job assembles", () => {
 		// **Two claims about one release, and nothing compared them.** `RELEASE_SOURCE_ROOTS` is what the manifest's digest
-		// covers; the `$include` list in `.github/workflows/release.yml` is what the published zip is assembled from. `modes` is
-		// in the first and was missing from the second, so the digest described a release whose mode definitions were not in it -
-		// and the pair is worse than either alone: an installed release that selects a mode it cannot read refuses **every tool
-		// call** (the adapter refuses at the `tool_call` boundary when the mode failed to load).
+		// covers; the list of roots staged into the archive is what the published zip is assembled from. `modes` is in the
+		// first and was missing from the second, so the digest described a release whose mode definitions were not in it -
+		// and the pair is worse than either alone: an installed release that selects a mode it cannot read refuses **every
+		// tool call** (the adapter refuses at the `tool_call` boundary when the mode failed to load).
 		//
-		// The check derives rather than lists: a root counts as copied when the archive takes it, or takes a directory it lives
-		// under. That is what makes it hold for a root added later, without anyone remembering this case.
-		const workflow = readFileSync(join(process.cwd(), ".github", "workflows", "release.yml"), "utf8");
-		const assignment = /\$include = @\(([^)]*)\)/u.exec(workflow);
-		assert.ok(assignment, "the release job still declares the archive's contents in one list");
+		// **Which file this list is read from changed on 2026-10-16, and this case is what noticed.** It used to be an
+		// `$include` array inside `.github/workflows/release.yml`, while a local replay re-typed the same list by hand - the
+		// same rule in two files, which is the shape that drifts. `scripts/stage-release.ps1` is now the one place that says
+		// what an archive contains, and the workflow calls it. This case went red the moment the array left the workflow,
+		// which is what a case holding two files equal should do: it cannot pass while the rule has no home it can find.
+		//
+		// The check derives rather than lists: a root counts as staged when the archive takes it, or takes a directory it
+		// lives under. That is what makes it hold for a root added later, without anyone remembering this case.
+		const stager = readFileSync(join(process.cwd(), "scripts", "stage-release.ps1"), "utf8");
+		const assignment = /\$include = @\(([\s\S]*?)\)/u.exec(stager);
+		assert.ok(assignment, "the release stager still declares the archive's contents in one list");
 		const copied = new Set([...(assignment[1] ?? "").matchAll(/'([^']+)'/gu)].map((match) => match[1] as string));
 		assert.ok(copied.size > 5, "a list this small would pass this check vacuously");
 		const missing = RELEASE_SOURCE_ROOTS.filter((root) => {

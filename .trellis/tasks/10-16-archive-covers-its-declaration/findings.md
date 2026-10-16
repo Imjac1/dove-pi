@@ -34,7 +34,30 @@ which passes a real manifest. The case now asserts the refusal's exit, the named
 Verified end to end on the artefact that matters: the published v0.2.4 archive is **refused** by the new check with
 `Archive carries a cache: installer/__pycache__/__init__.cpython-311.pyc and 16 more`.
 
+## The single home, and the mistake that got pushed with it
+
+`scripts/stage-release.ps1` is now the one place that says what an archive contains - the include list, the two `.trellis`
+entries, the cache exclusion and the generated assets - and the release workflow's staging step is a call to it. Measured
+both paths: from the working tree it stages **347 files and removes 3 cache directories**; from `-Ref v0.2.4` it stages
+**344 and removes none**, because git's tree carries no caches at all - the same 344 the verifier compared, and an
+independent confirmation that these files are untracked rather than merely unpushed.
+
+**I pushed a red commit, and the honest description is that the gate did its job and I did not read it.** The gate run and
+the commit were in the same command, and the first line of that output was
+`✖ copies every root the digest covers into the archive the release job assembles` - `tests/release-manifest.test.ts` held
+the workflow's `$include` array against `RELEASE_SOURCE_ROOTS`, so moving the array into the helper broke it. That is
+precisely the behaviour a case holding two files equal should have, and it is the case that would have caught the original
+two-files-one-rule drift. The repair points it at the helper - the same assertion, the file it reads changed - and the
+suite is back to 993/993. `bc355cb` therefore went out red and the commit after it says so; no history was rewritten.
+
+**A byte-identical local reproduction was not achieved, by either path**, and the measurement is worse than my expectation
+rather than better: the published archive stores **LF** (0 CRLF, 203 bare LF in a `.trellis/spec` file) while staging from
+a ref here produced **CRLF** (203 CRLF, 0 bare LF) - identical after normalising line endings, different as bytes. The
+step in this pipeline that converts them was **not** isolated, so the helper's own doc was corrected against the
+measurement instead of the intuition it was written from, and the criterion that asks for byte identity is left unticked.
+
 ## What this child did not do, stated instead of implied
+
 
 - **The design's stronger shape is not implemented.** It called for one assembly helper owning the include list, called by
   the workflow *and* by a local replay, so the rule would have a single home. What exists is the workflow's removal step
