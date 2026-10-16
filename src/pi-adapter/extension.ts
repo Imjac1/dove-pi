@@ -18,7 +18,7 @@ import { applyWorkspacePatch, createWorkspaceSnapshot, restoreWorkspaceSnapshot,
 import { createProjectProvider, initializeNativeProject, summarizeProjectContinuation, updateProjectManifest, type ProjectContextSnapshot, type ProjectContinuation, type ProjectProvider, type ProjectTask, type ProjectTaskConvergenceOperation, type ProjectTaskOperation } from "../project-provider/index.ts";
 import { buildInteroperableProjectContext, readInteroperableContextProjection } from "../context/interoperable.ts";
 import type { ContextSegment } from "../core/context-compiler.ts";
-import { getPiVersion } from "./host-version.ts";
+import { describePiVersionFailure, getPiVersion, readPiVersion } from "./host-version.ts";
 import { inspectWebAccessReadiness, writeWebSearchConfig } from "../web-access/config.ts";
 import { createChineseSettingsComponent } from "./chinese-settings.ts";
 import { discoverAllSkills } from "../skills/discovery.ts";
@@ -2377,6 +2377,12 @@ export default function personalAgentExtension(pi: ExtensionAPI): void {
 			},
 		});
 		keepaliveTimer.arm();
+		// **A version reading that found nothing is said once per session, not swallowed.** `readPiVersion` carries
+		// where it looked so this case - nothing found at all, which is the one a reader can act on - is distinguishable
+		// from a host whose manifest simply has no version field. Measured 2026-10-17: the previous revision returned
+		// "unknown" here with no warning, no log line and no record.
+		const piVersionReading = readPiVersion();
+		if (piVersionReading.unreadable) ctx.ui?.notify(describePiVersionFailure(piVersionReading), "warning");
 		pendingContinuationPlan = undefined;
 		currentRequestHadNonQuestionTool = false;
 		requestContextText = undefined;

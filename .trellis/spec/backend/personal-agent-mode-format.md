@@ -43,7 +43,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   carried, how many characters entered, and whether it was cut are reported through the strategy snapshot, computed by the
   same call that builds the block so the reading cannot describe a block that was not sent.
   **Anchors.** `src/core/prompt-policy.ts` (`workModeInstructions`), `src/core/work-mode.ts` (`WorkMode.source`),
-  `src/pi-adapter/extension.ts:3635` (the same call building the block, with the reading taken at `:987`), `src/core/strategy-snapshot.ts`; `tests/mode-body-prompt.test.ts` and the three host
+  `src/pi-adapter/extension.ts:3641` (the same call building the block, with the reading taken at `:987`), `src/core/strategy-snapshot.ts`; `tests/mode-body-prompt.test.ts` and the three host
   cases in `tests/host-work-mode.test.ts`.
 - `governance.yaml` requires `version`, `framework`, `scope`, `authority.capabilities` and
   `gate.semantics` (`none`/`limit`/`conformance`/`both`).
@@ -85,7 +85,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   through the shell; an unclassifiable mutation is refused. Absent axes mean a mode says nothing.
   **Where the unkept part is reported.** A mode whose claims are partly enforceable **loads**, so nothing refuses it
   and nothing else would say what was left out. The sentence belongs on the two lines a person and a reading already
-  use: the load line (`src/pi-adapter/extension.ts:2567`) and the status line's
+  use: the load line (`src/pi-adapter/extension.ts:2573`) and the status line's
   `networkAxis=unloaded|none|shell-uncovered` field (`src/pi-adapter/extension.ts:1333`). **Whether a shell route is
   actually open is a question for `shellRoutesOpen`** (`src/core/work-mode.ts`), which reads `never_allow` through the
   wildcard rule and the fence's own shell stance; a first version looked for the two names `bash` and `powershell`
@@ -94,7 +94,7 @@ function matchesPermission(list: readonly string[], action: string): boolean;
   fence clause says the mode refuses both. Measured 2026-10-14 and held by `tests/work-mode.test.ts`: `code-development`
   declares `network: none` and leaves both shells open, so it carries the sentence, while `code-audit` denies both and
   does not - the pair is the case, because a sentence every mode got would say nothing.
-  **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2460` (`loadWorkModeFromDirectory`), whose own fence refusals are in `src/core/work-mode.ts`.
+  **Anchors.** Enforced at `src/core/action-policy.ts:625`; refused at load at `src/pi-adapter/extension.ts:2466` (`loadWorkModeFromDirectory`), whose own fence refusals are in `src/core/work-mode.ts`.
 - **A `fence` entry reaches the whole filesystem, not only the workspace.** Both sides are canonicalised
   and compared as locations: inside the workspace the relative form is produced first and wins, and a
   target with no relative form falls back to the canonical absolute one. So an entry may name a path

@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "the standard the fix is judged by: a control that reads as a control while answering nothing is the defect class, and a message names the cause its own code can check"}

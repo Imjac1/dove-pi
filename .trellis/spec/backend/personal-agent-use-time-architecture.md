@@ -8,7 +8,7 @@
 
 | Role | Who | Evidence |
 |---|---|---|
-| **Owner of the loop** | **the Pi host**: it runs "call the model, run the tools, repeat", and owns the session, the TUI and the provider channel | the extension attaches handlers and nothing else: **18 `pi.on(...)` calls, no loop body** (`src/pi-adapter/extension.ts:2324`-`:3693`) |
+| **Owner of the loop** | **the Pi host**: it runs "call the model, run the tools, repeat", and owns the session, the TUI and the provider channel | the extension attaches handlers and nothing else: **18 `pi.on(...)` calls, no loop body** (`src/pi-adapter/extension.ts:2324`-`:3699`) |
 | **Contract** of the loop | `src/core/loop.ts`: the contract's `interface` / `type` declarations - `GateInvocation`, `GateDecision`, `ActionGate`, `AgentLoop` - and **two functions**: `normalizeGateDecision`, the guard every loop applies, and `gateLabelOf`, which reads the refusal class a decision carries | `src/core/loop.ts:81`, `:117`, `:135`, `:175`, `:190`, `:284` |
 | **Reference implementation** (reachable, and not the loop the Pi host runs) | `src/core/loop-runner.ts` | reached by `src/commands/axi-turn.ts`, which `src/cli.ts` dispatches; the allow-list entry was removed when that wiring landed |
 
@@ -22,31 +22,31 @@ Five groups: assembly, request boundaries, the tool boundary, evidence, session 
 |---|---|---|
 | `session_start` | `:2361` | **assemble a session**: arm the keepalive timer (`SessionKeepaliveTimer`, `:29`), open the ledger (`:917`, `new ExecutionLedger(join(stateDir, "execution.jsonl"))`), resolve the mode and the authority document (`loadWorkModeFromDirectory`, `preflightAuthority`, `:67`-`:68`), and **compose the action policy** with `createActionPolicy` (`:2362`; cleared at the session boundary, `:2359`) |
 | `input` | `:2324` | the user's text enters the request lifecycle first (`requestLifecycle.acceptSubmission`), which decides whether it is accepted |
-| `before_agent_start` | `:3464` | open a request lease (`requestLifecycle.beginRequest`) and fix this round's request plan |
-| `agent_start` | `:2577` | start one **attempt** (`startAttempt`) with its trigger: initial, retry, or retry after compaction |
-| `turn_start` | `:2864` | open a tool batch (`progressGuard.beginToolBatch()`) |
-| `tool_call` | `:2868` | **the gate** - see 鎼? |
-| `tool_result` | `:3171` | record that the effect actually happened (`pendingEffects` into the effect boundary) |
-| `message_end` | `:3256` | assistant messages only: stop reason and usage |
-| `before_provider_headers` | `:3341` | session affinity (`DOVE_PI_DISABLE_SESSION_AFFINITY=1` turns it off) |
-| `before_provider_request` | `:3353` | keepalive observation (every provider call counts), provider budgeting against the model window (`model-gateway`), and the request plan when one is due |
-| `after_provider_response` | `:3455` | record the HTTP status; at 400 and above classify the failure (`classifyProviderFailure`) |
-| `thinking_level_select` | `:3322` | **only when the policy is `off`** (fully manual) is the user's choice written back to the default baseline |
-| `context` | `:3735` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
-| `session_before_compact` | `:2798` | **the one replay still refused**: compaction replaces the surrounding context with a summary, so the model's record that the tool already ran is weaker |
-| `session_compact` | `:2812` | if the compaction will retry, mark the trigger `compaction-retry` |
-| `agent_end` | `:2596` | close the progress guard (`progressGuard.end()`), project cancellation into the request state, take the last assistant message |
-| `agent_settled` | `:2763` | **state snapshot only, never the callback's ctx** - `agent_end` may abort and reload the session, and reading ctx there raises Pi's "stale ctx" and masks the real terminal record |
-| `session_shutdown` | `:2816` | disarm the keepalive timer (a **caller obligation**: a timer that outlives its session reports into the next one, which is worse than a cold cache) |
+| `before_agent_start` | `:3470` | open a request lease (`requestLifecycle.beginRequest`) and fix this round's request plan |
+| `agent_start` | `:2583` | start one **attempt** (`startAttempt`) with its trigger: initial, retry, or retry after compaction |
+| `turn_start` | `:2870` | open a tool batch (`progressGuard.beginToolBatch()`) |
+| `tool_call` | `:2874` | **the gate** - see 鎼? |
+| `tool_result` | `:3177` | record that the effect actually happened (`pendingEffects` into the effect boundary) |
+| `message_end` | `:3262` | assistant messages only: stop reason and usage |
+| `before_provider_headers` | `:3347` | session affinity (`DOVE_PI_DISABLE_SESSION_AFFINITY=1` turns it off) |
+| `before_provider_request` | `:3359` | keepalive observation (every provider call counts), provider budgeting against the model window (`model-gateway`), and the request plan when one is due |
+| `after_provider_response` | `:3461` | record the HTTP status; at 400 and above classify the failure (`classifyProviderFailure`) |
+| `thinking_level_select` | `:3328` | **only when the policy is `off`** (fully manual) is the user's choice written back to the default baseline |
+| `context` | `:3741` | transform context before every provider request: drop stale guidance and legacy entries, keep real snapshots and their order |
+| `session_before_compact` | `:2804` | **the one replay still refused**: compaction replaces the surrounding context with a summary, so the model's record that the tool already ran is weaker |
+| `session_compact` | `:2818` | if the compaction will retry, mark the trigger `compaction-retry` |
+| `agent_end` | `:2602` | close the progress guard (`progressGuard.end()`), project cancellation into the request state, take the last assistant message |
+| `agent_settled` | `:2769` | **state snapshot only, never the callback's ctx** - `agent_end` may abort and reload the session, and reading ctx there raises Pi's "stale ctx" and masks the real terminal record |
+| `session_shutdown` | `:2822` | disarm the keepalive timer (a **caller obligation**: a timer that outlives its session reports into the next one, which is worse than a cold cache) |
 
 ## 3. Where the gate is enforced (today)
 
-**Site**: inside the `pi.on("tool_call")` handler, `src/pi-adapter/extension.ts:2868`.
+**Site**: inside the `pi.on("tool_call")` handler, `src/pi-adapter/extension.ts:2874`.
 
-1. **The mode check comes first, ahead of the lease check** - a mode that failed to load must stop the action even when the request bookkeeping is not set up (`:2831`-`:2833`).
-2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`:2837`-`:2838`). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.
-3. On `block` it records the refusal - `ledger.appendGateRefused({ taskId, stepId: "gate:<toolCallId>", mode, tool, action, ... })` - and then **`return { block: true, reason: "[Dove mode ...] ...\nDo this instead: ..." }`** (from `:2857`). The call is really blocked, and the refusal **carries a deterministic remedy**.
-4. **The half that reads arguments runs after the input is final** (`:2861`).
+1. **The mode check comes first, ahead of the lease check** - a mode that failed to load must stop the action even when the request bookkeeping is not set up (`:2837`-`:2839`).
+2. **The name-only half runs first**: `resolveActionIdentity(event.toolName, event.input)` then `activeActionPolicy.denyDecision(identity.action)` (`:2843`-`:2844`). It reads the name on purpose: the permission list is name-based, so this decision **cannot be invalidated by an argument mutation later in the handler**.
+3. On `block` it records the refusal - `ledger.appendGateRefused({ taskId, stepId: "gate:<toolCallId>", mode, tool, action, ... })` - and then **`return { block: true, reason: "[Dove mode ...] ...\nDo this instead: ..." }`** (from `:2863`). The call is really blocked, and the refusal **carries a deterministic remedy**.
+4. **The half that reads arguments runs after the input is final** (`:2867`).
 
 **The honest boundary**: this path is the **host** calling us at each tool call. "Every action passes the gate" is kept by the host's calling behaviour; the contract at `src/core/loop.ts:183` (that `ActionGate.evaluate` is invoked for **every** proposed action, including ones that will be blocked) is held up today by **tests and the host** together.
 
