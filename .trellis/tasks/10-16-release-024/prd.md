@@ -23,11 +23,12 @@
 
 ## Acceptance Criteria
 
-- [ ] **0.2.4 是 Latest** ✓，四产物齐全 ✓（zip ✓、`.sha256` ✓、`install.ps1` ✓、`release.json` ✓）。
-- [ ] 它的 `releaseId` 指向的提交**包含** `80e4dad` ✓、`f528375` ✓、`d40f9b5` ✓、`6eaffdb` ✓（用 `git merge-base --is-ancestor` 逐个判 ✓，不靠眼看 ✓）。
-- [ ] `release:check` 在 tag 之前**通过** ✓（本地重演 ✓）。
-- [ ] 用户 URL 取到的是它 ✓（HTTP 200 ✓ + 大小与树里的 `install.ps1` 一致 ✓）。
-- [ ] 若 `test (locked)` 因围栏而红 ✓：**tag 未动** ✓，且这一条被记录 ✓。
+- [x] **0.2.4 是 Latest** ✓，四产物齐全 ✓（`dove-pi-windows.zip` ✓、`.sha256` ✓、`install.ps1` ✓、`release.json` ✓，非 draft ✓，2026-10-16T11:23:04Z ✓）。
+- [x] 它的 `releaseId` 指向的提交**包含**那四笔 ✓ —— 四个 `git merge-base --is-ancestor` 都退 0 ✓；**且发布出来的清单自己这么说** ✓：用户 URL 取到的 `release.json` 报 `commit=25039c99…` ✓，正是 tag 所在提交 ✓，且与本地重演的 `releaseId` 一致 ✓。
+- [x] `release:check` 在 tag 之前**通过** ✓（`Release ready: v0.2.4 (0.2.4+25039c9); assets=4` ✓）—— 它**先拒了两次** ✓，两次都对 ✓（见 `findings.md`：一次是我改了版本号没提交 ✓，一次是任务元数据未提交 ✓）。
+- [x] 用户 URL 取到的是它 ✓：`install.ps1` **HTTP 200 / 20,623 B** ✓，与树里的同大小 ✓（须显式走代理 ✓ —— `Invoke-WebRequest` 不认环境代理 ✓）。
+- [x] 那条围栏**这次没发作** ✓：tag 上与 master 上的 `Compatibility` **都绿** ✓ ⇒ "不挪 tag" 的规则**未被触发** ✓，无需记录例外 ✓。
+- [x] `findings.md` 记了 releaseId ✓、两次被 readiness 拒绝的原因 ✓、以及**本子任务没证到的那一条**（祖先关系证的是提交、不是压缩包内容 ✓）。
 
 ## Out of Scope
 
