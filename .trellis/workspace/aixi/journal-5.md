@@ -1515,3 +1515,27 @@ The three needs-change tasks the 1.0 re-check opened were implemented and archiv
 ### Status
 
 [OK] **Completed**
+
+
+## Session 253: The floor a citation satisfies while saying the wrong thing, and a decision measured instead of assumed
+<!-- trellis-session: v=2 fp=11fd9b3bd0711cb5 -->
+
+**Date**: 2026-10-17
+**Task**: The floor a citation satisfies while saying the wrong thing, and a decision measured instead of assumed
+**Branch**: `master`
+
+### Summary
+
+Two planned tasks landed. The citation audit read the mount page eighteen rows and the eleven named citations against the lines they name, and found nine that had been pointing at lines that never held their sentence - the registration range ending at a stray catch rather than the last mount point, SessionKeepaliveTimer naming line 29 instead of its import, the ledger naming line 917 instead of the line that constructs it, the mode and authority calls naming lines from a function they are not in, the action policy naming where it is not composed, and the gate three inner citations naming a region twenty lines away. None was caused by the earlier repair: that repoint was identity-proved, so it preserved the wrong targets it was handed. Each was repointed by content and the target line was read first. The audit also states its own method two false positives rather than smoothing them, and concludes that no sentence was found wrong - which is a claim that needs its population stated, and is. The install question was decided rather than deferred: the host public path persists settings and reports progress, but installNpm runs npm install for a source unconditionally with no already-installed check, it takes one source per call so a profile becomes one npm invocation per source on a shared root, and its progress events carry no counters - while this installer skips what is configured, sequences its own writes and reports current and total. So the hand-rolled path stays and the comment now carries the three measured reasons. Gates at the end: typecheck exit 0, npm test 1001 pass and 0 fail, installer OK, corpus 0 problems, both citation doors green. The two passes remain owed and blocked: nothing credential-shaped changed in sixteen hours, and the watcher logged 180 attempts across the night with both credentials refusing.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7817237` | docs(spec): nine prose citations that satisfied the floor and said the wrong thing |
+| `77df279` | chore(task): archive 10-17-prose-citation-audit |
+| `be0dcc4` | docs(install): the hand-rolled path is a choice with measured reasons, not a workaround for a missing API |
+
+### Status
+
+[OK] **Completed**

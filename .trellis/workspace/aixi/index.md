@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 252
+- **Total Sessions**: 253
 - **Last Active**: 2026-10-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1517 | Active |
+| `journal-5.md` | ~1541 | Active |
 | `journal-4.md` | ~1995 | Archived |
 | `journal-3.md` | ~1982 | Archived |
 | `journal-2.md` | ~1988 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 253 | 2026-10-17 | The floor a citation satisfies while saying the wrong thing, and a decision measured instead of assumed | `7817237`, `77df279`, `be0dcc4` | `master` |
 | 252 | 2026-10-17 | Three needs-change verdicts land, and the tax the doors charge for moving a line | `4b016a8`, `eb7c521`, `bf327d5`, `52bfa82` | `master` |
 | 251 | 2026-10-17 | The host surface under 1.0, and the cause rule's first real refusal | `d781546`, `98f71d8`, `a0002db`, `bec6792`, `9a0bb7f`, `f93170d`, `de3fec8`, `221eec3`, `f5dadd1`, `051dd5c` | `master` |
 | 250 | 2026-10-17 | The range's end was never a cited line | `d5b21ec` | `master` |
