@@ -92,16 +92,16 @@ export async function installExtensionProfile(profile: ExtensionProfile, options
 		updateStatus = "unchanged";
 	}
 
-	// **This comment used to say the host had no public persistent multi-source install API.**
-	// Measured 2026-10-17 against the installed Pi 1.0: it does. `PackageManager` declares
-	// `installAndPersist`, `removeAndPersist`, `install`, `remove`, `update`,
-	// `addSourceToSettings`, `removeSourceFromSettings` and `setProgressCallback` over
-	// `install | remove | update | clone | pull` progress events
-	// (`pi-coding-agent/dist/core/package-manager.d.ts`). The sentence was true of the
-	// version this code was written against, and the loop below still keeps its writes to
-	// the shared Pi/npm root serialized and its progress bounded - but that shape is now a
-	// deliberate choice rather than a workaround for a missing API, and whether to adopt the
-	// public path is its own task rather than this comment's conclusion.
+	// **This comment used to say the host had no public persistent multi-source install API.** Measured
+	// 2026-10-17 against the installed Pi 1.0: `PackageManager` declares `installAndPersist`,
+	// `removeAndPersist`, `addSourceToSettings`, `removeSourceFromSettings`, `install`, `remove`, `update`
+	// and a progress callback, so that sentence is gone. The loop below still does not use them, for three
+	// measured reasons. (a) `installNpm` runs `npm install` for a source unconditionally - no
+	// already-installed check - while this loop skips what is already configured a few lines down. (b) The
+	// public path takes one source per call, so a profile becomes one npm invocation per source on a shared
+	// root rather than one sequenced pass this code controls. (c) Its progress events carry an action and a
+	// source but no counters, while this loop reports current/total per package.
+	// **So this shape is a deliberate choice with a measured reason, not a workaround for a missing API.**
 	for (const [index, entry] of profilePackages.entries()) {
 		const existing = configuredPackages.find((value) => matchesConfiguredPackage(value, entry));
 		const alreadyConfigured = existing !== undefined && (!updateConfigured || matchesExactConfiguredPackage(existing, entry));
